@@ -1,0 +1,38 @@
+# This is a generated file. Not intended for manual editing.
+services:
+  auth-service:
+    build:
+      context: "C:\\Abblix\\Oidc.Server"
+      dockerfile: "Abblix.AuthenticationService/Dockerfile"
+      target: "base"
+    command: []
+    entrypoint:
+    - "dotnet"
+    - "/app/bin/Debug/net8.0/Abblix.AuthenticationService.dll"
+    environment:
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    image: "auth-service:dev"
+    ports: []
+    volumes:
+    - "C:\\Users\\kkova\\.nuget\\packages:/root/.nuget/packages"
+    - "C:\\Abblix\\Oidc.Server\\Abblix.AuthenticationService:/app:rw"
+    - "C:\\Abblix\\Oidc.Server:/src:rw"
+    working_dir: "/app"
+  test-client:
+    build:
+      context: "C:\\Abblix\\Oidc.Server"
+      dockerfile: "Abblix.TestClient/Dockerfile"
+      target: "base"
+    command: []
+    entrypoint:
+    - "dotnet"
+    - "/app/bin/Debug/net8.0/Abblix.TestClient.dll"
+    environment:
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    image: "test-client:dev"
+    ports: []
+    volumes:
+    - "C:\\Users\\kkova\\.nuget\\packages:/root/.nuget/packages"
+    - "C:\\Abblix\\Oidc.Server\\Abblix.TestClient:/app:rw"
+    - "C:\\Abblix\\Oidc.Server:/src:rw"
+    working_dir: "/app"
