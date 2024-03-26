@@ -1,0 +1,22 @@
+name: Auto Versioning
+
+on:
+  push:
+    branches:
+      - master # or main, depending on your default branch
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # This is important to fetch all tags and history
+
+      - name: Bump version and push tag
+        uses: mathieudutour/github-tag-action@v5.6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch # Automatically bump patch version
+          release_branches: master # or main
+          create_annotated_tag: true

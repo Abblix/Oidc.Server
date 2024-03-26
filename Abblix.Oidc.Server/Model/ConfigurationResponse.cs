@@ -85,8 +85,8 @@ public record ConfigurationResponse
     public string Issuer { init; get; } = default!;
 
     /// <summary>
-    /// The URL of the OpenID Provider's JSON Web Key Set (JWKS) document. This document contains the provider's public keys,
-    /// enabling clients to verify signatures and encrypt messages to the provider.
+    /// The URL of the OpenID Provider's JSON Web Key Set (JWKS) document. This document contains the provider's public
+    /// keys, enabling clients to verify signatures and encrypt messages to the provider.
     /// </summary>
     [JsonPropertyName(Parameters.JwksUri)]
     public Uri? JwksUri { init; get; }

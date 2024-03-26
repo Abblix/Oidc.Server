@@ -57,7 +57,7 @@ public record Address
     public string? Formatted { get; set; }
 
     /// <summary>
-    ///  Full street address component, which MAY include house number, street name, Post Office Box,
+    /// Full street address component, which MAY include house number, street name, Post Office Box,
     /// and multi-line extended street address information.
     /// This field MAY contain multiple lines, separated by newlines.
     /// Newlines can be represented either as a carriage return/line feed pair ("\r\n")

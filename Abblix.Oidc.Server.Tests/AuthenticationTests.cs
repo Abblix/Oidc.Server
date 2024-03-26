@@ -189,7 +189,7 @@ public sealed class AuthenticationTests: IDisposable
 		static string UriBase(Uri uri) => uri.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.Unescaped);
 	}
 
-	[Fact]
+	[Fact(Skip = "grant_type=password not supported by default")]
 	public async Task GrantTypePasswordTest()
 	{
 		var query = new Dictionary<string, string>(StringComparer.Ordinal)

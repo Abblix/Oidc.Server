@@ -30,7 +30,7 @@
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a back-channel authentication request in scenarios such as OpenID Connect's Client Initiated Backchannel Authentication (CIBA) flow.
-/// This record extends the <see cref="ClientRequest"/> by incorporating specific properties and behaviors for back-channel authentication.
+/// Represents a back-channel authentication request in scenarios such as OpenID Connect's Client Initiated Backchannel
+/// Authentication (CIBA) flow.
 /// </summary>
 public record BackChannelAuthenticationRequest;
