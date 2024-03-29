@@ -23,8 +23,6 @@ jobs:
           default_bump: patch # Automatically bump patch version
           release_branches: master
           create_annotated_tag: true
-      - name: Log the new version
-        run: echo "The new version is ${{ steps.set_version.outputs.new_version }}"
 
   build:
     needs: versioning
@@ -42,7 +40,7 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.new_version }}
+        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
 
   publish:
     needs: build
