@@ -10,7 +10,7 @@ jobs:
   versioning:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.version }}
+      version: ${{ steps.set_version.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4.1.2
         with:
@@ -40,7 +40,7 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.new_version }}
 
   publish:
     needs: build
