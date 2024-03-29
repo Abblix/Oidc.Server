@@ -15,10 +15,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Oidc.Server.UnitTest
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Utils", "Abblix.Utils\Abblix.Utils.csproj", "{1281A1E9-59D5-4669-9FCA-2668A373319D}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{2E098D94-05A8-4469-ABA1-C9CA2D269F28}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{F7F23B88-40C8-43B3-A75D-5D4FAB7D2637}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AEC498B7-D15B-484A-8735-0AC77D23DC4E}"
 	ProjectSection(SolutionItems) = preProject
 		.gitattributes = .gitattributes
@@ -26,15 +22,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Certificates", "Certificates", "{D67E4868-1EDB-4044-A92D-E340BB8F0B58}"
-	ProjectSection(SolutionItems) = preProject
-		Certificates\ca_config.cnf = Certificates\ca_config.cnf
-		Certificates\generate.js = Certificates\generate.js
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Utils.UnitTests", "Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj", "{B4F3431F-A71C-44F4-A2BF-DCB00D17739E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Jwt.UnitTests", "Abblix.Jwt.UnitTests\Abblix.Jwt.UnitTests.csproj", "{A68A5E5E-D478-45D9-9C76-412AA07A5F5C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Oidc.Server.Mvc", "Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj", "{D44DD4A8-9A4D-4BB3-B590-1F9D85A41DB2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -74,19 +66,15 @@ Global
 		{A68A5E5E-D478-45D9-9C76-412AA07A5F5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A68A5E5E-D478-45D9-9C76-412AA07A5F5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A68A5E5E-D478-45D9-9C76-412AA07A5F5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D44DD4A8-9A4D-4BB3-B590-1F9D85A41DB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D44DD4A8-9A4D-4BB3-B590-1F9D85A41DB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D44DD4A8-9A4D-4BB3-B590-1F9D85A41DB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D44DD4A8-9A4D-4BB3-B590-1F9D85A41DB2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{6EBC9BF3-506A-4EA1-93E7-15F2E1E8A7E0} = {2E098D94-05A8-4469-ABA1-C9CA2D269F28}
-		{9017323B-D85F-46FC-8561-07BA41EFD665} = {2E098D94-05A8-4469-ABA1-C9CA2D269F28}
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A} = {F7F23B88-40C8-43B3-A75D-5D4FAB7D2637}
-		{FAF56FB7-12B5-4AAA-BCA5-A76D49F0E273} = {F7F23B88-40C8-43B3-A75D-5D4FAB7D2637}
-		{1281A1E9-59D5-4669-9FCA-2668A373319D} = {2E098D94-05A8-4469-ABA1-C9CA2D269F28}
-		{D67E4868-1EDB-4044-A92D-E340BB8F0B58} = {AEC498B7-D15B-484A-8735-0AC77D23DC4E}
-		{B4F3431F-A71C-44F4-A2BF-DCB00D17739E} = {F7F23B88-40C8-43B3-A75D-5D4FAB7D2637}
-		{A68A5E5E-D478-45D9-9C76-412AA07A5F5C} = {F7F23B88-40C8-43B3-A75D-5D4FAB7D2637}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {DEBC3C65-164F-4F76-B5D3-477C7DA579AA}

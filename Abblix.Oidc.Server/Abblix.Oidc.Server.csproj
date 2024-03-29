@@ -11,11 +11,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
-      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
       <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
       <EmbeddedResource Include=".\Features\Licensing\Resources\Abblix Licensing.pem" />
       <None Include="..\README.md" />
@@ -26,6 +21,11 @@
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
       <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
       <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
     </ItemGroup>
 
 </Project>
