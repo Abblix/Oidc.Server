@@ -40,7 +40,9 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: |
+          VERSION_TAG=${{ needs.versioning.outputs.version }}
+          dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=$VERSION_TAG
 
   publish:
     needs: build
