@@ -76,7 +76,6 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 	/// <returns>An asynchronous stream of <see cref="AuthSession"/> instances representing the current authentication sessions.</returns>
 	public async IAsyncEnumerable<AuthSession> GetAvailableAuthSessions()
 	{
-		//TODO implement multi-session support when someone authenticated with several accounts at the same time
 		var user = await AuthenticateAsync();
 		if (user != null)
 		{
