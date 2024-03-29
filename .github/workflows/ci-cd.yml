@@ -23,6 +23,8 @@ jobs:
           default_bump: patch # Automatically bump patch version
           release_branches: master
           create_annotated_tag: true
+      - name: Log the new version
+        run: echo "The new version is ${{ steps.set_version.outputs.new_version }}"
 
   build:
     needs: versioning

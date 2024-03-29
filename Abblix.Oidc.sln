@@ -20,6 +20,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.gitattributes = .gitattributes
 		.gitignore = .gitignore
 		README.md = README.md
+		.github\workflows\ci-cd.yml = .github\workflows\ci-cd.yml
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Utils.UnitTests", "Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj", "{B4F3431F-A71C-44F4-A2BF-DCB00D17739E}"
