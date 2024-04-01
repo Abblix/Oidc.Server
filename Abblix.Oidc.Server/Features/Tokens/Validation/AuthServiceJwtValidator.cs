@@ -81,7 +81,13 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 
 	private Task<bool> ValidateIssuerAsync(string issuer)
 	{
-		return Task.FromResult(issuer == _issuerProvider.GetIssuer());
+		var result = issuer == _issuerProvider.GetIssuer();
+		if (result)
+		{
+			LicenseChecker.CheckIssuer(issuer);
+		}
+
+		return Task.FromResult(result);
 	}
 
 	private async Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)

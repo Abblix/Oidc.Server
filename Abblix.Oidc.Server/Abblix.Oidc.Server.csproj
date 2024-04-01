@@ -13,7 +13,7 @@
     <ItemGroup>
       <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
       <EmbeddedResource Include=".\Features\Licensing\Resources\Abblix Licensing.pem" />
-      <None Include="..\README.md" />
+      <None Include="README.md" />
     </ItemGroup>
 
     <ItemGroup>
@@ -26,6 +26,20 @@
     <ItemGroup>
       <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
       <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="bin\Release\net6.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net6.0" />
+      <None Include="bin\Release\net6.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net6.0" />
+      <None Include="bin\Release\net6.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net6.0" />
+
+      <None Include="bin\Release\net7.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net7.0" />
+      <None Include="bin\Release\net7.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net7.0" />
+      <None Include="bin\Release\net7.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net7.0" />
+
+      <None Include="bin\Release\net8.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net8.0" />
+      <None Include="bin\Release\net8.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net8.0" />
+      <None Include="bin\Release\net8.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net8.0" />
     </ItemGroup>
 
 </Project>

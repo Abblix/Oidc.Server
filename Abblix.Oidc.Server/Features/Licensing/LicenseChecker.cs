@@ -68,7 +68,7 @@ public static class LicenseChecker
     /// <returns>A task that, upon completion, returns the client information if it complies with the licensing
     /// constraints; otherwise, logs an error.</returns>
     public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo)
-        => (await clientInfo).CheckLicense();
+        => (await clientInfo).CheckClient();
 
     /// <summary>
     /// Applies licensing checks to client information.
@@ -76,7 +76,7 @@ public static class LicenseChecker
     /// <param name="clientInfo">The client information to check against licensing constraints.</param>
     /// <returns>The client information if it complies with the licensing constraints; otherwise, logs an error.
     /// </returns>
-    public static ClientInfo? CheckLicense(this ClientInfo? clientInfo)
+    public static ClientInfo? CheckClient(this ClientInfo? clientInfo)
     {
         if (clientInfo != null)
         {
@@ -119,7 +119,7 @@ public static class LicenseChecker
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
-    public static string CheckLicense(string issuer)
+    public static string CheckIssuer(string issuer)
     {
         var utcNow = DateTimeOffset.UtcNow;
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;

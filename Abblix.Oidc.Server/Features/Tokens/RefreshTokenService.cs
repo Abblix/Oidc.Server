@@ -107,7 +107,7 @@ public class RefreshTokenService : IRefreshTokenService
 				IssuedAt = issuedAt,
 				NotBefore = now,
 				ExpiresAt = expiresAt,
-				Issuer = LicenseChecker.CheckLicense(_issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
 				Audiences = new[] { clientInfo.ClientId },
 			},
 		};

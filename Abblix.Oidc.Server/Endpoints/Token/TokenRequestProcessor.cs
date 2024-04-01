@@ -87,7 +87,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 	/// </remarks>
 	public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
 	{
-		request.ClientInfo.CheckLicense();
+		request.ClientInfo.CheckClient();
 
 		var accessToken = await _accessTokenService.CreateAccessTokenAsync(
 			request.AuthSession,

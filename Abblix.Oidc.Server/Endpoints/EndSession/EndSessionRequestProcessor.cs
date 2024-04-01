@@ -114,7 +114,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 		await _authenticationService.SignOutAsync();
 		_logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
 
-		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckLicense(_issuerProvider.GetIssuer()));
+		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()));
 
 		var tasks = new List<Task>();
 		foreach (var clientId in authSession.AffectedClientIds)

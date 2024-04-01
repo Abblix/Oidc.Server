@@ -101,7 +101,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	/// </returns>
 	public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
 	{
-		request.ClientInfo.CheckLicense();
+		request.ClientInfo.CheckClient();
 		var model = request.Model;
 
 		var authSessions = await GetAvailableAuthSessionsAsync(model);

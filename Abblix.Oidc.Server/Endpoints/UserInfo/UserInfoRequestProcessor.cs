@@ -93,7 +93,7 @@ internal class UserInfoRequestProcessor : IUserInfoRequestProcessor
 		var subject = _subjectTypeConverter.Convert(request.AuthSession.Subject, request.ClientInfo);
 		userInfo.SetProperty(JwtClaimTypes.Subject, subject);
 
-		var issuer = LicenseChecker.CheckLicense(_issuerProvider.GetIssuer());
+		var issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer());
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
 }

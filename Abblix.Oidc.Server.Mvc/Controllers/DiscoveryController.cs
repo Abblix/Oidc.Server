@@ -97,7 +97,7 @@ public sealed class DiscoveryController : ControllerBase
 	{
 		var response = new ConfigurationResponse
 		{
-			Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer()),
+			Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 
 			JwksUri = Resolve(Path.Keys, OidcEndpoints.Keys),
 			AuthorizationEndpoint = Resolve(Path.Authorize, OidcEndpoints.Authorize),

@@ -114,7 +114,8 @@ internal class AccessTokenService : IAccessTokenService
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(_issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
+				Audiences = new[] { clientInfo.ClientId },
 			},
 		};
 

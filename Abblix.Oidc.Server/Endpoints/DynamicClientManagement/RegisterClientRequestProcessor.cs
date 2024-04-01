@@ -113,13 +113,14 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         var clientId = model.ClientId.HasValue() ? model.ClientId : _clientIdGenerator.GenerateClientId();
         var (clientSecret, expiresAt) = GenerateClientSecret(model.TokenEndpointAuthMethod, issuedAt);
 
-        await _clientInfoManager.AddClientAsync(ToClientInfo(model, clientId, clientSecret, expiresAt, request.SectorIdentifier));
+        var clientInfo = ToClientInfo(model, clientId, clientSecret, expiresAt, request.SectorIdentifier);
+        await _clientInfoManager.AddClientAsync(clientInfo);
 
         var response = new ClientRegistrationSuccessResponse(clientId, issuedAt)
         {
             ClientSecret = clientSecret,
             ClientSecretExpiresAt = expiresAt,
-            RegistrationAccessToken = await IssueRegistrationAccessToken(clientId, issuedAt),
+            RegistrationAccessToken = await IssueRegistrationAccessTokenAsync(clientId, issuedAt),
         };
         return response;
     }
@@ -206,7 +207,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         return clientInfo;
     }
 
-    private Task<string> IssueRegistrationAccessToken(string clientId, DateTimeOffset issuedAt)
+    private Task<string> IssueRegistrationAccessTokenAsync(string clientId, DateTimeOffset issuedAt)
     {
         var token = new JsonWebToken
         {
@@ -215,12 +216,13 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 Type = JwtTypes.RegistrationAccessToken,
                 Algorithm = SigningAlgorithms.RS256,
             },
-            Payload = {
+            Payload =
+            {
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 //ExpiresAt = issuedAt + ..., //TODO think about the expiration of this token
 
-                Issuer = LicenseChecker.CheckLicense(_issuerProvider.GetIssuer()),
+                Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
                 Audiences = new[] { clientId },
                 Subject = clientId,
             },
