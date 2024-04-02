@@ -37,17 +37,16 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Implementation;
 
 /// <summary>
-/// Provides access to JSON Web Keys (JWK) used for encryption and signing JWT tokens,
-/// based on the preconfigured X509 certificates defined in OIDC options.
+/// Provides access to JSON Web Keys (JWK) used for encryption and signing JWT tokens.
 /// </summary>
 /// <remarks>
 /// This implementation provides keys for encryption and signing purposes by mapping X509 certificates to JWK format.
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
-internal class ServiceKeysProvider : IAuthServiceKeysProvider
+internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 {
-	public ServiceKeysProvider(IOptions<OidcOptions> options)
+	public OidcOptionsKeysProvider(IOptions<OidcOptions> options)
 	{
 		_options = options;
 	}
@@ -62,9 +61,8 @@ internal class ServiceKeysProvider : IAuthServiceKeysProvider
 	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys)
 	{
 		var jsonWebKeys =
-			from cert in _options.Value.EncryptionCertificates
-			orderby cert.NotAfter descending
-			select cert.ToJsonWebKey(includePrivateKeys);
+			from jwk in _options.Value.EncryptionKeys
+			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.AsAsync();
 	}
@@ -77,9 +75,8 @@ internal class ServiceKeysProvider : IAuthServiceKeysProvider
 	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys)
 	{
 		var jsonWebKeys =
-			from cert in _options.Value.SigningCertificates
-			orderby cert.NotAfter descending
-			select cert.ToJsonWebKey(includePrivateKeys);
+			from jwk in _options.Value.SigningKeys
+			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.AsAsync();
 	}

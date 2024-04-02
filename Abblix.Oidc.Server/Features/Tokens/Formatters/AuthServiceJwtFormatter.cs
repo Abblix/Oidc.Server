@@ -64,7 +64,7 @@ public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 	/// </remarks>
 	public async Task<string> FormatAsync(JsonWebToken token)
 	{
-		// Select the appropriate signing key based on the JWT's specified algorithm
+		// Select the appropriate signing key based on the JWT specified algorithm
 		var signingCredentials = await _serviceKeysProvider.GetSigningKeys(true)
 			.FirstByAlgorithmAsync(token.Header.Algorithm);
 

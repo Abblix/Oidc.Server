@@ -270,7 +270,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
         return services
-            .AddSingleton<IAuthServiceKeysProvider, ServiceKeysProvider>()
+            .AddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>()
 
             .AddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>()
             .AddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();

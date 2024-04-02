@@ -34,41 +34,48 @@ namespace Abblix.Jwt;
 
 //TODO consider to split this class into specialized subclasses (RSA/EllipticCurve)
 /// <summary>
-/// Represents a JSON Web Key (JWK), a data structure that represents a cryptographic key in JSON format.
-/// The class supports various key types including RSA and Elliptic Curve, and is capable of representing both public and private keys.
+/// Represents a JSON Web Key (JWK), a versatile structure for representing cryptographic keys using JSON.
+/// It supports various cryptographic algorithms, including RSA and Elliptic Curve, and can represent both
+/// public and private keys. JWKs are crucial for digital signatures, encryption, and ensuring secure
+/// communication in web-based protocols.
 /// </summary>
-public class JsonWebKey
+public record JsonWebKey
 {
     /// <summary>
-    /// Key type (kty). Identifies the cryptographic algorithm family used with the key, such as "RSA" or "EC" for Elliptic Curve.
+    /// Identifies the cryptographic algorithm family used with the key, such as RSA or EC (Elliptic Curve),
+    /// specifying the key's type and its intended cryptographic use.
     /// </summary>
     [JsonPropertyName("kty")]
     [JsonPropertyOrder(1)]
     public string? KeyType { get; set; }
 
     /// <summary>
-    /// Intended use of the key (use). Indicates how the key is meant to be used, such as "sig" for signing or "enc" for encryption.
+    /// Indicates the intended use of the key, for example, "sig" (signature) for signing operations or
+    /// "enc" (encryption) for encryption operations, guiding clients on how to use the key appropriately.
     /// </summary>
     [JsonPropertyName("use")]
     [JsonPropertyOrder(2)]
     public string? Usage { get; set; }
 
     /// <summary>
-    /// Algorithm (alg). Specifies the algorithm that the key is intended to be used with.
+    /// Specifies the algorithm intended for use with the key, aligning with JWT and JWA specifications
+    /// to ensure interoperability and secure key management.
     /// </summary>
     [JsonPropertyName("alg")]
     [JsonPropertyOrder(3)]
     public string? Algorithm { get; set; }
 
     /// <summary>
-    /// Key ID (kid). A hint indicating which specific key owned by the signer should be used.
+    /// A unique identifier for the key, facilitating key selection and management in multi-key environments,
+    /// enabling clients and servers to reference and utilize the correct key for cryptographic operations.
     /// </summary>
     [JsonPropertyName("kid")]
     [JsonPropertyOrder(4)]
     public string? KeyId { get; set; }
 
     /// <summary>
-    /// X.509 Certificate Chain (x5c). Contains a chain of one or more PKIX certificates.
+    /// Contains a chain of one or more PKIX certificates (RFC 5280), offering a method to associate X.509
+    /// certificates with the key for validation and trust chain establishment in secure communications.
     /// </summary>
     [JsonPropertyName("x5c")]
     [JsonPropertyOrder(5)]
@@ -76,7 +83,8 @@ public class JsonWebKey
     public byte[][]? Certificates { get; set; }
 
     /// <summary>
-    /// X.509 Certificate SHA-1 Thumbprint (x5t). A base64url-encoded SHA-1 thumbprint (a.k.a. digest) of the DER encoding of an X.509 certificate.
+    /// A base64url-encoded SHA-1 thumbprint of the DER encoding of an X.509 certificate, providing a compact
+    /// means to associate a certificate with the JWK for verification purposes without transmitting the full certificate.
     /// </summary>
     [JsonPropertyName("x5t")]
     [JsonPropertyOrder(5)]
@@ -169,4 +177,30 @@ public class JsonWebKey
     [JsonPropertyOrder(16)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? FirstCrtCoefficient { get; set; }
+
+    /// <summary>
+    /// Prepares a sanitized version of the JWK that excludes private key information unless explicitly included,
+    /// suitable for public sharing while preserving the integrity of sensitive data.
+    /// </summary>
+    /// <param name="includePrivateKeys">Whether to include private key data in the sanitized output.</param>
+    /// <returns>
+    /// A new instance of <see cref="JsonWebKey"/> with or without private key data based on the input parameter.
+    /// </returns>
+    public JsonWebKey Sanitize(bool includePrivateKeys)
+    {
+        return includePrivateKeys switch
+        {
+            true when PrivateKey is { Length: > 0} => this,
+            true => throw new InvalidOperationException($"There is no private key for kid={KeyId}"),
+            false => this with
+            {
+                PrivateKey = null,
+                FirstCrtCoefficient = null,
+                FirstPrimeFactor = null,
+                FirstFactorCrtExponent = null,
+                SecondPrimeFactor = null,
+                SecondFactorCrtExponent = null,
+            }
+        };
+    }
 }
