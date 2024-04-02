@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Description>
             The package integrates Abblix's OpenID Connect Server capabilities with ASP.NET MVC, offering seamless

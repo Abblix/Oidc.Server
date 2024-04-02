@@ -4,7 +4,7 @@
     <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IsPackable>true</IsPackable>
+    <IsPackable>false</IsPackable>
     <Description>
       A lightweight, easy-to-use library for generating, validating, and working with JSON Web Tokens (JWT) in .NET applications.
       Whether you're developing web APIs, microservices, or serverless applications that require secure, stateless authentication
