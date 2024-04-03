@@ -16,6 +16,8 @@
     </ItemGroup>
     
     <ItemGroup>
+        <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" PrivateAssets="All" />
+        <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" PrivateAssets="All" />
         <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
     </ItemGroup>
     
