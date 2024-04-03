@@ -8,7 +8,6 @@
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
         <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -25,22 +24,25 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
-      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" PrivateAssets="all" />
+      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" PrivateAssets="all" />
     </ItemGroup>
 
-    <ItemGroup>
-      <None Include="bin\Release\net6.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net6.0" />
-      <None Include="bin\Release\net6.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net6.0" />
-      <None Include="bin\Release\net6.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net6.0" />
+    <!-- Add this Target to include DLLs directly in the NuGet package -->
+    <Target Name="IncludeDependencies" AfterTargets="Build">
+        <ItemGroup>
+            <None Include="bin\Release\net6.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net6.0" />
+            <None Include="bin\Release\net6.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net6.0" />
+            <None Include="bin\Release\net6.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net6.0" />
 
-      <None Include="bin\Release\net7.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net7.0" />
-      <None Include="bin\Release\net7.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net7.0" />
-      <None Include="bin\Release\net7.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net7.0" />
+            <None Include="bin\Release\net7.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net7.0" />
+            <None Include="bin\Release\net7.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net7.0" />
+            <None Include="bin\Release\net7.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net7.0" />
 
-      <None Include="bin\Release\net8.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net8.0" />
-      <None Include="bin\Release\net8.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net8.0" />
-      <None Include="bin\Release\net8.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net8.0" />
-    </ItemGroup>
+            <None Include="bin\Release\net8.0\Abblix.Utils.dll" Pack="true" PackagePath="lib\net8.0" />
+            <None Include="bin\Release\net8.0\Abblix.Jwt.dll" Pack="true" PackagePath="lib\net8.0" />
+            <None Include="bin\Release\net8.0\Abblix.DependencyInjection.dll" Pack="true" PackagePath="lib\net8.0" />
+        </ItemGroup>
+    </Target>
 
 </Project>
