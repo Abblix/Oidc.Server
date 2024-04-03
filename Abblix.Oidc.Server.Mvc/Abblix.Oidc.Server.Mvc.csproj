@@ -8,11 +8,7 @@
         <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Description>
-            The package integrates Abblix's OpenID Connect Server capabilities with ASP.NET MVC, offering seamless
-            support for authentication and authorization in MVC applications. It enables rapid implementation of
-            secure OpenID Connect protocols, ensuring robust security features are accessible within the MVC framework.
-        </Description>
+        <Description>The package integrates Abblix's OpenID Connect Server capabilities with ASP.NET MVC, offering seamless support for authentication and authorization in MVC applications. It enables rapid implementation of secure OpenID Connect protocols, ensuring robust security features are accessible within the MVC framework.</Description>
     </PropertyGroup>
 
     <ItemGroup>
@@ -24,7 +20,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
     </ItemGroup>
 
     <PropertyGroup>

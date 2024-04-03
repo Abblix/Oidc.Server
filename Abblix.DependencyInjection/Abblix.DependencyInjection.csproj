@@ -4,11 +4,9 @@
     <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-    <Description>
-      Enhances .NET applications with Abblix's sophisticated dependency injection patterns,
-      offering features like service aliasing, composite services, and decorators for streamlined service registration.
-    </Description>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Description>Enhances .NET applications with Abblix's sophisticated dependency injection patterns, offering features like service aliasing, composite services, and decorators for streamlined service registration.</Description>
   </PropertyGroup>
 
   <ItemGroup>

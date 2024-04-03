@@ -38,18 +38,17 @@ public static class CookieOptionsExtensions
     /// </summary>
     /// <param name="options">The custom cookie options to convert.</param>
     /// <returns>The converted <see cref="CookieOptions"/> suitable for ASP.NET Core.</returns>
-    public static CookieOptions ConvertOptions(this Common.CookieOptions options)
-        => new()
-        {
-            Domain = options.Domain,
-            Path = options.Path,
-            Secure = options.Secure,
-            IsEssential = options.IsEssential,
-            HttpOnly = options.HttpOnly,
-            SameSite = options.SameSite.ConvertSameSite(),
-            Expires = options.Expires,
-            MaxAge = options.MaxAge,
-        };
+    public static CookieOptions ConvertOptions(this Common.CookieOptions options) => new()
+    {
+        Domain = options.Domain,
+        Path = options.Path,
+        Secure = options.Secure,
+        IsEssential = options.IsEssential,
+        HttpOnly = options.HttpOnly,
+        SameSite = options.SameSite.ConvertSameSite(),
+        Expires = options.Expires,
+        MaxAge = options.MaxAge,
+    };
 
     /// <summary>
     /// Converts a string representation of the SameSite attribute to its <see cref="SameSiteMode"/> equivalent.
@@ -57,7 +56,9 @@ public static class CookieOptionsExtensions
     /// <param name="sameSite">The string representation of the SameSite attribute.</param>
     /// <returns>The <see cref="SameSiteMode"/> value corresponding to the input string.</returns>
     private static SameSiteMode ConvertSameSite(this string? sameSite)
-        => sameSite.HasValue()
+    {
+        return sameSite.HasValue()
             ? Enum.Parse<SameSiteMode>(sameSite, true)
             : SameSiteMode.Unspecified;
+    }
 }
