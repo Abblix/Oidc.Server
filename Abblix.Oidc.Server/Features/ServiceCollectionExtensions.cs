@@ -100,6 +100,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         return services
+#if NET8_0_OR_GREATER
+            .AddSingleton(TimeProvider.System)
+#endif
             .AddSingleton<IClock, SystemClock>()
             .AddSingleton<IHashService, HashService>()
             .AddSingleton<ISubjectTypeConverter, SubjectTypeConverter>()
