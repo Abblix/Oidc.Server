@@ -27,8 +27,6 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
-using System.Security.Claims;
-
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
 /// <summary>
@@ -58,10 +56,9 @@ public interface IAuthenticationService
 	/// Initiates a new user session based on provided user claims, effectively signing in the user.
 	/// This method is essential for establishing new user sessions following successful authentication.
 	/// </summary>
-	/// <param name="principal">The claims principal that identifies the user.</param>
 	/// <param name="authSession">Detailed information about the authentication session to be established.</param>
 	/// <returns>A task that signifies the completion of the user sign-in process.</returns>
-	Task SignInAsync(ClaimsPrincipal principal, AuthSession authSession);
+	Task SignInAsync(AuthSession authSession);
 
 	/// <summary>
 	/// Terminates the current user session, effectively signing out the user.

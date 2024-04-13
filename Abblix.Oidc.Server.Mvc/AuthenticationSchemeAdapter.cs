@@ -37,7 +37,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using IAuthenticationService = Abblix.Oidc.Server.Features.UserAuthentication.IAuthenticationService;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -51,29 +50,22 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 	/// <summary>
 	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class.
 	/// </summary>
-	/// <param name="logger">The logger for logging information and errors.</param>
-	/// <param name="authenticationSchemeProvider">Provides the authentication scheme.</param>
 	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>.</param>
-	public AuthenticationSchemeAdapter(
-		ILogger<AuthenticationSchemeAdapter> logger,
-		IAuthenticationSchemeProvider authenticationSchemeProvider,
-		IHttpContextAccessor httpContextAccessor)
+	public AuthenticationSchemeAdapter(IHttpContextAccessor httpContextAccessor)
 	{
-		_logger = logger;
-		_authenticationSchemeProvider = authenticationSchemeProvider;
 		_httpContextAccessor = httpContextAccessor;
 	}
 
-	private readonly ILogger _logger;
-	private readonly IAuthenticationSchemeProvider _authenticationSchemeProvider;
 	private readonly IHttpContextAccessor _httpContextAccessor;
 
-	private HttpContext HttpContext => _httpContextAccessor.HttpContext.NotNull(nameof(_httpContextAccessor.HttpContext));
+	private HttpContext HttpContext => _httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
 
 	/// <summary>
 	/// Asynchronously retrieves the available authentication sessions for the current user.
 	/// </summary>
-	/// <returns>An asynchronous stream of <see cref="AuthSession"/> instances representing the current authentication sessions.</returns>
+	/// <returns>
+	/// An asynchronous stream of <see cref="AuthSession"/> instances representing the current authentication sessions.
+	/// </returns>
 	public async IAsyncEnumerable<AuthSession> GetAvailableAuthSessions()
 	{
 		var user = await AuthenticateAsync();
@@ -86,14 +78,13 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 	/// <summary>
 	/// Asynchronously authenticates the current user based on the default authentication scheme.
 	/// </summary>
-	/// <returns>A task that represents the asynchronous operation. The task result contains the <see cref="AuthSession"/> of the authenticated user, or null if authentication fails.</returns>
+	/// <returns>A task that represents the asynchronous operation.
+	/// The task result contains the <see cref="AuthSession"/> of the authenticated user,
+	/// or null if authentication fails.
+	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()
 	{
-		var scheme = await _authenticationSchemeProvider.GetDefaultAuthenticateSchemeAsync();
-		if (scheme == null)
-			return null;
-
-		var authenticationResult = await HttpContext.AuthenticateAsync(scheme.Name);
+		var authenticationResult = await HttpContext.AuthenticateAsync();
 		if (!authenticationResult.Succeeded)
 			return null;
 
@@ -134,19 +125,19 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 				authSession.AffectedClientIds = affectedClientIdsArray;
 		}
 
-		_logger.LogDebug("AuthenticateAsync() returns {@AuthSession}", authSession);
-
 		return authSession;
 	}
 
 	/// <summary>
 	/// Signs in the specified user into the application.
 	/// </summary>
-	/// <param name="principal">The claims principal representing the user.</param>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
 	/// <returns>A task that represents the asynchronous sign-in operation.</returns>
-	public Task SignInAsync(ClaimsPrincipal principal, AuthSession authSession)
+	public Task SignInAsync(AuthSession authSession)
 	{
+		var claims = new[] { new Claim(JwtClaimTypes.Subject, authSession.Subject) };
+		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.AuthenticationType));
+
 		var properties = new AuthenticationProperties();
 		properties.SetString(JwtClaimTypes.SessionId, authSession.SessionId);
 		properties.SetString(JwtClaimTypes.AuthenticationTime, authSession.AuthenticationTime.ToUnixTimeSeconds().ToString());
@@ -168,7 +159,7 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 			return Task.CompletedTask;
 
 		authSession.AffectedClientIds = authSession.AffectedClientIds.Append(clientId);
-		return SignInAsync(HttpContext.User, authSession);
+		return SignInAsync(authSession);
 	}
 
 	/// <summary>
