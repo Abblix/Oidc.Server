@@ -143,12 +143,15 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
 
     private async Task<ActionResult> RedirectAsync(Uri uri, AuthorizationRequest request)
     {
-        var par = await _authorizationRequestStorage.StoreAsync(request, _options.Value.LoginSessionExpiresIn);
+        var response = await _authorizationRequestStorage.StoreAsync(
+            request,
+            _options.Value.LoginSessionExpiresIn);
+
         return new RedirectResult(new UriBuilder(uri)
         {
             Query =
             {
-                [_options.Value.RequestUriParameterName] = par.RequestUri.OriginalString,
+                [_options.Value.RequestUriParameterName] = response.RequestUri.OriginalString,
             }
         });
     }

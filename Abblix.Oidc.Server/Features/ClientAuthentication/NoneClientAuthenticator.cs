@@ -80,10 +80,12 @@ public class NoneClientAuthenticator: IClientAuthenticator
     /// Attempts to authenticate a client based solely on its ID, without requiring a client secret.
     /// </summary>
     /// <param name="request">The client request containing the client's ID.</param>
-    /// <returns>A task that represents the asynchronous operation, returning the authenticated <see cref="ClientInfo"/> if successful, or null if authentication fails.</returns>
+    /// <returns>A task that represents the asynchronous operation, returning the authenticated <see cref="ClientInfo"/>
+    /// if successful, or null if authentication fails.</returns>
     /// <remarks>
-    /// This method is suitable for public clients where a secret is not issued or cannot be securely stored. It verifies the existence of the client
-    /// and ensures it is marked as a public client in the configuration. Clients not meeting these criteria are not authenticated.
+    /// This method is suitable for public clients where a secret is not issued or cannot be securely stored.
+    /// It verifies the existence of the client and ensures it is marked as a public client in the configuration.
+    /// Clients not meeting these criteria are not authenticated.
     /// </remarks>
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {

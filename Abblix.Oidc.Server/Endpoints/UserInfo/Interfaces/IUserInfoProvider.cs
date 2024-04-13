@@ -33,15 +33,35 @@ using System.Text.Json.Nodes;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Provides functionality to retrieve user information as JWT claims.
+/// Provides functionality to retrieve user information as JWT claims, supporting both simple and structured claim values.
+/// This interface enables the dynamic extraction and packaging of user attributes into JWT claims, accommodating a variety
+/// of claim types including those that require complex, structured data beyond traditional scalar values.
 /// </summary>
 public interface IUserInfoProvider
 {
-	/// <summary>
-	/// Asynchronously gets user information for a given subject identifier and requested claims.
-	/// </summary>
-	/// <param name="subject">The subject identifier of the user.</param>
-	/// <param name="requestedClaims">The collection of claims requested.</param>
-	/// <returns>An array of JWT claims representing the user's information, or null if the information is not available.</returns>
-	Task<JsonObject?> GetUserInfoAsync(string subject, IEnumerable<string> requestedClaims);
+    /// <summary>
+    /// Asynchronously retrieves a set of user claims for a specified subject identifier, including both simple and
+    /// structured claim values as requested by the client application. This method supports the OpenID Connect
+    /// specification by allowing for the selective disclosure of user information, catering to the need for complex
+    /// data structures within claims.
+    /// </summary>
+    /// <param name="subject">The unique subject identifier (sub claim) of the user whose information is being requested.
+    /// This identifier must uniquely identify the user across all applications and services.</param>
+    /// <param name="requestedClaims">A collection of names representing the claims requested by a client application.
+    /// Implementations should check against this list to return only those claims that are requested and authorized
+    /// for release, including both scalar values and structured data as necessary.</param>
+    /// <returns>
+    /// A task that resolves to a <see cref="JsonObject"/>, encapsulating the user's claims where each entry consists of
+    /// a claim name and its value. The value can be a simple scalar value (e.g., a string or number) or a structured
+    /// object, allowing for complex data types to be represented. Returns null if no information is available for the
+    /// given subject. The use of <see cref="JsonObject"/> facilitates the representation of hierarchical data within claims,
+    /// supporting richer and more detailed user profiles.
+    /// </returns>
+    /// <remarks>
+    /// Implementers should ensure that the disclosure of user information complies with applicable privacy laws and
+    /// the principles of data minimization. Sensitive or personal information must only be shared with explicit user
+    /// consent and in a secure manner. In cases where the requested user or claims are not found, returning null or an
+    /// empty <see cref="JsonObject"/> helps maintain privacy and security.
+    /// </remarks>
+    Task<JsonObject?> GetUserInfoAsync(string subject, IEnumerable<string> requestedClaims);
 }
