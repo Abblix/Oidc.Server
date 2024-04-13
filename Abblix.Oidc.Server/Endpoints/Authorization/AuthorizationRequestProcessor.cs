@@ -161,7 +161,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 		if (!authSession.AffectedClientIds.Contains(authContext.ClientId))
 		{
-			authSession.AffectedClientIds = authSession.AffectedClientIds.Append(authContext.ClientId);
+			authSession.AffectedClientIds.Add(authContext.ClientId);
 			await _authSessionService.SignInAsync(authSession);
 		}
 

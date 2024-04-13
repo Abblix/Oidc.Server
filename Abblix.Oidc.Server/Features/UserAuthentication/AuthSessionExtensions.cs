@@ -51,7 +51,7 @@ public static class AuthSessionExtensions
     public static void ApplyTo(this AuthSession authSession, JsonWebTokenPayload payload)
     {
         payload.Subject = authSession.Subject;
-        payload.IdentityProvider = authSession.AuthenticationType;
+        payload.IdentityProvider = authSession.IdentityProvider;
         payload.SessionId = authSession.SessionId;
         payload.AuthenticationTime = authSession.AuthenticationTime;
     }
@@ -69,7 +69,7 @@ public static class AuthSessionExtensions
     {
         Subject = payload.Subject.NotNull(nameof(payload.Subject)),
         SessionId = payload.SessionId.NotNull(nameof(payload.SessionId)),
-        AuthenticationType = payload.IdentityProvider,
+        IdentityProvider = payload.IdentityProvider,
         AuthenticationTime = payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
     };
 }
