@@ -32,7 +32,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -67,7 +66,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         IClientSecretGenerator clientSecretGenerator,
         IHashService hashService,
         IClientInfoManager clientInfoManager,
-        IClock clock,
+        TimeProvider clock,
         NewClientOptions options,
         IAuthServiceJwtFormatter serviceJwtFormatter,
         IIssuerProvider issuerProvider)
@@ -86,7 +85,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     private readonly IClientInfoManager _clientInfoManager;
     private readonly IClientSecretGenerator _clientSecretGenerator;
     private readonly IHashService _hashService;
-    private readonly IClock _clock;
+    private readonly TimeProvider _clock;
     private readonly IIssuerProvider _issuerProvider;
     private readonly NewClientOptions _options;
     private readonly IAuthServiceJwtFormatter _serviceJwtFormatter;
@@ -109,7 +108,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     {
         var model = request.Model;
 
-        var issuedAt = _clock.UtcNow;
+        var issuedAt = _clock.GetUtcNow();
         var clientId = model.ClientId.HasValue() ? model.ClientId : _clientIdGenerator.GenerateClientId();
         var (clientSecret, expiresAt) = GenerateClientSecret(model.TokenEndpointAuthMethod, issuedAt);
 

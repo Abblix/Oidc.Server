@@ -32,7 +32,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
@@ -57,7 +56,7 @@ public class LogoutTokenService : ILogoutTokenService
     /// </param>
     public LogoutTokenService(
         ILogger<LogoutTokenService> logger,
-        IClock clock,
+        TimeProvider clock,
         ISubjectTypeConverter subjectTypeConverter,
         IClientJwtFormatter jwtFormatter)
     {
@@ -68,7 +67,7 @@ public class LogoutTokenService : ILogoutTokenService
     }
 
     private readonly ILogger _logger;
-    private readonly IClock _clock;
+    private readonly TimeProvider _clock;
     private readonly ISubjectTypeConverter _subjectTypeConverter;
     private readonly IClientJwtFormatter _jwtFormatter;
 
@@ -100,7 +99,7 @@ public class LogoutTokenService : ILogoutTokenService
         //TODO extract id generator to separate class
         var jwtId = CryptoRandom.GetRandomBytes(16).ToHexString();
 
-        var issuedAt = _clock.UtcNow;
+        var issuedAt = _clock.GetUtcNow();
 
         var logoutToken = new JsonWebToken
         {

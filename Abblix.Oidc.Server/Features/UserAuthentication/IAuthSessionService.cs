@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// This interface plays a pivotal role in the security and session management of an application, ensuring that users are
 /// authenticated and their sessions are managed securely across different contexts and client applications.
 /// </summary>
-public interface IAuthenticationService
+public interface IAuthSessionService
 {
 	/// <summary>
 	/// Retrieves currently active authentication sessions for the user.
@@ -66,13 +66,4 @@ public interface IAuthenticationService
 	/// </summary>
 	/// <returns>A task that signifies the completion of the user sign-out process.</returns>
 	Task SignOutAsync();
-
-	/// <summary>
-	/// Updates or refreshes the authentication session for a specific client, typically used to extend session validity or update session details.
-	/// This method supports scenarios where long-lived sessions are needed or session information needs to be refreshed due to changes in user state.
-	/// </summary>
-	/// <param name="authSession">The updated authentication session information.</param>
-	/// <param name="clientId">The identifier of the client application for which the session is being updated.</param>
-	/// <returns>A task representing the asynchronous operation to update the authentication session.</returns>
-	Task UpdateAsync(AuthSession authSession, string clientId);
 }

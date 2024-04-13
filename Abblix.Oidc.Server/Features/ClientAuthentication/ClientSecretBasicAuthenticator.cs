@@ -30,7 +30,6 @@
 using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -53,7 +52,8 @@ public class ClientSecretBasicAuthenticator : ClientSecretAuthenticator, IClient
 	public ClientSecretBasicAuthenticator(
 		ILogger<ClientSecretBasicAuthenticator> logger,
 		IClientInfoProvider clientInfoProvider,
-		IClock clock, IHashService hashService)
+		TimeProvider clock,
+		IHashService hashService)
 		: base(logger, clientInfoProvider, clock, hashService)
 	{
 	}

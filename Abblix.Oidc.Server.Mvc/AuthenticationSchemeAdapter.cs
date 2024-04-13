@@ -37,15 +37,14 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
-using IAuthenticationService = Abblix.Oidc.Server.Features.UserAuthentication.IAuthenticationService;
 
 namespace Abblix.Oidc.Server.Mvc;
 
 /// <summary>
-/// Adapts ASP.NET Authentication Scheme to the <see cref="IAuthenticationService"/> interface.
+/// Adapts ASP.NET Authentication Scheme to the <see cref="IAuthSessionService"/> interface.
 /// Allows integration of Abblix Oidc Server with standard ASP.NET Authentication capability.
 /// </summary>
-public class AuthenticationSchemeAdapter : IAuthenticationService
+public class AuthenticationSchemeAdapter : IAuthSessionService
 {
 	/// <summary>
 	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class.
@@ -145,21 +144,6 @@ public class AuthenticationSchemeAdapter : IAuthenticationService
 		properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
 
 		return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
-	}
-
-	/// <summary>
-	/// Updates the specified authentication session with the given client ID.
-	/// </summary>
-	/// <param name="authSession">The authentication session to be updated.</param>
-	/// <param name="clientId">The client ID to be added to the session.</param>
-	/// <returns>A task that represents the asynchronous update operation.</returns>
-	public Task UpdateAsync(AuthSession authSession, string clientId)
-	{
-		if (authSession.AffectedClientIds.Contains(clientId))
-			return Task.CompletedTask;
-
-		authSession.AffectedClientIds = authSession.AffectedClientIds.Append(clientId);
-		return SignInAsync(authSession);
 	}
 
 	/// <summary>

@@ -31,7 +31,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -61,7 +60,7 @@ internal class AccessTokenService : IAccessTokenService
 	/// the standards required for secure transmission and validation.</param>
 	public AccessTokenService(
 		IIssuerProvider issuerProvider,
-		IClock clock,
+		TimeProvider clock,
 		ITokenIdGenerator tokenIdGenerator,
 		IAuthServiceJwtFormatter serviceJwtFormatter)
 	{
@@ -72,7 +71,7 @@ internal class AccessTokenService : IAccessTokenService
 	}
 
 	private readonly IIssuerProvider _issuerProvider;
-	private readonly IClock _clock;
+	private readonly TimeProvider _clock;
 	private readonly ITokenIdGenerator _tokenIdGenerator;
 	private readonly IAuthServiceJwtFormatter _serviceJwtFormatter;
 
@@ -99,7 +98,7 @@ internal class AccessTokenService : IAccessTokenService
 		AuthorizationContext authContext,
 		ClientInfo clientInfo)
 	{
-		var issuedAt = _clock.UtcNow;
+		var issuedAt = _clock.GetUtcNow();
 
 		var accessToken = new JsonWebToken
 		{

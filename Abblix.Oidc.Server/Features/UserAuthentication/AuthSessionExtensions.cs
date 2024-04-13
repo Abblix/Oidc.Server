@@ -65,12 +65,11 @@ public static class AuthSessionExtensions
     /// This method allows for the reconstruction of an authentication session from the claims encoded in a JWT.
     /// It is particularly useful when processing JWTs to extract authentication and user session details.
     /// </remarks>
-    public static AuthSession ToAuthSession(this JsonWebTokenPayload payload)
-        => new()
-        {
-            Subject = payload.Subject.NotNull(nameof(payload.Subject)),
-            SessionId = payload.SessionId.NotNull(nameof(payload.SessionId)),
-            AuthenticationType = payload.IdentityProvider,
-            AuthenticationTime = payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
-        };
+    public static AuthSession ToAuthSession(this JsonWebTokenPayload payload) => new()
+    {
+        Subject = payload.Subject.NotNull(nameof(payload.Subject)),
+        SessionId = payload.SessionId.NotNull(nameof(payload.SessionId)),
+        AuthenticationType = payload.IdentityProvider,
+        AuthenticationTime = payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
+    };
 }

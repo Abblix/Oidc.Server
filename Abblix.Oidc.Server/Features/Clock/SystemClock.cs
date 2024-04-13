@@ -27,35 +27,28 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
-namespace Abblix.Oidc.Server.Features.Clock;
+#if !NET8_0_OR_GREATER
 
-#if NET8_0_OR_GREATER
-
-/// <summary>
-/// Represents a clock providing the current time, where the time source can be configured through a <see cref="TimeProvider"/>.
-/// This version is specifically for use with .NET 8.0 or greater, allowing for more flexible time source configurations.
-/// </summary>
-/// <param name="timeProvider">A <see cref="TimeProvider"/> instance that defines how the current time is obtained.</param>
-public class SystemClock(TimeProvider timeProvider) : IClock
-{
-   /// <summary>
-    /// Gets the current UTC time as provided by the configured <see cref="TimeProvider"/>.
-    /// </summary>
-    public DateTimeOffset UtcNow => timeProvider.GetUtcNow();
-}
-
-#else
+// ReSharper disable once CheckNamespace
+namespace System;
 
 /// <summary>
 /// Represents a clock that provides the current UTC time based on the system clock.
 /// This implementation is intended for use in versions of .NET earlier than 8.0, relying on the system's clock.
 /// </summary>
-public class SystemClock : IClock
+public abstract class TimeProvider
 {
     /// <summary>
     /// Gets the current UTC time directly from the system clock.
     /// </summary>
-    public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
+    public abstract DateTimeOffset GetUtcNow();
+
+    public static readonly TimeProvider System = new SystemTimeProvider();
+
+    private class SystemTimeProvider : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow;
+    }
 }
 
 #endif

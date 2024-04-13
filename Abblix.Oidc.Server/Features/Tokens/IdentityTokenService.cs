@@ -35,7 +35,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -51,10 +50,9 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// </summary>
 internal class IdentityTokenService : IIdentityTokenService
 {
-
 	public IdentityTokenService(
 		IIssuerProvider issuerProvider,
-		IClock clock,
+		TimeProvider clock,
 		IUserInfoProvider userInfoProvider,
 		IScopeClaimsProvider scopeClaimsProvider,
 		ISubjectTypeConverter subjectTypeConverter,
@@ -69,7 +67,7 @@ internal class IdentityTokenService : IIdentityTokenService
 	}
 
 	private readonly IIssuerProvider _issuerProvider;
-	private readonly IClock _clock;
+	private readonly TimeProvider _clock;
 	private readonly IUserInfoProvider _userInfoProvider;
 	private readonly IScopeClaimsProvider _scopeClaimsProvider;
 	private readonly ISubjectTypeConverter _subjectTypeConverter;
@@ -124,7 +122,7 @@ internal class IdentityTokenService : IIdentityTokenService
 			throw new InvalidOperationException("The user claims were not found by subject value");
 		}
 
-		var issuedAt = _clock.UtcNow;
+		var issuedAt = _clock.GetUtcNow();
 
 		var identityToken = new JsonWebToken
 		{

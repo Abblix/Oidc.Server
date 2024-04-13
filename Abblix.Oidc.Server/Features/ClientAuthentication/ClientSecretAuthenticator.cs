@@ -28,7 +28,6 @@
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
@@ -54,7 +53,7 @@ public abstract class ClientSecretAuthenticator
 	protected ClientSecretAuthenticator(
 		ILogger<ClientSecretAuthenticator> logger,
 		IClientInfoProvider clientInfoProvider,
-		IClock clock,
+		TimeProvider clock,
 		IHashService hashService)
 	{
 		_logger = logger;
@@ -65,7 +64,7 @@ public abstract class ClientSecretAuthenticator
 
 	private readonly ILogger _logger;
 	private readonly IClientInfoProvider _clientInfoProvider;
-	private readonly IClock _clock;
+	private readonly TimeProvider _clock;
 	private readonly IHashService _hashService;
 
 	/// <summary>
@@ -139,7 +138,7 @@ public abstract class ClientSecretAuthenticator
 			return false; // Invalid secret
 		}
 
-		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < _clock.UtcNow)
+		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < _clock.GetUtcNow())
 		{
 			_logger.LogWarning("Client authentication failed: Secret has expired for client {ClientId}",
 				client.ClientId);

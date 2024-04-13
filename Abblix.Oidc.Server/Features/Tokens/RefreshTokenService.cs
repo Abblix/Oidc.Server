@@ -33,7 +33,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -51,7 +50,7 @@ public class RefreshTokenService : IRefreshTokenService
 {
 	public RefreshTokenService(
 		IIssuerProvider issuerProvider,
-		IClock clock,
+		TimeProvider clock,
 		ITokenIdGenerator tokenIdGenerator,
 		IAuthServiceJwtFormatter jwtFormatter)
 	{
@@ -62,7 +61,7 @@ public class RefreshTokenService : IRefreshTokenService
 	}
 
 	private readonly IIssuerProvider _issuerProvider;
-	private readonly IClock _clock;
+	private readonly TimeProvider _clock;
 	private readonly ITokenIdGenerator _tokenIdGenerator;
 	private readonly IAuthServiceJwtFormatter _jwtFormatter;
 
@@ -88,7 +87,7 @@ public class RefreshTokenService : IRefreshTokenService
 		ClientInfo clientInfo,
 		JsonWebToken? refreshToken)
 	{
-		var now = _clock.UtcNow;
+		var now = _clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
 		var expiresAt = CalculateExpiresAt(issuedAt, clientInfo.RefreshToken);
 		if (expiresAt < now)

@@ -31,14 +31,12 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
-using IAuthenticationService = Abblix.Oidc.Server.Features.UserAuthentication.IAuthenticationService;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -57,21 +55,21 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	/// including user authentication, consent handling, authorization code generation, access
 	/// and identity token services, and time-related functionality.
 	/// </summary>
-	/// <param name="authenticationService">Service for handling user authentication.</param>
+	/// <param name="authSessionService">Service for handling user authentication.</param>
 	/// <param name="consentService">Service for managing user consent.</param>
 	/// <param name="authorizationCodeService">Service for generating and managing authorization codes.</param>
 	/// <param name="accessTokenService">Service for creating access tokens.</param>
 	/// <param name="identityTokenService">Service for generating identity tokens.</param>
 	/// <param name="clock">Service for managing time-related operations.</param>
 	public AuthorizationRequestProcessor(
-		IAuthenticationService authenticationService,
+		IAuthSessionService authSessionService,
 		IConsentService consentService,
 		IAuthorizationCodeService authorizationCodeService,
 		IAccessTokenService accessTokenService,
 		IIdentityTokenService identityTokenService,
-		IClock clock)
+		TimeProvider clock)
 	{
-		_authenticationService = authenticationService;
+		_authSessionService = authSessionService;
 		_consentService = consentService;
 		_authorizationCodeService = authorizationCodeService;
 		_accessTokenService = accessTokenService;
@@ -81,10 +79,10 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 	private readonly IAccessTokenService _accessTokenService;
 	private readonly IAuthorizationCodeService _authorizationCodeService;
-	private readonly IAuthenticationService _authenticationService;
+	private readonly IAuthSessionService _authSessionService;
 	private readonly IConsentService _consentService;
 	private readonly IIdentityTokenService _identityTokenService;
-	private readonly IClock _clock;
+	private readonly TimeProvider _clock;
 
 	/// <summary>
 	/// Asynchronously processes a valid authorization request.
@@ -161,7 +159,11 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 			CodeChallengeMethod = model.CodeChallengeMethod,
 		};
 
-		await _authenticationService.UpdateAsync(authSession, authContext.ClientId);
+		if (!authSession.AffectedClientIds.Contains(authContext.ClientId))
+		{
+			authSession.AffectedClientIds = authSession.AffectedClientIds.Append(authContext.ClientId);
+			await _authSessionService.SignInAsync(authSession);
+		}
 
 		var result = new SuccessfullyAuthenticated(
 			model,
@@ -210,12 +212,12 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 	private Task<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
 	{
-		var authSessions = _authenticationService.GetAvailableAuthSessions();
+		var authSessions = _authSessionService.GetAvailableAuthSessions();
 
 		if (model.MaxAge.HasValue)
 		{
 			// skip all sessions older than max_age value
-			var minAuthenticationTime = _clock.UtcNow - model.MaxAge;
+			var minAuthenticationTime = _clock.GetUtcNow() - model.MaxAge;
 			authSessions = authSessions
 				.WhereAsync(session => minAuthenticationTime < session.AuthenticationTime);
 		}

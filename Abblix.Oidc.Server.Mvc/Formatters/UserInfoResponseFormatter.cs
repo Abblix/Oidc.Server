@@ -31,7 +31,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -51,7 +50,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     /// <param name="clock">Provides the current time.</param>
     /// <param name="clientJwtFormatter">Formats JWTs for clients.</param>
     public UserInfoResponseFormatter(
-        IClock clock,
+        TimeProvider clock,
         IClientJwtFormatter clientJwtFormatter)
     {
         _clock = clock;
@@ -59,7 +58,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     }
 
     private readonly IClientJwtFormatter _clientJwtFormatter;
-    private readonly IClock _clock;
+    private readonly TimeProvider _clock;
 
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -93,7 +92,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
                     Payload = new JsonWebTokenPayload(user)
                     {
                         Issuer = issuer,
-                        IssuedAt = _clock.UtcNow,
+                        IssuedAt = _clock.GetUtcNow(),
                         Audiences = new[] { clientInfo.ClientId },
                     }
                 };

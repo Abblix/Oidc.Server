@@ -35,7 +35,6 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Clock;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -100,10 +99,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         return services
-#if NET8_0_OR_GREATER
             .AddSingleton(TimeProvider.System)
-#endif
-            .AddSingleton<IClock, SystemClock>()
             .AddSingleton<IHashService, HashService>()
             .AddSingleton<ISubjectTypeConverter, SubjectTypeConverter>()
             .AddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>()

@@ -53,26 +53,26 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 	/// Initializes a new instance of the <see cref="EndSessionRequestProcessor"/> class.
 	/// </summary>
 	/// <param name="logger">The logger.</param>
-	/// <param name="authenticationService">The authentication service.</param>
+	/// <param name="authSessionService">The authentication service.</param>
 	/// <param name="issuerProvider">The issuer provider.</param>
 	/// <param name="clientInfoProvider">The client info provider.</param>
 	/// <param name="logoutNotifier">The logout notifier.</param>
 	public EndSessionRequestProcessor(
 		ILogger<EndSessionRequestProcessor> logger,
-		IAuthenticationService authenticationService,
+		IAuthSessionService authSessionService,
 		IIssuerProvider issuerProvider,
 		IClientInfoProvider clientInfoProvider,
 		ILogoutNotifier logoutNotifier)
 	{
 		_logger = logger;
-		_authenticationService = authenticationService;
+		_authSessionService = authSessionService;
 		_issuerProvider = issuerProvider;
 		_clientInfoProvider = clientInfoProvider;
 		_logoutNotifier = logoutNotifier;
 	}
 
 	private readonly ILogger _logger;
-	private readonly IAuthenticationService _authenticationService;
+	private readonly IAuthSessionService _authSessionService;
 	private readonly IClientInfoProvider _clientInfoProvider;
 	private readonly IIssuerProvider _issuerProvider;
 	private readonly ILogoutNotifier _logoutNotifier;
@@ -96,7 +96,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 			};
 		}
 
-		var authSession = await _authenticationService.AuthenticateAsync();
+		var authSession = await _authSessionService.AuthenticateAsync();
 		if (authSession == null)
 		{
 			return new EndSessionSuccessfulResponse(postLogoutRedirectUri, Array.Empty<Uri>());
@@ -111,7 +111,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 				$"The claim {JwtClaimTypes.Subject} must contain the unique identifier of the user logged in");
 		}
 
-		await _authenticationService.SignOutAsync();
+		await _authSessionService.SignOutAsync();
 		_logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
 
 		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()));

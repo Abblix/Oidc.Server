@@ -94,7 +94,7 @@ public static class ServiceCollectionExtensions
 		    .AddSingleton<IParameterValidator, ParameterValidator>()
 			.AddSingleton<IParametersProvider, ParametersProvider>()
 		    .AddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>()
-			.AddSingleton<IAuthenticationService, AuthenticationSchemeAdapter>()
+			.AddSingleton<IAuthSessionService, AuthenticationSchemeAdapter>()
 			.AddSingleton<IUriResolver, UriResolver>()
 			.AddSingleton<IActionContextAccessor, ActionContextAccessor>()
 			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
