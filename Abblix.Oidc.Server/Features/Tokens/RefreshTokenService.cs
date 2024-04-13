@@ -102,7 +102,7 @@ public class RefreshTokenService : IRefreshTokenService
 			},
 			Payload =
 			{
-				JwtId = _tokenIdGenerator.NewId(),
+				JwtId = _tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = now,
 				ExpiresAt = expiresAt,

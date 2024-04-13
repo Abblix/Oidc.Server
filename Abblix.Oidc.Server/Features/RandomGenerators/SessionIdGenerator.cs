@@ -46,5 +46,5 @@ public class SessionIdGenerator : ISessionIdGenerator
 	/// </summary>
 	/// <returns>A string representing a URL-safe, cryptographically strong random session identifier. The identifier
 	/// is encoded in a way that makes it suitable for use in HTTP URLs, cookies, or any other URL-based contexts.</returns>
-	public string NewId() => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(32));
+	public string GenerateSessionId() => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(32));
 }

@@ -44,5 +44,5 @@ public interface ISessionIdGenerator
 	/// <returns>A new, unique session identifier as a string. The format and characteristics of the session ID
 	/// (e.g., length, characters used) should be designed to enhance security and minimize the risk of session
 	/// hijacking or collision.</returns>
-	string NewId();
+	string GenerateSessionId();
 }

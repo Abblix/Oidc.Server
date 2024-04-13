@@ -109,7 +109,7 @@ internal class AccessTokenService : IAccessTokenService
 			},
 			Payload =
 			{
-				JwtId = _tokenIdGenerator.NewId(),
+				JwtId = _tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,

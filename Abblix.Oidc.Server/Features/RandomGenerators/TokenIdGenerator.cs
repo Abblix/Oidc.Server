@@ -43,5 +43,5 @@ public class TokenIdGenerator : ITokenIdGenerator
 	/// HTTP URL-safe Base64 encoding, resulting in a string suitable for use as a JWT ID.
 	/// </summary>
 	/// <returns>A URL-safe, randomly generated unique identifier for a JWT.</returns>
-	public string NewId() => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(32));
+	public string GenerateTokenId() => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(32));
 }

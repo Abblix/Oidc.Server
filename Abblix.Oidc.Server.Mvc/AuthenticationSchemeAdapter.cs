@@ -103,7 +103,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		if (string.IsNullOrEmpty(sessionId))
 		{
 			throw new InvalidOperationException(
-				$"Use {nameof(SessionIdGenerator)}.{nameof(SessionIdGenerator.NewId)}() to generate a new session Id when calling .SignInAsync() method");
+				$"Use {nameof(SessionIdGenerator)}.{nameof(SessionIdGenerator.GenerateSessionId)}() to generate a new session Id when calling .SignInAsync() method");
 		}
 
 		var authenticationTime = properties.GetString(JwtClaimTypes.AuthenticationTime);

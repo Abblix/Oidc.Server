@@ -41,5 +41,5 @@ public interface ITokenIdGenerator
 	/// and characteristics of the generated ID, such as its length, randomness, and URL-safety.
 	/// </summary>
 	/// <returns>A unique identifier suitable for use as a JWT ID.</returns>
-	string NewId();
+	string GenerateTokenId();
 }
