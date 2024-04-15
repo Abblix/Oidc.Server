@@ -33,25 +33,25 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// Represents a model of an authentication session for a logged-in user, capturing essential details about the user's
 /// authentication state and interactions within the system.
 /// </summary>
-public record AuthSession
+public record AuthSession(string Subject, string SessionId, DateTimeOffset AuthenticationTime)
 {
     /// <summary>
     /// The unique identifier for the user in the session. This is typically a user-specific identifier that can be
     /// used to retrieve user details or verify the user's identity across different parts of the application.
     /// </summary>
-    public string Subject { get; init; } = null!;
+    public string Subject { get; init; } = Subject;
 
     /// <summary>
     /// The unique identifier of the session, used to track the session across requests and possibly across
     /// different services.
     /// </summary>
-    public string SessionId { get; init; } = null!;
+    public string SessionId { get; init; } = SessionId;
 
     /// <summary>
     /// The timestamp indicating when the user was authenticated. This is used for session management purposes such as
     /// session expiration and activity logging.
     /// </summary>
-    public DateTimeOffset AuthenticationTime { get; init; }
+    public DateTimeOffset AuthenticationTime { get; init; } = AuthenticationTime;
 
     /// <summary>
     /// The provider used to authenticate the user's identity. This could be a local database, an external identity

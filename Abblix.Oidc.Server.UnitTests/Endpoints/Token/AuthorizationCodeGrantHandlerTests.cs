@@ -100,13 +100,8 @@ public class AuthorizationCodeGrantHandlerTests
 			.Setup(_ => _.AuthorizeByCodeAsync(tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrantResult(
-					new AuthSession
-					{
-						Subject = "123",
-						SessionId = "session1",
-						AuthenticationTime = DateTimeOffset.UtcNow,
-					},
-					new AuthorizationContext(clientInfo.ClientId, new[] { Scopes.OpenId }, null)
+					new AuthSession("123", "session1", DateTimeOffset.UtcNow),
+					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)
 					{
 						CodeChallenge = codeChallenge,
 						CodeChallengeMethod = codeChallengeMethod,

@@ -54,6 +54,19 @@ public record AuthorizationContext(string ClientId, string[] Scope, RequestedCla
     public string ClientId { get; init; } = ClientId;
 
     /// <summary>
+    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or permissions
+    /// that the client is requesting on the user's behalf. They play a key role in enforcing principle of least privilege.
+    /// </summary>
+    public string[] Scope { get; init; } = Scope;
+
+    /// <summary>
+    /// Optional. Specifies the individual Claims requested by the client, providing detailed instructions
+    /// for the authorization server on the Claims to be returned, either in the ID Token or via the UserInfo endpoint.
+    /// This mechanism supports clients in obtaining consented user information in a structured and controlled manner.
+    /// </summary>
+    public RequestedClaims? RequestedClaims { get; init; } = RequestedClaims;
+
+    /// <summary>
     /// The URI where the authorization response should be sent. This URI must match one of the registered redirect URIs
     /// for the client application, ensuring that authorization responses are delivered to the correct destination securely.
     /// </summary>
@@ -77,17 +90,4 @@ public record AuthorizationContext(string ClientId, string[] Scope, RequestedCla
     /// enhancing the security of PKCE by allowing the authorization server to verify the code exchange authenticity.
     /// </summary>
     public string? CodeChallengeMethod { get; init; }
-
-    /// <summary>
-    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or permissions
-    /// that the client is requesting on the user's behalf. They play a key role in enforcing principle of least privilege.
-    /// </summary>
-    public string[] Scope { get; init; } = Scope;
-
-    /// <summary>
-    /// Optional. Specifies the individual Claims requested by the client, providing detailed instructions
-    /// for the authorization server on the Claims to be returned, either in the ID Token or via the UserInfo endpoint.
-    /// This mechanism supports clients in obtaining consented user information in a structured and controlled manner.
-    /// </summary>
-    public RequestedClaims? RequestedClaims { get; init; } = RequestedClaims;
 }

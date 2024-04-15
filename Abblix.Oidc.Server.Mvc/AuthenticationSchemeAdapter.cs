@@ -116,13 +116,12 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 			return null;
 
 		// TODO think about the support for a list of several user accounts below
-		var authSession = new AuthSession
+		var authSession = new AuthSession(
+			principal.FindFirstValue(JwtClaimTypes.Subject).NotNull(JwtClaimTypes.Subject),
+			sessionId,
+			DateTimeOffset.FromUnixTimeSeconds(long.Parse(authenticationTime)))
 		{
 			IdentityProvider = principal.Identity!.AuthenticationType,
-			Subject = principal.FindFirstValue(JwtClaimTypes.Subject).NotNull(JwtClaimTypes.Subject),
-
-			SessionId = sessionId,
-			AuthenticationTime = DateTimeOffset.FromUnixTimeSeconds(long.Parse(authenticationTime)),
 			AuthContextClassRef = properties.GetString(JwtClaimTypes.AuthContextClassRef),
 		};
 
