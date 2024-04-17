@@ -74,7 +74,7 @@ public class AuthorizationRequestStorage : IAuthorizationRequestStorage
         var requestUri = _authorizationRequestUriGenerator.GenerateRequestUri();
 
         await _storage.SetAsync(
-            requestUri.OriginalString,
+            ToKeyString(requestUri),
             request,
             new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
 
@@ -92,5 +92,7 @@ public class AuthorizationRequestStorage : IAuthorizationRequestStorage
     /// <returns>A task that resolves to the retrieved <see cref="AuthorizationRequest"/> if found; otherwise, null.
     /// If the request is not found, it may have expired or been removed from the cache previously.</returns>
     public Task<AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove)
-        => _storage.GetAsync<AuthorizationRequest>(requestUri.OriginalString, shouldRemove);
+        => _storage.GetAsync<AuthorizationRequest>(ToKeyString(requestUri), shouldRemove);
+
+    private static string ToKeyString(Uri requestUri) => requestUri.OriginalString;
 }

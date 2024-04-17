@@ -78,7 +78,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 		var authorizationCode = _authorizationCodeGenerator.GenerateAuthorizationCode();
 		
 		await _storage.SetAsync(
-			authorizationCode,
+			ToKeyString(authorizationCode),
 			new AuthorizedGrantResult(authSession, context),
 			new StorageOptions { AbsoluteExpirationRelativeToNow = clientInfo.AuthorizationCodeExpiresIn });
 		
@@ -93,7 +93,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 	/// the authorization attempt and contains any tokens issued.</returns>
 	public async Task<GrantAuthorizationResult> AuthorizeByCodeAsync(string authorizationCode)
 	{
-		var result = await _storage.GetAsync<GrantAuthorizationResult>(authorizationCode, false);
+		var result = await _storage.GetAsync<GrantAuthorizationResult>(ToKeyString(authorizationCode), false);
 		if (result == null)
 		{
 			return new InvalidGrantResult(ErrorCodes.InvalidGrant, "Authorization code is invalid");
@@ -108,5 +108,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 	/// <param name="authorizationCode">The authorization code to remove.</param>
 	/// <returns>A task representing the asynchronous operation to remove the code.</returns>
 	public Task RemoveAuthorizationCodeAsync(string authorizationCode)
-		=> _storage.RemoveAsync(authorizationCode);
+		=> _storage.RemoveAsync(ToKeyString(authorizationCode));
+
+	private string ToKeyString(string authorizationCode) => $"{nameof(authorizationCode)}:{authorizationCode}";
 }
