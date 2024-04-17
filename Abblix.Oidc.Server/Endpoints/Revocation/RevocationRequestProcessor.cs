@@ -28,8 +28,8 @@
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
-using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
@@ -65,8 +65,8 @@ public class RevocationRequestProcessor : IRevocationRequestProcessor
 	public async Task<RevocationResponse> ProcessAsync(ValidRevocationRequest request)
 	{
 		var payload = request.Token?.Payload;
-		if (payload != null && payload.JwtId.HasValue())
-			await _tokenRegistry.SetStatusAsync(payload.JwtId, payload.ExpiresAt, JsonWebTokenStatus.Revoked);
+		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
+			await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
 		return new TokenRevokedResponse();
 	}

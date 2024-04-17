@@ -35,17 +35,20 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.SessionManagement;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features;
@@ -95,16 +98,16 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
     /// <returns>The <see cref="IServiceCollection"/> with the common services registered.</returns>
-
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        return services
-            .AddSingleton(TimeProvider.System)
-            .AddSingleton<IHashService, HashService>()
-            .AddSingleton<ISubjectTypeConverter, SubjectTypeConverter>()
-            .AddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>()
-
-            .AddJsonWebTokens();
+        services.TryAddSingleton<IConsentService, NullConsentService>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IHashService, HashService>();
+        services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
+        services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
+        services.TryAddSingleton<IBinarySerializer, Utf8JsonBinarySerializer>();
+        services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
+        return services.AddJsonWebTokens();
     }
 
     /// <summary>
@@ -172,11 +175,13 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddRandomGenerators(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IClientIdGenerator, ClientIdGenerator>()
-            .AddSingleton<IClientSecretGenerator, ClientSecretGenerator>()
-            .AddSingleton<ITokenIdGenerator, TokenIdGenerator>()
-            .AddSingleton<ISessionIdGenerator, SessionIdGenerator>();
+        services.TryAddSingleton<IAuthorizationCodeGenerator, AuthorizationCodeGenerator>();
+        services.TryAddSingleton<IAuthorizationRequestUriGenerator, AuthorizationRequestUriGenerator>();
+        services.TryAddSingleton<IClientIdGenerator, ClientIdGenerator>();
+        services.TryAddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
+        services.TryAddSingleton<ITokenIdGenerator, TokenIdGenerator>();
+        services.TryAddSingleton<ISessionIdGenerator, SessionIdGenerator>();
+        return services;
     }
 
     /// <summary>
@@ -186,7 +191,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSessionManagement(this IServiceCollection services)
     {
         return services
-            .AddScoped<ISessionManagementService, DefaultSessionManagementService>()
+            .AddScoped<ISessionManagementService, SessionManagementService>()
             .Decorate<IAuthorizationRequestProcessor, AuthorizationRequestProcessorDecorator>();
     }
 
@@ -307,7 +312,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenRevocation(this IServiceCollection services)
     {
         return services
-            .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
+            .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>()
+            .AddSingleton<ITokenRegistry, TokenRegistry>();
     }
 
     /// <summary>
@@ -344,5 +350,17 @@ public static class ServiceCollectionExtensions
         return services
             .AddHostedService<LicenseLoadingService>()
             .AddSingleton<ILicenseJwtProvider, StaticLicenseJwtProvider>(Dependency.Override(licenseJwt));
+    }
+
+    /// <summary>
+    /// Adds singleton services related to storage mechanisms to the specified <see cref="IServiceCollection"/>.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    public static IServiceCollection AddStorages(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
+        services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
+        return services;
     }
 }

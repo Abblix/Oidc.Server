@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -162,9 +163,9 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
             return null;
         }
 
-        if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: var expiresAt } })
+        if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: {} expiresAt } })
         {
-            await _tokenRegistry.SetStatusAsync(jwtId, expiresAt, JsonWebTokenStatus.Used);
+            await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
         }
 
         return issuerValidator.ClientInfo;

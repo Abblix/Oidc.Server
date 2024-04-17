@@ -69,7 +69,7 @@ public record AuthorizationRequest
 	/// The client ID of the requesting client.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientId)]
-	public string ClientId { get; init; } = default!;
+	public string? ClientId { get; init; }
 
 	/// <summary>
 	/// The redirect URI where the response should be sent.
@@ -110,7 +110,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Prompt)]
     [AllowedValues(Prompts.Create, Prompts.Consent, Prompts.Login, Prompts.None, Prompts.SelectAccount)]
-    public string? Prompt { get; set; }
+    public string? Prompt { get; init; }
 
 	/// <summary>
 	/// Specifies the allowable elapsed time since the last user authentication.

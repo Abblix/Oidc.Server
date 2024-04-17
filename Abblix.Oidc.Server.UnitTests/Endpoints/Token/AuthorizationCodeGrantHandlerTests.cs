@@ -36,6 +36,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
@@ -48,9 +49,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
 public class AuthorizationCodeGrantHandlerTests
 {
-	private Mock<IAuthorizationCodeService> _authCodeService;
-	private Mock<IParameterValidator> _parameterValidator;
-	private AuthorizationCodeGrantHandler _handler;
+	private readonly Mock<IAuthorizationCodeService> _authCodeService;
+	private readonly Mock<IParameterValidator> _parameterValidator;
+	private readonly AuthorizationCodeGrantHandler _handler;
 
 	public AuthorizationCodeGrantHandlerTests()
 	{

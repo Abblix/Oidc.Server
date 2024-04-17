@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Mvc;
 /// Contains constants for various OpenID Connect and OAuth2 endpoint paths.
 /// This class centralizes the paths used throughout the application for consistency and maintainability.
 /// </summary>
-internal static class Path
+public static class Path
 {
     private const string Base = "~/connect";
 

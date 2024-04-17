@@ -157,4 +157,8 @@ public record OidcOptions
 	/// compliance.
 	/// </summary>
 	public string? LicenseJwt { get; set; }
+
+	public int AuthorizationCodeLength { get; set; } = 64;
+
+	public int RequestUriLength { get; set; } = 64;
 }

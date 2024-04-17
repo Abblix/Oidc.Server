@@ -29,8 +29,8 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
@@ -89,7 +89,10 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
 
             foreach (var (jwtId, expiresAt) in tokens)
             {
-                await _tokenRegistry.SetStatusAsync(jwtId, expiresAt, JsonWebTokenStatus.Revoked);
+                if (expiresAt.HasValue)
+                {
+                    await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt.Value);
+                }
             }
 
             return new TokenErrorResponse(

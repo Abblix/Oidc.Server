@@ -157,7 +157,6 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
 	}
 
-
 	/// <summary>
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>

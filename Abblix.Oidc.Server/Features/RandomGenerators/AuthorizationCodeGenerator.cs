@@ -1,4 +1,4 @@
-// Abblix OpenID Connect Server Library
+﻿// Abblix OpenID Connect Server Library
 // Copyright (c) 2024 by Abblix LLP
 // 
 // This software is provided 'as-is', without any express or implied warranty. In no
@@ -28,43 +28,35 @@
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
+namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Processes pushed authorization requests by storing them and generating a response
-/// that includes the request URI and expiration information.
+/// Generates secure authorization codes for OAuth 2.0 authorization code flows.
+/// This implementation relies on cryptographic randomness to generate codes that are difficult to predict,
+/// enhancing the security of the authorization process.
 /// </summary>
-public class PushedAuthorizationRequestProcessor : IPushedAuthorizationRequestProcessor
+public class AuthorizationCodeGenerator : IAuthorizationCodeGenerator
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="PushedAuthorizationRequestProcessor"/> class
-    /// with a specified authorization request storage.
+    /// Initializes a new instance of the <see cref="AuthorizationCodeGenerator"/> class.
     /// </summary>
-    /// <param name="storage">The storage used to keep the authorization requests.</param>
-    /// <param name="options"></param>
-    public PushedAuthorizationRequestProcessor(
-        IAuthorizationRequestStorage storage,
-        IOptionsSnapshot<OidcOptions> options)
+    /// <param name="options">Configuration options that determine the behavior of the code generation,
+    /// including the length of the authorization codes generated.</param>
+    public AuthorizationCodeGenerator(IOptions<OidcOptions> options)
     {
-        _storage = storage;
         _options = options;
     }
 
-    private readonly IAuthorizationRequestStorage _storage;
-    private readonly IOptionsSnapshot<OidcOptions> _options;
+    private readonly IOptions<OidcOptions> _options;
 
     /// <summary>
-    /// Asynchronously processes a valid pushed authorization request by storing it and returning a response
-    /// that includes the request URI for later retrieval and the duration for which the request is valid.
+    /// Generates a unique authorization code using secure cryptographic methods. The code is URL-safe encoded
+    /// to ensure it can be transmitted safely in URLs.
     /// </summary>
-    /// <param name="request">The valid pushed authorization request to process.</param>
-    /// <returns>A task that resolves to an <see cref="AuthorizationResponse"/> containing
-    /// the request URI and expiration information.</returns>
-    public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
-        => await _storage.StoreAsync(request.Model,_options.Value.PushedAuthorizationRequestExpiresIn);
+    /// <returns>A URL-safe, secure, and randomly generated authorization code.</returns>
+    public string GenerateAuthorizationCode()
+        => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(_options.Value.AuthorizationCodeLength));
 }

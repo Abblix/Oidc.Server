@@ -27,12 +27,12 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
-
-namespace Abblix.Oidc.Server.Common.Interfaces;
+namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Provides a contract for managing OAuth 2.0 authorization codes, facilitating the authorization code flow.
@@ -67,18 +67,19 @@ public interface IAuthorizationCodeService
     /// and granting access based on the code provided. This method verifies the code's validity, ensuring it
     /// matches a previously issued code and has not expired or been used.
     /// </summary>
-    /// <param name="authorizationCode">The authorization code to be validated and processed for granting access.</param>
+    /// <param name="authorizationCode">
+    /// The authorization code to be validated and processed for granting access.
+    /// </param>
     /// <returns>A task that asynchronously returns a <see cref="GrantAuthorizationResult"/> representing the outcome
-    /// of the authorization process, including any access tokens or refresh tokens issued as part of the grant.</returns>
+    /// of the authorization process, including any access tokens or refresh tokens issued as part of the grant.
+    /// </returns>
     Task<GrantAuthorizationResult> AuthorizeByCodeAsync(string authorizationCode);
 
     /// <summary>
-    /// Removes a previously issued authorization code from the system. This operation is typically performed
-    /// after a code has been successfully exchanged for an access token or if the code expires without being used.
-    /// Removing the code helps maintain the integrity of the authorization process and prevents reuse or replay attacks.
+    /// Asynchronously removes an authorization code from the system. This method is typically called once an authorization
+    /// code has been exchanged for an access token, or when it expires, ensuring that the code cannot be reused.
     /// </summary>
-    /// <param name="authorizationCode">The authorization code to be invalidated and removed from the system.</param>
-    /// <returns>A task representing the asynchronous operation of removing the specified authorization code, ensuring
-    /// it cannot be used in future authorization requests.</returns>
+    /// <param name="authorizationCode">The authorization code to be removed.</param>
+    /// <returns>A task representing the asynchronous operation of removing the authorization code.</returns>
     Task RemoveAuthorizationCodeAsync(string authorizationCode);
 }

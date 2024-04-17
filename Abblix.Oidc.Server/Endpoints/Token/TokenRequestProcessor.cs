@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -110,10 +111,11 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 
 			if (request is {
 				    ClientInfo.RefreshToken.AllowReuse: false,
-				    RefreshToken.Payload: { JwtId: { } jwtId, ExpiresAt: var expiresAt }})
+				    RefreshToken.Payload: { JwtId: { } jwtId, ExpiresAt: {} expiresAt }
+			    })
 			{
 				// Revokes used refresh token to prevent its reuse
-				await _tokenRegistry.SetStatusAsync(jwtId, expiresAt, JsonWebTokenStatus.Revoked);
+				await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 			}
 		}
 

@@ -33,19 +33,24 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-
-
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// This class is responsible for handling the authorization code grant type
-/// as part of the IAuthorizationGrantHandler process.
+/// Handles the authorization code grant type for OAuth 2.0.
+/// This class validates the provided authorization code against stored codes,
+/// checks the client details, and implements PKCE verification when necessary.
 /// </summary>
 public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthorizationCodeGrantHandler"/> class.
+    /// </summary>
+    /// <param name="parameterValidator">The service to validate request parameters.</param>
+    /// <param name="authorizationCodeService">The service to manage authorization codes.</param>
     public AuthorizationCodeGrantHandler(
         IParameterValidator parameterValidator,
         IAuthorizationCodeService authorizationCodeService)
@@ -58,7 +63,7 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     private readonly IAuthorizationCodeService _authorizationCodeService;
 
     /// <summary>
-    /// Gets the grant type this handler supports.
+    /// Gets the grant type this handler supports, which is the authorization code grant type.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported
     {
@@ -67,17 +72,19 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
 
     /// <summary>
     /// Authorizes the token request asynchronously using the authorization code grant type.
+    /// Validates the authorization code, verifies the client information, and ensures compliance with PKCE if used.
     /// </summary>
-    /// <param name="request">The token request to authorize.</param>
+    /// <param name="request">The token request containing the authorization code.</param>
     /// <param name="clientInfo">The client information associated with the request.</param>
-    /// <returns>A task representing the result of the authorization process, containing a GrantAuthorizationResult object.</returns>
+    /// <returns>A task representing the result of the authorization process,
+    /// containing a <see cref="GrantAuthorizationResult"/>.</returns>
     public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         _parameterValidator.Required(request.Code, nameof(request.Code));
 
-        var authorizationResult = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        var grantResult = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
 
-        return authorizationResult switch
+        return grantResult switch
         {
             AuthorizedGrantResult { Context.ClientId: var clientId } when clientId != clientInfo.ClientId
                 => new InvalidGrantResult(ErrorCodes.UnauthorizedClient, "Code was issued for another client"),
@@ -89,17 +96,17 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
                 when !string.Equals(challenge, CalculateChallenge(method, request.CodeVerifier), StringComparison.OrdinalIgnoreCase)
                 => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is not valid"),
 
-            _ => authorizationResult,
+            _ => grantResult,
         };
     }
 
     /// <summary>
     /// Calculates the code challenge based on the provided method and code verifier.
+    /// Supports 'plain' and 'S256' challenge methods.
     /// </summary>
-    /// <param name="method">The code challenge method to use.</param>
-    /// <param name="codeVerifier">The code verifier string.</param>
-    /// <returns>The calculated code challenge.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when an unknown code challenge method is encountered.</exception>
+    /// <param name="method">The code challenge method used during authorization request.</param>
+    /// <param name="codeVerifier">The code verifier submitted by the client.</param>
+    /// <returns>The calculated code challenge string.</returns>
     private static string CalculateChallenge(string method, string codeVerifier) => method switch
     {
         CodeChallengeMethods.S256 => HttpServerUtility.UrlTokenEncode(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),

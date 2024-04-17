@@ -69,7 +69,7 @@ public class AllowedValuesAttribute : ValidationAttribute
 			null => ValidationResult.Success,
 			string[][] stringValues => IsValid(stringValues.SelectMany(stringValue => stringValue), context),
 			string[] stringValues => IsValid(stringValues, context),
-			string stringValue => IsValid(stringValue, context),
+			string stringValue => IsValid(stringValue),
 			_ => throw new InvalidOperationException($"The type {value.GetType()} is not supported by {nameof(AllowedValuesAttribute)}"),
 		};
 	}
@@ -78,7 +78,7 @@ public class AllowedValuesAttribute : ValidationAttribute
 	{
 		foreach (var value in values)
 		{
-			var result = IsValid(value, context);
+			var result = IsValid(value);
 			if (result != ValidationResult.Success)
 				return result;
 		}
@@ -86,7 +86,7 @@ public class AllowedValuesAttribute : ValidationAttribute
 		return ValidationResult.Success;
 	}
 
-	private ValidationResult? IsValid(string value, ValidationContext context)
+	private ValidationResult? IsValid(string value)
 	{
 		if (!_allowedValues.Contains(value, StringComparer.OrdinalIgnoreCase))
 			return new ValidationResult($"The value '{value}' is invalid");

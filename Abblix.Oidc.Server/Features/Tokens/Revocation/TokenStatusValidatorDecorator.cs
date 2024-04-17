@@ -28,6 +28,7 @@
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 

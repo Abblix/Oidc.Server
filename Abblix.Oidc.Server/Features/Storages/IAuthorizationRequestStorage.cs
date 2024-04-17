@@ -30,9 +30,7 @@
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 
-
-
-namespace Abblix.Oidc.Server.Common.Interfaces;
+namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Provides mechanisms for securely storing and retrieving OAuth 2.0 authorization requests.

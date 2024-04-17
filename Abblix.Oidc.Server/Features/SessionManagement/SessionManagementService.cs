@@ -46,18 +46,18 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// This service is responsible for managing browser sessions by utilizing cookies and providing mechanisms
 /// to check and maintain the session state between the client and the server.
 /// </summary>
-public class DefaultSessionManagementService : ISessionManagementService
+public class SessionManagementService : ISessionManagementService
 {
     private const string CookieNamePlaceHolder = "\"{{cookieName}}\"";
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="DefaultSessionManagementService"/> class with the specified
+    /// Initializes a new instance of the <see cref="SessionManagementService"/> class with the specified
     /// OpenID Connect options and request information provider.
     /// </summary>
     /// <param name="options">The options for configuring the OpenID Connect session management service.</param>
     /// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
     /// the current request is over HTTPS and the request's base path.</param>
-    public DefaultSessionManagementService(
+    public SessionManagementService(
         IOptionsSnapshot<OidcOptions> options,
         IRequestInfoProvider requestInfoProvider)
     {
@@ -119,7 +119,7 @@ public class DefaultSessionManagementService : ISessionManagementService
     /// containing the HTML content for the check session iframe and the name of the session management cookie.</returns>
     public async Task<CheckSessionResponse> GetCheckSessionResponseAsync()
     {
-        var type = typeof(DefaultSessionManagementService);
+        var type = typeof(SessionManagementService);
         var name = $"{type.Namespace}.Resources.checkSession.html";
 
         string htmlTemplate;
