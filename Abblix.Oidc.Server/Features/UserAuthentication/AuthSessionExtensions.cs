@@ -68,8 +68,6 @@ public static class AuthSessionExtensions
     public static AuthSession ToAuthSession(this JsonWebTokenPayload payload) => new(
         payload.Subject.NotNull(nameof(payload.Subject)),
         payload.SessionId.NotNull(nameof(payload.SessionId)),
-        payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)))
-    {
-        IdentityProvider = payload.IdentityProvider,
-    };
+        payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
+        payload.IdentityProvider.NotNull(nameof(payload.IdentityProvider)));
 }

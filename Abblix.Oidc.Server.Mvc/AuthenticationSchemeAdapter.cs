@@ -119,9 +119,9 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		var authSession = new AuthSession(
 			principal.FindFirstValue(JwtClaimTypes.Subject).NotNull(JwtClaimTypes.Subject),
 			sessionId,
-			DateTimeOffset.FromUnixTimeSeconds(long.Parse(authenticationTime)))
+			DateTimeOffset.FromUnixTimeSeconds(long.Parse(authenticationTime)),
+			principal.Identity!.AuthenticationType.NotNull(nameof(ClaimsIdentity.AuthenticationType)))
 		{
-			IdentityProvider = principal.Identity!.AuthenticationType,
 			AuthContextClassRef = properties.GetString(JwtClaimTypes.AuthContextClassRef),
 		};
 

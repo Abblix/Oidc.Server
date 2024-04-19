@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// Represents a model of an authentication session for a logged-in user, capturing essential details about the user's
 /// authentication state and interactions within the system.
 /// </summary>
-public record AuthSession(string Subject, string SessionId, DateTimeOffset AuthenticationTime)
+public record AuthSession(string Subject, string SessionId, DateTimeOffset AuthenticationTime, string IdentityProvider)
 {
     /// <summary>
     /// The unique identifier for the user in the session. This is typically a user-specific identifier that can be
@@ -58,7 +58,7 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// provider, or a social login provider, and can be useful for auditing and enforcing security policies based
     /// on the origin of authentication.
     /// </summary>
-    public string? IdentityProvider { get; init; }
+    public string? IdentityProvider { get; init; } = IdentityProvider;
 
     /// <summary>
     /// Indicates the authentication context class that the authentication performed satisfied, according to
