@@ -29,7 +29,6 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -92,9 +91,7 @@ public class UserClaimsProvider : IUserClaimsProvider
         ClientInfo clientInfo)
     {
         var claimNames = _scopeClaimsProvider.GetRequestedClaims(
-            scope,
-            from claim in requestedClaims select claim.Key)
-            ;
+            scope, requestedClaims?.Select(claim => claim.Key));
 
         var userInfo = await _userInfoProvider.GetUserInfoAsync(
             authSession.Subject,
@@ -108,7 +105,7 @@ public class UserClaimsProvider : IUserClaimsProvider
         var subject = _subjectTypeConverter.Convert(authSession.Subject, clientInfo);
         userInfo.SetProperty(JwtClaimTypes.Subject, subject);
 
-        if (FindMissingClaims(userInfo, requestedClaims) is { Count: > 0 } missingClaims)
+        if (FindMissingClaims(userInfo, requestedClaims) is { Length: > 0 } missingClaims)
         {
             _logger.LogWarning("The following claims are requested, but not returned from {IUserInfoProvider}: {@MissingClaims}",
                 _userInfoProvider.GetType().FullName,
@@ -120,20 +117,17 @@ public class UserClaimsProvider : IUserClaimsProvider
         return userInfo;
     }
 
-    private static List<string>? FindMissingClaims(
+    private static string[]? FindMissingClaims(
         JsonObject userInfo,
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims)
     {
         if (requestedClaims == null)
             return null;
 
-        List<string>? missingClaims = null;
-        foreach (var (claim, details) in requestedClaims)
-            if (details.Essential == true && !userInfo.TryGetPropertyValue(claim, out _))
-            {
-                missingClaims ??= new List<string>();
-                missingClaims.Add(claim);
-            }
+        var missingClaims = (
+            from claim in requestedClaims
+            where claim.Value.Essential == true && !userInfo.TryGetPropertyValue(claim.Key, out _)
+            select claim.Key).ToArray();
 
         return missingClaims;
     }
