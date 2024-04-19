@@ -166,7 +166,7 @@ public sealed class AuthenticationTests: IDisposable
 		var userInfo = await _oidcClient.GetUserInfo(tokenType, accessToken);
 
 		Assert.Equal(
-			new[] { "sub", "kaspersky.login", "kaspersky.created_at" },
+			new[] { "sub" },
 			userInfo.RootElement.EnumerateObject().Select(claim => claim.Name).ToArray()
 		);
 	}
@@ -177,7 +177,7 @@ public sealed class AuthenticationTests: IDisposable
 		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
 		var tokenForm = XDocument.Parse(await response.Content.ReadAsStringAsync());
-		var idToken = tokenForm.Descendants("input").Single(_ => _.Attribute("name")?.Value == "id_token").Attribute("value")?.Value;
+		var idToken = tokenForm.Descendants("input").Single(e => e.Attribute("name")?.Value == "id_token").Attribute("value")?.Value;
 		Assert.False(string.IsNullOrEmpty(idToken), "idToken is empty");
 	}
 

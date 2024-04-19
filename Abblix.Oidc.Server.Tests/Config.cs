@@ -55,15 +55,9 @@ public sealed class Config
 
 	public Config() => AppSettings.Bind(this);
 
-	public string KasperskyIdDatabase { get; set; }
-	public Uri UisBaseUrl { get; set; }
-
 	public ClientSettings AccountManagementApp { get; set; }
 	public ClientSettings ApClientSampleCode { get; set; }
-
 	public Uri BaseUrl { get; set; }
-
-	public string Realm { get; set; }
 	public string Login { get; set; }
 	public string Password { get; set; }
 

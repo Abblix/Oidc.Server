@@ -109,7 +109,7 @@ public class OidcClient : IDisposable
 
 		var payload = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(tokenParts[1])));
 
-		var expected = new[] { "nbf", "exp", "iss", "client_id", "sub", "auth_time", "idp", "kaspersky.sub_version", "scope", "sid", "jti", "iat" };
+		var expected = new[] { "nbf", "exp", "iss", "client_id", "sub", "auth_time", "idp", "scope", "sid", "jti", "iat" };
 		var actual = (from claim in payload.RootElement.EnumerateObject() select claim.Name).ToArray();
 
 		var missingClaims = expected.Except(actual).ToArray();
