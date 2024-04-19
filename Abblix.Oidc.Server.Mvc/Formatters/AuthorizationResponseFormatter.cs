@@ -38,6 +38,8 @@ using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
@@ -45,39 +47,55 @@ using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
-/// Formats authorization responses based on the provided authorization response model.
+/// Handles the formatting of authorization responses in compliance with OpenID Connect and OAuth 2.0 protocols.
+/// This formatter is responsible for transforming internal authorization response models into appropriate
+/// HTTP responses that can be understood by clients and end-users.
 /// </summary>
 internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAuthorizationResponseFormatter
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationResponseFormatter"/> class.
+    /// Initializes a new instance of the <see cref="AuthorizationResponseFormatter"/> class, setting up essential
+    /// services and configuration options needed to format authorization responses.
     /// </summary>
-    /// <param name="options">The OpenID Connect options.</param>
-    /// <param name="authorizationRequestStorage">The storage for authorization requests.</param>
-    /// <param name="parametersProvider">The provider for parameters.</param>
-    /// <param name="sessionManagementService">The service for session management.</param>
+    /// <param name="options">The configuration options for OpenID Connect.</param>
+    /// <param name="authorizationRequestStorage">
+    /// The storage service for managing and retrieving authorization requests.</param>
+    /// <param name="parametersProvider">
+    /// The provider for retrieving additional parameters needed during the formatting process.</param>
+    /// <param name="sessionManagementService">
+    /// The service responsible for managing user sessions within the authorization process.</param>
+    /// <param name="httpContextAccessor">
+    /// Accessor to obtain the current HTTP context, facilitating access to request and response objects.</param>
+
     public AuthorizationResponseFormatter(
         IOptions<OidcOptions> options,
         IAuthorizationRequestStorage authorizationRequestStorage,
         IParametersProvider parametersProvider,
-        ISessionManagementService sessionManagementService)
+        ISessionManagementService sessionManagementService,
+        IHttpContextAccessor httpContextAccessor)
         : base(parametersProvider)
     {
         _options = options;
         _authorizationRequestStorage = authorizationRequestStorage;
         _sessionManagementService = sessionManagementService;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     private readonly IAuthorizationRequestStorage _authorizationRequestStorage;
     private readonly ISessionManagementService _sessionManagementService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOptions<OidcOptions> _options;
 
     /// <summary>
-    /// Formats an authorization response asynchronously.
+    /// Formats an authorization response based on the specified request and response model asynchronously.
+    /// It handles various outcomes such as redirections for additional user interactions and successful authentication,
+    /// adapting the response according to the OpenID Connect and OAuth 2.0 specifications.
     /// </summary>
-    /// <param name="request">The authorization request.</param>
-    /// <param name="response">The authorization response model.</param>
-    /// <returns>An asynchronous task that returns the formatted authorization response.</returns>
+    /// <param name="request">The authorization request containing details about the initial request from the client.
+    /// </param>
+    /// <param name="response">The authorization response model to format.</param>
+    /// <returns>A task that represents the asynchronous operation and results in an <see cref="ActionResult"/>
+    /// that can be returned by an ASP.NET Core controller.</returns>
     public async Task<ActionResult> FormatResponseAsync(
         AuthorizationRequest request,
         Endpoints.Authorization.Interfaces.AuthorizationResponse response)
@@ -141,11 +159,28 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
         }
     }
 
+    /// <summary>
+    /// Helper method to redirect the user agent to a specified URI while attaching an authorization request.
+    /// </summary>
+    /// <param name="uri">The base URI to redirect to.</param>
+    /// <param name="request">The authorization request to attach to the URI as a query parameter.</param>
+    /// <returns>A task that represents the asynchronous operation and results in a redirect action result.</returns>
     private async Task<ActionResult> RedirectAsync(Uri uri, AuthorizationRequest request)
     {
         var response = await _authorizationRequestStorage.StoreAsync(
             request,
             _options.Value.LoginSessionExpiresIn);
+
+        if (!uri.IsAbsoluteUri)
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+
+            var requestUri = new Uri(
+                httpContext.NotNull(nameof(httpContext)).Request.GetDisplayUrl(),
+                UriKind.Absolute);
+
+            uri = new Uri(requestUri, uri);
+        }
 
         return new RedirectResult(new UriBuilder(uri)
         {
