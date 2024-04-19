@@ -32,46 +32,51 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
 /// Facilitates the creation and management of identity tokens as part of the OpenID Connect authentication flow.
-/// This service assembles identity tokens that encapsulate authenticated user identity, aligning with OpenID Connect
-/// specifications.
+/// This service constructs identity tokens that encapsulate the authenticated user's identity, adhering to
+/// OpenID Connect specifications. It integrates additional security by incorporating claims for token integrity
+/// verification.
 /// </summary>
 internal class IdentityTokenService : IIdentityTokenService
 {
+	/// <summary>
+	/// Initializes a new instance of the <see cref="IdentityTokenService"/> class, setting up the necessary components
+	/// for identity token creation.
+	/// </summary>
+	/// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
+	/// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
+	/// token.</param>
+	/// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
+	/// the security requirements for transmission.</param>
+	/// <param name="userClaimsProvider">Retrieves user-specific claims to be embedded in the identity token,
+	/// based on the authentication session and client's requested scopes and claims.</param>
 	public IdentityTokenService(
 		IIssuerProvider issuerProvider,
 		TimeProvider clock,
-		IUserInfoProvider userInfoProvider,
-		IScopeClaimsProvider scopeClaimsProvider,
-		ISubjectTypeConverter subjectTypeConverter,
-		IClientJwtFormatter jwtFormatter)
+		IClientJwtFormatter jwtFormatter,
+		IUserClaimsProvider userClaimsProvider)
 	{
 		_issuerProvider = issuerProvider;
 		_clock = clock;
-		_userInfoProvider = userInfoProvider;
-		_scopeClaimsProvider = scopeClaimsProvider;
-		_subjectTypeConverter = subjectTypeConverter;
 		_jwtFormatter = jwtFormatter;
+		_userClaimsProvider = userClaimsProvider;
 	}
 
 	private readonly IIssuerProvider _issuerProvider;
 	private readonly TimeProvider _clock;
-	private readonly IUserInfoProvider _userInfoProvider;
-	private readonly IScopeClaimsProvider _scopeClaimsProvider;
-	private readonly ISubjectTypeConverter _subjectTypeConverter;
 	private readonly IClientJwtFormatter _jwtFormatter;
+	private readonly IUserClaimsProvider _userClaimsProvider;
 
 	/// <summary>
 	/// Generates an identity token encapsulating the user's authenticated session, optionally embedding claims based on
@@ -93,7 +98,7 @@ internal class IdentityTokenService : IIdentityTokenService
 	/// user identification across services. It explicitly handles `c_hash` and `at_hash` creation, providing additional
 	/// security checks for token integrity.
 	/// </remarks>
-	public async Task<EncodedJsonWebToken> CreateIdentityTokenAsync(
+	public async Task<EncodedJsonWebToken?> CreateIdentityTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -112,15 +117,14 @@ internal class IdentityTokenService : IIdentityTokenService
 			scope = scope.Except(new[] { Scopes.Profile, Scopes.Email, Scopes.Address }).ToArray();
 		}
 
-		var claimNames = _scopeClaimsProvider.GetRequestedClaims(
+		var userInfo = await _userClaimsProvider.GetUserClaimsAsync(
+			authSession,
 			scope,
-			authContext.RequestedClaims?.IdToken);
+			authContext.RequestedClaims?.IdToken,
+			clientInfo);
 
-		var userInfo = await _userInfoProvider.GetUserInfoAsync(authSession.Subject, claimNames);
 		if (userInfo == null)
-		{
-			throw new InvalidOperationException("The user claims were not found by subject value");
-		}
+			return null;
 
 		var issuedAt = _clock.GetUtcNow();
 
@@ -137,7 +141,6 @@ internal class IdentityTokenService : IIdentityTokenService
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
 				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
 
-				Subject = _subjectTypeConverter.Convert(authSession.Subject, clientInfo),
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
 				[JwtClaimTypes.AuthContextClassRef] = authSession.AuthContextClassRef,

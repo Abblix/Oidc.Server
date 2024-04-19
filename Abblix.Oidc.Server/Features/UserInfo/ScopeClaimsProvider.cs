@@ -29,16 +29,19 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Model;
 
-namespace Abblix.Oidc.Server.Common.Implementation;
+namespace Abblix.Oidc.Server.Features.UserInfo;
 
 /// <summary>
-/// Provides claim names based on requested scopes and claims.
+/// Implements the <see cref="IScopeClaimsProvider"/> interface to provide claim names based on requested scopes
+/// and claims. This class manages the association between scopes and the specific claims they include,
+/// facilitating the retrieval of appropriate claims for given scopes during the authorization process.
 /// </summary>
 public class ScopeClaimsProvider : IScopeClaimsProvider
 {
+    /// <summary>
+    /// A mapping from scopes to the respective arrays of claim types that each scope encompasses.
+    /// </summary>
     private readonly Dictionary<string, string[]> _scopeToClaimsMap = new[]
     {
         StandardScopes.OpenId,
@@ -50,25 +53,23 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
     }.ToDictionary(definition => definition.Scope, definition => definition.ClaimTypes, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Gets the requested claims based on scopes and requested claim details.
+    /// Retrieves the specific claims associated with the requested scopes and any additional requested claims.
     /// </summary>
-    /// <param name="scopes">An array of requested scopes.</param>
-    /// <param name="requestedClaims">A dictionary of requested claim details.</param>
-    /// <returns>Enumeration of claim names.</returns>
+    /// <param name="scopes">The collection of scopes for which claims need to be provided.</param>
+    /// <param name="requestedClaims">Additional specific claims requested outside of the scope requests.</param>
+    /// <returns>A collection of claim names that are associated with the requested scopes and additional claims.
+    /// </returns>
     public IEnumerable<string> GetRequestedClaims(
         IEnumerable<string> scopes,
-        Dictionary<string, RequestedClaimDetails>? requestedClaims)
+        IEnumerable<string>? requestedClaims)
     {
         var claimNames = scopes
-            .SelectMany(scope => _scopeToClaimsMap.TryGetValue(scope, out var claimsInScope) ? claimsInScope : Array.Empty<string>())
+            .SelectMany(scope => _scopeToClaimsMap.TryGetValue(scope, out var claims) ? claims : Array.Empty<string>())
             .Prepend(JwtClaimTypes.Subject);
 
         if (requestedClaims != null)
         {
-            claimNames = claimNames.Concat(
-                from claim in requestedClaims
-                where claim.Value.Essential == true
-                select claim.Key);
+            claimNames = claimNames.Concat(requestedClaims);
         }
 
         return claimNames;

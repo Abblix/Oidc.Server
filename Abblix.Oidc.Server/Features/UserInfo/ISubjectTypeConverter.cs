@@ -27,30 +27,33 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
-using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
-namespace Abblix.Oidc.Server.Common.Interfaces;
+namespace Abblix.Oidc.Server.Features.UserInfo;
 
 /// <summary>
-/// Represents a service responsible for mapping requested claims based on scopes and requested claim details.
+/// Defines the interface for a service that converts user subject identifiers according to the client's specified
+/// subject type. This conversion ensures that the subject identifier presented to the client is in the format
+/// that the client expects, based on its configuration.
 /// </summary>
-public interface IScopeClaimsProvider
+/// <remarks>
+/// The implementation of this interface should support various subject types, such as "public" or "pairwise",
+/// and provide appropriate conversions based on the OpenID Connect specifications.
+/// </remarks>
+public interface ISubjectTypeConverter
 {
     /// <summary>
-    /// The requested claims based on scopes and requested claim details.
+    /// Lists the subject types that this converter supports. This typically includes "public" and "pairwise"
+    /// among others, depending on the OpenID Connect implementation specifics.
     /// </summary>
-    /// <param name="scopes">The requested scopes.</param>
-    /// <param name="requestedClaims">The requested claim details.</param>
-    /// <returns>An IEnumerable of claim names.</returns>
-    IEnumerable<string> GetRequestedClaims(IEnumerable<string> scopes, Dictionary<string, RequestedClaimDetails>? requestedClaims);
+    IEnumerable<string> SubjectTypesSupported { get; }
 
     /// <summary>
-    /// A collection of all the scopes supported by this provider.
+    /// Converts the subject identifier for an end-user based on the client's subject type.
     /// </summary>
-    IEnumerable<string> ScopesSupported { get; }
-
-    /// <summary>
-    /// A collection of all the claims that can be provided by this provider.
-    /// </summary>
-    IEnumerable<string> ClaimsSupported { get; }
+    /// <param name="subject">The original subject identifier of the end-user.</param>
+    /// <param name="clientInfo">Information about the client for which the subject identifier is being transformed.
+    /// </param>
+    /// <returns>The transformed subject identifier suitable for the client's subject type.</returns>
+    string Convert(string subject, ClientInfo clientInfo);
 }

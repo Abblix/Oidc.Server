@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 

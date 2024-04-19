@@ -47,6 +47,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -103,8 +104,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IConsentService, NullConsentService>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
-        services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IBinarySerializer, Utf8JsonBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
@@ -353,14 +352,37 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds singleton services related to storage mechanisms to the specified <see cref="IServiceCollection"/>.
+    /// Registers services for various storage functionalities related to the OAuth 2.0 and OpenID Connect flows within
+    /// the application. This method configures essential storage services that manage authorization codes and
+    /// authorization requests, ensuring their persistence and accessibility across the application.
     /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    /// <param name="services">The <see cref="IServiceCollection"/> to which the storage services will be added.
+    /// This collection is crucial for configuring dependency injection in ASP.NET Core applications, allowing services
+    /// to be added, managed, and retrieved throughout the application lifecycle.</param>
+    /// <returns>The modified <see cref="IServiceCollection"/> after adding the storage services, permitting additional
+    /// configurations to be chained.</returns>
     public static IServiceCollection AddStorages(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers services related to user claims management into the provided <see cref="IServiceCollection"/>.
+    /// This method sets up essential services required for processing and handling user claims based on authentication
+    /// sessions and authorization requests, facilitating the integration of user-specific data into tokens or responses.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to which the user claims provider services will be
+    /// added. This collection is a mechanism for adding and retrieving dependencies in .NET applications, often used
+    /// to configure dependency injection in ASP.NET Core applications.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/> after adding the services, allowing for further
+    /// modifications and additions to be chained.</returns>
+    public static IServiceCollection AddUserInfo(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IUserClaimsProvider, UserClaimsProvider>();
+        services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
+        services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         return services;
     }
 }

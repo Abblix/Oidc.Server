@@ -39,6 +39,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;

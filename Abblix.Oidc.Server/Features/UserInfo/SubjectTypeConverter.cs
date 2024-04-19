@@ -30,11 +30,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.Common.Implementation;
+namespace Abblix.Oidc.Server.Features.UserInfo;
 
 /// <summary>
 /// Implements conversion of subject identifiers for end-users based on the subject type requested by the client.
