@@ -38,35 +38,12 @@ namespace Abblix.Jwt.UnitTests;
 public class JwtEncryptionTests
 {
     // Generates an RSA key for encryption.
-    private static readonly JsonWebKey EncryptingKey = GenerateRsaJsonWebKey(JsonWebKeyUseNames.Enc);
+    private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc, 2048);
 
     // Generates an RSA key for signing.
-    private static readonly JsonWebKey SigningKey = GenerateRsaJsonWebKey(JsonWebKeyUseNames.Sig);
+    private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig, 2048);
 
     // Helper method to generate RSA JsonWebKey.
-    private static JsonWebKey GenerateRsaJsonWebKey(string usage)
-    {
-        using var rsa = RSA.Create();
-        rsa.KeySize = 2048; // Recommended key size for RSA
-        var parameters = rsa.ExportParameters(true);
-
-        var key = new JsonWebKey
-        {
-            Algorithm = "RS256",
-            KeyType = "RSA",
-            Usage = usage,
-            RsaExponent = parameters.Exponent,
-            RsaModulus = parameters.Modulus,
-            PrivateKey = parameters.D,
-            FirstPrimeFactor = parameters.P,
-            SecondPrimeFactor = parameters.Q,
-            FirstFactorCrtExponent = parameters.DP,
-            SecondFactorCrtExponent = parameters.DQ,
-            FirstCrtCoefficient = parameters.InverseQ,
-        };
-
-        return key;
-    }
 
     [Fact]
     public async Task JwtFullCycleTest()
