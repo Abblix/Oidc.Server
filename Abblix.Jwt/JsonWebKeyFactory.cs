@@ -51,7 +51,7 @@ public static class JsonWebKeyFactory
         var algorithm = usage switch
         {
             JsonWebKeyUseNames.Sig => "RS256",
-            JsonWebKeyUseNames.Enc => "RSA-OAEP",
+            JsonWebKeyUseNames.Enc => "RS256",
             _ => throw new ArgumentException("Invalid usage specified. Valid options are 'sig' for signing or 'enc' for encryption.", nameof(usage))
         };
 
