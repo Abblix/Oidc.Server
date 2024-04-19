@@ -30,16 +30,26 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Defines check session options.
+/// Defines options for the session check cookie used in monitoring changes in session status.
 /// </summary>
 public record CheckSessionCookieOptions
 {
-	/// <summary>The name of the cookie used to monitor changes of status of a session</summary>
-	public string Name { get; init; } = default!;
+	/// <summary>
+	/// The name of the cookie used to monitor session status changes. The default value is "Abblix.SessionId".
+	/// </summary>
+	public string Name { get; init; } = "Abblix.SessionId";
 
-	/// <summary>Domain name for the cookie if it is required</summary>
+	/// <summary>
+	/// The domain name where the cookie is available. Specifying the domain restricts where the cookie is sent.
+	/// Leaving this value null means the cookie is sent to all subdomains.
+	/// </summary>
 	public string? Domain { get; set; }
 
-	/// <summary>Same site policy applied for the cookie</summary>
-	public string? SameSite { get; set; }
+	/// <summary>
+	/// The SameSite attribute for the cookie which asserts that a cookie must not be sent with cross-origin requests,
+	/// providing some protection against cross-site request forgery attacks (CSRF).
+	/// The default value is "None", which permits the cookie to be sent with cross-site requests.
+	/// Valid options are "None", "Lax", and "Strict".
+	/// </summary>
+	public string SameSite { get; set; } = "None";
 }
