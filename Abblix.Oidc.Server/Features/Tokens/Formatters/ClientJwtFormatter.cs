@@ -69,7 +69,7 @@ public class ClientJwtFormatter : IClientJwtFormatter
     /// </remarks>
     public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
     {
-        var signingCredentials = await _serviceKeysProvider.GetSigningKeys()
+        var signingCredentials = await _serviceKeysProvider.GetSigningKeys(true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         var encryptingCredentials = await _clientKeysProvider.GetEncryptionKeys(clientInfo)

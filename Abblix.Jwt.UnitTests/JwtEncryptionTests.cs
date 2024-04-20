@@ -27,7 +27,6 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
-using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
 using Microsoft.IdentityModel.Tokens;
@@ -37,13 +36,8 @@ namespace Abblix.Jwt.UnitTests;
 
 public class JwtEncryptionTests
 {
-    // Generates an RSA key for encryption.
-    private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc, 2048);
-
-    // Generates an RSA key for signing.
-    private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig, 2048);
-
-    // Helper method to generate RSA JsonWebKey.
+    private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
+    private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
 
     [Fact]
     public async Task JwtFullCycleTest()
