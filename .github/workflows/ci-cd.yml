@@ -8,7 +8,7 @@ jobs:
   versioning:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.new_version }}
+      version: ${{ steps.set_version.outputs.new_version }}-beta
     steps:
       - uses: actions/checkout@v4.1.2
         with:
@@ -20,6 +20,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch # Automatically bump patch version
           release_branches: master
+          custom_tag: ${{ steps.set_version.outputs.new_version }}-beta
           create_annotated_tag: true
 
   build:
