@@ -20,7 +20,6 @@ cd Oidc.Server
 # Check if .NET SDK is installed
 dotnet --version  # Check the installed version of .NET SDK
 # Visit the official Microsoft website to install or update it if necessary
-# Upgrade your .NET version if required
 
 # Restore dependencies
 dotnet restore
