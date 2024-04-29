@@ -12,7 +12,7 @@
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageTags>Abblix, OIDC.Server, OIDC, OpenID, OpenID Connect, Authentication, Authorization, Security, Identity Management, OAuth 2.0, SSO, Single Sign-On</PackageTags>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET IdentityServer Federation Claims WebApi</PackageTags>
         <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.nuget.md</PackageLicenseFile>
         <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
