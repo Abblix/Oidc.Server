@@ -1,31 +1,24 @@
-﻿// Abblix OpenID Connect Server Library
-// Copyright (c) 2024 by Abblix LLP
+﻿// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
 // 
-// This software is provided 'as-is', without any express or implied warranty. In no
-// event will the authors be held liable for any damages arising from the use of this
-// software.
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
 // 
-// Permitted Use: This software is open for use and extension by non-profit,
-// educational and community projects under the condition that it remains unmodified
-// and used in its entirety through official Nuget packages. Any unauthorized
-// modification, forking of the whole repository, or altering individual files is
-// strictly prohibited to ensure development occurs solely within the official Abblix LLP
-// repository.
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
 // 
-// Prohibited Actions: Redistribution, modification, incorporation of this software or
-// any part thereof into other products, and creation of derivative works are not
-// permitted without obtaining a commercial license from Abblix LLP.
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
 // 
-// Commercial Use: A separate license is required for commercial use, including
-// functionalities extended beyond the original software. For information on obtaining
-// a commercial license, please contact Abblix LLP.
+// For full licensing terms, please visit:
 // 
-// Enforcement: Unauthorized redistribution, modification, or use of this software in
-// other projects or products is strictly prohibited without prior written permission
-// from the copyright holder. Violations may be subject to legal action.
+// https://oidc.abblix.com/license
 // 
-// For more information, please refer to the license agreement located at:
-// https://github.com/Abblix/Oidc.Server/blob/master/README.md
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
