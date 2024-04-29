@@ -88,10 +88,10 @@ public class AuthorizationCodeGrantHandlerTests
 		// arrange
 		var clientInfo = new ClientInfo("client1");
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = codeVerifier };
-		_parameterValidator.Setup(_ => _.Required(tokenRequest.Code, "Code"));
+		_parameterValidator.Setup(v => v.Required(tokenRequest.Code, "Code"));
 
 		_authCodeService
-			.Setup(_ => _.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrantResult(
 					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
