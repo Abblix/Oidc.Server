@@ -27,6 +27,7 @@
 // For more information, please refer to the license agreement located at:
 // https://github.com/Abblix/Oidc.Server/blob/master/README.md
 
+using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -152,7 +153,8 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 			return new ConsentRequired(model, authSession);
 		}
 
-		var authContext = new AuthorizationContext(model.ClientId, model.Scope, model.Claims)
+		var clientId = request.ClientInfo.ClientId;
+		var authContext = new AuthorizationContext(clientId, model.Scope, model.Claims)
 		{
 			RedirectUri = model.RedirectUri,
 			Nonce = model.Nonce,
@@ -160,9 +162,9 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 			CodeChallengeMethod = model.CodeChallengeMethod,
 		};
 
-		if (!authSession.AffectedClientIds.Contains(authContext.ClientId))
+		if (!authSession.AffectedClientIds.Contains(clientId))
 		{
-			authSession.AffectedClientIds.Add(authContext.ClientId);
+			authSession.AffectedClientIds.Add(clientId);
 			await _authSessionService.SignInAsync(authSession);
 		}
 

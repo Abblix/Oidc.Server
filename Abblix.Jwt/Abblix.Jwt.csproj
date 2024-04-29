@@ -6,16 +6,35 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Description>A lightweight, easy-to-use library for generating, validating, and working with JSON Web Tokens (JWT) in .NET applications. Whether you're developing web APIs, microservices, or serverless applications that require secure, stateless authentication and authorization solutions, Abblix.Jwt provides a robust set of features to incorporate JWT-based authentication with minimal effort. Features include token validation, custom claims, signature verification, and audience validation, making it an ideal choice for developers looking to secure their .NET applications efficiently.</Description>
+    <PackageId>Abblix.JWT</PackageId>
+    <Title>Abblix JWT</Title>
+    <Description>A lightweight, easy-to-use library for working with JSON Web Tokens (JWT) in .NET applications. Features include token validation, custom claims, signature verification, and audience validation, making it an ideal choice for developers looking to secure their .NET applications efficiently.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix, JWT, JSON Web Token, Authentication, Security, Token, API Security, OAuth, OAuth2, Access Token, Identity, ASP.NET Security, Web Security</PackageTags>
+    <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.nuget.md</PackageLicenseFile>
+    <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>For detailed release notes, visit: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\LICENSE.nuget.md" Link="LICENSE.nuget.md" Pack="true" PackagePath="" />
+    <None Include="..\README.nuget.md" Link="README.nuget.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>
