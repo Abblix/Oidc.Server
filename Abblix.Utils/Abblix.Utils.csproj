@@ -13,7 +13,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix, Utilities, String Manipulation, URI Parsing, JSON Serialization, Cryptography, Data Encoding, Extensions, .NET Utilities, Secure Random, Custom JSON Converters, Base32 Encoding, Asynchronous Utilities</PackageTags>
+    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions .NET-Utilities Secure-Random Custom-JSON-Converters Base32-Encoding Asynchronous-Utilities</PackageTags>
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.nuget.md</PackageLicenseFile>
     <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
