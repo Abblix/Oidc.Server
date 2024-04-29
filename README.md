@@ -33,7 +33,7 @@ To better understand the Abblix OIDC Server product, we strongly recommend visit
 
 ## Contacts
 
-For more details about our products, services, or any general information regarding the Abblix OIDC Server, feel free to reach out to us. We are here to provide support and answer any questions you may have. Below are the best ways to contact our team:
+For more information regarding the Abblix OIDC Server, feel free to reach out to us. We are here to provide support and answer any questions you may have. Below are the best ways to contact our team:
 
 - **Email**: Send us your inquiries or support requests at [support@abblix.com](mailto:support@abblix.com).
 - **Website**: Visit the official Abblix OIDC Server page for more information: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
