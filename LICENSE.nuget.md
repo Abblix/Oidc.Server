@@ -1,4 +1,4 @@
-# LICENSE AGREEMENT
+# License Agreement
 
 This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership ("Copyright Holder") for the OIDC Server ("Software").
 
