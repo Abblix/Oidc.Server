@@ -13,7 +13,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix, DependencyInjection, DI, .NET, ServiceLifetime, Scoped, Singleton, Transient, Composite, Decorator, AdvancedDI, ServiceResolver, .NET Core, Microsoft.Extensions.DependencyInjection, IoC, InversionOfControl</PackageTags>
+    <PackageTags>Abblix DependencyInjection DI .NET ServiceLifetime Scoped Singleton Transient Composite Decorator AdvancedDI ServiceResolver .NET Core Microsoft.Extensions.DependencyInjection IoC InversionOfControl</PackageTags>
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.nuget.md</PackageLicenseFile>
     <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
