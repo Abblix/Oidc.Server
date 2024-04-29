@@ -11,21 +11,17 @@ jobs:
       version: ${{ steps.set_version.outputs.new_version }}-beta
     steps:
       - uses: actions/checkout@v4.1.2
-        with:
-          fetch-depth: 0 # Essential to fetch all history for proper tagging
       - name: Bump version and push tag
         id: set_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch
+          default_bump: patch # Automatically bump patch version
           release_branches: master
           custom_tag: ${{ steps.set_version.outputs.new_version }}-beta
           create_annotated_tag: true
-          default_prerelease_bump: prerelease
-          tag_prefix: v
-          fetch_all_tags: false
-          dry_run: false
+          pre_release_branches: .*
+          append_to_pre_release_tag: -beta
 
   build:
     needs: versioning
