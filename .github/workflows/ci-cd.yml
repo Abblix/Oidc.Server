@@ -8,7 +8,7 @@ jobs:
   versioning:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.new_version }}-beta
+      version: ${{ steps.set_version.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4.1.2
       - name: Bump version and push tag
@@ -17,11 +17,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch # Automatically bump patch version
-          release_branches: master
-          custom_tag: ${{ steps.set_version.outputs.new_version }}-beta
-          create_annotated_tag: true
-          pre_release_branches: .*
-          append_to_pre_release_tag: -beta
+          release_branches: release.*,hotfix.*,master
+          pre_release_branches: feature.*
 
   build:
     needs: versioning
