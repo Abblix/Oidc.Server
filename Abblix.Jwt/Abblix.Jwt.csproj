@@ -13,7 +13,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix JWT JSON-Web-Token Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity ASP.NET-Security Web-Security</PackageTags>
+    <PackageTags>Abblix JWT JSON-Web-Token Authentication Security Token API-Security OAuth OAuth2 AccessToken Identity ASP.NET-Security Web-Security</PackageTags>
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.nuget.md</PackageLicenseFile>
     <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
