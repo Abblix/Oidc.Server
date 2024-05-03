@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.Utils</PackageId>
+    <Title>Abblix Utils</Title>
+    <Description>Abblix.Utils is a comprehensive utility library for .NET that enhances data manipulation and processing capabilities across applications. It includes advanced URI and string manipulation tools, cryptographic functionalities, and custom JSON converters to streamline serialization tasks. Key features include handling complex URI components, extending string operations, providing secure random data generation, and implementing custom converters for efficient JSON processing.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions .NET-Utilities Secure-Random Custom-JSON-Converters Base32-Encoding Asynchronous-Utilities</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>For detailed release notes, visit: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

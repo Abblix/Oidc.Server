@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Abblix.OIDC.Server.MVC</PackageId>
+        <Title>Abblix OIDC Server Model-View-Controller</Title>
+        <Description>The package integrates Abblix's OIDC Server capabilities with ASP.NET MVC, offering seamless support for OpenID Connect in MVC applications. It enables fast and easy implementation of secure OpenID Connect protocols, ensuring security features are accessible within the MVC framework.</Description>
+        <Authors>Abblix LLP</Authors>
+        <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET IdentityServer Federation Claims WebApi</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
+        <PackageReleaseNotes>For detailed release notes, visit: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+        <PackageIcon>Abblix.png</PackageIcon>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+        <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+        <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+        <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+        <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+</Project>
