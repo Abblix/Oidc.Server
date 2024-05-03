@@ -1,0 +1,66 @@
+<html lang="en">
+<head>
+    <script type="application/javascript">
+        if (window !== window.parent)
+            window.addEventListener("message", receiveMessage, false);
+
+        function receiveMessage(e)
+        {
+            var spaceIndex = e.data.lastIndexOf(" ");
+            if (spaceIndex < 0)
+                return;
+
+            var clientId = e.data.substring(0, spaceIndex);
+            var sessionState = e.data.substring(spaceIndex + 1);
+
+            var dotIndex = sessionState.lastIndexOf(".");
+            if (dotIndex < 0)
+                return;
+
+            var hash = sessionState.substring(0, dotIndex);
+            var salt = sessionState.substring(dotIndex + 1);
+            var sessionId = getCookieValue("{{cookieName}}");
+            var source = clientId + " " + e.origin + " " + sessionId + " " + salt;
+
+            sha256(source).then(function(result) {
+                var message = hash === result ? "unchanged" : "changed";
+                e.source.postMessage(message, e.origin);
+            });
+        }
+
+        function sha256(value)
+        {
+            var data = new TextEncoder().encode(value);
+            return crypto.subtle.digest("SHA-256", data).then(function(buffer)
+            {
+                return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+                    .replace(/\+/g, "-")
+                    .replace(/\//g, "_")
+                    .replace(/=/g, "");
+            });
+        }
+
+        function getCookieValue(name)
+        {
+            var cookies = parseCookies();
+            return cookies[name] ?? "";
+        }
+
+        function parseCookies() {
+            var cookies = {};
+            if (document.cookie === '')
+                return cookies;
+
+            document.cookie.split('; ').forEach(function (cookie) {
+                var index = cookie.indexOf('=');
+                var name = cookie.substring(0, index);
+                var value = decodeURIComponent(cookie.substring(index + 1));
+                cookies[name] = value;
+            });
+            return cookies;
+        }
+    </script>
+    <title></title>
+</head>
+<body></body>
+</html>

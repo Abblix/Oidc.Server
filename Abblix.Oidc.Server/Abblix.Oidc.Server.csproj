@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>true</ImplicitUsings>
+        <PackageId>Abblix.OIDC.Server</PackageId>
+        <Title>Abblix OIDC Server</Title>
+        <Description>Flexible OpenID Connect and OAuth 2.0 server-side implementation for modern ASP.NET projects</Description>
+        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
+        <Authors>Abblix LLP</Authors>
+        <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET IdentityServer Federation Claims WebApi</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
+        <PackageReleaseNotes>For detailed release notes, visit: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+        <PackageIcon>Abblix.png</PackageIcon>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
+      <EmbeddedResource Include=".\Features\Licensing\Resources\Abblix Licensing.pem" />
+      <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+      <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+      <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    </ItemGroup>
+
+</Project>
