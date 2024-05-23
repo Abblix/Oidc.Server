@@ -56,6 +56,7 @@ public class ArrayConverterTests
     {
         const string json = "null";
         var reader = new Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json));
+        reader.Read();
         var converter = new ArrayConverter<string, CustomElementConverter>();
 
         var result = converter.Read(ref reader, typeof(string[]), new JsonSerializerOptions());
@@ -72,6 +73,7 @@ public class ArrayConverterTests
     {
         const string json = "[]";
         var reader = new Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json));
+        reader.Read();
         var converter = new ArrayConverter<string, CustomElementConverter>();
 
         var result = converter.Read(ref reader, typeof(string[]), new JsonSerializerOptions());
@@ -88,6 +90,7 @@ public class ArrayConverterTests
     {
         const string json = "[\"one\", \"two\", \"three\"]";
         var reader = new Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json));
+        reader.Read();
         var converter = new ArrayConverter<string, CustomElementConverter>();
 
         var result = converter.Read(ref reader, typeof(string[]), new JsonSerializerOptions());

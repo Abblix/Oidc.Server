@@ -45,9 +45,6 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement?[]?>
     /// <returns>An array of <typeparamref name="TElement"/> or null if the JSON token is null.</returns>
     public override TElement?[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.None)
-            reader.Read();
-
         switch (reader.TokenType)
         {
             case JsonTokenType.Null:
