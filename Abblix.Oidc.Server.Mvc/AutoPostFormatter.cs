@@ -57,14 +57,14 @@ public class AutoPostFormatter : TextOutputFormatter
 	/// This method overrides the base class implementation to write an HTML form with the specified parameters.
 	/// </summary>
 	/// <param name="context">The context for the output formatter.</param>
-	/// <param name="encoding">The encoding to use for the response.</param>
+	/// <param name="selectedEncoding">The encoding to use for the response.</param>
 	/// <returns>A task that represents the asynchronous write operation.</returns>
-	public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding encoding)
+	public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding selectedEncoding)
 	{
 		if (context.Object == null)
 			return;
 
-		var settings = new XmlWriterSettings { Async = true, Encoding = encoding };
+		var settings = new XmlWriterSettings { Async = true, Encoding = selectedEncoding };
 		await using var writer = XmlWriter.Create(context.HttpContext.Response.Body, settings);
 
 		var parameters = _parametersProvider.GetParameters(context.Object);

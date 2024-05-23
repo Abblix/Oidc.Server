@@ -51,23 +51,23 @@ public class AllowedValuesAttribute : ValidationAttribute
 	/// Determines whether the specified value of the object is valid.
 	/// </summary>
 	/// <param name="value">The value of the object to validate.</param>
-	/// <param name="context">The context information about the object being validated.</param>
+	/// <param name="validationContext">The context information about the object being validated.</param>
 	/// <returns><see cref="ValidationResult.Success"/> if the value is among the allowed values,
 	/// otherwise an error <see cref="ValidationResult"/>.
 	/// </returns>
-	protected override ValidationResult? IsValid(object? value, ValidationContext context)
+	protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
 	{
 		return value switch
 		{
 			null => ValidationResult.Success,
-			string[][] stringValues => IsValid(stringValues.SelectMany(stringValue => stringValue), context),
-			string[] stringValues => IsValid(stringValues, context),
+			string[][] stringValues => IsValid(stringValues.SelectMany(stringValue => stringValue), validationContext),
+			string[] stringValues => IsValid(stringValues, validationContext),
 			string stringValue => IsValid(stringValue),
 			_ => throw new InvalidOperationException($"The type {value.GetType()} is not supported by {nameof(AllowedValuesAttribute)}"),
 		};
 	}
 
-	private ValidationResult? IsValid(IEnumerable<string> values, ValidationContext context)
+	private ValidationResult? IsValid(IEnumerable<string> values, ValidationContext validationContext)
 	{
 		foreach (var value in values)
 		{

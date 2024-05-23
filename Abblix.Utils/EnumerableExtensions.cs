@@ -37,7 +37,8 @@ public static class EnumerableExtensions
 		=> value ?? Enumerable.Empty<T>();
 
 	/// <summary>
-	/// Traverses a hierarchy upwards, starting from a specific item and moving to its parent, grandparent, etc., as determined by a parent selector function.
+	/// Traverses a hierarchy upwards, starting from a specific item and moving to its parent, grandparent, etc.,
+	/// as determined by a parent selector function.
 	/// </summary>
 	/// <typeparam name="T">The type of elements in the hierarchy.</typeparam>
 	/// <param name="item">The starting item in the hierarchy.</param>
@@ -66,7 +67,7 @@ public static class EnumerableExtensions
 	/// <param name="input">The sequence of root elements.</param>
 	/// <param name="childrenSelector">A function to retrieve the children of an element.</param>
 	/// <returns>A flattened sequence of all elements in the tree.</returns>
-	public static IEnumerable<T> FlattenTree<T>(this IEnumerable<T> input, Func<T, IEnumerable<T>> childrenSelector)
+	public static IEnumerable<T> FlattenTree<T>(this IEnumerable<T>? input, Func<T, IEnumerable<T>> childrenSelector)
 	{
 		var queue = new Queue<T>();
 		queue.EnqueueAll(input);
@@ -97,9 +98,19 @@ public static class EnumerableExtensions
 		}
 	}
 
-	private static void EnqueueAll<T>(this Queue<T> queue, IEnumerable<T> input)
+	/// <summary>
+	/// Enqueues all elements from a specified collection into the given queue.
+	/// </summary>
+	/// <typeparam name="T">The type of elements contained in the queue and the enumerable collection.</typeparam>
+	/// <param name="queue">The queue into which elements will be enqueued.</param>
+	/// <param name="input">The collection of elements to enqueue. If the collection is null, no action is taken.
+	/// </param>
+	public static void EnqueueAll<T>(this Queue<T> queue, IEnumerable<T>? input)
 	{
-		foreach (var item in input.OrEmpty())
+		if (input == null)
+			return;
+
+		foreach (var item in input)
 		{
 			queue.Enqueue(item);
 		}

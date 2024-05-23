@@ -54,12 +54,8 @@ public class AuthorizationErrorFormatter
     /// <param name="request">The original authorization request that led to the error.</param>
     /// <param name="error">The authorization error to be formatted.</param>
     /// <returns>A task that resolves to the formatted HTTP action result.</returns>
-    public Task<ActionResult> FormatResponseAsync(
-        AuthorizationRequest request,
-        AuthorizationError error)
-    {
-        return Task.FromResult(FormatResponse(request, error));
-    }
+    public Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
+        => Task.FromResult(FormatResponse(request, error));
 
     /// <summary>
     /// Internally formats the authorization error response based on the request context and the error's properties,
@@ -72,18 +68,17 @@ public class AuthorizationErrorFormatter
     {
         switch (error)
         {
-            case { RedirectUri: not null }:
+            case { RedirectUri: {} redirectUri }:
 
                 var response = new AuthorizationResponse
                 {
                     Error = error.Error,
                     ErrorDescription = error.ErrorDescription,
                     ErrorUri = error.ErrorUri,
-
                     State = request.State,
                 };
 
-                return ToActionResult(response, error.ResponseMode, error.RedirectUri);
+                return ToActionResult(response, error.ResponseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));
