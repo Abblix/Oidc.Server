@@ -60,14 +60,14 @@ public class AllowedValuesAttribute : ValidationAttribute
 		return value switch
 		{
 			null => ValidationResult.Success,
-			string[][] stringValues => IsValid(stringValues.SelectMany(stringValue => stringValue), validationContext),
-			string[] stringValues => IsValid(stringValues, validationContext),
+			string[][] stringValues => IsValid(stringValues.SelectMany(stringValue => stringValue)),
+			string[] stringValues => IsValid(stringValues),
 			string stringValue => IsValid(stringValue),
 			_ => throw new InvalidOperationException($"The type {value.GetType()} is not supported by {nameof(AllowedValuesAttribute)}"),
 		};
 	}
 
-	private ValidationResult? IsValid(IEnumerable<string> values, ValidationContext validationContext)
+	private ValidationResult? IsValid(IEnumerable<string> values)
 	{
 		foreach (var value in values)
 		{
