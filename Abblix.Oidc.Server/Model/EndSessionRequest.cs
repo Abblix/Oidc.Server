@@ -84,5 +84,5 @@ public record EndSessionRequest
 	/// A boolean value indicating whether the end session has been confirmed. Typically used in interactive logout confirmation scenarios.
 	/// </summary>
 	[JsonPropertyName(Parameters.Confirmed)]
-	public bool Confirmed { get; set; }
+	public bool? Confirmed { get; set; }
 }

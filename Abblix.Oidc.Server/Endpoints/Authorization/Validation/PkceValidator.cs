@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
 /// Validates the PKCE (Proof Key for Code Exchange) parameters in an authorization request.
-/// PKCE adds an additional layer of security for the OAuth 2.0 authorization code flow,
+/// PKCE adds another layer of security for the OAuth 2.0 authorization code flow,
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
@@ -55,7 +55,7 @@ public class PkceValidator : SyncAuthorizationContextValidatorBase
 				return context.InvalidRequest("The client is not allowed PKCE plain method");
 			}
 		}
-		else if (context.ClientInfo.PkceRequired)
+		else if (context.ClientInfo.PkceRequired ?? true)
 		{
 			return context.InvalidRequest("The client requires PKCE code challenge");
 		}

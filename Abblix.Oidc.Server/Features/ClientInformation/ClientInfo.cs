@@ -73,7 +73,7 @@ public record ClientInfo(string ClientId)
     /// Indicates whether the client is to use Proof Key for Code Exchange (PKCE) in the authorization code flow,
     /// enhancing security for public clients.
     /// </summary>
-    public bool PkceRequired { get; set; } = false;
+    public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
     /// Indicates if the client is allowed to use the "plain" method for PKCE.
@@ -85,13 +85,13 @@ public record ClientInfo(string ClientId)
     /// The validity period of an authorization code issued to this client.
     /// Shorter durations are recommended for higher security.
     /// </summary>
-    public TimeSpan AuthorizationCodeExpiresIn { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan AuthorizationCodeExpiresIn { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// Specifies the lifetime of access tokens issued to this client.
     /// Shorter access token lifetimes reduce the risk of token leakage.
     /// </summary>
-    public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromHours(1);
+    public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Configures the behavior and properties of refresh tokens issued to this client,
@@ -131,7 +131,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Allows the client to request tokens that enable access to the user's resources while they are offline.
     /// </summary>
-    public bool OfflineAccessAllowed { get; set; } = false;
+    public bool? OfflineAccessAllowed { get; set; } = false;
 
     /// <summary>
     /// The set of JSON Web Keys used by the client, typically for signing request objects and decrypting

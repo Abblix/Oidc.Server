@@ -44,6 +44,7 @@ public static class EnumerableExtensions
 	/// <param name="parentSelector">A function that returns the parent of a given item.</param>
 	/// <returns>An IEnumerable&lt;T&gt; representing the path from the item upwards in the hierarchy.</returns>
 	public static IEnumerable<T> TravelUp<T>(this T item, Func<T, T?> parentSelector)
+		where T: class
 	{
 		for (var current = item; current != null; )
 		{

@@ -99,13 +99,10 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
         var response = await _processor.ProcessAsync(request);
 
         // Register issued tokens as part of the authorization code grant
-        if (response is TokenIssuedResponse
-            {
-                AccessToken: var accessToken,
-                RefreshToken: var refreshToken
-            })
+        if (response is TokenIssuedResponse { AccessToken: var accessToken, RefreshToken: var refreshToken })
         {
             var issuedTokensList = new List<TokenInfo>();
+
             void TryRegisterToken(JsonWebToken? token)
             {
                 if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt }})
