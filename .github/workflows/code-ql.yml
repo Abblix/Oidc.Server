@@ -15,35 +15,28 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Increase the timeout limit as needed
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
 
     strategy:
       matrix:
-        language: [ 'javascript', 'typescript', 'csharp' ]
+        language: [ 'csharp' ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4.0.0
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0'
-
-      - name: Restore .NET dependencies
-        run: dotnet restore
-
-      - name: Build .NET project
-        run: dotnet build --no-restore --configuration Release
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          tools: latest
+
+      - name: Build .NET project
+        run: dotnet build --configuration Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
