@@ -1,5 +1,35 @@
-## Description
-**Abblix OIDC Server** is a robust .NET library that implements the OpenID Connect protocol on the server side. It is designed to meet high standards of flexibility, reusability, and reliability, using well-known software design patterns such as modular and hexagonal architectures. These patterns ensure that different parts of the library can work independently, improving the library's modularity, testability, and maintainability. The library also supports Dependency Injection using the standard .NET DI container, which aids in better organization and management of code. Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms to simplify the integration of OpenID Connect into your services.
+# Abblix OIDC Server
+
+**Abblix OIDC Server** is a robust .NET library that provides comprehensive support for OAuth2 and OpenID Connect on the server side.
+
+It is designed to meet high standards of flexibility, reusability, and reliability, using well-known software design patterns such as modular and hexagonal architectures. 
+These patterns ensure that different parts of the library can work independently, improving the library's modularity, testability, and maintainability. 
+The library also supports Dependency Injection using the standard .NET DI container, which aids in better organization and management of code. 
+Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms to simplify the integration of OpenID Connect into your services.
+
+## Code Quality and Security Checks
+
+The quality and security of this project are continuously checked using [SonarCloud](https://sonarcloud.io/):
+
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
+
+## Certification
+![OpenID_Foundation_Certification](https://static.tildacdn.pro/tild3135-6534-4137-a636-613839336364/oid-l-certification-.svg)
+
+Abblix OIDC Server is [officially certified](https://openid.net/certification/#OPENID-OP-P) by the OpenID Foundation for the following profiles:
+- Basic OP
+- Implicit OP
+- Hybrid OP
+- Config OP
+- Dynamic OP
+- Form Post OP
+- 3rd Party-Init OP
+- RP-Initiated OP
+- Session OP
+- Front-Channel OP
+- Back-Channel OP
 
 ## How to Build
 ```shell

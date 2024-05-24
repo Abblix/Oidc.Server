@@ -24,8 +24,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
-
-
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
@@ -44,20 +42,20 @@ public class ScopeValidator : SyncAuthorizationContextValidatorBase
 	/// </summary>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
-	/// An <see cref="AuthorizationRequestValidationError"/> if the scope validation fails,
+	/// An <see cref="AuthorizationRequestValidationError" /> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
-	{
-		if (context.Request.Scope.HasFlag(Scopes.OfflineAccess))
-		{
-			if (context.FlowType == FlowTypes.Implicit)
-				return context.InvalidRequest("It is not allowed to request for offline access in implicit flow");
+	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    {
+        if (context.Request.Scope.HasFlag(Scopes.OfflineAccess))
+        {
+            if (context.FlowType == FlowTypes.Implicit)
+                return context.InvalidRequest("It is not allowed to request for offline access in implicit flow");
 
-			if (!context.ClientInfo.OfflineAccessAllowed)
-				return context.InvalidRequest("This client is not allowed to request for offline access");
-		}
+            if (context.ClientInfo.OfflineAccessAllowed != true)
+                return context.InvalidRequest("This client is not allowed to request for offline access");
+        }
 
-		return null;
-	}
+        return null;
+    }
 }
