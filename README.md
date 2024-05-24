@@ -14,7 +14,7 @@ The quality and security of this project are continuously checked using [SonarCl
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![CodeQL Analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/code-ql.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/actions/workflows/code-ql.yml)
+[![CodeQL Analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml)
 
 ## Certification
 ![OpenID_Foundation_Certification](https://static.tildacdn.pro/tild3135-6534-4137-a636-613839336364/oid-l-certification-.svg)
