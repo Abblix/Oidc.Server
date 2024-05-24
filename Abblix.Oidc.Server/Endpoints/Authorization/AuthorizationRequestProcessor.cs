@@ -205,7 +205,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		return result;
 	}
 
-	private Task<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
 	{
 		var authSessions = _authSessionService.GetAvailableAuthSessions();
 
@@ -214,14 +214,14 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 			// skip all sessions older than max_age value
 			var minAuthenticationTime = _clock.GetUtcNow() - model.MaxAge;
 			authSessions = authSessions
-				.WhereAsync(session => minAuthenticationTime < session.AuthenticationTime);
+				.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
 		var acrValues = model.AcrValues;
 		if (acrValues is { Length: > 0 })
 		{
 			authSessions = authSessions
-				.WhereAsync(session => session.AuthContextClassRef.HasValue() &&
+				.Where(session => session.AuthContextClassRef.HasValue() &&
 				                       acrValues.Contains(session.AuthContextClassRef));
 		}
 

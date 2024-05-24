@@ -72,8 +72,8 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     IdToken = success.IdToken?.EncodedJwt,
                 };
 
-            case TokenErrorResponse error:
-                return new BadRequestObjectResult(error);
+            case TokenErrorResponse { Error: var error, ErrorDescription: var description }:
+                return new BadRequestObjectResult(new ErrorResponse(error, description));
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(response));

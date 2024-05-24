@@ -37,14 +37,14 @@ public static class JsonWebKeyExtensions
     /// <param name="alg">The algorithm to match. Returns null if <see cref="SigningAlgorithms.None"/> is provided.</param>
     /// <returns>The first <see cref="JsonWebKey"/> with the specified algorithm or null if not found.</returns>
 
-    public static Task<JsonWebKey?> FirstByAlgorithmAsync(this IAsyncEnumerable<JsonWebKey> credentials, string? alg)
+    public static async Task<JsonWebKey?> FirstByAlgorithmAsync(this IAsyncEnumerable<JsonWebKey> credentials, string? alg)
     {
         if (alg == SigningAlgorithms.None)
-            return Task.FromResult<JsonWebKey?>(null);
+            return null;
 
         if (alg.HasValue())
-            credentials = credentials.WhereAsync(key => key.Algorithm == alg);
+            credentials = credentials.Where(key => key.Algorithm == alg);
 
-        return credentials.FirstOrDefaultAsync();
+        return await credentials.FirstOrDefaultAsync();
     }
 }

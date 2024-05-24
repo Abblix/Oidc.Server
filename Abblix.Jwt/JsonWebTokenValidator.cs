@@ -96,9 +96,9 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
                 var signingKeys = resolveIssuerSigningKeys(securityToken.Issuer);
 
                 if (keyId.HasValue())
-                    signingKeys = signingKeys.WhereAsync(key => key.KeyId == keyId);
+                    signingKeys = signingKeys.Where(key => key.KeyId == keyId);
 
-                return signingKeys.SelectAsync(key => key.ToSecurityKey()).ToListAsync().Result;
+                return signingKeys.Select(key => key.ToSecurityKey()).ToListAsync().Result;
             };
         }
 
@@ -109,9 +109,9 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
                 var decryptionKeys = resolveTokenDecryptionKeys(securityToken.Issuer);
 
                 if (keyId.HasValue())
-                    decryptionKeys = decryptionKeys.WhereAsync(key => key.KeyId == keyId);
+                    decryptionKeys = decryptionKeys.Where(key => key.KeyId == keyId);
 
-                return decryptionKeys.SelectAsync(key => key.ToSecurityKey()).ToListAsync().Result;
+                return decryptionKeys.Select(key => key.ToSecurityKey()).ToListAsync().Result;
             };
 
         var handler = new JwtSecurityTokenHandler();

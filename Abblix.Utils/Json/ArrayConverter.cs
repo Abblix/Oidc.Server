@@ -31,7 +31,7 @@ namespace Abblix.Utils.Json;
 /// </summary>
 /// <typeparam name="TElement">The type of the elements in the array.</typeparam>
 /// <typeparam name="TConverter">The type of the converter used for the elements in the array.</typeparam>
-public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement[]?>
+public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement?[]?>
     where TConverter: JsonConverter<TElement>, new()
 {
     private readonly TConverter _elementConverter = new();
@@ -43,7 +43,7 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement[]?>
     /// <param name="typeToConvert">The type of object to convert to.</param>
     /// <param name="options">Options for the serializer.</param>
     /// <returns>An array of <typeparamref name="TElement"/> or null if the JSON token is null.</returns>
-    public override TElement[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override TElement?[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         switch (reader.TokenType)
         {
@@ -58,15 +58,18 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement[]?>
                 throw new JsonException();
         }
 
-        var result = new List<TElement>();
+        var result = new List<TElement?>();
         while (reader.Read())
         {
             switch (reader.TokenType)
             {
+                case JsonTokenType.Null:
+                    result.Add(default);
+                    break;
+
                 case JsonTokenType.String:
                     var element = _elementConverter.Read(ref reader, typeof(TElement), options);
-                    if (element != null)
-                        result.Add(element);
+                    result.Add(element);
                     break;
 
                 case JsonTokenType.EndArray:
@@ -86,7 +89,7 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement[]?>
     /// <param name="writer">The writer to write JSON to.</param>
     /// <param name="value">The array of <typeparamref name="TElement"/> to write.</param>
     /// <param name="options">Options for the serializer.</param>
-    public override void Write(Utf8JsonWriter writer, TElement[]? value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, TElement?[]? value, JsonSerializerOptions options)
     {
         if (value == null)
         {
@@ -99,7 +102,14 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement[]?>
         {
             foreach (var element in value)
             {
-                _elementConverter.Write(writer, element, options);
+                if (element is null)
+                {
+                    writer.WriteNullValue();
+                }
+                else
+                {
+                    _elementConverter.Write(writer, element, options);
+                }
             }
         }
         finally

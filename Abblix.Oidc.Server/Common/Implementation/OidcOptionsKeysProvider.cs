@@ -57,7 +57,7 @@ internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 			from jwk in _options.Value.EncryptionKeys
 			select jwk.Sanitize(includePrivateKeys);
 
-		return jsonWebKeys.AsAsync();
+		return jsonWebKeys.ToAsyncEnumerable();
 	}
 
 	/// <summary>
@@ -71,6 +71,6 @@ internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 			from jwk in _options.Value.SigningKeys
 			select jwk.Sanitize(includePrivateKeys);
 
-		return jsonWebKeys.AsAsync();
+		return jsonWebKeys.ToAsyncEnumerable();
 	}
 }

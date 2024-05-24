@@ -38,17 +38,17 @@ public abstract class ConditionalRequiredAttribute : RequiredAttribute
 	/// Determines whether the specified value of the object is valid based on a custom condition.
 	/// </summary>
 	/// <param name="value">The value of the object to validate.</param>
-	/// <param name="context">The context information about the object being validated.</param>
+	/// <param name="validationContext">The context information about the object being validated.</param>
 	/// <returns>
 	/// <see cref="ValidationResult.Success"/> if the condition is not met or if the value is valid as per the base <see cref="RequiredAttribute"/>;
 	/// otherwise, an error <see cref="ValidationResult"/>.
 	/// </returns>
-	protected override ValidationResult? IsValid(object? value, ValidationContext context)
+	protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
 	{
-		if (!IsRequired(context.ObjectInstance))
+		if (!IsRequired(validationContext.ObjectInstance))
 			return ValidationResult.Success;
 
-		return base.IsValid(value, context);
+		return base.IsValid(value, validationContext);
 	}
 
 	/// <summary>

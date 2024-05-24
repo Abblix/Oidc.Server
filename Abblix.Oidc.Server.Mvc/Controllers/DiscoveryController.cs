@@ -34,7 +34,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -163,8 +162,8 @@ public sealed class DiscoveryController : ControllerBase
 		if (!options.Value.EnabledEndpoints.HasFlag(OidcEndpoints.Keys))
 			return NotFound();
 
-		var keys = await serviceKeysProvider.GetSigningKeys().ToListAsync();
-		return  Json(new JsonWebKeySet(keys.ToArray()));
+		var keys = await serviceKeysProvider.GetSigningKeys().ToArrayAsync();
+		return Json(new JsonWebKeySet(keys));
 	}
 
 	private static JsonResult Json(object response) => new(
