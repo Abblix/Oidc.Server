@@ -61,45 +61,37 @@ public readonly record struct Sanitized
         {
             var c = source[i];
 
-            switch (c)
+            var replacement = c switch
             {
-                case '\n':
-                    ReplaceTo("\\n", ref builder, source, i);
-                    break;
-                case '\r':
-                    ReplaceTo("\\r", ref builder, source, i);
-                    break;
-                case '\t':
-                    ReplaceTo("\\t", ref builder, source, i);
-                    break;
-                case '\"':
-                    ReplaceTo("\\\"", ref builder, source, i);
-                    break;
-                case '\'':
-                    ReplaceTo("\\'", ref builder, source, i);
-                    break;
-                case '\\':
-                    ReplaceTo(@"\\", ref builder, source, i);
-                    break;
-                case ',':
-                    ReplaceTo("\\,", ref builder, source, i);
-                    break;
-                case ';':
-                    ReplaceTo("\\;", ref builder, source, i);
-                    break;
-                default:
-                    if (0x00 <= c && c <= 0x1f || c == 0x7f)
-                        ReplaceTo(null, ref builder, source, i);
-                    else
-                        builder?.Append(c);
-                    break;
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                '\"' => "\\\"",
+                '\'' => "\\'",
+                '\\' => @"\\",
+                ',' => "\\,",
+                ';' => "\\;",
+                _ => null
+            };
+
+            if (replacement != null)
+            {
+                ReplaceTo(ref builder, source, i, replacement);
+            }
+            else if (0x00 <= c && c <= 0x1f || c == 0x7f)
+            {
+                ReplaceTo(ref builder, source, i, null);
+            }
+            else
+            {
+                builder?.Append(c);
             }
         }
 
         return builder != null ? builder.ToString() : source;
     }
 
-    private void ReplaceTo(string? replacement, ref StringBuilder? builder, string source, int i)
+    private void ReplaceTo(ref StringBuilder? builder, string source, int i, string? replacement)
     {
         builder ??= new StringBuilder(source, 0, i, source.Length + (replacement?.Length ?? 0) - 1);
         builder.Append(replacement);
