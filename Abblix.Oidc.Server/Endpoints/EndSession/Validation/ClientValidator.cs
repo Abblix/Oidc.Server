@@ -67,7 +67,7 @@ public class ClientValidator : IEndSessionContextValidator
         var clientInfo = await _clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            _logger.LogWarning("The client with id {ClientId} was not found", context.ClientId);
+            _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(context.ClientId));
             return new EndSessionRequestValidationError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");

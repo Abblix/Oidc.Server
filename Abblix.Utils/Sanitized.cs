@@ -34,12 +34,12 @@ public readonly record struct Sanitized
     /// Initializes a new instance of the <see cref="Sanitized"/> struct with the specified source string.
     /// </summary>
     /// <param name="source">The source string to be sanitized.</param>
-    public Sanitized(string? source)
+    public Sanitized(object? source)
     {
         _source = source;
     }
 
-    private readonly string? _source;
+    private readonly object? _source;
 
     /// <summary>
     /// Returns the sanitized string representation of the source string.
@@ -47,59 +47,61 @@ public readonly record struct Sanitized
     /// <returns>A sanitized string with control characters removed and special characters escaped.</returns>
     public override string? ToString()
     {
-        if (string.IsNullOrEmpty(_source))
+        if (_source == null)
+            return null;
+
+        var source = _source.ToString();
+        if (string.IsNullOrEmpty(source))
         {
-            return _source;
+            return source;
         }
 
-        StringBuilder? resultBuilder = null;
-        var source = _source;
-        
-        for (var i = 0; i < _source.Length; i++)
+        StringBuilder? builder = null;
+        for (var i = 0; i < source.Length; i++)
         {
-            var c = _source[i];
+            var c = source[i];
 
             switch (c)
             {
                 case '\n':
-                    ReplaceTo("\\n", ref resultBuilder, source, i);
+                    ReplaceTo("\\n", ref builder, source, i);
                     break;
                 case '\r':
-                    ReplaceTo("\\r", ref resultBuilder, source, i);
+                    ReplaceTo("\\r", ref builder, source, i);
                     break;
                 case '\t':
-                    ReplaceTo("\\t", ref resultBuilder, source, i);
+                    ReplaceTo("\\t", ref builder, source, i);
                     break;
                 case '\"':
-                    ReplaceTo("\\\"", ref resultBuilder, source, i);
+                    ReplaceTo("\\\"", ref builder, source, i);
                     break;
                 case '\'':
-                    ReplaceTo("\\'", ref resultBuilder, source, i);
+                    ReplaceTo("\\'", ref builder, source, i);
                     break;
                 case '\\':
-                    ReplaceTo(@"\\", ref resultBuilder, source, i);
+                    ReplaceTo(@"\\", ref builder, source, i);
                     break;
                 case ',':
-                    ReplaceTo("\\,", ref resultBuilder, source, i);
+                    ReplaceTo("\\,", ref builder, source, i);
                     break;
                 case ';':
-                    ReplaceTo("\\;", ref resultBuilder, source, i);
+                    ReplaceTo("\\;", ref builder, source, i);
                     break;
                 default:
                     if (0x00 <= c && c <= 0x1f || c == 0x7f)
-                        ReplaceTo(null, ref resultBuilder, source, i);
+                        ReplaceTo(null, ref builder, source, i);
                     else
-                        resultBuilder?.Append(c);
+                        builder?.Append(c);
                     break;
             }
         }
 
-        return resultBuilder != null ? resultBuilder.ToString() : _source;
+        return builder != null ? builder.ToString() : source;
     }
 
-    private void ReplaceTo(string? replacement, ref StringBuilder? resultBuilder, string source, int i)
+    private void ReplaceTo(string? replacement, ref StringBuilder? builder, string source, int i)
     {
-        resultBuilder ??= new StringBuilder(source, 0, i, source.Length + (replacement?.Length ?? 0) - 1);
-        resultBuilder.Append(replacement);
+        builder ??= new StringBuilder(source, 0, i, source.Length + (replacement?.Length ?? 0) - 1);
+        builder.Append(replacement);
     }
 }
