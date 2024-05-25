@@ -17,7 +17,7 @@ The quality and security of this project are continuously checked using [SonarCl
 [![CodeQL Analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
 
 ## Certification
-![OpenID_Foundation_Certification](https://static.tildacdn.pro/tild3135-6534-4137-a636-613839336364/oid-l-certification-.svg)
+[![OpenID_Foundation_Certification](https://static.tildacdn.pro/tild3135-6534-4137-a636-613839336364/oid-l-certification-.svg)](https://openid.net/certification/#OPENID-OP-P)
 
 Abblix OIDC Server is [officially certified](https://openid.net/certification/#OPENID-OP-P) by the OpenID Foundation for the following profiles:
 - Basic OP
