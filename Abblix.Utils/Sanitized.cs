@@ -45,16 +45,11 @@ public readonly record struct Sanitized
     /// Returns the sanitized string representation of the source string.
     /// </summary>
     /// <returns>A sanitized string with control characters removed and special characters escaped.</returns>
-    public override string? ToString()
+    public override string ToString()
     {
-        if (_source == null)
-            return null;
-
-        var source = _source.ToString();
+        var source = _source?.ToString();
         if (string.IsNullOrEmpty(source))
-        {
-            return source;
-        }
+            return string.Empty;
 
         StringBuilder? builder = null;
         for (var i = 0; i < source.Length; i++)
