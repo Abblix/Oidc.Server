@@ -23,6 +23,7 @@
 using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -88,7 +89,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
-                            sectorIdentifierUri);
+                            new Sanitized(sectorIdentifierUri));
                         return ErrorFactory.InvalidClientMetadata(
                             $"Unable to receive content of {Parameters.SectorIdentifierUri}");
                     }
@@ -109,7 +110,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                 if (missingUris.Length > 0)
                 {
                     _logger.LogWarning("The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
-                        sectorIdentifierUri,
+                        new Sanitized(sectorIdentifierUri),
                         missingUris);
 
                     return ErrorFactory.InvalidClientMetadata(
