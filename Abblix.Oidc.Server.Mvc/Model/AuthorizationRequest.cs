@@ -42,7 +42,6 @@ public record AuthorizationRequest
 	/// The specific scopes requested determine the access privileges granted.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Scope)]
-	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.Address, Scopes.OfflineAccess)]
 	[ModelBinder(typeof(SpaceSeparatedValuesBinder))]
 	public string[] Scope { get; init; } = Array.Empty<string>();
 

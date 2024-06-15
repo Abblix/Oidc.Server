@@ -40,7 +40,6 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
-	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.Address, Scopes.OfflineAccess)]
 	public string[] Scope { get; init; } = Array.Empty<string>();
 
 	/// <summary>
