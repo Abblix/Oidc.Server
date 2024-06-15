@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -59,14 +60,15 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
     /// The service responsible for managing user sessions within the authorization process.</param>
     /// <param name="httpContextAccessor">
     /// Accessor to obtain the current HTTP context, facilitating access to request and response objects.</param>
-
-    public AuthorizationResponseFormatter(
-        IOptions<OidcOptions> options,
+    /// <param name="issuerProvider">
+    /// Provides issuer information crucial for generating consistent authorization responses.</param>
+    public AuthorizationResponseFormatter(IOptions<OidcOptions> options,
         IAuthorizationRequestStorage authorizationRequestStorage,
         IParametersProvider parametersProvider,
         ISessionManagementService sessionManagementService,
-        IHttpContextAccessor httpContextAccessor)
-        : base(parametersProvider)
+        IHttpContextAccessor httpContextAccessor,
+        IIssuerProvider issuerProvider)
+        : base(parametersProvider, issuerProvider)
     {
         _options = options;
         _authorizationRequestStorage = authorizationRequestStorage;
@@ -116,19 +118,16 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
                 var modelResponse = new AuthorizationResponse
                 {
                     State = response.Model.State,
+                    Issuer = _issuerProvider.GetIssuer(),
                     Scope = string.Join(' ', response.Model.Scope),
-
                     Code = success.Code,
-
                     TokenType = success.TokenType,
                     AccessToken = success.AccessToken?.EncodedJwt,
-
                     IdToken = success.IdToken?.EncodedJwt,
-
                     SessionState = success.SessionState,
                 };
 
-                var actionResult = ToActionResult(modelResponse, success.ResponseMode, response.Model.RedirectUri);
+                var actionResult = ToActionResult(modelResponse, success.ResponseMode, success.Model.RedirectUri);
 
                 if (_sessionManagementService.Enabled  &&
                     success.SessionId.HasValue() &&
