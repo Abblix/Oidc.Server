@@ -22,7 +22,6 @@
 
 using System.Net.Http.Json;
 using Abblix.Jwt;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
