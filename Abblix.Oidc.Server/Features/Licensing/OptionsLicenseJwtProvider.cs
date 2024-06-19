@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Licensing;

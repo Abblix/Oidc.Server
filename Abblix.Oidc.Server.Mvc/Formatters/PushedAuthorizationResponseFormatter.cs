@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -39,11 +40,12 @@ public class PushedAuthorizationResponseFormatter : AuthorizationErrorFormatter,
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="PushedAuthorizationResponseFormatter"/> class
-    /// with the specified parameters provider.
+    /// with the specified parameters' provider.
     /// </summary>
     /// <param name="parametersProvider">Provides access to parameters used in formatting the response.</param>
-    public PushedAuthorizationResponseFormatter(IParametersProvider parametersProvider)
-        : base(parametersProvider)
+    /// <param name="issuerProvider">Provides access to the issuer information used in responses.</param>
+    public PushedAuthorizationResponseFormatter(IParametersProvider parametersProvider, IIssuerProvider issuerProvider)
+        : base(parametersProvider, issuerProvider)
     {
     }
 

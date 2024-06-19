@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Security.Cryptography;
+using Abblix.Utils;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Abblix.Jwt;
@@ -53,12 +54,14 @@ public static class JsonWebKeyFactory
         rsa.KeySize = keySize;
         var parameters = rsa.ExportParameters(true);
 
+        var parametersExponent = parameters.Exponent;
         var key = new JsonWebKey
         {
             KeyType = "RSA",
+            KeyId = parameters.ToKeyId(),
             Algorithm = algorithm,
             Usage = usage,
-            RsaExponent = parameters.Exponent,
+            RsaExponent = parametersExponent,
             RsaModulus = parameters.Modulus,
             PrivateKey = parameters.D,
             FirstPrimeFactor = parameters.P,
@@ -69,5 +72,27 @@ public static class JsonWebKeyFactory
         };
 
         return key;
+    }
+
+    private static string ToKeyId(this RSAParameters parameters)
+    {
+        var keyMaterial = (parameters.Modulus, parameters.Exponent) switch
+        {
+            ({} modulus, {} exponent) => modulus.Concat(exponent),
+            ({} modulus, null) => modulus,
+            (null, {} exponent) => exponent,
+            (null, null) => Array.Empty<byte>(),
+        };
+
+        // Compute the SHA-256 hash of the concatenated string
+        return SHA256.HashData(keyMaterial).ToHexString();
+    }
+
+    private static byte[] Concat(this byte[] modulus, byte[] exponent)
+    {
+        var buffer = new byte[modulus.Length + exponent.Length];
+        Array.Copy(modulus, buffer, modulus.Length);
+        Array.Copy(exponent, 0, buffer, modulus.Length, exponent.Length);
+        return buffer;
     }
 }
