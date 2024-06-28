@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -34,11 +34,17 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 public class ScopeValidator : SyncAuthorizationContextValidatorBase
 {
+	public ScopeValidator(IScopeManager scopeManager)
+	{
+		_scopeManager = scopeManager;
+	}
+
+	private readonly IScopeManager _scopeManager;
+
 	/// <summary>
-	/// Validates the scopes specified in the authorization request.
-	/// It checks the compatibility of requested scopes with the client's allowed scopes
-	/// and the OAuth flow type. For instance, it validates if offline access is requested
-	/// appropriately and if the client is authorized for such access.
+	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
+	/// with the client's allowed scopes and the OAuth flow type. For instance, it validates if offline access is
+	/// requested appropriately and if the client is authorized for such access.
 	/// </summary>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
@@ -46,16 +52,27 @@ public class ScopeValidator : SyncAuthorizationContextValidatorBase
 	/// or null if the scopes in the request are valid.
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
-    {
-        if (context.Request.Scope.HasFlag(Scopes.OfflineAccess))
-        {
-            if (context.FlowType == FlowTypes.Implicit)
-                return context.InvalidRequest("It is not allowed to request for offline access in implicit flow");
+	{
+		var scopes = new List<ScopeDefinition>();
 
-            if (context.ClientInfo.OfflineAccessAllowed != true)
-                return context.InvalidRequest("This client is not allowed to request for offline access");
-        }
+	    foreach (var scope in context.Request.Scope)
+	    {
+		    if (scope == Scopes.OfflineAccess)
+		    {
+			    if (context.FlowType == FlowTypes.Implicit)
+				    return context.InvalidScope("It is not allowed to request for offline access in implicit flow");
 
+			    if (context.ClientInfo.OfflineAccessAllowed != true)
+				    return context.InvalidScope("This client is not allowed to request for offline access");
+		    }
+
+		    if (!_scopeManager.TryGet(scope, out var scopeDefinition))
+			    return context.InvalidScope("The specified scope is not available");
+
+		    scopes.Add(scopeDefinition);
+	    }
+
+	    context.Scope = scopes.ToArray();
         return null;
     }
 }

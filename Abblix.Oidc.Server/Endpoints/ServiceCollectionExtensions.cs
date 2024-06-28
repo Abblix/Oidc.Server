@@ -47,11 +47,11 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using ClientValidator = Abblix.Oidc.Server.Endpoints.Authorization.Validation.ClientValidator;
-using PostLogoutRedirectUrisValidator = Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator;
+
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -102,12 +102,13 @@ public static class ServiceCollectionExtensions
     {
         return services
             // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
-            .AddSingleton<IAuthorizationContextValidator, ClientValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>()
             .AddSingleton<IAuthorizationContextValidator, RedirectUriValidator>()
             .AddSingleton<IAuthorizationContextValidator, FlowTypeValidator>()
             .AddSingleton<IAuthorizationContextValidator, ResponseModeValidator>()
             .AddSingleton<IAuthorizationContextValidator, NonceValidator>()
-            .AddSingleton<IAuthorizationContextValidator, ScopeValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>()
             .AddSingleton<IAuthorizationContextValidator, PkceValidator>()
             .Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
     }
@@ -139,11 +140,32 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddAuthorizationGrants()
+            .AddTokenContextValidators()
 
             .AddScoped<ITokenHandler, TokenHandler>()
             .AddScoped<ITokenRequestValidator, TokenRequestValidator>()
             .AddScoped<ITokenRequestProcessor, TokenRequestProcessor>()
             .Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+    }
+
+    /// <summary>
+    /// Configures and registers a composite of token context validators into the service collection.
+    /// This method sets up a sequence of validators that perform various checks on token requests,
+    /// ensuring they comply with the necessary criteria before a token can be issued.
+    /// </summary>
+    /// <param name="services">The service collection to which the token context validators will be added.</param>
+    /// <returns>The modified service collection with the registered token context validators.</returns>
+    public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
+    {
+        return services
+            // Register individual validators that will participate in a composite pattern.
+            .AddSingleton<ITokenContextValidator, Token.Validation.ResourceValidator>()
+            .AddSingleton<ITokenContextValidator, Token.Validation.ScopeValidator>()
+            .AddSingleton<ITokenContextValidator, Token.Validation.ClientValidator>()
+            .AddSingleton<ITokenContextValidator, AuthorizationGrantValidator>()
+            // Combine all registered ITokenContextValidator into a single composite validator.
+            // This composite approach allows the application to apply multiple validation checks sequentially.
+            .Compose<ITokenContextValidator, TokenContextValidatorComposite>();
     }
 
     /// <summary>
@@ -290,7 +312,7 @@ public static class ServiceCollectionExtensions
                 // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
                 .AddSingleton<IClientRegistrationContextValidator, ClientIdValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, RedirectUrisValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, PostLogoutRedirectUrisValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
@@ -317,8 +339,8 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddSingleton<IEndSessionContextValidator, IdTokenHintValidator>()
-            .AddSingleton<IEndSessionContextValidator, Abblix.Oidc.Server.Endpoints.EndSession.Validation.ClientValidator>()
-            .AddSingleton<IEndSessionContextValidator, Abblix.Oidc.Server.Endpoints.EndSession.Validation.PostLogoutRedirectUrisValidator>()
+            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>()
+            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>()
             .AddSingleton<IEndSessionContextValidator, ConfirmationValidator>()
             .Compose<IEndSessionContextValidator, EndSessionContextValidatorComposite>();
     }

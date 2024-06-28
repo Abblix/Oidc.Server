@@ -32,7 +32,7 @@ public interface IClientAuthenticator
 {
     /// <summary>
     /// Specifies the authentication methods supported by this authenticator.
-    /// This property should return a value that identify the authentication scheme
+    /// This property should return a value that identifies the authentication scheme
     /// (e.g., "client_secret_basic", "private_key_jwt") supported by the implementer.
     /// </summary>
     IEnumerable<string> ClientAuthenticationMethodsSupported { get; }

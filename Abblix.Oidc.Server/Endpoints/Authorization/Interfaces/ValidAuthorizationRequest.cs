@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -39,8 +40,9 @@ public record ValidAuthorizationRequest : AuthorizationRequestValidationResult
 	{
 		Model = context.Request;
 		ClientInfo = context.ClientInfo;
+		Scope = context.Scope;
+		Resources = context.Resources;
 	}
-
 	/// <summary>
 	/// The original or recovered request model that was validated.
 	/// </summary>
@@ -50,4 +52,15 @@ public record ValidAuthorizationRequest : AuthorizationRequestValidationResult
 	/// Information about the client making the request, as determined during validation.
 	/// </summary>
 	public ClientInfo ClientInfo { get; init; }
+
+	/// <summary>
+	/// The scope associated with the authorization request, indicating the permissions requested by the client.
+	/// </summary>
+	public ScopeDefinition[] Scope { get; set; }
+
+	/// <summary>
+	/// The resources associated with the authorization request, detailing the specific resources the client
+	/// is requesting access to.
+	/// </summary>
+	public ResourceDefinition[] Resources { get; set; }
 }

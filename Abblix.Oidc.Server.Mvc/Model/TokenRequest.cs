@@ -96,14 +96,14 @@ public record TokenRequest
     /// The username of the resource owner, used in the password grant type.
     /// This represents the credentials of the user for whom the client is requesting the token.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.Username)]
+    [BindProperty(Name = Parameters.Username)]
     public string? UserName { get; set; }
 
     /// <summary>
     /// The password of the resource owner, used in the password grant type.
     /// Along with the username, this forms the user credentials required for the password grant type.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.Password)]
+    [BindProperty(Name = Parameters.Password)]
     public string? Password { get; set; }
 
     /// <summary>
@@ -125,7 +125,7 @@ public record TokenRequest
             GrantType = GrantType,
             Code = Code,
             Password = Password,
-            Resource = Resource,
+            Resources = Resource,
             Scope = Scope,
             RefreshToken = RefreshToken,
             RedirectUri = RedirectUri,
