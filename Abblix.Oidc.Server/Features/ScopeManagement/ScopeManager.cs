@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -67,4 +68,8 @@ public class ScopeManager : IScopeManager
     /// <returns>True if the scope exists and the definition is retrieved, false otherwise.</returns>
     public bool TryGet(string scope, [MaybeNullWhen(false)] out ScopeDefinition definition)
         => _scopes.TryGetValue(scope, out definition);
+
+    public IEnumerator<ScopeDefinition> GetEnumerator() => _scopes.Values.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

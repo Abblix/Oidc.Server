@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.ScopeManagement;
 /// <summary>
 /// Defines a contract for managing and retrieving scope definitions.
 /// </summary>
-public interface IScopeManager
+public interface IScopeManager: IEnumerable<ScopeDefinition>
 {
     /// <summary>
     /// Attempts to retrieve the definition of a specified scope.
