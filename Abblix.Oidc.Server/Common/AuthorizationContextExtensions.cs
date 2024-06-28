@@ -54,6 +54,9 @@ public static class AuthorizationContextExtensions
         payload.ClientId = context.ClientId;
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
+        payload.Audiences = context.Resources is { Length: > 0 }
+            ? Array.ConvertAll(context.Resources, res => res.OriginalString)
+            : new[] { context.ClientId };
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(context.RequestedClaims, JsonSerializerOptions);
     }
 
@@ -70,9 +73,21 @@ public static class AuthorizationContextExtensions
     /// </remarks>
     public static AuthorizationContext ToAuthorizationContext(this JsonWebTokenPayload payload)
     {
+        var resources =
+            payload.Audiences.Count() == 1 && payload.Audiences.Single() == payload.ClientId
+                ? null
+                : payload.Audiences
+            .Select(aud => Uri.TryCreate(aud, UriKind.Absolute, out var uri) ? uri : null)
+            .OfType<Uri>()
+            .ToArray();
+
         return new AuthorizationContext(
             payload.ClientId.NotNull(nameof(payload.ClientId)),
             payload.Scope.NotNull(nameof(payload.Scope)).ToArray(),
-            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions));
+            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions))
+        {
+            Nonce = payload.Nonce,
+            Resources = resources,
+        };
     }
 }

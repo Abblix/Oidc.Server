@@ -34,6 +34,8 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -95,6 +97,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         services.TryAddSingleton<IConsentService, NullConsentService>();
+
+        services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
+        services.Decorate<IUserConsentsProvider, PromptConsentDecorator>();
+
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
         services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
@@ -376,6 +382,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserClaimsProvider, UserClaimsProvider>();
         services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
+        services.TryAddSingleton<IScopeManager, ScopeManager>();
+        services.TryAddSingleton<IResourceManager, ResourceManager>();
         return services;
     }
 }

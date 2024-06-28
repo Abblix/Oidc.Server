@@ -194,7 +194,7 @@ public record AuthorizationRequest
 	/// resource.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Resource)]
-	public Uri[]? Resource { get; set; }
+	public Uri[]? Resources { get; set; }
 
 	public Core.AuthorizationRequest Map() => new()
 	{
@@ -218,6 +218,6 @@ public record AuthorizationRequest
 		CodeChallengeMethod = CodeChallengeMethod,
 		IdTokenHint = IdTokenHint,
 		ClaimsLocales = ClaimsLocales,
-		Resource = Resource,
+		Resources = Resources,
 	};
 }

@@ -30,15 +30,15 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Processes token requests in compliance with OAuth 2.0 and OpenID Connect standards.
-/// This processor is responsible for handling various types of token requests (e.g., authorization code, refresh token)
-/// and generating the appropriate token responses, including access tokens, refresh tokens and ID tokens.
+/// Processes token requests in compliance with OAuth 2.0 and OpenID Connect standards,
+/// handling various types of token requests such as authorization code and refresh token.
+/// Generates the appropriate token responses including access tokens, refresh tokens, and ID tokens.
 /// </summary>
 public class TokenRequestProcessor : ITokenRequestProcessor
 {
 	/// <summary>
-	/// Initializes a new instance of the <see cref="TokenRequestProcessor"/> class with services for token generation
-	/// and management.
+	/// Initializes a new instance of the <see cref="TokenRequestProcessor"/> class, equipped with services
+	/// for token generation and management.
 	/// </summary>
 	/// <param name="accessTokenService">Service for creating and managing access tokens.</param>
 	/// <param name="refreshTokenService">Service for creating and managing refresh tokens.</param>
@@ -59,41 +59,43 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
-	/// the request's scope and grant type. Generates an access token for every request and, depending on the scope,
+	/// the request's scope and grant type. It generates an access token for every request and, depending on the scope,
 	/// may also generate a refresh token and an ID token for OpenID Connect authentication.
 	/// </summary>
-	/// <param name="request">
-	/// The validated token request containing client and authorization session information.</param>
+	/// <param name="request">The validated token request containing client and authorization session information.
+	/// </param>
 	/// <returns>A task representing the asynchronous operation, yielding a <see cref="TokenResponse"/> containing
 	/// the generated tokens.</returns>
 	/// <remarks>
-	/// Access tokens are generated for client authorization in resource access.
-	/// Refresh tokens are issued for long-lived sessions, allowing clients to obtain new access tokens without
-	/// re-authentication. ID tokens provide identity information about the user and are used in OpenID Connect
-	/// authentication flows. This method ensures the secure and compliant generation of these tokens as per OAuth 2.0
-	/// and OpenID Connect standards.
+	/// Access tokens authorize clients for resource access; refresh tokens enable long-lived sessions by allowing
+	/// new access tokens to be obtained without re-authentication; ID tokens provide identity information about
+	/// the user, crucial for OpenID Connect authentication flows. This method ensures secure and compliant token
+	/// generation.
 	/// </remarks>
 	public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
 	{
-		request.ClientInfo.CheckClient();
+		var clientInfo = request.ClientInfo;
+		clientInfo.CheckClient();
+
+		var authContext = BuildAuthorizationContextFor(request);
 
 		var accessToken = await _accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
-			request.AuthorizedGrant.Context,
-			request.ClientInfo);
+			authContext,
+			clientInfo);
 
 		var response = new TokenIssuedResponse(
 			accessToken,
 			TokenTypes.Bearer,
-			request.ClientInfo.AccessTokenExpiresIn,
+			clientInfo.AccessTokenExpiresIn,
 			TokenTypeIdentifiers.AccessToken);
 
-		if (request.AuthorizedGrant.Context.Scope.HasFlag(Scopes.OfflineAccess))
+		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{
 			response.RefreshToken = await _refreshTokenService.CreateRefreshTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				request.AuthorizedGrant.Context,
-				request.ClientInfo,
+				clientInfo,
 				request.AuthorizedGrant switch
 				{
 					RefreshTokenAuthorizedGrant grant => grant.RefreshToken,
@@ -101,17 +103,47 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 				});
 		}
 
-		if (request.AuthorizedGrant.Context.Scope.HasFlag(Scopes.OpenId))
+		if (authContext.Scope.HasFlag(Scopes.OpenId))
 		{
 			response.IdToken = await _identityTokenService.CreateIdentityTokenAsync(
 				request.AuthorizedGrant.AuthSession,
-				request.AuthorizedGrant.Context,
-				request.ClientInfo,
+				authContext,
+				clientInfo,
 				false,
 				null,
 				accessToken.EncodedJwt);
 		}
 
 		return response;
+	}
+
+	/// <summary>
+	/// Constructs a new <see cref="AuthorizationContext"/> by refining and reconciling the scopes and resources
+	/// from the original authorization request based on the current token request.
+	/// </summary>
+	/// <param name="request">The valid token request that contains the original authorization grant and any additional
+	/// token-specific requests.</param>
+	/// <returns>An updated <see cref="AuthorizationContext"/> that reflects the actual scopes and resources that
+	/// should be considered during the token issuance process.</returns>
+	private static AuthorizationContext BuildAuthorizationContextFor(ValidTokenRequest request)
+	{
+		var authContext = request.AuthorizedGrant.Context;
+
+		// Determine the effective scopes for the token request, defaulting to OpenId if no specific scopes are requested.
+		var scope = authContext.Scope is { Length: > 0 }
+			? request.Scope.Select(sd => sd.Scope).Intersect(authContext.Scope, StringComparer.Ordinal).ToArray()
+			: new[] { Scopes.OpenId };
+
+		// Determine the effective resources for the token request, defaulting to none if no specific resources are requested.
+		var resources = authContext.Resources is { Length: > 0 }
+			? request.Resources.Select(rd => rd.Resource).Intersect(authContext.Resources).ToArray()
+			: Array.Empty<Uri>();
+
+		// Return a new authorization context updated with the determined scopes and resources.
+		return authContext with
+		{
+			Scope = scope,
+			Resources = resources,
+		};
 	}
 }

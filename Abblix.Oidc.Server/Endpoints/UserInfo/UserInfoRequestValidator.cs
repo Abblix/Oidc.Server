@@ -71,7 +71,9 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="UserInfoRequestValidationResult"/>.</returns>
-	public async Task<UserInfoRequestValidationResult> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest)
+	public async Task<UserInfoRequestValidationResult> ValidateAsync(
+		UserInfoRequest userInfoRequest,
+		ClientRequest clientRequest)
 	{
 		string jwtAccessToken;
 		var authorizationHeader = clientRequest.AuthorizationHeader;
@@ -79,7 +81,9 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		{
 			if (authorizationHeader.Scheme != TokenTypes.Bearer)
 			{
-				return new UserInfoRequestError(ErrorCodes.InvalidGrant, $"The scheme name '{authorizationHeader.Scheme}' is not supported");
+				return new UserInfoRequestError(
+					ErrorCodes.InvalidGrant,
+					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 			}
 
 			if (userInfoRequest.AccessToken != null)
@@ -118,10 +122,12 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 
 		switch (result)
 		{
-			case ValidJsonWebToken { Token: { Header.Type: var tokenType } token }:
-				if (tokenType != JwtTypes.AccessToken)
-					return new UserInfoRequestError(ErrorCodes.InvalidGrant, $"Invalid token type: {tokenType}");
+			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.AccessToken:
+				return new UserInfoRequestError(
+					ErrorCodes.InvalidGrant,
+					$"Invalid token type: {tokenType}");
 
+			case ValidJsonWebToken { Token: var token }:
 				(authSession, authContext) = await _accessTokenService.AuthenticateByAccessTokenAsync(token);
 				break;
 
@@ -134,7 +140,11 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 
 		var clientInfo = await _clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
 		if (clientInfo == null)
-			return new UserInfoRequestError(ErrorCodes.InvalidGrant, $"The client '{authContext.ClientId}' is not found");
+		{
+			return new UserInfoRequestError(
+				ErrorCodes.InvalidGrant,
+				$"The client '{authContext.ClientId}' is not found");
+		}
 
 		return new ValidUserInfoRequest(userInfoRequest, authSession, authContext, clientInfo);
 	}

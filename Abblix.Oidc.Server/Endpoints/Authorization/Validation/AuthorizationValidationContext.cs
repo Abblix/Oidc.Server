@@ -28,43 +28,55 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// Represents a validation context containing information about the client, response mode, and flow type
-/// that is used during the authorization request validation process.
+/// Encapsulates the context necessary for validating an authorization request, including client details,
+/// response modes, and the OAuth 2.0 flow type.
 /// </summary>
 public record AuthorizationValidationContext(AuthorizationRequest Request)
 {
 	/// <summary>
-	/// The request object to validate.
+	/// The authorization request to be validated. This includes all the details provided by the client
+	/// for the authorization process.
 	/// </summary>
 	public AuthorizationRequest Request { get; set; } = Request;
 
 	private ClientInfo? _clientInfo;
 
 	/// <summary>
-	/// The ClientInfo object containing information about the client. It is a result of identifying the client
-	/// making the authorization request.
+	/// Provides details about the client making the authorization request. This includes identifying information
+	/// such as client ID and any other relevant data that has been registered with the authorization server.
 	/// </summary>
-	/// <exception cref="InvalidOperationException">Thrown when attempting to get a null value.</exception>
+	/// <exception cref="InvalidOperationException">Thrown when trying to access this property before it is set.
+	/// </exception>
 	public ClientInfo ClientInfo { get => _clientInfo.NotNull(nameof(ClientInfo)); set => _clientInfo = value; }
 
 	/// <summary>
-	/// The response mode associated with the authorization request, determining how the authorization response
-	/// should be delivered to the client.
+	/// Specifies how the authorization response should be delivered to the client, e.g., via a direct query or fragment.
 	/// </summary>
 	public string ResponseMode = ResponseModes.Query;
 
 	private FlowTypes? _flowType;
 
 	/// <summary>
-	/// The flow type associated with the authorization request, indicating the OAuth 2.0 flow being utilized
-	/// (e.g., Authorization Code, Implicit).
+	/// Identifies the OAuth 2.0 flow used in the authorization request, such as Authorization Code or Implicit.
 	/// </summary>
-	/// <exception cref="InvalidOperationException">Thrown when attempting to get a null value.</exception>
+	/// <exception cref="InvalidOperationException">Thrown when trying to access this property before it is set.
+	/// </exception>
 	public FlowTypes FlowType { get => _flowType.NotNull(nameof(FlowType)); set => _flowType = value; }
 
 	/// <summary>
-	/// The validated and approved redirect URI for the authorization response.
-	/// This URI must match one of the URIs registered by the client.
+	/// The redirect URI where the response to the authorization request should be sent. This URI must be one of the
+	/// registered URIs for the client to ensure security.
 	/// </summary>
 	public Uri? ValidRedirectUri { get; set; }
+
+	/// <summary>
+	/// A collection of scope definitions applicable to the authorization request, determining the permissions granted.
+	/// </summary>
+	public ScopeDefinition[] Scope { get; set; } = Array.Empty<ScopeDefinition>();
+
+	/// <summary>
+	/// A collection of resource definitions that may be requested as part of the authorization process,
+	/// providing additional control over the accessible resources.
+	/// </summary>
+	public ResourceDefinition[] Resources { get; set; } = Array.Empty<ResourceDefinition>();
 }

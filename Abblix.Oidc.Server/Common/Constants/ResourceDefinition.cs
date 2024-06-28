@@ -20,22 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.UserAuthentication;
-
-namespace Abblix.Oidc.Server.Features.Consents;
+namespace Abblix.Oidc.Server.Common.Constants;
 
 /// <summary>
-/// Provides methods to determine whether user consent is to proceed with authentication.
+/// Represents a resource with associated scopes, defining the permissions and access levels within an application.
+/// This record is typically used to configure and enforce authorization policies based on resource identifiers
+/// and their corresponding scopes.
 /// </summary>
-[Obsolete("Use IConsentProvider instead")]
-public interface IConsentService
-{
-	/// <summary>
-	/// Checks if consent is for the given authorization request and authentication session.
-	/// </summary>
-	/// <param name="request">The authorization request.</param>
-	/// <param name="authSession">The authentication session.</param>
-	/// <returns>True if consent is required, false otherwise.</returns>
-	Task<bool> IsConsentRequired(ValidAuthorizationRequest request, AuthSession authSession);
-}
+/// <param name="Resource">The identifier for the resource, often a unique name or URL representing the resource.</param>
+/// <param name="Scopes">A variable number of scope definitions associated with the resource. Each scope definition
+/// specifies a scope and its related claims, detailing the access levels and permissions granted.</param>
+public record ResourceDefinition(Uri Resource, params ScopeDefinition[] Scopes);
