@@ -51,6 +51,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 
 namespace Abblix.Oidc.Server.Endpoints;
@@ -138,14 +139,18 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddTokenEndpoint(this IServiceCollection services)
     {
-        return services
+        services
             .AddAuthorizationGrants()
-            .AddTokenContextValidators()
+            .AddTokenContextValidators();
 
-            .AddScoped<ITokenHandler, TokenHandler>()
-            .AddScoped<ITokenRequestValidator, TokenRequestValidator>()
-            .AddScoped<ITokenRequestProcessor, TokenRequestProcessor>()
-            .Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+         services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
+         
+         services.TryAddScoped<ITokenHandler, TokenHandler>();
+         services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
+         services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
+         services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+
+         return services;
     }
 
     /// <summary>

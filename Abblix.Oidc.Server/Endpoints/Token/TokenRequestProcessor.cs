@@ -43,19 +43,23 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 	/// <param name="accessTokenService">Service for creating and managing access tokens.</param>
 	/// <param name="refreshTokenService">Service for creating and managing refresh tokens.</param>
 	/// <param name="identityTokenService">Service for creating and managing ID tokens in OpenID Connect flows.</param>
+	/// <param name="tokenContextEvaluator">Service for building the authorization context from a token request.</param>
 	public TokenRequestProcessor(
 		IAccessTokenService accessTokenService,
 		IRefreshTokenService refreshTokenService,
-		IIdentityTokenService identityTokenService)
+		IIdentityTokenService identityTokenService,
+		ITokenAuthorizationContextEvaluator tokenContextEvaluator)
 	{
 		_accessTokenService = accessTokenService;
 		_refreshTokenService = refreshTokenService;
 		_identityTokenService = identityTokenService;
+		_tokenContextEvaluator = tokenContextEvaluator;
 	}
 
 	private readonly IAccessTokenService _accessTokenService;
 	private readonly IRefreshTokenService _refreshTokenService;
 	private readonly IIdentityTokenService _identityTokenService;
+	private readonly ITokenAuthorizationContextEvaluator _tokenContextEvaluator;
 
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
@@ -77,7 +81,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 		var clientInfo = request.ClientInfo;
 		clientInfo.CheckClient();
 
-		var authContext = BuildAuthorizationContextFor(request);
+		var authContext = _tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
 		var accessToken = await _accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
@@ -96,11 +100,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 				request.AuthorizedGrant.AuthSession,
 				request.AuthorizedGrant.Context,
 				clientInfo,
-				request.AuthorizedGrant switch
-				{
-					RefreshTokenAuthorizedGrant grant => grant.RefreshToken,
-					_ => null,
-				});
+				request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken } ? refreshToken : null);
 		}
 
 		if (authContext.Scope.HasFlag(Scopes.OpenId))
@@ -115,35 +115,5 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 		}
 
 		return response;
-	}
-
-	/// <summary>
-	/// Constructs a new <see cref="AuthorizationContext"/> by refining and reconciling the scopes and resources
-	/// from the original authorization request based on the current token request.
-	/// </summary>
-	/// <param name="request">The valid token request that contains the original authorization grant and any additional
-	/// token-specific requests.</param>
-	/// <returns>An updated <see cref="AuthorizationContext"/> that reflects the actual scopes and resources that
-	/// should be considered during the token issuance process.</returns>
-	private static AuthorizationContext BuildAuthorizationContextFor(ValidTokenRequest request)
-	{
-		var authContext = request.AuthorizedGrant.Context;
-
-		// Determine the effective scopes for the token request, defaulting to OpenId if no specific scopes are requested.
-		var scope = authContext.Scope is { Length: > 0 }
-			? request.Scope.Select(sd => sd.Scope).Intersect(authContext.Scope, StringComparer.Ordinal).ToArray()
-			: new[] { Scopes.OpenId };
-
-		// Determine the effective resources for the token request, defaulting to none if no specific resources are requested.
-		var resources = authContext.Resources is { Length: > 0 }
-			? request.Resources.Select(rd => rd.Resource).Intersect(authContext.Resources).ToArray()
-			: Array.Empty<Uri>();
-
-		// Return a new authorization context updated with the determined scopes and resources.
-		return authContext with
-		{
-			Scope = scope,
-			Resources = resources,
-		};
 	}
 }
