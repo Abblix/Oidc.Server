@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Collections.Generic;
-
 namespace Abblix.Utils.Json;
 
 using System;
@@ -32,7 +30,7 @@ using System.Text.Json.Serialization;
 /// A JSON converter that handles deserialization and serialization of a JSON value
 /// that could either be a single string or an array of strings.
 /// </summary>
-public class StringOrArrayConverter : JsonConverter<string[]>
+public class SingleOrArrayConverter<T> : JsonConverter<T[]>
 {
     /// <summary>
     /// Reads and converts the JSON to a string array.
@@ -45,15 +43,19 @@ public class StringOrArrayConverter : JsonConverter<string[]>
     /// <returns>An array of strings parsed from the JSON input.</returns>
     /// <exception cref="JsonException">Thrown if an unexpected token type is encountered.</exception>
 
-    public override string[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override T[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        var elementType = typeof(T);
+        var converter = (JsonConverter<T>)options.GetConverter(elementType)
+                        ?? throw new JsonException($"No converter found for {elementType}");
+
         switch (reader.TokenType)
         {
             case JsonTokenType.Null:
                 return null;
 
             case JsonTokenType.String:
-                return new[] { ReadStringFrom(reader) };
+                return new[] { ReadFrom(ref reader, elementType, converter, options) };
 
             case JsonTokenType.StartArray:
                 break;
@@ -62,7 +64,7 @@ public class StringOrArrayConverter : JsonConverter<string[]>
                 throw new JsonException("Unexpected token type.");
         }
 
-        var values = new List<string>();
+        var values = new List<T>();
         while (reader.Read())
         {
             switch (reader.TokenType)
@@ -71,7 +73,7 @@ public class StringOrArrayConverter : JsonConverter<string[]>
                     break;
 
                 case JsonTokenType.String:
-                    values.Add(ReadStringFrom(reader));
+                    values.Add(ReadFrom(ref reader, elementType, converter, options));
                     break;
 
                 default:
@@ -80,8 +82,11 @@ public class StringOrArrayConverter : JsonConverter<string[]>
         }
         return values.ToArray();
 
-        static string ReadStringFrom(Utf8JsonReader reader)
-            => reader.GetString() ?? throw new JsonException("Null values are not allowed");
+        static T ReadFrom(ref Utf8JsonReader reader, Type elementType, JsonConverter<T> converter, JsonSerializerOptions options)
+        {
+            return converter.Read(ref reader, elementType, options)
+                   ?? throw new JsonException("Null values are not allowed");
+        }
     }
 
     /// <summary>
@@ -93,8 +98,12 @@ public class StringOrArrayConverter : JsonConverter<string[]>
     /// <param name="value">The string array to write.</param>
     /// <param name="options">Options for the serializer.</param>
     /// <exception cref="ArgumentNullException">Thrown if the writer or value is null.</exception>
-    public override void Write(Utf8JsonWriter writer, string[]? value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, T[]? value, JsonSerializerOptions options)
     {
+        var elementType = typeof(T);
+        var converter = (JsonConverter<T>)options.GetConverter(elementType)
+                        ?? throw new JsonException($"No converter found for {elementType}");
+
         if (value == null)
         {
             writer.WriteNullValue();
@@ -104,14 +113,14 @@ public class StringOrArrayConverter : JsonConverter<string[]>
         switch (value.Length)
         {
             case 1:
-                writer.WriteStringValue(value[0]);
+                converter.Write(writer, value[0], options);
                 break;
 
             default:
                 writer.WriteStartArray();
                 foreach (var item in value)
                 {
-                    writer.WriteStringValue(item);
+                    converter.Write(writer, item, options);
                 }
                 writer.WriteEndArray();
                 break;

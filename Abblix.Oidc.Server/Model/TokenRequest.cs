@@ -81,7 +81,7 @@ public record TokenRequest
 	/// Defined in RFC 8707.
 	/// </remarks>
 	[JsonPropertyName(Parameters.Resource)]
-	[JsonConverter(typeof(StringOrArrayConverter))]
+	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]
 	public Uri[]? Resources { get; set; }
 
 	/// <summary>
@@ -94,12 +94,7 @@ public record TokenRequest
 	/// The scope of the access request, expressed as a list of space-delimited, case-sensitive strings.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
-	[AllowedValues(
-		Scopes.OpenId,
-		Scopes.Profile,
-		Scopes.Email,
-		Scopes.Phone,
-		Scopes.OfflineAccess)]
+	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.OfflineAccess)]
 	public string[] Scope { get; set; } = Array.Empty<string>();
 
 	/// <summary>

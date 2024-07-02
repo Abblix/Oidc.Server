@@ -26,9 +26,9 @@ using Abblix.Utils.Json;
 
 namespace Abblix.Utils.UnitTests;
 
-public class StringOrArrayConverterTests
+public class SingleOrArrayConverterTests
 {
-    private readonly StringOrArrayConverter _converter = new();
+    private readonly SingleOrArrayConverter<string> _converter = new();
 
     [Theory]
     [InlineData("\"singleString\"", new[] { "singleString" })]
