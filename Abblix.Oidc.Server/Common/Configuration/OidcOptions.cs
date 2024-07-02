@@ -170,5 +170,10 @@ public record OidcOptions
 	/// </summary>
 	public ScopeDefinition[]? Scopes { get; set; }
 
+	/// <summary>
+	/// The resource definitions supported by the OIDC server. This setting outlines the resources that clients
+	/// can request access to during authorization, ensuring the OIDC server can enforce access control policies
+	/// and permissions based on these definitions.
+	/// </summary>
 	public ResourceDefinition[]? Resources { get; set; }
 }
