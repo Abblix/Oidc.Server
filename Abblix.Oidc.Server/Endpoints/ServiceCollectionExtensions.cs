@@ -77,15 +77,29 @@ public static class ServiceCollectionExtensions
             .AddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
     }
 
+    /// <summary>
+    /// Registers authorization request fetchers and related services into the provided IServiceCollection.
+    /// This method adds implementations for various authorization request fetchers as singletons, ensuring
+    /// that they are efficiently reused throughout the application. It also composes these fetchers into a
+    /// composite fetcher to handle different types of authorization requests seamlessly.
+    /// </summary>
+    /// <param name="services">The IServiceCollection to which the services will be added.</param>
+    /// <returns>The updated IServiceCollection with the added authorization request fetchers.</returns>
     public static IServiceCollection AddAuthorizationRequestFetchers(this IServiceCollection services)
     {
         return services
+            // Add a JSON object binder as a singleton
+            .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
+
+            // Add individual authorization request fetchers as singletons
             .AddSingleton<IAuthorizationRequestFetcher, PushedRequestFetcher>()
             .AddSingleton<IAuthorizationRequestFetcher, RequestUriFetcher>()
-            .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
             .AddSingleton<IAuthorizationRequestFetcher, RequestObjectFetcher>()
+
+            // Compose the individual fetchers into a composite fetcher
             .Compose<IAuthorizationRequestFetcher, CompositeRequestFetcher>();
     }
+
 
     /// <summary>
     /// Adds a series of validators for authorization context as a composite service to ensure comprehensive validation
