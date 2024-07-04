@@ -49,7 +49,8 @@ public class ScopeValidator: SyncTokenContextValidatorBase
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
     /// are recognized by the scope manager and are permissible for the requesting client.
     /// </summary>
-    /// <param name="context">The context containing the token request information, including the scopes to be validated.</param>
+    /// <param name="context">The context containing the token request information,
+    /// including the scopes to be validated.</param>
     /// <returns>
     /// A <see cref="TokenRequestError"/> if any of the requested scopes are invalid or not permitted,
     /// including an error code and a message describing the issue;
@@ -57,21 +58,16 @@ public class ScopeValidator: SyncTokenContextValidatorBase
     /// </returns>
     protected override TokenRequestError? Validate(TokenValidationContext context)
     {
-        var scopes = new List<ScopeDefinition>();
-
-        foreach (var scope in context.Request.Scope)
+        if (!_scopeManager.Validate(
+                context.Request.Scope,
+                context.Resources,
+                out var scopeDefinitions,
+                out var errorDescription))
         {
-            if (!_scopeManager.TryGet(scope, out var scopeDefinition))
-            {
-                return new TokenRequestError(
-                    ErrorCodes.InvalidScope,
-                    "The scope is not available");
-            }
-
-            scopes.Add(scopeDefinition);
+            return new TokenRequestError(ErrorCodes.InvalidScope, errorDescription);
         }
 
-        context.Scope = scopes.ToArray();
+        context.Scope = scopeDefinitions;
         return null;
     }
 }

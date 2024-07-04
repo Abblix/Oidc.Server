@@ -53,26 +53,25 @@ public class ScopeValidator : SyncAuthorizationContextValidatorBase
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
-		var scopes = new List<ScopeDefinition>();
-
-	    foreach (var scope in context.Request.Scope)
+		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
 	    {
-		    if (scope == Scopes.OfflineAccess)
-		    {
-			    if (context.FlowType == FlowTypes.Implicit)
+		    if (context.FlowType == FlowTypes.Implicit)
 				    return context.InvalidScope("It is not allowed to request for offline access in implicit flow");
 
-			    if (context.ClientInfo.OfflineAccessAllowed != true)
+		    if (context.ClientInfo.OfflineAccessAllowed != true)
 				    return context.InvalidScope("This client is not allowed to request for offline access");
-		    }
-
-		    if (!_scopeManager.TryGet(scope, out var scopeDefinition))
-			    return context.InvalidScope("The specified scope is not available");
-
-		    scopes.Add(scopeDefinition);
 	    }
 
-	    context.Scope = scopes.ToArray();
+		if (!_scopeManager.Validate(
+			    context.Request.Scope,
+			    context.Resources,
+			    out var scopeDefinitions,
+			    out var errorDescription))
+		{
+			return context.InvalidScope(errorDescription);
+		}
+
+	    context.Scope = scopeDefinitions;
         return null;
     }
 }
