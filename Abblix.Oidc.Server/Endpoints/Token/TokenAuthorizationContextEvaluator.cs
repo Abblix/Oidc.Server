@@ -55,7 +55,9 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         var resources = authContext.Resources;
         if (resources is { Length: > 0 } && request.Resources is { Length: > 0 })
         {
-            resources = resources.Intersect(from rd in request.Resources select rd.Resource).ToArray();
+            resources = resources
+                .Intersect(from rd in request.Resources select rd.Resource)
+                .ToArray();
         }
 
         // Return a new authorization context updated with the determined scopes and resources.

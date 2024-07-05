@@ -149,7 +149,11 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 		var clientId = request.ClientInfo.ClientId;
 		var grantedConsents = userConsents.Granted;
-		var scopes = Array.ConvertAll(grantedConsents.Scopes, scope => scope.Scope);
+		var scopes = grantedConsents.Scopes
+			.Concat(grantedConsents.Resources.SelectMany(rd => rd.Scopes))
+			.Select(sd => sd.Scope)
+			.Distinct()
+			.ToArray();
 		var resources = Array.ConvertAll(grantedConsents.Resources, resource => resource.Resource);
 		var authContext = new AuthorizationContext(clientId, scopes, model.Claims)
 		{
