@@ -6,23 +6,18 @@ on:
 #    branches: [ master ]
 
 jobs:
-  versioning:
+  get_version:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.new_version }}
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4.1.2
-      - name: Bump version and push tag
-        id: set_version
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch # Automatically bump patch version
-          release_branches: release.*,hotfix.*,master
-          pre_release_branches: feature.*
+      - name: Get latest tag
+        id: get_version
+        run: echo "version=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_ENV
 
   build:
-    needs: versioning
+    needs: get_version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.1.2
@@ -37,12 +32,13 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.get_version.outputs.version }}
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@v4.3.1
         with:
           name: nuget-packages
           path: nupkg/*.nupkg
+
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -52,5 +48,7 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
-      - name: Push to NuGet
-        run: dotnet nuget push "**/*.nupkg" -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push to NuGet.org
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push to GitHub Packages
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.GITHUB_TOKEN }} -s https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
