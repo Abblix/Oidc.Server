@@ -66,8 +66,8 @@ public class JwtEncryptionTests
         {
             ValidateAudience = aud => Task.FromResult(token.Payload.Audiences.SequenceEqual(aud)),
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
-            ResolveTokenDecryptionKeys = _ => new [] { EncryptingKey }.AsAsync(),
-            ResolveIssuerSigningKeys = _ => new [] { SigningKey }.AsAsync(),
+            ResolveTokenDecryptionKeys = _ => new [] { EncryptingKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
         };
 
         var result = Assert.IsType<ValidJsonWebToken>(await validator.ValidateAsync(jwt, parameters));

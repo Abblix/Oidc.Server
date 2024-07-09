@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
@@ -47,6 +46,6 @@ public class OptionsLicenseJwtProvider : ILicenseJwtProvider
     public IAsyncEnumerable<string>? GetLicenseJwtAsync()
     {
         var licenseJwt = _options.Value.LicenseJwt;
-        return licenseJwt != null ? new[] { licenseJwt }.AsAsync() : null;
+        return licenseJwt != null ? new[] { licenseJwt }.ToAsyncEnumerable() : null;
     }
 }

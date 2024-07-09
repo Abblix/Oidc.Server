@@ -23,11 +23,13 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request for obtaining various types of tokens (e.g., access token, refresh token) from the authorization server.
+/// Represents a request to get various types of tokens
+/// (e.g., access token, refresh token) from the authorization server.
 /// </summary>
 public record TokenRequest
 {
@@ -79,7 +81,8 @@ public record TokenRequest
 	/// Defined in RFC 8707.
 	/// </remarks>
 	[JsonPropertyName(Parameters.Resource)]
-	public Uri[]? Resource { get; set; }
+	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]
+	public Uri[]? Resources { get; set; }
 
 	/// <summary>
 	/// The refresh token used to obtain a new access token. Required for the refresh token grant type.
@@ -91,12 +94,7 @@ public record TokenRequest
 	/// The scope of the access request, expressed as a list of space-delimited, case-sensitive strings.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
-	[AllowedValues(
-		Scopes.OpenId,
-		Scopes.Profile,
-		Scopes.Email,
-		Scopes.Phone,
-		Scopes.OfflineAccess)]
+	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.OfflineAccess)]
 	public string[] Scope { get; set; } = Array.Empty<string>();
 
 	/// <summary>

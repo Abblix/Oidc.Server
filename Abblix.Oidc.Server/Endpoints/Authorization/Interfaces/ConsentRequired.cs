@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
@@ -27,7 +29,24 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
-/// Means that a user is logged and it is to ask for his consent for authorization.
+/// Represents a state where the user is authenticated but requires consent for further authorization.
+/// This record is used to encapsulate the details needed to prompt the user for consent.
 /// </summary>
-public record ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession)
-    : AuthorizationResponse(Model);
+/// <param name="Model">The model of the authorization request prompting the need for user consent.</param>
+/// <param name="AuthSession">The authentication session associated with the user, detailing their authenticated state.
+/// </param>
+/// <param name="RequiredUserConsents">
+/// Defines the consents that are pending and require user approval.
+/// This includes the specific scopes and resources that need user consent before proceeding with the authorization
+/// process. </param>
+public record ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession, ConsentDefinition RequiredUserConsents)
+    : AuthorizationResponse(Model)
+{
+    [Obsolete("Use constructor with RequiredUserConsents parameter instead")]
+    public ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession)
+        : this(Model, AuthSession, new ConsentDefinition(
+            Array.Empty<ScopeDefinition>(),
+            Array.Empty<ResourceDefinition>()))
+    {
+    }
+}

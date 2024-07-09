@@ -83,7 +83,7 @@ public record EndSessionRequest
     /// This is typically used to prevent accidental logouts and ensure intentional user actions.
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.Confirmed)]
-    public bool Confirmed { get; set; } = false;
+    public bool? Confirmed { get; set; } = false;
 
     /// <summary>
     /// Maps the properties of this end session request to a <see cref="Core.EndSessionRequest"/> object.

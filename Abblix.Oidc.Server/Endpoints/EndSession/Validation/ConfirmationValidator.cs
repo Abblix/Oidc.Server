@@ -44,7 +44,7 @@ public class ConfirmationValidator:  IEndSessionContextValidator
     {
         var request = context.Request;
 
-        if (!request.Confirmed && !request.IdTokenHint.HasValue())
+        if (request.Confirmed != true && !request.IdTokenHint.HasValue())
         {
             return new EndSessionRequestValidationError(
                 ErrorCodes.ConfirmationRequired,

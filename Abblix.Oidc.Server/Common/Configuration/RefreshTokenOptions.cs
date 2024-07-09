@@ -30,12 +30,12 @@ public record struct RefreshTokenOptions()
 	/// <summary>
 	/// Sets the absolute period of expiration for refresh tokens.
 	/// </summary>
-	public TimeSpan AbsoluteExpiresIn { get; init; } = TimeSpan.FromDays(30);
+	public TimeSpan AbsoluteExpiresIn { get; init; } = TimeSpan.FromHours(8);
 
 	/// <summary>
 	/// Sets the sliding (call-to-call relative) period of expiration for refresh tokens.
 	/// </summary>
-	public TimeSpan? SlidingExpiresIn { get; init; } = TimeSpan.FromDays(15);
+	public TimeSpan? SlidingExpiresIn { get; init; } = TimeSpan.FromHours(1);
 
 	/// <summary>
 	/// Allows to reuse refresh tokens after the first usage.

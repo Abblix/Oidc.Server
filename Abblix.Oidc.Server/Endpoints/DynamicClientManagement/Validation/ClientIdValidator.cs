@@ -62,7 +62,7 @@ public class ClientIdValidator : IClientRegistrationContextValidator
             var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
             if (clientInfo != null)
             {
-                _logger.LogWarning("The client with id {ClientId} is already registered", clientId);
+                _logger.LogWarning("The client with id {ClientId} is already registered", new Sanitized(clientId));
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
             }
         }

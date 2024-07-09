@@ -47,9 +47,9 @@ public sealed class AbsoluteUriAttribute : ValidationAttribute
 	/// Determines whether the specified value of the object is valid.
 	/// </summary>
 	/// <param name="value">The value of the object to validate.</param>
-	/// <param name="context">The context information about the object being validated.</param>
+	/// <param name="validationContext">The context information about the object being validated.</param>
 	/// <returns><see cref="ValidationResult.Success"/> if the value is a valid absolute URI, otherwise an error <see cref="ValidationResult"/>.</returns>
-	protected override ValidationResult? IsValid(object? value, ValidationContext context)
+	protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
 		=> value switch
 		{
 			null => ValidationResult.Success, // absence is OK, apply [Required] if needed
@@ -57,14 +57,14 @@ public sealed class AbsoluteUriAttribute : ValidationAttribute
 			string str when string.IsNullOrEmpty(str) => ValidationResult.Success,
 			Uri uri when string.IsNullOrEmpty(uri.OriginalString) => ValidationResult.Success,
 			
-			string str when Uri.TryCreate(str, UriKind.RelativeOrAbsolute, out var uri) => IsValid(uri, context),
+			string str when Uri.TryCreate(str, UriKind.RelativeOrAbsolute, out var uri) => IsValid(uri, validationContext),
 
 			Uri { IsAbsoluteUri: true, Scheme: var scheme } when RequireScheme.HasValue() && !string.Equals(RequireScheme, scheme, StringComparison.OrdinalIgnoreCase)
-				=> new ValidationResult($"{context.GetName()} value must use {RequireScheme} scheme."),
+				=> new ValidationResult($"{validationContext.GetName()} value must use {RequireScheme} scheme."),
 			
 			Uri { IsAbsoluteUri: true } => ValidationResult.Success,
 			
-			Uri => new ValidationResult($"{context.GetName()} value is not absolute."),
-			_ => new ValidationResult($"{context.GetName()} is not Uri, but {value.GetType().Name}."),
+			Uri => new ValidationResult($"{validationContext.GetName()} value is not absolute."),
+			_ => new ValidationResult($"{validationContext.GetName()} is not Uri, but {value.GetType().Name}."),
 		};
 }

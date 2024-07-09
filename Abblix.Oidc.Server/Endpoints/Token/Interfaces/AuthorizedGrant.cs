@@ -28,12 +28,19 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
 /// Represents the successful result of an authorized grant operation,
-/// including authentication session and authorization context.
+/// encapsulating the details of the authentication session and the authorization context.
 /// </summary>
-/// <param name="AuthSession">The authentication session associated with the grant.</param>
-/// <param name="Context">The context of the authorization process.</param>
+/// <param name="AuthSession">The authentication session associated with the grant, detailing the user's authenticated
+/// state.</param>
+/// <param name="Context">The context of the authorization process, providing specific details such as the client ID,
+/// requested scopes, and any other relevant authorization parameters.</param>
 public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Context)
     : GrantAuthorizationResult
 {
+    /// <summary>
+    /// An array of tokens that have been issued as part of this grant.
+    /// This may include access tokens, refresh tokens, or other types of tokens
+    /// depending on the authorization flow and client request.
+    /// </summary>
     public TokenInfo[]? IssuedTokens { get; init; }
 }

@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;
 
@@ -32,18 +32,12 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// </summary>
 public class ScopeClaimsProvider : IScopeClaimsProvider
 {
-    /// <summary>
-    /// A mapping from scopes to the respective arrays of claim types that each scope encompasses.
-    /// </summary>
-    private readonly Dictionary<string, string[]> _scopeToClaimsMap = new[]
+    public ScopeClaimsProvider(IScopeManager scopeManager)
     {
-        StandardScopes.OpenId,
-        StandardScopes.Profile,
-        StandardScopes.Email,
-        StandardScopes.Address,
-        StandardScopes.Phone,
-        StandardScopes.OfflineAccess,
-    }.ToDictionary(definition => definition.Scope, definition => definition.ClaimTypes, StringComparer.OrdinalIgnoreCase);
+        _scopeManager = scopeManager;
+    }
+
+    private readonly IScopeManager _scopeManager;
 
     /// <summary>
     /// Retrieves the specific claims associated with the requested scopes and any additional requested claims.
@@ -57,7 +51,9 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
         IEnumerable<string>? requestedClaims)
     {
         var claimNames = scopes
-            .SelectMany(scope => _scopeToClaimsMap.TryGetValue(scope, out var claims) ? claims : Array.Empty<string>())
+            .SelectMany(scope => _scopeManager.TryGet(scope, out var scopeDefinition)
+                ? scopeDefinition.ClaimTypes
+                : Array.Empty<string>())
             .Prepend(JwtClaimTypes.Subject);
 
         if (requestedClaims != null)
@@ -71,10 +67,12 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
     /// <summary>
     /// A collection of all the scopes supported by this provider.
     /// </summary>
-    public IEnumerable<string> ScopesSupported => _scopeToClaimsMap.Keys;
+    public IEnumerable<string> ScopesSupported
+        => _scopeManager.Select(def => def.Scope);
 
     /// <summary>
     /// A collection of all the claims that can be provided by this provider.
     /// </summary>
-    public IEnumerable<string> ClaimsSupported => _scopeToClaimsMap.Values.SelectMany(claims => claims);
+    public IEnumerable<string> ClaimsSupported
+        => _scopeManager.SelectMany(def => def.ClaimTypes).Distinct(StringComparer.Ordinal);
 }

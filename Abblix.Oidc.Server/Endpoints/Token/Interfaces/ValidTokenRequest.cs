@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 
@@ -35,7 +37,25 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// process.</param>
 /// <param name="ClientInfo">Information about the client making the token request, including client credentials and
 /// metadata.</param>
+/// /// <param name="Scope">The scopes associated with the token request, indicating the permissions
+/// requested by the client. </param>
+/// <param name="Resources">The resources associated with the token request,
+/// detailing the specific resources the client is requesting access to.</param>
 public record ValidTokenRequest(
 	TokenRequest Model,
 	AuthorizedGrant AuthorizedGrant,
-	ClientInfo ClientInfo) : TokenRequestValidationResult;
+	ClientInfo ClientInfo,
+	ScopeDefinition[] Scope,
+	ResourceDefinition[] Resources)
+	: TokenRequestValidationResult
+{
+	public ValidTokenRequest(TokenValidationContext context)
+		: this(
+			context.Request,
+			context.AuthorizedGrant,
+			context.ClientInfo,
+			context.Scope,
+			context.Resources)
+	{
+	}
+}

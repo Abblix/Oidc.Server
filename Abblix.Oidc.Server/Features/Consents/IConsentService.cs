@@ -28,6 +28,7 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// <summary>
 /// Provides methods to determine whether user consent is to proceed with authentication.
 /// </summary>
+[Obsolete("Use IConsentProvider instead")]
 public interface IConsentService
 {
 	/// <summary>

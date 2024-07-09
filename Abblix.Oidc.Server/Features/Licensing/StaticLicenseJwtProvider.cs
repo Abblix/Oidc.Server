@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Utils;
-
 namespace Abblix.Oidc.Server.Features.Licensing;
 
 /// <summary>
@@ -53,6 +51,6 @@ public class StaticLicenseJwtProvider : ILicenseJwtProvider
     /// <returns>A task that represents the asynchronous operation, resulting in the license JWT string.</returns>
     public IAsyncEnumerable<string>? GetLicenseJwtAsync()
     {
-        return new[] { _licenseJwt }.AsAsync();
+        return new[] { _licenseJwt }.ToAsyncEnumerable();
     }
 }

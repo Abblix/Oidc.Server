@@ -34,7 +34,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <param name="SessionId">An optional session identifier that may be used for session management.</param>
 /// <param name="AffectedClientIds"> Identifiers of the clients that are affected by or related to this authentication
 /// process.</param>
-public record SuccessfullyAuthenticated(AuthorizationRequest Model, string ResponseMode, string? SessionId, ICollection<string> AffectedClientIds)
+public record SuccessfullyAuthenticated(
+	AuthorizationRequest Model,
+	string ResponseMode,
+	string? SessionId,
+	ICollection<string> AffectedClientIds)
 	: AuthorizationResponse(Model)
 {
 	/// <summary>
