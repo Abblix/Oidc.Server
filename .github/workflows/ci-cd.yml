@@ -1,9 +1,7 @@
-name: CI/CD with Auto Versioning
+name: CI/CD Pipeline for Auto Versioning, Building, and Publishing on Release Branch
 
 on:
   workflow_dispatch:  # Manual trigger
-  release:
-    types: [published]  # Trigger on published releases
 
 jobs:
   get_version:
@@ -52,6 +50,7 @@ jobs:
 
   publish:
     needs: build
+    if: startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     steps:
       - name: Download NuGet packages artifacts
