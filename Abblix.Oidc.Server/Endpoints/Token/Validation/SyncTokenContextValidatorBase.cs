@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,22 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
-namespace Abblix.Oidc.Server.Features.Consents;
+namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
-/// <summary>
-/// Provides methods to determine whether user consent is to proceed with authentication.
-/// </summary>
-[Obsolete("Use IConsentProvider instead")]
-public interface IConsentService
+public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
 {
-	/// <summary>
-	/// Checks if consent is for the given authorization request and authentication session.
-	/// </summary>
-	/// <param name="request">The authorization request.</param>
-	/// <param name="authSession">The authentication session.</param>
-	/// <returns>True if consent is required, false otherwise.</returns>
-	Task<bool> IsConsentRequired(ValidAuthorizationRequest request, AuthSession authSession);
+    public Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
+        => Task.FromResult(Validate(context));
+
+    protected abstract TokenRequestError? Validate(TokenValidationContext context);
 }

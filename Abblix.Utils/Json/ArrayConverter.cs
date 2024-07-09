@@ -27,7 +27,7 @@ namespace Abblix.Utils.Json;
 
 /// <summary>
 /// A custom JSON converter that handles the serialization and deserialization of arrays of a specific type.
-/// Utilizes a specified element converter for individual elements of the array.
+/// It uses a specified element converter for individual elements of the array.
 /// </summary>
 /// <typeparam name="TElement">The type of the elements in the array.</typeparam>
 /// <typeparam name="TConverter">The type of the converter used for the elements in the array.</typeparam>

@@ -47,11 +47,12 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using ClientValidator = Abblix.Oidc.Server.Endpoints.Authorization.Validation.ClientValidator;
-using PostLogoutRedirectUrisValidator = Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -76,15 +77,29 @@ public static class ServiceCollectionExtensions
             .AddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
     }
 
+    /// <summary>
+    /// Registers authorization request fetchers and related services into the provided IServiceCollection.
+    /// This method adds implementations for various authorization request fetchers as singletons, ensuring
+    /// that they are efficiently reused throughout the application. It also composes these fetchers into a
+    /// composite fetcher to handle different types of authorization requests seamlessly.
+    /// </summary>
+    /// <param name="services">The IServiceCollection to which the services will be added.</param>
+    /// <returns>The updated IServiceCollection with the added authorization request fetchers.</returns>
     public static IServiceCollection AddAuthorizationRequestFetchers(this IServiceCollection services)
     {
         return services
+            // Add a JSON object binder as a singleton
+            .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
+
+            // Add individual authorization request fetchers as singletons
             .AddSingleton<IAuthorizationRequestFetcher, PushedRequestFetcher>()
             .AddSingleton<IAuthorizationRequestFetcher, RequestUriFetcher>()
-            .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
             .AddSingleton<IAuthorizationRequestFetcher, RequestObjectFetcher>()
+
+            // Compose the individual fetchers into a composite fetcher
             .Compose<IAuthorizationRequestFetcher, CompositeRequestFetcher>();
     }
+
 
     /// <summary>
     /// Adds a series of validators for authorization context as a composite service to ensure comprehensive validation
@@ -102,12 +117,13 @@ public static class ServiceCollectionExtensions
     {
         return services
             // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
-            .AddSingleton<IAuthorizationContextValidator, ClientValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>()
             .AddSingleton<IAuthorizationContextValidator, RedirectUriValidator>()
             .AddSingleton<IAuthorizationContextValidator, FlowTypeValidator>()
             .AddSingleton<IAuthorizationContextValidator, ResponseModeValidator>()
             .AddSingleton<IAuthorizationContextValidator, NonceValidator>()
-            .AddSingleton<IAuthorizationContextValidator, ScopeValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>()
+            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>()
             .AddSingleton<IAuthorizationContextValidator, PkceValidator>()
             .Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
     }
@@ -137,13 +153,38 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddTokenEndpoint(this IServiceCollection services)
     {
-        return services
+        services
             .AddAuthorizationGrants()
+            .AddTokenContextValidators();
 
-            .AddScoped<ITokenHandler, TokenHandler>()
-            .AddScoped<ITokenRequestValidator, TokenRequestValidator>()
-            .AddScoped<ITokenRequestProcessor, TokenRequestProcessor>()
-            .Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+         services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
+         
+         services.TryAddScoped<ITokenHandler, TokenHandler>();
+         services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
+         services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
+         services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+
+         return services;
+    }
+
+    /// <summary>
+    /// Configures and registers a composite of token context validators into the service collection.
+    /// This method sets up a sequence of validators that perform various checks on token requests,
+    /// ensuring they comply with the necessary criteria before a token can be issued.
+    /// </summary>
+    /// <param name="services">The service collection to which the token context validators will be added.</param>
+    /// <returns>The modified service collection with the registered token context validators.</returns>
+    public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
+    {
+        return services
+            // Register individual validators that will participate in a composite pattern.
+            .AddSingleton<ITokenContextValidator, Token.Validation.ResourceValidator>()
+            .AddSingleton<ITokenContextValidator, Token.Validation.ScopeValidator>()
+            .AddSingleton<ITokenContextValidator, Token.Validation.ClientValidator>()
+            .AddSingleton<ITokenContextValidator, AuthorizationGrantValidator>()
+            // Combine all registered ITokenContextValidator into a single composite validator.
+            // This composite approach allows the application to apply multiple validation checks sequentially.
+            .Compose<ITokenContextValidator, TokenContextValidatorComposite>();
     }
 
     /// <summary>
@@ -290,7 +331,7 @@ public static class ServiceCollectionExtensions
                 // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
                 .AddSingleton<IClientRegistrationContextValidator, ClientIdValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, RedirectUrisValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, PostLogoutRedirectUrisValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
@@ -317,8 +358,8 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddSingleton<IEndSessionContextValidator, IdTokenHintValidator>()
-            .AddSingleton<IEndSessionContextValidator, Abblix.Oidc.Server.Endpoints.EndSession.Validation.ClientValidator>()
-            .AddSingleton<IEndSessionContextValidator, Abblix.Oidc.Server.Endpoints.EndSession.Validation.PostLogoutRedirectUrisValidator>()
+            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>()
+            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>()
             .AddSingleton<IEndSessionContextValidator, ConfirmationValidator>()
             .Compose<IEndSessionContextValidator, EndSessionContextValidatorComposite>();
     }

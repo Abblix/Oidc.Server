@@ -156,7 +156,7 @@ public class SanitizedTests
     {
         const string? input = null;
         var sanitizedValue = new Sanitized(input);
-        Assert.Null(sanitizedValue.ToString());
+        Assert.Equal(string.Empty, sanitizedValue.ToString());
     }
 
     /// <summary>

@@ -43,4 +43,9 @@ public record TokenIssuedResponse(EncodedJsonWebToken AccessToken, string TokenT
 	/// An ID token that provides identity information about the user.
 	/// </summary>
 	public EncodedJsonWebToken? IdToken { get; set; }
+
+	/// <summary>
+	/// The scopes associated with the access token issued. Scopes indicate the permissions granted to the access token.
+	/// </summary>
+	public IEnumerable<string> Scope => AccessToken.Token.Payload.Scope;
 }
