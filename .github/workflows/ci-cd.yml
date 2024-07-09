@@ -22,9 +22,10 @@ jobs:
         id: get_version
         run: |
           tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.1")
-          echo "version=$tag" >> $GITHUB_ENV
-          echo "::set-output name=version::$tag"
-          echo "Resolved version: $tag"
+          version=${tag#v}  # Remove leading 'v' if present
+          echo "version=$version" >> $GITHUB_ENV
+          echo "::set-output name=version::$version"
+          echo "Resolved version: $version"
           
   build:
     needs: get_version
