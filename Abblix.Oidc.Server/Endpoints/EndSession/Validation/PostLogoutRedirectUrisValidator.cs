@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.EndSessionRequest;
 
@@ -75,7 +76,7 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
             return null;
 
         _logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-            redirectUri,
+            new Sanitized(redirectUri),
             context.ClientInfo.ClientId);
 
         return new EndSessionRequestValidationError(

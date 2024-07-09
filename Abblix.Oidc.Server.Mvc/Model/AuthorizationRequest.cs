@@ -42,7 +42,6 @@ public record AuthorizationRequest
 	/// The specific scopes requested determine the access privileges granted.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Scope)]
-	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.Address, Scopes.OfflineAccess)]
 	[ModelBinder(typeof(SpaceSeparatedValuesBinder))]
 	public string[] Scope { get; init; } = Array.Empty<string>();
 
@@ -195,7 +194,7 @@ public record AuthorizationRequest
 	/// resource.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Resource)]
-	public Uri[]? Resource { get; set; }
+	public Uri[]? Resources { get; set; }
 
 	public Core.AuthorizationRequest Map() => new()
 	{
@@ -219,6 +218,6 @@ public record AuthorizationRequest
 		CodeChallengeMethod = CodeChallengeMethod,
 		IdTokenHint = IdTokenHint,
 		ClaimsLocales = ClaimsLocales,
-		Resource = Resource,
+		Resources = Resources,
 	};
 }

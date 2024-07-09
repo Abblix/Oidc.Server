@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -119,4 +119,18 @@ public static class ErrorFactory
 			description,
 			context.ValidRedirectUri,
 			context.ResponseMode);
+
+	/// <summary>
+	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid scope error.
+	/// This error type is used when the scopes requested by the client are not supported or are inappropriate
+	/// for the requested operation.
+	/// </summary>
+	/// <param name="context">The validation context associated with the request, providing additional context for
+	/// the error response.</param>
+	/// <param name="description">A human-readable description of why the requested scopes are invalid.</param>
+	/// <returns>An <see cref="AuthorizationRequestValidationError"/> with details about the scope-related issue.</returns>
+	public static AuthorizationRequestValidationError InvalidScope(
+		this AuthorizationValidationContext context,
+		string description)
+		=> context.Error(ErrorCodes.InvalidScope, description);
 }

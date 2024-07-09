@@ -289,7 +289,7 @@ public record ClientRegistrationRequest
     /// PKCE enhances the security of the OAuth authorization code flow, particularly for public clients.
     /// </summary>
     [JsonPropertyName(Parameters.PkceRequired)]
-    public bool PkceRequired { get; set; }
+    public bool? PkceRequired { get; set; } = false;
 
     /// <summary>
     /// Indicates whether this client is allowed to request offline access.
@@ -303,7 +303,7 @@ public record ClientRegistrationRequest
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelLogoutSessionRequired)]
-    public bool BackChannelLogoutSessionRequired { get; set; }
+    public bool? BackChannelLogoutSessionRequired { get; set; } = false;
 
     /// <summary>
     /// URI used for back-channel logout. This URI is called by the OpenID Provider to initiate a logout for the client.
@@ -324,7 +324,7 @@ public record ClientRegistrationRequest
     /// This is used to manage user sessions in scenarios involving multiple clients.
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
-    public bool FrontChannelLogoutSessionRequired { get; set; }
+    public bool? FrontChannelLogoutSessionRequired { get; set; } = false;
 
     /// <summary>
     /// Array of URIs to which the OP will redirect the user's user agent after logging out.

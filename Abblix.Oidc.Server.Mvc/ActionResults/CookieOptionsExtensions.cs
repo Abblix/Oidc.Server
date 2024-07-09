@@ -24,6 +24,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.Mvc.ActionResults;
+
 public static class CookieOptionsExtensions
 {
     /// <summary>

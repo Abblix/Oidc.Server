@@ -51,21 +51,21 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	/// and identity token services, and time-related functionality.
 	/// </summary>
 	/// <param name="authSessionService">Service for handling user authentication.</param>
-	/// <param name="consentService">Service for managing user consent.</param>
+	/// <param name="consentsProvider">Service for managing user consent.</param>
 	/// <param name="authorizationCodeService">Service for generating and managing authorization codes.</param>
 	/// <param name="accessTokenService">Service for creating access tokens.</param>
 	/// <param name="identityTokenService">Service for generating identity tokens.</param>
 	/// <param name="clock">Service for managing time-related operations.</param>
 	public AuthorizationRequestProcessor(
 		IAuthSessionService authSessionService,
-		IConsentService consentService,
+		IUserConsentsProvider consentsProvider,
 		IAuthorizationCodeService authorizationCodeService,
 		IAccessTokenService accessTokenService,
 		IIdentityTokenService identityTokenService,
 		TimeProvider clock)
 	{
 		_authSessionService = authSessionService;
-		_consentService = consentService;
+		_consentsProvider = consentsProvider;
 		_authorizationCodeService = authorizationCodeService;
 		_accessTokenService = accessTokenService;
 		_identityTokenService = identityTokenService;
@@ -75,7 +75,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	private readonly IAccessTokenService _accessTokenService;
 	private readonly IAuthorizationCodeService _authorizationCodeService;
 	private readonly IAuthSessionService _authSessionService;
-	private readonly IConsentService _consentService;
+	private readonly IUserConsentsProvider _consentsProvider;
 	private readonly IIdentityTokenService _identityTokenService;
 	private readonly TimeProvider _clock;
 
@@ -131,7 +131,8 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 		var authSession = authSessions.Single();
 
-		if (model.Prompt == Prompts.Consent || await _consentService.IsConsentRequired(request, authSession))
+		var userConsents = await _consentsProvider.GetUserConsentsAsync(request, authSession);
+		if (userConsents.Pending is { Scopes.Length: > 0 } or { Resources.Length: > 0 })
 		{
 			if (model.Prompt == Prompts.None)
 			{
@@ -143,16 +144,24 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 					model.RedirectUri);
 			}
 
-			return new ConsentRequired(model, authSession);
+			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
 
 		var clientId = request.ClientInfo.ClientId;
-		var authContext = new AuthorizationContext(clientId, model.Scope, model.Claims)
+		var grantedConsents = userConsents.Granted;
+		var scopes = grantedConsents.Scopes
+			.Concat(grantedConsents.Resources.SelectMany(rd => rd.Scopes))
+			.Select(sd => sd.Scope)
+			.Distinct()
+			.ToArray();
+		var resources = Array.ConvertAll(grantedConsents.Resources, resource => resource.Resource);
+		var authContext = new AuthorizationContext(clientId, scopes, model.Claims)
 		{
 			RedirectUri = model.RedirectUri,
 			Nonce = model.Nonce,
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
+			Resources = resources,
 		};
 
 		if (!authSession.AffectedClientIds.Contains(clientId))
@@ -179,33 +188,28 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		if (tokenRequired)
 		{
 			result.TokenType = TokenTypes.Bearer;
-
-			var accessToken = await _accessTokenService.CreateAccessTokenAsync(
+			result.AccessToken = await _accessTokenService.CreateAccessTokenAsync(
 				authSession,
 				authContext,
 				request.ClientInfo);
-
-			result.AccessToken = accessToken;
 		}
 
 		var idTokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.IdToken);
 		if (idTokenRequired)
 		{
-			var idToken = await _identityTokenService.CreateIdentityTokenAsync(
+			result.IdToken = await _identityTokenService.CreateIdentityTokenAsync(
 				authSession,
 				authContext,
 				request.ClientInfo,
 				!codeRequired && !tokenRequired,
 				result.Code,
 				result.AccessToken?.EncodedJwt);
-
-			result.IdToken = idToken;
 		}
 
 		return result;
 	}
 
-	private Task<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
 	{
 		var authSessions = _authSessionService.GetAvailableAuthSessions();
 
@@ -214,14 +218,14 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 			// skip all sessions older than max_age value
 			var minAuthenticationTime = _clock.GetUtcNow() - model.MaxAge;
 			authSessions = authSessions
-				.WhereAsync(session => minAuthenticationTime < session.AuthenticationTime);
+				.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
 		var acrValues = model.AcrValues;
 		if (acrValues is { Length: > 0 })
 		{
 			authSessions = authSessions
-				.WhereAsync(session => session.AuthContextClassRef.HasValue() &&
+				.Where(session => session.AuthContextClassRef.HasValue() &&
 				                       acrValues.Contains(session.AuthContextClassRef));
 		}
 

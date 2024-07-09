@@ -24,7 +24,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 

@@ -186,14 +186,14 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         {
             clientInfo.BackChannelLogout = new BackChannelLogoutOptions(
                 model.BackChannelLogoutUri,
-                model.BackChannelLogoutSessionRequired);
+                model.BackChannelLogoutSessionRequired ?? false);
         }
 
         if (model.FrontChannelLogoutUri != null)
         {
             clientInfo.FrontChannelLogout = new FrontChannelLogoutOptions(
                 model.FrontChannelLogoutUri,
-                model.FrontChannelLogoutSessionRequired);
+                model.FrontChannelLogoutSessionRequired ?? false);
         }
 
         return clientInfo;

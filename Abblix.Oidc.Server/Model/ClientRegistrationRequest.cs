@@ -253,7 +253,7 @@ public record ClientRegistrationRequest
     /// Gets or sets a value indicating whether PKCE (Proof Key for Code Exchange) is required.
     /// </summary>
     [JsonPropertyName(Parameters.PkceRequired)]
-    public bool PkceRequired { get; set; }
+    public bool? PkceRequired { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether offline access is allowed.
@@ -262,7 +262,7 @@ public record ClientRegistrationRequest
     /// <c>true</c> if offline access is allowed; otherwise, <c>false</c>. Defaults to <c>true</c>.
     /// </value>
     [JsonPropertyName(Parameters.OfflineAccessAllowed)]
-    public bool OfflineAccessAllowed { get; set; } = true;
+    public bool? OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the URI for back-channel logout.
@@ -288,7 +288,7 @@ public record ClientRegistrationRequest
     /// This property corresponds to the 'backchannel_logout_session_required' parameter in the OpenID Connect specification.
     /// </remarks>
     [JsonPropertyName(Parameters.BackChannelLogoutSessionRequired)]
-    public bool BackChannelLogoutSessionRequired { get; set; }
+    public bool? BackChannelLogoutSessionRequired { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the URI for front-channel logout.
@@ -317,7 +317,7 @@ public record ClientRegistrationRequest
     /// This is typically used to facilitate logout across multiple sessions or devices.
     /// </remarks>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
-    public bool FrontChannelLogoutSessionRequired { get; set; }
+    public bool? FrontChannelLogoutSessionRequired { get; set; } = false;
 
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]

@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Utils;
@@ -37,15 +38,23 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class AuthorizationErrorFormatter
 {
     /// <summary>
-    /// Initializes a new instance of <see cref="AuthorizationErrorFormatter"/> with the necessary parameter provider.
+    /// Initializes a new instance of <see cref="AuthorizationErrorFormatter"/> with necessary dependencies for
+    /// response parameter handling.
     /// </summary>
-    /// <param name="parametersProvider">The provider for extracting and formatting response parameters.</param>
-    public AuthorizationErrorFormatter(IParametersProvider parametersProvider)
+    /// <param name="parametersProvider">The provider for extracting and formatting response parameters,
+    /// which includes details like state and error descriptions.</param>
+    /// <param name="issuerProvider">The provider for the issuer URL, ensuring the 'iss' claim is correctly
+    /// included in error responses if applicable.</param>
+    public AuthorizationErrorFormatter(
+        IParametersProvider parametersProvider,
+        IIssuerProvider issuerProvider)
     {
         _parametersProvider = parametersProvider;
+        _issuerProvider = issuerProvider;
     }
 
     private readonly IParametersProvider _parametersProvider;
+    protected readonly IIssuerProvider _issuerProvider;
 
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,
@@ -54,12 +63,8 @@ public class AuthorizationErrorFormatter
     /// <param name="request">The original authorization request that led to the error.</param>
     /// <param name="error">The authorization error to be formatted.</param>
     /// <returns>A task that resolves to the formatted HTTP action result.</returns>
-    public Task<ActionResult> FormatResponseAsync(
-        AuthorizationRequest request,
-        AuthorizationError error)
-    {
-        return Task.FromResult(FormatResponse(request, error));
-    }
+    public Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
+        => Task.FromResult(FormatResponse(request, error));
 
     /// <summary>
     /// Internally formats the authorization error response based on the request context and the error's properties,
@@ -72,18 +77,18 @@ public class AuthorizationErrorFormatter
     {
         switch (error)
         {
-            case { RedirectUri: not null }:
+            case { RedirectUri: {} redirectUri }:
 
                 var response = new AuthorizationResponse
                 {
+                    State = request.State,
+                    Issuer = _issuerProvider.GetIssuer(),
                     Error = error.Error,
                     ErrorDescription = error.ErrorDescription,
                     ErrorUri = error.ErrorUri,
-
-                    State = request.State,
                 };
 
-                return ToActionResult(response, error.ResponseMode, error.RedirectUri);
+                return ToActionResult(response, error.ResponseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));

@@ -84,11 +84,11 @@ public class UserClaimsProvider : IUserClaimsProvider
         ClientInfo clientInfo)
     {
         var claimNames = _scopeClaimsProvider.GetRequestedClaims(
-            scope, requestedClaims?.Select(claim => claim.Key));
+            scope, requestedClaims?.Select(claim => claim.Key))
+            .Distinct(StringComparer.Ordinal);
 
         var userInfo = await _userInfoProvider.GetUserInfoAsync(
-            authSession.Subject,
-            claimNames.Distinct(StringComparer.Ordinal));
+            authSession.Subject, claimNames);
         if (userInfo == null)
         {
             _logger.LogWarning("The user claims were not found by subject value");
