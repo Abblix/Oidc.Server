@@ -113,7 +113,7 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
                 return await RedirectAsync(
                     _options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
-            case SuccessfullyAuthenticated { Model.RedirectUri: not null } success:
+            case SuccessfullyAuthenticated { Model.RedirectUri: { } redirectUri } success:
 
                 var modelResponse = new AuthorizationResponse
                 {
@@ -127,7 +127,7 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
                     SessionState = success.SessionState,
                 };
 
-                var actionResult = ToActionResult(modelResponse, success.ResponseMode, success.Model.RedirectUri);
+                var actionResult = ToActionResult(modelResponse, success.ResponseMode, redirectUri);
 
                 if (_sessionManagementService.Enabled  &&
                     success.SessionId.HasValue() &&

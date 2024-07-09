@@ -178,7 +178,8 @@ public record AuthorizationRequest
 	/// resource.
 	/// </summary>
 	[JsonPropertyName(Parameters.Resource)]
-	public Uri[]? Resource { get; set; }
+	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]
+	public Uri[]? Resources { get; set; }
 
 	public static class Parameters
     {

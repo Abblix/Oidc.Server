@@ -83,4 +83,11 @@ public record AuthorizationContext(string ClientId, string[] Scope, RequestedCla
     /// enhancing the security of PKCE by allowing the authorization server to verify the code exchange authenticity.
     /// </summary>
     public string? CodeChallengeMethod { get; init; }
+
+    /// <summary>
+    /// The resources for which the authorization is granted.
+    /// These resources are typically URIs that identify specific services or data that the client is authorized
+    /// to access.
+    /// </summary>
+    public Uri[]? Resources { get; init; }
 }
