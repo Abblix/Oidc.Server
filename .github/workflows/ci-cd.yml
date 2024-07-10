@@ -9,7 +9,17 @@ on:
         default: 'release/1.0.0'  # Example default branch
 
 jobs:
+  startup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump github context
+        run:   echo "$GITHUB_CONTEXT"
+        shell: bash
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+
   check_merge_conflict:
+    needs: startup
     runs-on: ubuntu-latest
     steps:
       - name: Checkout master branch
