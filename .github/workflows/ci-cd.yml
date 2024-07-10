@@ -62,3 +62,28 @@ jobs:
         run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
       - name: Push to GitHub Packages
         run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.GITHUB_TOKEN }} -s https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
+
+  merge_to_master:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4.1.2
+        with:
+          ref: master
+          fetch-depth: 0  # Fetch all history to avoid shallow clone issues
+      - name: Checkout release branch
+        uses: actions/checkout@v4.1.2
+        with:
+          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+          path: release_branch
+      - name: Merge release branch into master
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository_owner }}/{{ github.repository_name }}.git
+          git fetch origin master
+          git checkout master
+          git merge --no-ff --no-edit release_branch
+          git push origin master
+        
