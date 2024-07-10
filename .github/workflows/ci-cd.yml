@@ -1,4 +1,4 @@
-name: CI/CD Pipeline for Auto Versioning, Building, and Publishing on Release Branch
+name: Build, Publish and Merge Release to Master
 
 on:
   workflow_dispatch:  # Manual trigger
@@ -50,7 +50,7 @@ jobs:
 
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/heads/release/')
+#    if: startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     steps:
       - name: Download NuGet packages artifacts
@@ -58,10 +58,10 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
-      - name: Push to NuGet.org
-        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
-      - name: Push to GitHub Packages
-        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.GITHUB_TOKEN }} -s https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
+#      - name: Push to NuGet.org
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+#      - name: Push to GitHub Packages
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.GITHUB_TOKEN }} -s https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
 
   merge_to_master:
     needs: publish
