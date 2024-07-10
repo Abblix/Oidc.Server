@@ -2,6 +2,11 @@ name: Build, Publish and Merge Release to Master
 
 on:
   workflow_dispatch:  # Manual trigger
+    inputs:
+      release_branch:
+        description: 'The release branch to be processed'
+        required: true
+        default: 'release/1.0.0'  # Example default branch
 
 jobs:
   check_merge_conflict:
@@ -15,7 +20,8 @@ jobs:
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+#          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+          ref: ${{ github.event.inputs.release_branch }}  # Checkout the release branch specified in the workflow dispatch input
           path: release_branch
       - name: Check for merge conflicts
         run: |
@@ -99,7 +105,8 @@ jobs:
       - name: Checkout release branch
         uses: actions/checkout@v4.1.2
         with:
-          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+#          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+          ref: ${{ github.event.inputs.release_branch }}  # Checkout the release branch specified in the workflow dispatch input
           path: release_branch
       - name: Merge release branch into master
         run: |
