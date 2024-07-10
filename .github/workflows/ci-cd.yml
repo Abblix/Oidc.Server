@@ -22,7 +22,7 @@ jobs:
           tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.1")
           version=${tag#v}  # Remove leading 'v' if present
           echo "version=$version" >> $GITHUB_ENV
-          echo "::set-output name=version::$version"
+          echo "version=$version" >> $GITHUB_OUTPUT
           echo "Resolved version: $version"
           
   build:
