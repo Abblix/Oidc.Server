@@ -4,7 +4,31 @@ on:
   workflow_dispatch:  # Manual trigger
 
 jobs:
+  check_merge_conflict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0  # Fetch all history to avoid shallow clone issues
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}  # Checkout the release branch that triggered the workflow
+          path: release_branch
+      - name: Check for merge conflicts
+        run: |
+          git fetch origin master
+          git checkout master
+          git merge --no-commit --no-ff release_branch || (
+            echo "Merge to master conflict detected. Aborting."
+            git merge --abort
+            exit 1
+          )
+
   get_version:
+    needs: check_merge_conflict
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
@@ -86,4 +110,4 @@ jobs:
           git checkout master
           git merge --no-ff --no-edit release_branch
           git push origin master
-        
+          
