@@ -46,6 +46,7 @@ Abblix OIDC Server fully implements a comprehensive suite of advanced standards 
 - **OAuth 2.0 Form Post Response Mode**: [Core Specification](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html): Transmits OAuth 2.0 responses via HTTP form posts.
 - **OpenID Connect Dynamic Client Registration**: [Detailed Specification](https://openid.net/specs/openid-connect-registration-1_0.html): Enables OpenID Connect clients to register dynamically with providers.
 - **OpenID Connect Core: Pairwise Pseudonymous Identifiers (PPID)**: [Core Specification](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg): Implements a privacy mechanism by generating unique identifiers for clients.
+- **OAuth 2.0 Resource Indicators**: [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707): Enables users to specify the resources they want access to, enhancing security and access control.
 
 ## Getting Started
 
