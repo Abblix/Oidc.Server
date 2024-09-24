@@ -34,16 +34,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
 /// Handles the authorization code grant type for OAuth 2.0.
-/// This class validates the provided authorization code against stored codes,
-/// checks the client details, and implements PKCE verification when necessary.
+/// This class validates the provided authorization code, verifies client details, and checks for PKCE compliance.
+/// PKCE is a security mechanism primarily used in public clients, and its enforcement helps prevent code injection
+/// attacks.
 /// </summary>
 public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AuthorizationCodeGrantHandler"/> class.
+    /// The constructor sets up the services necessary for validating the parameters of a token request and managing
+    /// authorization codes. It centralizes these services to streamline the validation process and ensure secure
+    /// handling of authorization codes.
     /// </summary>
-    /// <param name="parameterValidator">The service to validate request parameters.</param>
-    /// <param name="authorizationCodeService">The service to manage authorization codes.</param>
+    /// <param name="parameterValidator">
+    /// Service for validating request parameters, ensuring required fields are provided.</param>
+    /// <param name="authorizationCodeService">
+    /// Service responsible for generating, validating, and managing authorization codes.</param>
     public AuthorizationCodeGrantHandler(
         IParameterValidator parameterValidator,
         IAuthorizationCodeService authorizationCodeService)
@@ -56,7 +62,8 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     private readonly IAuthorizationCodeService _authorizationCodeService;
 
     /// <summary>
-    /// Gets the grant type this handler supports, which is the authorization code grant type.
+    /// Provides the grant type this handler supports, which is the OAuth 2.0 'authorization_code' grant type.
+    /// This information is useful for identifying the handler's capabilities in a broader authorization framework.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported
     {
@@ -64,46 +71,76 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     }
 
     /// <summary>
-    /// Authorizes the token request asynchronously using the authorization code grant type.
-    /// Validates the authorization code, verifies the client information, and ensures compliance with PKCE if used.
+    /// Authorizes a token request asynchronously using the authorization code grant type.
+    /// This method validates the authorization code submitted by the client, ensures the client making the request
+    /// is the same as the one to whom the code was originally issued, and performs any necessary PKCE checks.
+    /// It ensures that all security requirements, including client verification and PKCE validation, are enforced
+    /// before tokens are issued.
     /// </summary>
-    /// <param name="request">The token request containing the authorization code.</param>
-    /// <param name="clientInfo">The client information associated with the request.</param>
-    /// <returns>A task representing the result of the authorization process,
-    /// containing a <see cref="GrantAuthorizationResult"/>.</returns>
+    /// <param name="request">
+    /// The token request containing the authorization code and other necessary parameters.</param>
+    /// <param name="clientInfo">
+    /// Information about the client, used to verify that the request is valid for this client.</param>
+    /// <returns>A task that represents the asynchronous authorization operation.
+    /// The result is either an authorized grant or an error indicating why the request failed.</returns>
     public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
+        // Ensures the authorization code is provided in the request.
         _parameterValidator.Required(request.Code, nameof(request.Code));
 
-        var grantResult = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        // Validates the authorization code and retrieves the authorization context associated with the code.
+        var result = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
 
-        return grantResult switch
+        // Verifies that the authorization code was issued for the requesting client.
+        return result switch
         {
+            // If the client making the request is not the same as the one that initiated the authentication,
+            // return an unauthorized error.
             AuthorizedGrant { Context.ClientId: var clientId } when clientId != clientInfo.ClientId
-                => new InvalidGrantResult(ErrorCodes.UnauthorizedClient, "Code was issued for another client"),
+                => new InvalidGrantResult(
+                    ErrorCodes.UnauthorizedClient,
+                    "Code was issued for another client"),
 
+            // Checks if PKCE is required but the code verifier is missing from the request.
             AuthorizedGrant { Context.CodeChallenge: not null } when string.IsNullOrEmpty(request.CodeVerifier)
                 => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is required"),
 
+            // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
             AuthorizedGrant { Context: { CodeChallenge: { } challenge, CodeChallengeMethod: { } method } }
-                when !string.Equals(challenge, CalculateChallenge(method, request.CodeVerifier), StringComparison.OrdinalIgnoreCase)
+                when !string.Equals(
+                    challenge,
+                    CalculateChallenge(method, request.CodeVerifier),
+                    StringComparison.OrdinalIgnoreCase)
+
                 => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is not valid"),
 
-            _ => grantResult,
+            // Returns the authorized grant if all checks pass.
+            _ => result,
         };
     }
 
     /// <summary>
-    /// Calculates the code challenge based on the provided method and code verifier.
-    /// Supports 'plain' and 'S256' challenge methods.
+    /// Calculates the code challenge from the provided code verifier and method.
+    /// PKCE involves transforming the code verifier into a code challenge, which the authorization server verifies when
+    /// exchanging the authorization code for a token. This method ensures that the correct transformation is applied.
+    /// It supports both 'plain' and 'S256' methods, with 'S256' being the recommended approach for stronger security.
     /// </summary>
-    /// <param name="method">The code challenge method used during authorization request.</param>
-    /// <param name="codeVerifier">The code verifier submitted by the client.</param>
-    /// <returns>The calculated code challenge string.</returns>
+    /// <param name="method">The PKCE challenge method, either 'plain' or 'S256'.</param>
+    /// <param name="codeVerifier">The code verifier submitted by the client during the token request.</param>
+    /// <returns>The transformed code challenge based on the specified method.</returns>
     private static string CalculateChallenge(string method, string codeVerifier) => method switch
     {
-        CodeChallengeMethods.S256 => HttpServerUtility.UrlTokenEncode(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
+        // Encodes the code verifier using SHA256 and URL-safe base64 encoding for 'S256' method.
+        CodeChallengeMethods.S256 =>
+            HttpServerUtility.UrlTokenEncode(
+                SHA256.HashData(
+                    Encoding.ASCII.GetBytes(
+                        codeVerifier))),
+
+        // Returns the code verifier as-is for the 'plain' method.
         CodeChallengeMethods.Plain => codeVerifier,
+
+        // Throws an exception if an unsupported method is encountered.
         _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown code challenge method: {method}"),
     };
 }

@@ -22,7 +22,9 @@
 
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -84,14 +86,16 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Handles requests to the authorization endpoint, performing user authentication and obtaining consent for requested scopes.
+    /// Handles requests to the authorization endpoint, performing user authentication and getting consent for requested scopes.
     /// </summary>
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
     /// <param name="request">The authorization request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing the authorization response.</returns>
+    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// the authorization response.</returns>
     /// <remarks>
-    /// This endpoint is a key component of the OpenID Connect flow, initiating user authentication and consent for access to their information.
+    /// This endpoint is a key component of the OpenID Connect flow, initiating user authentication and
+    /// consent for access to their information.
     /// <see href="https://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint">
     /// OpenID Connect Authorization Endpoint Documentation
     /// </see>
@@ -110,13 +114,15 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Processes requests to the userinfo endpoint, returning claims about the authenticated user based on the provided access token.
+    /// Processes requests to the userinfo endpoint, returning claims about the authenticated user based on
+    /// the provided access token.
     /// </summary>
     /// <param name="handler">The handler responsible for processing userinfo requests.</param>
     /// <param name="formatter">The formatter used to generate a response with user claims.</param>
     /// <param name="userInfoRequest">The userinfo request containing the access token.</param>
     /// <param name="clientRequest">Additional request information provided by the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing the userinfo response.</returns>
+    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// the userinfo response.</returns>
     /// <remarks>
     /// This endpoint provides claims about the authenticated user, conforming to the
     /// <see href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfo">
@@ -138,14 +144,17 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Facilitates the logout process by handling requests to the end session endpoint, allowing clients to terminate the user's session.
+    /// Facilitates the logout process by handling requests to the end session endpoint,
+    /// allowing clients to terminate the user's session.
     /// </summary>
     /// <param name="handler">The handler responsible for processing end session requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the end session request.</param>
     /// <param name="request">The end session request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for the end session process.</returns>
+    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// the end session process.</returns>
     /// <remarks>
-    /// This endpoint supports the RP-Initiated Logout functionality, enabling clients to initiate logout procedures compliant with OpenID Connect.
+    /// This endpoint supports the RP-Initiated Logout functionality, enabling clients to initiate
+    /// logout procedures compliant with OpenID Connect.
     /// <see href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout">
     /// OpenID Connect EndSession Endpoint Documentation
     /// </see>
@@ -165,13 +174,17 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Monitors the user's session state by handling requests to the check session endpoint, typically used within an iframe for session management.
+    /// Monitors the user's session state by handling requests to the check session endpoint, typically used
+    /// within an iframe for session management.
     /// </summary>
     /// <param name="handler">The handler responsible for the check session operation.</param>
-    /// <param name="formatter">The formatter used to generate a response suitable for session checking within an iframe.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for the check session response.</returns>
+    /// <param name="formatter">The formatter used to generate a response suitable for session checking
+    /// within an iframe.</param>
+    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// the check session response.</returns>
     /// <remarks>
-    /// This endpoint is part of the OpenID Connect session management specification, enabling clients to monitor the authentication state.
+    /// This endpoint is part of the OpenID Connect session management specification,
+    /// enabling clients to monitor the authentication state.
     /// <see href="https://openid.net/specs/openid-connect-session-1_0.html#OPiframe">
     /// OpenID Connect Check Session Documentation
     /// </see>
@@ -187,7 +200,7 @@ public sealed class AuthenticationController : ControllerBase
         return await formatter.FormatResponseAsync(response);
     }
 
-    /*/// <summary>
+    /// <summary>
     /// Handles the backchannel authentication endpoint, initiating an out-of-band authentication process.
     /// </summary>
     /// <remarks>
@@ -198,29 +211,22 @@ public sealed class AuthenticationController : ControllerBase
     [HttpPost(Path.BackchannelAuthentication)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
-        [FromServices] IBackChannelAuthenticationRequestValidator validator,
-        [FromServices] IBackChannelAuthenticationRequestProcessor processor,
+        [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
-        [FromForm] BackChannelAuthenticationRequest request)
+        [FromForm] BackChannelAuthenticationRequest authenticationRequest,
+        [FromForm] ClientRequest clientRequest)
     {
-        var backChannelAuthenticationRequest = request.Map();
-        var validationResult = await validator.ValidateAsync(backChannelAuthenticationRequest);
+        var mappedAuthenticationRequest = authenticationRequest.Map();
+        var mappedClientRequest = clientRequest.Map();
 
-        var response = validationResult switch
-        {
-            ValidBackChannelAuthenticationRequest validRequest => await processor.ProcessAsync(validRequest),
+        var response = await handler.HandleAsync(mappedAuthenticationRequest, mappedClientRequest);
 
-            BackChannelAuthenticationValidationError { Error: var error, ErrorDescription: var description }
-                => new BackChannelAuthenticationError(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-
-        return await formatter.FormatResponseAsync(backChannelAuthenticationRequest, response);
+        return await formatter.FormatResponseAsync(mappedAuthenticationRequest, response);
     }
 
+    /*
     /// <summary>
-    /// Handles the device authorization endpoint for obtaining user authorization on limited-input devices.
+    /// Handles the device authorization endpoint for getting user authorization on limited-input devices.
     /// </summary>
     /// <remarks>
     /// <see href="https://www.rfc-editor.org/rfc/rfc8628">

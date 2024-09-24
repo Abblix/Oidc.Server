@@ -176,4 +176,22 @@ public record OidcOptions
 	/// and permissions based on these definitions.
 	/// </summary>
 	public ResourceDefinition[]? Resources { get; set; }
+
+	/// <summary>
+	/// Configuration options for the backchannel authentication flow,
+	/// used in scenarios such as Client-Initiated Backchannel Authentication (CIBA).
+	/// </summary>
+	public BackChannelAuthenticationOptions BackChannelAuthentication { get; set; } = new();
+
+	/// <summary>
+	/// Specifies the length of session identifiers used by the OIDC server.
+	/// The length determines the uniqueness and security of the session identifiers.
+	/// </summary>
+	public int SessionIdLength { get; set; } = 64;
+
+	/// <summary>
+	/// Specifies the length of token identifiers used by the OIDC server.
+	/// This value determines the length of the unique ID assigned to tokens.
+	/// </summary>
+	public int TokenIdLength { get; set; } = 64;
 }

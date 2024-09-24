@@ -20,6 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
-public record BackChannelAuthenticationSuccess : BackChannelAuthenticationResponse;
+public enum BackChannelAuthenticationStatus
+{
+    Pending,
+    Denied,
+    Authenticated,
+}

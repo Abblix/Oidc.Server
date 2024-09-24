@@ -73,7 +73,7 @@ public static class Path
     /// <summary>
     /// Path for the backchannel authentication endpoint.
     /// </summary>
-    public const string BackchannelAuthentication = Base + "/ciba";
+    public const string BackchannelAuthentication = Base + "/bc-authorize";
 
     /// <summary>
     /// Path for the device authorization endpoint.

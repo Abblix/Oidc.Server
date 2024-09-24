@@ -27,8 +27,22 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
+/// <summary>
+/// Validates the authorization grant in the context of a token request, ensuring that the request is authorized
+/// and that the associated redirect URI matches the one used during the initial authorization request.
+/// </summary>
+/// <remarks>
+/// This validator interacts with the <see cref="IAuthorizationGrantHandler"/> to perform the necessary checks
+/// on the authorization grant. It ensures that the token request is made for an authorized grant and verifies
+/// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context.
+/// </remarks>
 public class AuthorizationGrantValidator: ITokenContextValidator
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthorizationGrantValidator"/> class with
+    /// the specified grant handler.
+    /// </summary>
+    /// <param name="grantHandler">The handler responsible for authorizing the grant.</param>
     public AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler)
     {
         _grantHandler = grantHandler;
@@ -36,8 +50,26 @@ public class AuthorizationGrantValidator: ITokenContextValidator
 
     private readonly IAuthorizationGrantHandler _grantHandler;
 
+    /// <summary>
+    /// Asynchronously validates the authorization grant in the token request context. This method checks if the grant
+    /// is valid and authorized for the client making the request. It also ensures that the redirect URI used in the
+    /// token request matches the one used during the initial authorization request.
+    /// </summary>
+    /// <param name="context">The validation context containing the token request and client information.</param>
+    /// <returns>
+    /// A <see cref="TokenRequestError"/> if the authorization grant is invalid,
+    /// including an error code and description;
+    /// otherwise, null indicating that the grant is valid and the context has been updated.
+    /// </returns>
     public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
     {
+        if (!context.ClientInfo.AllowedGrantTypes.Contains(context.Request.GrantType))
+        {
+            return new TokenRequestError(
+                ErrorCodes.UnauthorizedClient,
+                "The grant type is not allowed for this client");
+        }
+
         var result = await _grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
         switch (result)
         {

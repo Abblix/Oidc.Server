@@ -29,7 +29,7 @@ namespace Abblix.Jwt;
 public record ValidJsonWebToken(JsonWebToken Token) : JwtValidationResult
 {
 	/// <summary>
-	/// Gets the successfully validated JsonWebToken.
+	/// The successfully validated JsonWebToken.
 	/// </summary>
 	public JsonWebToken Token { get; } = Token;
 }

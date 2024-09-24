@@ -30,6 +30,8 @@ using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
+using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -50,8 +52,12 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
+using RequestObjectFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.RequestObjectFetcher;
 
 
 namespace Abblix.Oidc.Server.Endpoints;
@@ -218,6 +224,7 @@ public static class ServiceCollectionExtensions
         return services
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
+            .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>();
     }
 
@@ -373,8 +380,23 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddBackChannelAuthenticationEndpoint(this IServiceCollection services)
     {
         return services
+            .AddBackChannelAuthenticationContextValidators()
+            .AddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetcher>()
+            .AddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>()
             .AddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>()
             .AddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>()
             .AddScoped<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+    }
+
+    public static IServiceCollection AddBackChannelAuthenticationContextValidators(this IServiceCollection services)
+    {
+        return services
+            // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
+            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ClientValidator>()
+            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>()
+            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>()
+            .AddSingleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>()
+            .AddSingleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>()
+            .Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
     }
 }

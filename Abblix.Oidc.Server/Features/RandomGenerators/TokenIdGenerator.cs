@@ -20,21 +20,37 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Generates a new identifier for a JSON Web Token (JWT). This class uses a cryptographic-strength random number generator
-/// to create a unique and secure identifier for each token. The generated identifier is then encoded using HTTP URL encoding
-/// to ensure it is safe to transmit in URL contexts.
+/// Generates a new identifier for a JSON Web Token (JWT). This class uses a cryptographic-strength random number
+/// generator to create a unique and secure identifier for each token. The generated identifier is then encoded using
+/// HTTP URL encoding to ensure it is safe to transmit in URL contexts.
 /// </summary>
 public class TokenIdGenerator : ITokenIdGenerator
 {
+	/// <summary>
+	/// Initializes a new instance of the <see cref="TokenIdGenerator"/> class with configuration options for
+	/// token ID generation, such as the length of the token ID.
+	/// </summary>
+	/// <param name="options">The configuration options for OIDC, providing settings such as the token ID length.
+	/// </param>
+	public TokenIdGenerator(IOptions<OidcOptions> options)
+	{
+		_options = options;
+	}
+
+	private readonly IOptions<OidcOptions> _options;
+
 	/// <summary>
 	/// Creates a new unique identifier for a JWT. This method generates a 32-byte random number and encodes it using
 	/// HTTP URL-safe Base64 encoding, resulting in a string suitable for use as a JWT ID.
 	/// </summary>
 	/// <returns>A URL-safe, randomly generated unique identifier for a JWT.</returns>
-	public string GenerateTokenId() => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(32));
+	public string GenerateTokenId()
+		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(_options.Value.TokenIdLength));
 }

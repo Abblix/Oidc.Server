@@ -90,14 +90,12 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers common services required by the application, like system clock, hashing services etc.
+    /// Registers common services required by the application, like system clock, hashing services, etc.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
     /// <returns>The <see cref="IServiceCollection"/> with the common services registered.</returns>
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        services.TryAddSingleton<IConsentService, NullConsentService>();
-
         services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
         services.Decorate<IUserConsentsProvider, PromptConsentDecorator>();
 
@@ -279,18 +277,22 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a service for formatting JWTs specific to client authentication within the specified <see cref="IServiceCollection"/>.
+    /// Registers services for validating and formatting JWTs used in client authentication scenarios within
+    /// the specified <see cref="IServiceCollection"/>.
     /// </summary>
     /// <remarks>
-    /// Adds a service which provides functionality for formatting JWTs used in client authentication scenarios.
-    /// This service ensures that JWTs generated for clients adhere to the required format and contain all necessary
-    /// claims for identifying and authenticating users in the client application.
+    /// This method adds services to the <see cref="IServiceCollection"/> that are responsible for validating and
+    /// formatting JWTs used specifically in client authentication.
+    /// These services ensure that JWTs conform to the required standards,
+    /// include all necessary claims, and are properly validated for client authentication processes.
     /// </remarks>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add the client JWT formatting service to.</param>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the client JWT validation and
+    /// formatting services to.</param>
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddClientJwt(this IServiceCollection services)
     {
         return services
+            .AddSingleton<IClientJwtValidator, ClientJwtValidator>()
             .AddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
     }
 

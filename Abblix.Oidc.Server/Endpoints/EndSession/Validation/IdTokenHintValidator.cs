@@ -55,32 +55,36 @@ public class IdTokenHintValidator : IEndSessionContextValidator
     {
         var request = context.Request;
 
-        if (!request.IdTokenHint.HasValue())
-            return null;
-
-        var result = await _jwtValidator.ValidateAsync(request.IdTokenHint);
-
-        switch (result)
+        if (request.IdTokenHint.HasValue())
         {
-            case ValidJsonWebToken { Token.Payload.Audiences: var audiences }:
-                if (!request.ClientId.HasValue())
-                {
-                    context.ClientId = audiences.Single(); // TODO find what to do if there are multiple audiences???
-                }
-                else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
-                {
+            var result = await _jwtValidator.ValidateAsync(
+                request.IdTokenHint,
+                ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
+
+            switch (result)
+            {
+                case ValidJsonWebToken { Token: var idToken, Token.Payload.Audiences: var audiences }:
+                    if (!request.ClientId.HasValue())
+                    {
+                        // TODO what we should do if there are multiple audiences???
+                        context.ClientId = audiences.Single();
+                    }
+                    else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
+                    {
+                        return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
+                            "The id token hint contains token issued for the client other than specified");
+                    }
+
+                    context.IdToken = idToken;
+                    break;
+
+                case JwtValidationError:
                     return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
-                        "The id token hint contains token issued for the client other than specified");
-                }
+                        "The id token hint contains invalid token");
 
-                break;
-
-            case JwtValidationError:
-                return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
-                    "The id token hint contains invalid token");
-
-            default:
-                throw new UnexpectedTypeException(nameof(result), result.GetType());
+                default:
+                    throw new UnexpectedTypeException(nameof(result), result.GetType());
+            }
         }
 
         return null;

@@ -20,13 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
+namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
-public class BackChannelAuthenticationStorage : IBackChannelAuthenticationStorage
+public interface IBackChannelAuthenticationStorage
 {
-	/// <inheritdoc />
-	public Task<string> StoreAsync(BackChannelAuthentication backChannelAuthentication)
-	{
-		throw new NotImplementedException();
-	}
+	Task<string> StoreAsync(BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn);
+	Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId);
 }

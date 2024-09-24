@@ -20,9 +20,27 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Model;
+
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 
+/// <summary>
+/// Defines the contract for processing validated backchannel authentication requests,
+/// transforming them into a response that includes necessary information for the client
+/// to complete the authentication flow.
+/// </summary>
 public interface IBackChannelAuthenticationRequestProcessor
 {
+	/// <summary>
+	/// Asynchronously processes a validated backchannel authentication request and generates
+	/// an appropriate response. This method handles the business logic required to respond
+	/// to a backchannel authentication request, including generating tokens, managing
+	/// session state, and any other necessary operations.
+	/// </summary>
+	/// <param name="request">The validated backchannel authentication request containing the original request data
+	/// and associated client information.</param>
+	/// <returns>A task that represents the asynchronous operation,
+	/// yielding a <see cref="BackChannelAuthenticationResponse"/> that contains the result of the processing,
+	/// such as an authentication request ID and the expires_in value.</returns>
 	Task<BackChannelAuthenticationResponse> ProcessAsync(ValidBackChannelAuthenticationRequest request);
 }

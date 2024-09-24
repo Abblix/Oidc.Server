@@ -29,10 +29,10 @@ using Parameters = Abblix.Oidc.Server.Model.RevocationRequest.Parameters;
 namespace Abblix.Oidc.Server.Mvc.Model;
 
 /// <summary>
-/// Represents a request for token revocation, extending from <see cref="ClientRequest"/>.
+/// Represents a request for token revocation.
 /// This record is used to invalidate a token, making it no longer usable for authorization purposes.
 /// </summary>
-public record RevocationRequest : ClientRequest
+public record RevocationRequest
 {
 	/// <summary>
 	/// The token that the client wants to revoke.
@@ -55,7 +55,7 @@ public record RevocationRequest : ClientRequest
 	/// This method is used to translate the request data into a format that can be processed by the core logic of the server.
 	/// </summary>
 	/// <returns>A <see cref="Core.RevocationRequest"/> object populated with data from this request.</returns>
-	public new Core.RevocationRequest Map()
+	public Core.RevocationRequest Map()
 	{
 		return new Core.RevocationRequest
 		{

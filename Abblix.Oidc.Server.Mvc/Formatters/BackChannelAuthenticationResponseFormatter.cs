@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -37,11 +38,20 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     /// </summary>
     /// <param name="request">The back-channel authentication request.</param>
     /// <param name="response">The back-channel authentication response to be formatted.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation,
+    /// with the formatted response as an <see cref="ActionResult"/>.</returns>
     public Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
         BackChannelAuthenticationResponse response)
     {
-        throw new NotImplementedException();
+        return Task.FromResult<ActionResult>(response switch
+        {
+            BackChannelAuthenticationSuccess success => new OkObjectResult(success),
+
+            BackChannelAuthenticationError { Error: var error, ErrorDescription: var description }
+                => new BadRequestObjectResult(new ErrorResponse(error, description)),
+
+            _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
+        });
     }
 }

@@ -20,12 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Represents the context of an authorization process, encapsulating key parameters necessary for processing
+/// Represents the context of an authorization process, encapsulating the key parameters required for processing
 /// authorization requests.
 /// </summary>
 /// <remarks>
@@ -40,28 +41,48 @@ namespace Abblix.Oidc.Server.Common;
 /// </remarks>
 public record AuthorizationContext(string ClientId, string[] Scope, RequestedClaims? RequestedClaims)
 {
+    // Constructor for building the AuthorizationContext using a combination of scopes and resources,
+    // ensuring deduplication and providing an initial aggregation of scope and resource information.
+    public AuthorizationContext(
+        string clientId,
+        ScopeDefinition[] scopes,
+        ResourceDefinition[] resources,
+        RequestedClaims? requestedClaims)
+        : this(
+            clientId,
+            scopes.Concat(resources.SelectMany(rd => rd.Scopes))
+                .Select(sd => sd.Scope)
+                .Distinct()
+                .ToArray(),
+            requestedClaims)
+    {
+        Resources = Array.ConvertAll(resources, resource => resource.Resource);
+    }
+
     /// <summary>
     /// The unique identifier for the client making the authorization request, as registered in the authorization server.
-    /// This identifier is crucial for linking the authorization request and the issued tokens to a specific client application.
+    /// This identifier is crucial for linking the authorization request and the issued tokens to a specific
+    /// client application.
     /// </summary>
     public string ClientId { get; init; } = ClientId;
 
     /// <summary>
-    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or permissions
-    /// that the client is requesting on the user's behalf. They play a key role in enforcing principle of least privilege.
+    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or
+    /// permissions that the client is requesting on the user's behalf.
+    /// They play a key role in enforcing the principle of least privilege.
     /// </summary>
     public string[] Scope { get; init; } = Scope;
 
     /// <summary>
     /// Optional. Specifies the individual Claims requested by the client, providing detailed instructions
     /// for the authorization server on the Claims to be returned, either in the ID Token or via the UserInfo endpoint.
-    /// This mechanism supports clients in obtaining consented user information in a structured and controlled manner.
     /// </summary>
     public RequestedClaims? RequestedClaims { get; init; } = RequestedClaims;
 
     /// <summary>
-    /// The URI where the authorization response should be sent. This URI must match one of the registered redirect URIs
-    /// for the client application, ensuring that authorization responses are delivered to the correct destination securely.
+    /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI
+    /// for the client application, ensuring that authorization responses are delivered to the correct destination
+    /// securely.
     /// </summary>
     public Uri? RedirectUri { get; init; }
 

@@ -61,7 +61,7 @@ public static class LicenseChecker
     /// <returns>A task that, upon completion, returns the client information if it complies with the licensing
     /// constraints; otherwise, logs an error.</returns>
     public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo)
-        => (await clientInfo).CheckClient();
+        => (await clientInfo).CheckClientLicense();
 
     /// <summary>
     /// Applies licensing checks to client information.
@@ -69,7 +69,7 @@ public static class LicenseChecker
     /// <param name="clientInfo">The client information to check against licensing constraints.</param>
     /// <returns>The client information if it complies with the licensing constraints; otherwise, logs an error.
     /// </returns>
-    public static ClientInfo? CheckClient(this ClientInfo? clientInfo)
+    public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo)
     {
         if (clientInfo != null)
         {

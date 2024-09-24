@@ -159,18 +159,19 @@ public record AuthorizationRequest
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>
-	/// The request as a JWT whose Claims are the request parameters.
+	/// A JWT (JSON Web Token) that encapsulates the entire authorization request as its payload.
+	/// This parameter is often used to transmit the request securely.
 	/// </summary>
 	[JsonPropertyName(Parameters.Request)]
-    public string? Request { get; init; }
+	public string? Request { get; init; }
 
 	/// <summary>
-	/// URL referencing a resource containing a Request Object value, which is a JWT containing the request
-	/// parameters.
+	/// A URL referencing a resource that contains a Request Object, which is a JWT with the authorization request
+	/// parameters as its claims. This URL must use HTTPS.
 	/// </summary>
 	[JsonPropertyName(Parameters.RequestUri)]
-    [AbsoluteUri(RequireScheme = "https")]
-    public Uri? RequestUri { get; init; }
+	[AbsoluteUri(RequireScheme = "https")]
+	public Uri? RequestUri { get; init; }
 
 	/// <summary>
 	/// Specifies the resource for which the access token is requested.

@@ -20,6 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+namespace Abblix.Oidc.Server.Model;
 
+/// <summary>
+/// Serves as the base class for all types of backchannel authentication responses.
+/// This abstract record represents the outcome of processing a backchannel authentication request,
+/// which can either be a success or an error. Subclasses of this record should define specific
+/// outcomes such as successful authentication or error conditions.
+/// </summary>
 public abstract record BackChannelAuthenticationResponse;

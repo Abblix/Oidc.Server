@@ -68,7 +68,7 @@ public class JsonWebTokenHeader
     /// </summary>
     /// <remarks>
     /// The 'alg' parameter identifies the cryptographic algorithm used to secure the JWT.
-    /// Common algorithms include HS256, RS256, and ES256. It is crucial for verifying the JWT's integrity.
+    /// Common algorithms include HS256, RS256, and ES256. It is crucial for verifying the JWT integrity.
     /// </remarks>
     public string? Algorithm
     {
