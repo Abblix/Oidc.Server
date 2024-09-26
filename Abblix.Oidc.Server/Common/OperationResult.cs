@@ -37,21 +37,41 @@ public abstract record OperationResult<T>
     /// Represents a successful result containing a value of type <typeparamref name="T"/>.
     /// </summary>
     /// <param name="Value">The value returned by the successful operation.</param>
-    public sealed record Success(T Value) : OperationResult<T>;
+    public sealed record Success(T Value) : OperationResult<T>
+    {
+        /// <summary>
+        /// Returns a string that represents the current object, either the successful value or an error description.
+        /// </summary>
+        /// <returns>
+        /// A string representation of the result, displaying the value in case of success,
+        /// or an error message in case of failure.
+        /// </returns>
+        public override string ToString() => Value?.ToString() ?? string.Empty;
+    }
 
     /// <summary>
     /// Represents an error result containing an error code and a descriptive message.
     /// </summary>
     /// <param name="ErrorCode">The code representing the type or cause of the error.</param>
     /// <param name="ErrorDescription">A human-readable description of the error.</param>
-    public sealed record Error(string ErrorCode, string ErrorDescription) : OperationResult<T>;
+    public sealed record Error(string ErrorCode, string ErrorDescription) : OperationResult<T>
+    {
+        /// <summary>
+        /// Returns a string that represents the current object, either the successful value or an error description.
+        /// </summary>
+        /// <returns>
+        /// A string representation of the result, displaying the value in case of success,
+        /// or an error message in case of failure.
+        /// </returns>
+        public override string ToString()
+            => $"{nameof(ErrorCode)}: {ErrorCode}, {nameof(ErrorDescription)}: {ErrorDescription}";
+    }
 
     /// <summary>
     /// Implicitly converts a value of type <typeparamref name="T"/> into a successful <see cref="Success"/> result.
     /// </summary>
     /// <param name="value">The value to be wrapped as a successful result.</param>
-    public static implicit operator OperationResult<T>(T value)
-        => new Success(value);
+    public static implicit operator OperationResult<T>(T value) => new Success(value);
 
     /// <summary>
     /// Implicitly converts an <see cref="ErrorResponse"/> into an <see cref="Error"/> result.
@@ -59,19 +79,4 @@ public abstract record OperationResult<T>
     /// <param name="error">The error response to be wrapped as an error result.</param>
     public static implicit operator OperationResult<T>(ErrorResponse error)
         => new Error(error.Error, error.ErrorDescription);
-
-    /// <summary>
-    /// Returns a string that represents the current object, either the successful value or an error description.
-    /// </summary>
-    /// <returns>
-    /// A string representation of the result, displaying the value in case of success,
-    /// or an error message in case of failure.
-    /// </returns>
-    public override string? ToString()
-        => this switch
-        {
-            Success(var value) => value?.ToString(),
-            Error(var error, var description) => $"Error: {error}, Description: {description}",
-            _ => $"Unexpected type: {GetType().FullName}",
-        };
 }

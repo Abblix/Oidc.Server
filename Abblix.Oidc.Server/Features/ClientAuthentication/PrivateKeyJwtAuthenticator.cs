@@ -106,7 +106,7 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
 
                 case (ValidJsonWebToken, clientInfo: not null):
                     _logger.LogWarning(
-                        ClientAuthenticationMethods.PrivateKeyJwt + " method is not allowed for the client {@ClientId}",
+                        "The authentication method is not allowed for the client {@ClientId}",
                         clientInfo.ClientId);
                     return null;
 

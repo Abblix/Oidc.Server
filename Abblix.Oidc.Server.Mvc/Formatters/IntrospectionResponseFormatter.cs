@@ -48,14 +48,14 @@ public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, IntrospectionResponse response)
     {
-        return Task.FromResult<ActionResult>(response switch
+        return Task.FromResult(response switch
         {
             IntrospectionSuccessResponse success => Format(success),
 
             IntrospectionErrorResponse error =>
                 new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
 
-            _ => throw new ArgumentOutOfRangeException(nameof(response))
+            _ => throw new ArgumentOutOfRangeException(nameof(response)),
         });
     }
 

@@ -29,8 +29,8 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
 /// <summary>
-/// Handles the fetching and processing of backchannel authentication request objects, including the validation
-/// of JWTs (JSON Web Tokens) and the binding of JSON payloads to <see cref="Model.BackChannelAuthenticationRequest"/> models.
+/// Handles the fetching and processing of backchannel authentication request objects, including the validation of JWTs
+/// (JSON Web Tokens) and the binding of JSON payloads to <see cref="Model.BackChannelAuthenticationRequest"/> models.
 /// </summary>
 public class RequestObjectFetcher : RequestObjectFetcherBase, IBackChannelAuthenticationRequestFetcher
 {

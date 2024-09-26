@@ -66,12 +66,21 @@ public class IdTokenHintValidator : IEndSessionContextValidator
                 case ValidJsonWebToken { Token: var idToken, Token.Payload.Audiences: var audiences }:
                     if (!request.ClientId.HasValue())
                     {
-                        // TODO what we should do if there are multiple audiences???
-                        context.ClientId = audiences.Single();
+                        try
+                        {
+                            context.ClientId = audiences.Single();
+                        }
+                        catch (Exception)
+                        {
+                            return new EndSessionRequestValidationError(
+                                ErrorCodes.InvalidRequest,
+                                "The audience in the id token hint is missing or have multiple values.");
+                        }
                     }
                     else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
                     {
-                        return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
+                        return new EndSessionRequestValidationError(
+                            ErrorCodes.InvalidRequest,
                             "The id token hint contains token issued for the client other than specified");
                     }
 

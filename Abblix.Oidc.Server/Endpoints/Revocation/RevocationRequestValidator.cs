@@ -35,7 +35,8 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// <summary>
 /// Validates revocation requests in accordance with OAuth 2.0 standards.
 /// This class is responsible for ensuring that revocation requests meet the criteria specified in
-/// OAuth 2.0 Token Revocation (RFC 7009). It validates the authenticity of the client and the token involved in the request.
+/// OAuth 2.0 Token Revocation (RFC 7009).
+/// It validates the authenticity of the client and the token involved in the request.
 /// </summary>
 public class RevocationRequestValidator : IRevocationRequestValidator
 {
@@ -43,8 +44,10 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 	/// Initializes a new instance of the <see cref="RevocationRequestValidator"/> class.
 	/// The constructor sets up the validator with necessary components for client authentication and JWT validation.
 	/// </summary>
-	/// <param name="clientAuthenticator">The client request authenticator to be used in the validation process.</param>
-	/// <param name="jwtValidator">The JWT validator to be used for validating the token included in the revocation request.</param>
+	/// <param name="clientAuthenticator">
+	/// The client request authenticator to be used in the validation process.</param>
+	/// <param name="jwtValidator">
+	/// The JWT validator to be used for validating the token included in the revocation request.</param>
 	public RevocationRequestValidator(
 		IClientAuthenticator clientAuthenticator,
 		IAuthServiceJwtValidator jwtValidator)
@@ -61,7 +64,8 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 	/// It checks the client's credentials and the validity of the token to be revoked. The validation ensures
 	/// that the token belongs to the authenticated client and is valid as per JWT standards.
 	/// </summary>
-	/// <param name="revocationRequest">The revocation request to be validated. Contains the token to be revoked and client information.</param>
+	/// <param name="revocationRequest">
+	/// The revocation request to be validated. Contains the token to be revoked and client information.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a
@@ -75,24 +79,22 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 		var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			return new RevocationRequestValidationError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new RevocationRequestValidationError(
+				ErrorCodes.InvalidClient,
+				"The client is not authorized");
 		}
 
 		var result = await _jwtValidator.ValidateAsync(revocationRequest.Token);
 		switch (result)
 		{
+			case ValidJsonWebToken { Token.Payload.ClientId: var clientId } when clientId != clientInfo.ClientId:
+				//TODO maybe log the message: The token was issued to another client?
+				return ValidRevocationRequest.InvalidToken(revocationRequest);
+
 			case ValidJsonWebToken { Token: var token }:
-
-				var clientId = token.Payload.ClientId;
-				if (clientId != clientInfo.ClientId)
-				{
-					//TODO maybe log the message: The token was issued to another client?
-					return ValidRevocationRequest.InvalidToken(revocationRequest);
-				}
-
 				return new ValidRevocationRequest(revocationRequest, token);
 
-			case JwtValidationError error: //TODO log error
+			case JwtValidationError: //TODO log error
 				return ValidRevocationRequest.InvalidToken(revocationRequest);
 
 			default:

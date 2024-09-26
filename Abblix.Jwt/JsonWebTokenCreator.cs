@@ -65,7 +65,7 @@ public sealed class JsonWebTokenCreator : IJsonWebTokenCreator
         {
             TokenType = jwt.Header.Type,
             Issuer = jwt.Payload.Issuer,
-            Audience = jwt.Payload.Audiences?.SingleOrDefault(), //TODO replace JwtSecurityTokenHandler with own code to overcome this limitation
+            Audience = jwt.Payload.Audiences.SingleOrDefault(), //TODO replace JwtSecurityTokenHandler with own code to overcome this limitation
 
             IssuedAt = CheckDateOverflow(jwt.Payload.IssuedAt, nameof(jwt.Payload.IssuedAt)),
             NotBefore = CheckDateOverflow(jwt.Payload.NotBefore, nameof(jwt.Payload.NotBefore)),

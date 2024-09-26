@@ -22,7 +22,6 @@
 
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
@@ -57,18 +56,21 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 public sealed class AuthenticationController : ControllerBase
 {
     /// <summary>
-    /// Handles the pushed authorization endpoint. This endpoint is used for receiving and processing pushed authorization requests
-    /// from clients, validating the request, and generating a response that either contains a URI for the stored authorization request
-    /// or an error message.
+    /// Handles the pushed authorization endpoint. This endpoint is used for receiving and processing pushed
+    /// authorization requests from clients, validating the request, and generating a response that either contains
+    /// a URI for the stored authorization request or an error message.
     /// </summary>
     /// <param name="handler">The handler responsible for processing pushed authorization requests.</param>
     /// <param name="formatter">The service for formatting the authorization response.</param>
     /// <param name="authorizationRequest">The authorization request received from the client.</param>
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
-    /// <returns>An action result containing the formatted authorization response, which can be a success or an error response.</returns>
+    /// <returns>
+    /// An action result containing the formatted authorization response, which can be a success or an error response.
+    /// </returns>
     /// <remarks>
-    /// This method first validates the incoming authorization request. If the request is valid, it is processed and stored,
-    /// and a response containing the request URI is returned. If the request is invalid, an error response is generated.
+    /// This method first validates the incoming authorization request.
+    /// If the request is valid, it is processed and stored, and a response containing the request URI is returned.
+    /// If the request is invalid, an error response is generated.
     /// </remarks>
     [HttpPost(Path.PushAuthorizationRequest)]
     [Consumes(MediaTypes.FormUrlEncoded)]
@@ -86,7 +88,8 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Handles requests to the authorization endpoint, performing user authentication and getting consent for requested scopes.
+    /// Handles requests to the authorization endpoint, performing user authentication and getting consent for
+    /// requested scopes.
     /// </summary>
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
@@ -201,13 +204,33 @@ public sealed class AuthenticationController : ControllerBase
     }
 
     /// <summary>
-    /// Handles the backchannel authentication endpoint, initiating an out-of-band authentication process.
+    /// Handles the backchannel authentication endpoint, initiating the authentication flow that occurs outside
+    /// the traditional user-agent interaction as specified by CIBA.
     /// </summary>
     /// <remarks>
+    /// The method implements the CIBA (Client-Initiated Backchannel Authentication) protocol,
+    /// enabling the authentication of a user through an out-of-band mechanism.
+    /// Clients initiate the authentication request, and the user's authentication happens through a separate channel
+    /// (e.g., mobile device).
+    ///
+    /// For more details, refer to the CIBA documentation:
     /// <see href="https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7">
     /// CIBA - Client Initiated Backchannel Authentication Documentation
     /// </see>
     /// </remarks>
+    /// <param name="handler">
+    /// Service that processes the authentication request, validating and initiating the backchannel flow.</param>
+    /// <param name="formatter">
+    /// Service that formats the response to the client, based on the result of the backchannel authentication request.
+    /// </param>
+    /// <param name="authenticationRequest">
+    /// The backchannel authentication request containing user-related authentication parameters.</param>
+    /// <param name="clientRequest">
+    /// The client request providing the client-related information needed for the request.</param>
+    /// <returns>
+    /// An <see cref="ActionResult"/> representing the HTTP response to the backchannel authentication request.
+    /// The response may indicate successful initiation of the process or an error if the request fails validation.
+    /// </returns>
     [HttpPost(Path.BackchannelAuthentication)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
@@ -218,9 +241,7 @@ public sealed class AuthenticationController : ControllerBase
     {
         var mappedAuthenticationRequest = authenticationRequest.Map();
         var mappedClientRequest = clientRequest.Map();
-
         var response = await handler.HandleAsync(mappedAuthenticationRequest, mappedClientRequest);
-
         return await formatter.FormatResponseAsync(mappedAuthenticationRequest, response);
     }
 

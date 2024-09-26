@@ -246,7 +246,7 @@ public record ConfigurationResponse
     /// enabling clients to send a fully self-contained authorization request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestParameterSupported)]
-    public bool RequestParameterSupported { init; get; } = default!;
+    public bool RequestParameterSupported { init; get; }
 
     /// <summary>
     /// Lists the prompt values supported by the OpenID Provider,
@@ -261,7 +261,7 @@ public record ConfigurationResponse
     /// and authentication of the information source.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSigningAlgValuesSupported)]
-    public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; } = default!;
+    public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for request objects.
@@ -269,7 +269,7 @@ public record ConfigurationResponse
     /// security measures against tampering and ensuring the authenticity of the request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectSigningAlgValuesSupported)]
-    public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; } = default!;
+    public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.

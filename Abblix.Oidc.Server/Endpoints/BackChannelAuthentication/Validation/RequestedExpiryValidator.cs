@@ -69,7 +69,7 @@ public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidato
         {
             context.ExpiresIn = _options.Value.BackChannelAuthentication.DefaultExpiry;
         }
-        else if (_options.Value.BackChannelAuthentication.MaximumExpiry >= context.Request.RequestedExpiry.Value)
+        else if (context.Request.RequestedExpiry.Value <= _options.Value.BackChannelAuthentication.MaximumExpiry)
         {
             context.ExpiresIn = context.Request.RequestedExpiry.Value;
         }

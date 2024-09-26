@@ -76,37 +76,35 @@ public abstract class RequestObjectFetcherBase
     protected async Task<OperationResult<T>> FetchAsync<T>(T request, string? requestObject)
         where T : class
     {
-        if (requestObject.HasValue())
+        if (!requestObject.HasValue())
+            return request;
+
+        _logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
+
+        JwtValidationResult? result;
+        using (var scope = _serviceProvider.CreateScope())
         {
-            _logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
-
-            JwtValidationResult? result;
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-                (result, _) = await tokenValidator.ValidateAsync(
-                    requestObject, ValidationOptions.ValidateIssuerSigningKey);
-            }
-
-            switch (result)
-            {
-                case ValidJsonWebToken { Token.Payload.Json: var payload }:
-                    var updatedRequest = await _jsonObjectBinder.BindModelAsync(payload, request);
-                    if (updatedRequest == null)
-                        return InvalidRequestObject("Unable to bind request object");
-
-                    return updatedRequest;
-
-                case JwtValidationError error:
-                    _logger.LogWarning("The request object contains invalid token: {@Error}", error);
-                    return InvalidRequestObject("The request object is invalid.");
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
-            }
+            var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
+            (result, _) = await tokenValidator.ValidateAsync(
+                requestObject, ValidationOptions.ValidateIssuerSigningKey);
         }
 
-        return request;
+        switch (result)
+        {
+            case ValidJsonWebToken { Token.Payload.Json: var payload }:
+                var updatedRequest = await _jsonObjectBinder.BindModelAsync(payload, request);
+                if (updatedRequest == null)
+                    return InvalidRequestObject("Unable to bind request object");
+
+                return updatedRequest;
+
+            case JwtValidationError error:
+                _logger.LogWarning("The request object contains invalid token: {@Error}", error);
+                return InvalidRequestObject("The request object is invalid.");
+
+            default:
+                throw new UnexpectedTypeException(nameof(result), result.GetType());
+        }
 
         static OperationResult<T>.Error InvalidRequestObject(string description)
             => new(ErrorCodes.InvalidRequestObject, description);
