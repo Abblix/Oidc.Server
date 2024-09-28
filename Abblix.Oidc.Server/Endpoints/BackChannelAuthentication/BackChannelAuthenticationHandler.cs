@@ -74,11 +74,11 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
         var fetchResult = await _fetcher.FetchAsync(request);
         switch (fetchResult)
         {
-            case OperationResult<BackChannelAuthenticationRequest>.Success(var requestObject):
+            case Result<BackChannelAuthenticationRequest>.Success(var requestObject):
                 request = requestObject;
                 break;
 
-            case OperationResult<BackChannelAuthenticationRequest>.Error(var error, var description):
+            case Result<BackChannelAuthenticationRequest>.Error(var error, var description):
                 return new BackChannelAuthenticationError(error, description);
 
             default:

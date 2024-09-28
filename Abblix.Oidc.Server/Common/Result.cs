@@ -29,15 +29,15 @@ namespace Abblix.Oidc.Server.Common;
 /// <typeparamref name="T"/>, or result in an error with an error code and description.
 /// </summary>
 /// <typeparam name="T">The type of the value returned in case of a successful result.</typeparam>
-public abstract record OperationResult<T>
+public abstract record Result<T>
 {
-    private OperationResult() { }
+    private Result() { }
 
     /// <summary>
-    /// Represents a successful result containing a value of type <typeparamref name="T"/>.
+    /// Represents a successful result containing a value of specific type.
     /// </summary>
     /// <param name="Value">The value returned by the successful operation.</param>
-    public sealed record Success(T Value) : OperationResult<T>
+    public sealed record Success(T Value) : Result<T>
     {
         /// <summary>
         /// Returns a string that represents the current object, either the successful value or an error description.
@@ -54,7 +54,7 @@ public abstract record OperationResult<T>
     /// </summary>
     /// <param name="ErrorCode">The code representing the type or cause of the error.</param>
     /// <param name="ErrorDescription">A human-readable description of the error.</param>
-    public sealed record Error(string ErrorCode, string ErrorDescription) : OperationResult<T>
+    public sealed record Error(string ErrorCode, string ErrorDescription) : Result<T>
     {
         /// <summary>
         /// Returns a string that represents the current object, either the successful value or an error description.
@@ -71,12 +71,12 @@ public abstract record OperationResult<T>
     /// Implicitly converts a value of type <typeparamref name="T"/> into a successful <see cref="Success"/> result.
     /// </summary>
     /// <param name="value">The value to be wrapped as a successful result.</param>
-    public static implicit operator OperationResult<T>(T value) => new Success(value);
+    public static implicit operator Result<T>(T value) => new Success(value);
 
     /// <summary>
     /// Implicitly converts an <see cref="ErrorResponse"/> into an <see cref="Error"/> result.
     /// </summary>
     /// <param name="error">The error response to be wrapped as an error result.</param>
-    public static implicit operator OperationResult<T>(ErrorResponse error)
+    public static implicit operator Result<T>(ErrorResponse error)
         => new Error(error.Error, error.ErrorDescription);
 }

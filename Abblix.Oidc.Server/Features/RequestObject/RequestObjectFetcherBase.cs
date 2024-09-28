@@ -66,14 +66,14 @@ public abstract class RequestObjectFetcherBase
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result contains an <see cref="OperationResult{T}"/>
+    /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
     /// <remarks>
     /// This method is used to decode and validate the JWT contained in the request. If the JWT is valid, the payload
     /// is bound to the request model. If the JWT is invalid, an error is returned and logged.
     /// </remarks>
-    protected async Task<OperationResult<T>> FetchAsync<T>(T request, string? requestObject)
+    protected async Task<Result<T>> FetchAsync<T>(T request, string? requestObject)
         where T : class
     {
         if (!requestObject.HasValue())
@@ -106,7 +106,7 @@ public abstract class RequestObjectFetcherBase
                 throw new UnexpectedTypeException(nameof(result), result.GetType());
         }
 
-        static OperationResult<T>.Error InvalidRequestObject(string description)
+        static Result<T>.Error InvalidRequestObject(string description)
             => new(ErrorCodes.InvalidRequestObject, description);
     }
 }

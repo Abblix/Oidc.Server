@@ -32,7 +32,7 @@ internal static class StringExtensions
 	/// </summary>
 	/// <param name="values">The array of strings to check.</param>
 	/// <param name="flag">The flag to search for.</param>
-	/// <returns>True if the flag is found; otherwise, false.</returns>
+	/// <returns>True, if the flag is found, otherwise, false.</returns>
 	public static bool HasFlag(this string[]? values, string flag)
 		=> values != null && values.Contains(flag, StringComparer.OrdinalIgnoreCase);
 
@@ -56,7 +56,8 @@ internal static class StringExtensions
 		var result = new List<string>(sourceValues.Length);
 		foreach (var sourceValue in sourceValues)
 		{
-			var allowedValue = allowedValues.FirstOrDefault(value => string.Equals(value, sourceValue, StringComparison.OrdinalIgnoreCase));
+			var allowedValue = allowedValues.FirstOrDefault(
+				value => string.Equals(value, sourceValue, StringComparison.OrdinalIgnoreCase));
 			if (allowedValue == null)
 			{
 				values = default!;

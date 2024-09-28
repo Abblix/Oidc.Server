@@ -81,9 +81,9 @@ public class RequestObjectFetcher : RequestObjectFetcherBase, IAuthorizationRequ
         var fetchResult = await FetchAsync(request, request.Request);
         return fetchResult switch
         {
-            OperationResult<AuthorizationRequest>.Success(var authorizationRequest) => authorizationRequest,
+            Result<AuthorizationRequest>.Success(var authorizationRequest) => authorizationRequest,
 
-            OperationResult<AuthorizationRequest>.Error(var error, var description)
+            Result<AuthorizationRequest>.Error(var error, var description)
                 => ErrorFactory.ValidationError(error, description),
 
             _ => throw new UnexpectedTypeException(nameof(fetchResult), fetchResult.GetType()),

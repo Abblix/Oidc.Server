@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// Array of redirection URIs for the OP to redirect the End-User after obtaining authorization.
+    /// Array of redirection URIs for the OP to redirect the End-User after getting authorization.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [Required]
@@ -312,8 +312,9 @@ public record ClientRegistrationRequest
     /// <c>true</c> if the front-channel logout requires a session identifier; otherwise, <c>false</c>.
     /// </value>
     /// <remarks>
-    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect specification.
-    /// When set to <c>true</c>, it indicates that the client requires a session identifier to be sent with front-channel logout requests.
+    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect
+    /// specification. When set to <c>true</c>, it indicates that the client requires a session identifier
+    /// to be sent with front-channel logout requests.
     /// This is typically used to facilitate logout across multiple sessions or devices.
     /// </remarks>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
