@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// Array of redirection URIs for the OP to redirect the End-User after obtaining authorization.
+    /// Array of redirection URIs for the OP to redirect the End-User after getting authorization.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [Required]
@@ -312,8 +312,9 @@ public record ClientRegistrationRequest
     /// <c>true</c> if the front-channel logout requires a session identifier; otherwise, <c>false</c>.
     /// </value>
     /// <remarks>
-    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect specification.
-    /// When set to <c>true</c>, it indicates that the client requires a session identifier to be sent with front-channel logout requests.
+    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect
+    /// specification. When set to <c>true</c>, it indicates that the client requires a session identifier
+    /// to be sent with front-channel logout requests.
     /// This is typically used to facilitate logout across multiple sessions or devices.
     /// </remarks>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
@@ -322,6 +323,22 @@ public record ClientRegistrationRequest
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
     public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
+
+    [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
+    [AllowedValues(
+        BackchannelTokenDeliveryModes.Ping,
+        BackchannelTokenDeliveryModes.Poll,
+        BackchannelTokenDeliveryModes.Push)]
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
+    public bool? BackChannelUserCodeParameter { get; set; }
 
     public static class Parameters
     {
@@ -363,5 +380,9 @@ public record ClientRegistrationRequest
         public const string FrontChannelLogoutUri = "frontchannel_logout_uri";
         public const string FrontChannelLogoutSessionRequired = "frontchannel_logout_session_required";
         public const string PostLogoutRedirectUris = "post_logout_redirect_uris";
+        public const string BackChannelTokenDeliveryMode = "backchannel_token_delivery_mode";
+        public const string BackChannelClientNotificationEndpoint = "backchannel_client_notification_endpoint";
+        public const string BackChannelAuthenticationRequestSigningAlg = "backchannel_authentication_request_signing_alg";
+        public const string BackChannelUserCodeParameter = "backchannel_user_code_parameter";
     }
 }

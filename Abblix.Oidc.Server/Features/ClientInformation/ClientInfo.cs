@@ -215,4 +215,6 @@ public record ClientInfo(string ClientId)
     /// as the authorization server will not handle its validation automatically.
     /// </remarks>
     public bool ParseLoginHintTokenAsJwt { get; set; } = true;
+
+    public bool BackChannelUserCodeParameter { get; set; } = false;
 }

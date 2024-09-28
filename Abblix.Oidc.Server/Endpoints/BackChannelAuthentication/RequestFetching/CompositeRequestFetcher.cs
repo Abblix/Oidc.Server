@@ -55,18 +55,18 @@ public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>A <see cref="FetchResult"/> that represents the outcome of the fetching process.
     /// It could be a success, fault, or an unexpected type error if the result is not handled correctly.</returns>
-    public async Task<OperationResult<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
+    public async Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
     {
         foreach (var fetcher in _fetchers)
         {
             var result = await fetcher.FetchAsync(request);
             switch (result)
             {
-                case OperationResult<BackChannelAuthenticationRequest>.Success(var success):
+                case Result<BackChannelAuthenticationRequest>.Success(var success):
                     request = success;
                     continue;
 
-                case OperationResult<BackChannelAuthenticationRequest>.Error error:
+                case Result<BackChannelAuthenticationRequest>.Error error:
                     return error;
 
                 default:

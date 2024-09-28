@@ -61,7 +61,7 @@ public class RequestObjectFetcher : RequestObjectFetcherBase, IBackChannelAuthen
     /// encapsulates the full request details.
     /// </param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result contains an <see cref="OperationResult{T}"/>
+    /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T}"/>
     /// with either a successfully processed <see cref="Model.BackChannelAuthenticationRequest"/> or an error result
     /// indicating validation issues.
     /// </returns>
@@ -70,8 +70,8 @@ public class RequestObjectFetcher : RequestObjectFetcherBase, IBackChannelAuthen
     /// the backchannel authentication request.
     /// If the JWT is valid, it binds the JWT payload to the backchannel authentication request model.
     /// If the JWT is invalid, the method logs a warning and returns an error result encapsulated in
-    /// an <see cref="OperationResult{T}"/>.
+    /// an <see cref="Result{T}"/>.
     /// </remarks>
-    public Task<OperationResult<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
+    public Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
         => FetchAsync(request, request.Request);
 }

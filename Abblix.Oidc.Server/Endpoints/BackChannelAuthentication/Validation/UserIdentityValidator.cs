@@ -123,11 +123,11 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
             var idTokenResult = await ValidateIdTokenHint(context, request.IdTokenHint);
             switch (idTokenResult)
             {
-                case OperationResult<JsonWebToken>.Success(var idToken):
+                case Result<JsonWebToken>.Success(var idToken):
                     context.IdToken = idToken;
                     break;
 
-                case OperationResult<JsonWebToken>.Error(var error, var description):
+                case Result<JsonWebToken>.Error(var error, var description):
                     return new BackChannelAuthenticationValidationError(error, description);
             }
         }
@@ -141,10 +141,10 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
     /// <param name="context">The validation context containing the client information.</param>
     /// <param name="idTokenHint">The ID token hint string to be validated.</param>
     /// <returns>
-    /// An <see cref="OperationResult{JsonWebToken}"/> representing the validation result,
+    /// An <see cref="Result{T}"/> representing the validation result,
     /// which can either be a successful token or an error.
     /// </returns>
-    private async Task<OperationResult<JsonWebToken>> ValidateIdTokenHint(
+    private async Task<Result<JsonWebToken>> ValidateIdTokenHint(
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
@@ -173,7 +173,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
         }
 
         // Helper method to generate an error response for invalid requests
-        OperationResult<JsonWebToken>.Error InvalidRequest(string description)
+        Result<JsonWebToken>.Error InvalidRequest(string description)
             => new (ErrorCodes.InvalidRequest, description);
     }
 }

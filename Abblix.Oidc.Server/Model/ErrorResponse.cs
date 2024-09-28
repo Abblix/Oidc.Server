@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <summary>
 /// Represents a standardized error response, commonly used in web APIs and OAuth2/OpenID Connect protocols.
 /// </summary>
-public record ErrorResponse(string Error, string ErrorDescription)
+public readonly record struct ErrorResponse(string Error, string ErrorDescription)
 {
 	/// <summary>
 	/// The error code representing the specific type of error encountered.

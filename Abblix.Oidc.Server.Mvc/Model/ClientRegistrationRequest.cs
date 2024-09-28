@@ -334,6 +334,22 @@ public record ClientRegistrationRequest
     [ElementsRequired]
     public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
 
+    [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
+    [AllowedValues(
+        BackchannelTokenDeliveryModes.Ping,
+        BackchannelTokenDeliveryModes.Poll,
+        BackchannelTokenDeliveryModes.Push)]
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
+    public bool? BackChannelUserCodeParameter { get; set; }
+
     /// <summary>
     /// Maps the properties of this client registration request to a <see cref="Core.ClientRegistrationRequest"/>
     /// object. This method is used to translate the request data into a format that can be processed by the core
@@ -389,6 +405,11 @@ public record ClientRegistrationRequest
             FrontChannelLogoutSessionRequired = FrontChannelLogoutSessionRequired,
 
             PostLogoutRedirectUris = PostLogoutRedirectUris,
+
+            BackChannelTokenDeliveryMode = BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = BackChannelClientNotificationEndpoint,
+            BackChannelAuthenticationRequestSigningAlg = BackChannelAuthenticationRequestSigningAlg,
+            BackChannelUserCodeParameter = BackChannelUserCodeParameter,
         };
     }
 }

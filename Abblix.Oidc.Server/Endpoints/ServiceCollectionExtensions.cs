@@ -397,6 +397,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>()
             .AddSingleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>()
             .AddSingleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>()
+            .AddSingleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>()
             .Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
     }
 }

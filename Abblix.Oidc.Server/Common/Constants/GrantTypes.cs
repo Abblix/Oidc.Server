@@ -40,13 +40,13 @@ public static class GrantTypes
     public const string ClientCredentials = "client_credentials";
 
     /// <summary>
-    /// Represents the Refresh Token grant type. Used to obtain a new access token using a refresh token.
-    /// Helpful for maintaining user sessions without requiring reauthentication.
+    /// Represents the Refresh Token grant type. Used to get a new access token using a refresh token.
+    /// Helpful for maintaining user sessions without requiring re-authentication.
     /// </summary>
     public const string RefreshToken = "refresh_token";
 
     /// <summary>
-    /// Represents the Implicit grant type. Used in single-page applications to obtain access tokens directly
+    /// Represents the Implicit grant type. Used in single-page applications to get access tokens directly
     /// from the authorization endpoint. Suitable for browser-based applications.
     /// </summary>
     public const string Implicit = "implicit";
@@ -71,7 +71,7 @@ public static class GrantTypes
 
     /// <summary>
     /// Represents the Device Authorization grant type. This grant type is used in scenarios where the client device
-    /// lacks a browser or has limited input capabilities, allowing it to obtain user authorization from another device
+    /// lacks a browser or has limited input capabilities, allowing it to get user authorization from another device
     /// with better input capabilities. It is particularly useful for devices in the IoT (Internet of Things) sector
     /// and smart devices that require user interaction for authorization.
     /// </summary>

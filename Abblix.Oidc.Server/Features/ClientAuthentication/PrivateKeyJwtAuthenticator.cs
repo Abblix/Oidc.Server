@@ -74,83 +74,86 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
     }
 
     /// <summary>
-    /// Attempts to authenticate a client using the Private Key JWT method by validating the JWT provided in the client request.
+    /// Attempts to authenticate a client using the Private Key JWT method by validating the JWT provided in
+    /// the client request.
     /// </summary>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
     /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
-        if (request.ClientAssertionType == ClientAssertionTypes.JwtBearer)
+        if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
         {
-            if (!request.ClientAssertion.HasValue())
-            {
-                _logger.LogWarning(
-                    $"{ClientAssertionType} is '{ClientAssertionTypes.JwtBearer}', but {ClientAssertion} is empty");
-                return null;
-            }
-
-            JwtValidationResult? result;
-            ClientInfo? clientInfo;
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-                (result, clientInfo) = await tokenValidator.ValidateAsync(request.ClientAssertion);
-            }
-
-            JsonWebToken token;
-            switch (result, clientInfo)
-            {
-                case (ValidJsonWebToken validToken, { TokenEndpointAuthMethod: ClientAuthenticationMethods.PrivateKeyJwt }):
-                    token = validToken.Token;
-                    break;
-
-                case (ValidJsonWebToken, clientInfo: not null):
-                    _logger.LogWarning(
-                        "The authentication method is not allowed for the client {@ClientId}",
-                        clientInfo.ClientId);
-                    return null;
-
-                case (ValidJsonWebToken, clientInfo: null):
-                    _logger.LogWarning("Something went wrong, token cannot be validated without client specified");
-                    return null;
-
-                case (JwtValidationError error, _):
-                    _logger.LogWarning("Invalid PrivateKeyJwt: {@Error}", error);
-                    return null;
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
-            }
-
-            string? subject;
-            try
-            {
-                subject = token.Payload.Subject;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning("Invalid PrivateKeyJwt: {Message}", ex.Message);
-                return null;
-            }
-
-            var issuer = token.Payload.Issuer;
-            if (issuer == null || subject == null || issuer != subject)
-            {
-                _logger.LogWarning(
-                    "Invalid PrivateKeyJwt: iss is \'{Issuer}\', but sub is {Subject}",
-                    issuer, subject);
-
-                return null;
-            }
-
-            if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt } })
-            {
-                await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
-            }
-
-            return clientInfo;
+            _logger.LogWarning(
+                $"{ClientAssertionType} is not '{ClientAssertionTypes.JwtBearer}'");
+            return null;
         }
 
-        return null;
+        if (!request.ClientAssertion.HasValue())
+        {
+            _logger.LogWarning(
+                $"{ClientAssertionType} is '{ClientAssertionTypes.JwtBearer}', but {ClientAssertion} is empty");
+            return null;
+        }
+
+        JwtValidationResult? result;
+        ClientInfo? clientInfo;
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
+            (result, clientInfo) = await tokenValidator.ValidateAsync(request.ClientAssertion);
+        }
+
+        JsonWebToken token;
+        switch (result, clientInfo)
+        {
+            case (ValidJsonWebToken validToken, { TokenEndpointAuthMethod: ClientAuthenticationMethods.PrivateKeyJwt }):
+                token = validToken.Token;
+                break;
+
+            case (ValidJsonWebToken, clientInfo: not null):
+                _logger.LogWarning(
+                    "The authentication method is not allowed for the client {@ClientId}",
+                    clientInfo.ClientId);
+                return null;
+
+            case (ValidJsonWebToken, clientInfo: null):
+                _logger.LogWarning("Something went wrong, token cannot be validated without client specified");
+                return null;
+
+            case (JwtValidationError error, _):
+                _logger.LogWarning("Invalid PrivateKeyJwt: {@Error}", error);
+                return null;
+
+            default:
+                throw new UnexpectedTypeException(nameof(result), result.GetType());
+        }
+
+        string? subject;
+        try
+        {
+            subject = token.Payload.Subject;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Invalid PrivateKeyJwt: {Message}", ex.Message);
+            return null;
+        }
+
+        var issuer = token.Payload.Issuer;
+        if (issuer == null || subject == null || issuer != subject)
+        {
+            _logger.LogWarning(
+                "Invalid PrivateKeyJwt: iss is \'{Issuer}\', but sub is {Subject}",
+                issuer, subject);
+
+            return null;
+        }
+
+        if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt } })
+        {
+            await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
+        }
+
+        return clientInfo;
     }
 }

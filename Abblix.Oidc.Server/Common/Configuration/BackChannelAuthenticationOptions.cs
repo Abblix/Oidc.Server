@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -60,4 +62,8 @@ public record BackChannelAuthenticationOptions
     /// This value ensures that each backchannel authentication request is uniquely identified.
     /// </summary>
     public int RequestIdLength { get; set; } = 64;
+
+    public IEnumerable<string>? TokenDeliveryModesSupported { get; set; } = new[] { BackchannelTokenDeliveryModes.Poll };
+
+    public bool UserCodeParameterSupported { get; set; } = false;
 }

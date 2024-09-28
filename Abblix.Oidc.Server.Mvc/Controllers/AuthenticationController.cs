@@ -231,7 +231,7 @@ public sealed class AuthenticationController : ControllerBase
     /// An <see cref="ActionResult"/> representing the HTTP response to the backchannel authentication request.
     /// The response may indicate successful initiation of the process or an error if the request fails validation.
     /// </returns>
-    [HttpPost(Path.BackchannelAuthentication)]
+    [HttpPost(Path.BackChannelAuthentication)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,

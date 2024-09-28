@@ -194,4 +194,7 @@ public record OidcOptions
 	/// This value determines the length of the unique ID assigned to tokens.
 	/// </summary>
 	public int TokenIdLength { get; set; } = 64;
+
+	public bool RequirePushedAuthorizationRequests { get; set; } = false;
+	public bool RequireSignedRequestObject { get; set; } = false;
 }

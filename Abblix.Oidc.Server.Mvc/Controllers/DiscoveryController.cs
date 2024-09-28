@@ -21,8 +21,6 @@
 // info@abblix.com
 
 using System.Net.Mime;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -130,11 +128,19 @@ public sealed class DiscoveryController : ControllerBase
 				? jwtValidator.SigningAlgValuesSupported
 				: null,
 
+			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
+			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
+
 			IdTokenSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
 			UserInfoSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
+
+			BackChannelAuthenticationEndpoint = Resolve(Path.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
+			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
+			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
+			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
 		};
 
-		return Task.FromResult<ActionResult<ConfigurationResponse>>(Json(response));
+		return Task.FromResult<ActionResult<ConfigurationResponse>>(response);
 
 		Uri? Resolve(string contentPath, OidcEndpoints enablingFlag)
 			=> options.Value.Discovery.AllowEndpointPathsDiscovery && options.Value.EnabledEndpoints.HasFlag(enablingFlag)
@@ -163,14 +169,6 @@ public sealed class DiscoveryController : ControllerBase
 			return NotFound();
 
 		var keys = await serviceKeysProvider.GetSigningKeys().ToArrayAsync();
-		return Json(new JsonWebKeySet(keys));
+		return new JsonWebKeySet(keys);
 	}
-
-	private static JsonResult Json(object response) => new(
-		response,
-		new JsonSerializerOptions
-		{
-			WriteIndented = true,
-			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-		});
 }
