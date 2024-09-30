@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -48,12 +49,13 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
     private readonly IClientJwtValidator _clientJwtValidator;
 
     /// <summary>
-    /// Validates the user's identity based on the available identity hints (e.g., login hint, login hint token, ID token hint).
-    /// It ensures that only one hint is present, and processes the provided hint to establish the user's identity.
+    /// Validates the user's identity based on the provided identity hints, such as login hint, login hint token,
+    /// or ID token hint. It ensures that only one identity hint is present and attempts to process the hint
+    /// to confirm the user's identity.
     /// </summary>
-    /// <param name="context">The validation context containing the backchannel authentication request.</param>
+    /// <param name="context">Contains the backchannel authentication request and client information.</param>
     /// <returns>
-    /// A <see cref="BackChannelAuthenticationValidationError"/> if the identity validation fails,
+    /// Returns a <see cref="BackChannelAuthenticationValidationError"/> if the identity validation fails,
     /// or null if the identity is successfully validated.
     /// </returns>
     public async Task<BackChannelAuthenticationValidationError?> ValidateAsync(
@@ -61,57 +63,58 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
     {
         var request = context.Request;
 
-        // Count the number of identity hints provided (LoginHint, LoginHintToken, IdTokenHint)
+        // Count the number of identity hints (LoginHint, LoginHintToken, IdTokenHint) provided in the request
         var userIdentityCount = new[]
             {
-                request.LoginHint,
-                request.LoginHintToken,
-                request.IdTokenHint,
+                request.LoginHint,        // Regular login hint
+                request.LoginHintToken,   // JWT-based login hint token
+                request.IdTokenHint       // ID token hint provided by the client
             }
             .Count(id => id.HasValue());
 
-        // Ensure exactly one identity hint is provided
         switch (userIdentityCount)
         {
             case 1:
-                break; // Valid scenario
+                break; // Valid scenario: exactly one hint is provided
 
             case 0:
+                // No identity hint is present; return an error indicating the user's identity is unknown
                 return new BackChannelAuthenticationValidationError(
                     ErrorCodes.InvalidRequest, "The user's identity is unknown.");
 
             default:
+                // Multiple identity hints provided; return an error indicating ambiguity
                 return new BackChannelAuthenticationValidationError(
                     ErrorCodes.InvalidRequest,
                     "User identity is not determined due to conflicting hints.");
         }
 
-        // Validate the LoginHintToken if present and configured to parse as JWT
+        // Validate the LoginHintToken if it is provided and the client is configured to parse it as a JWT
         if (request.LoginHintToken.HasValue() && context.ClientInfo.ParseLoginHintTokenAsJwt)
         {
             var (loginHintTokenResult, clientInfo) = await _clientJwtValidator.ValidateAsync(request.LoginHintToken);
             switch (loginHintTokenResult, clientInfo)
             {
-                // Successful validation and the client matches
-                case (ValidJsonWebToken { Token: var loginHintToken }, { ClientId: var clientId})
-                    when clientId == context.ClientInfo.ClientId:
-
-                    context.LoginHintToken = loginHintToken;
-                    break;
-
                 // The token was issued for another client
-                case (ValidJsonWebToken, not null):
+                case (ValidJsonWebToken, { ClientId: var clientId})
+                    when clientId != context.ClientInfo.ClientId:
 
                     return new BackChannelAuthenticationValidationError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken issued by another client.");
 
-                // JWT validation failed
+                // If the token is valid and issued for the correct client, store it in the validation context
+                case (ValidJsonWebToken { Token: var loginHintToken }, _):
+                    context.LoginHintToken = loginHintToken;
+                    break;
+
+                    // If JWT validation fails, return an error
                 case (JwtValidationError, _):
                     return new BackChannelAuthenticationValidationError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken validation failed.");
 
+                // Unexpected cases should result in an exception
                 default:
                     throw new InvalidOperationException("Something went wrong.");
             }
@@ -123,10 +126,12 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
             var idTokenResult = await ValidateIdTokenHint(context, request.IdTokenHint);
             switch (idTokenResult)
             {
+                // If successful, store the validated token in the context
                 case Result<JsonWebToken>.Success(var idToken):
                     context.IdToken = idToken;
                     break;
 
+                // If validation fails, return the error with the appropriate message
                 case Result<JsonWebToken>.Error(var error, var description):
                     return new BackChannelAuthenticationValidationError(error, description);
             }
@@ -148,32 +153,35 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
-        // Validate the ID token hint but skip lifetime validation
+        // Validate the ID token hint, ensuring that it is a well-formed token except validation of its lifetime.
         var result = await _idTokenValidator.ValidateAsync(
             idTokenHint,
             ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
-        // Check if the token was issued for the correct client
+        // Analyze the validation result, checking if the token was issued for the correct client
         switch (result)
         {
+            // If the token's audience doesn't match the client specified in the validation context, return an error.
             case ValidJsonWebToken { Token.Payload.Audiences: var audiences }
                 when !audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal):
 
-                return InvalidRequest(
+                return new ErrorResponse(
+                    ErrorCodes.InvalidRequest,
                     "The id token hint contains token issued for the client other than specified");
 
+            // If the token validation resulted in an error, return an invalid request error response.
             case JwtValidationError:
-                return InvalidRequest("The id token hint contains invalid token");
+                return new ErrorResponse(
+                    ErrorCodes.InvalidRequest,
+                    "The id token hint contains invalid token");
 
+            // If the token is valid, return it as the successful result.
             case ValidJsonWebToken { Token: var idToken }:
                 return idToken;
 
+            // If none of the above cases match, an unexpected result occurred, so throw an exception.
             default:
                 throw new UnexpectedTypeException(nameof(result), result.GetType());
         }
-
-        // Helper method to generate an error response for invalid requests
-        Result<JsonWebToken>.Error InvalidRequest(string description)
-            => new (ErrorCodes.InvalidRequest, description);
     }
 }

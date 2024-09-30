@@ -342,6 +342,7 @@ public static class ServiceCollectionExtensions
                 .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>()
                 .Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }
 

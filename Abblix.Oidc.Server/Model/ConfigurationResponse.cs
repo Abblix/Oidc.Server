@@ -33,9 +33,7 @@ namespace Abblix.Oidc.Server.Model;
 public record ConfigurationResponse
 {
     /// <summary>
-    /// Nested class containing string constants for JSON property names used in the configuration response.
-    /// These names map directly to the fields returned by the OpenID Connect discovery document, ensuring
-    /// proper serialization and deserialization of configuration data.
+    /// Nested class containing string constants for JSON property names.
     /// </summary>
     public static class Parameters
     {
@@ -139,8 +137,7 @@ public record ConfigurationResponse
     public Uri? RegistrationEndpoint { init; get; }
 
     /// <summary>
-    /// The URL for the Pushed Authorization Request endpoint, which allows clients to pre-register authorization
-    /// requests.
+    /// The URL for the Pushed Authorization Request endpoint, which allows clients to pre-register authorization requests.
     /// </summary>
     [JsonPropertyName(Parameters.PushedAuthorizationRequestEndpoint)]
     public Uri? PushedAuthorizationRequestEndpoint { get; set; }
@@ -149,7 +146,7 @@ public record ConfigurationResponse
     /// Indicates whether the provider requires clients to use the Pushed Authorization Requests (PAR) only.
     /// </summary>
     [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
-    public bool? RequirePushedAuthorizationRequests { get; set; }
+    public bool RequirePushedAuthorizationRequests { get; set; } //TODO use it!
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports front channel logout, allowing clients to log out users
@@ -284,29 +281,31 @@ public record ConfigurationResponse
     /// integrity of request objects received by the provider.
     /// </summary>
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
-    public bool? RequireSignedRequestObject { init; get; } //TODO use it!
+    public bool RequireSignedRequestObject { init; get; } //TODO use it!
 
     /// <summary>
-    /// Lists the supported backchannel token delivery modes for client-initiated backchannel authentication.
+    /// Lists the backchannel token delivery modes supported by the OpenID Provider,
+    /// indicating how backchannel tokens can be delivered during the authentication process.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelTokenDeliveryModesSupported)]
     public IEnumerable<string>? BackChannelTokenDeliveryModesSupported { get; init; }
 
     /// <summary>
-    /// The backchannel authentication endpoint for initiating CIBA (Client-Initiated Backchannel Authentication)
-    /// requests.
+    /// The URL of the backchannel authentication endpoint, where clients can initiate backchannel authentication requests.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelAuthenticationEndpoint)]
     public Uri? BackChannelAuthenticationEndpoint { get; init; }
 
     /// <summary>
-    /// Lists the supported signing algorithms for backchannel authentication requests.
+    /// Lists the signing algorithms supported for backchannel authentication requests, ensuring
+    /// the security and authenticity of the requests.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelAuthenticationRequestSigningAlgValuesSupported)]
     public IEnumerable<string>? BackChannelAuthenticationRequestSigningAlgValuesSupported { get; init; }
 
     /// <summary>
-    /// Indicates whether the OpenID Provider supports the backchannel user code parameter for CIBA.
+    /// Indicates whether the OpenID Provider supports the backchannel user code parameter,
+    /// which can be used to authenticate users during the backchannel authentication process.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
     public bool? BackChannelUserCodeParameterSupported { get; init; }

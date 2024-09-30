@@ -216,5 +216,24 @@ public record ClientInfo(string ClientId)
     /// </remarks>
     public bool ParseLoginHintTokenAsJwt { get; set; } = true;
 
+    /// <summary>
+    /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
+    /// during backchannel authentication.
+    /// </summary>
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    /// <summary>
+    /// The endpoint where backchannel client notifications are sent for this client.
+    /// </summary>
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The signing algorithm used for backchannel authentication requests sent to this client.
+    /// </summary>
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    /// <summary>
+    /// Indicates whether the backchannel authentication process supports user codes for this client.
+    /// </summary>
     public bool BackChannelUserCodeParameter { get; set; } = false;
 }

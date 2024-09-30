@@ -320,10 +320,18 @@ public record ClientRegistrationRequest
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
     public bool? FrontChannelLogoutSessionRequired { get; set; } = false;
 
+    /// <summary>
+    /// Array of URIs to which the OP will redirect the user's user agent after logging out.
+    /// These URIs are used to continue the user's browsing session after logout.
+    /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
     public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
 
+    /// <summary>
+    /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
+    /// during backchannel authentication.
+    /// </summary>
     [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
     [AllowedValues(
         BackchannelTokenDeliveryModes.Ping,
@@ -331,14 +339,24 @@ public record ClientRegistrationRequest
         BackchannelTokenDeliveryModes.Push)]
     public string? BackChannelTokenDeliveryMode { get; set; }
 
+    /// <summary>
+    /// The endpoint where backchannel client notifications are sent for this client.
+    /// </summary>
     [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
+    [AbsoluteUri]
     public Uri? BackChannelClientNotificationEndpoint { get; set; }
 
+    /// <summary>
+    /// The signing algorithm used for backchannel authentication requests sent to this client.
+    /// </summary>
     [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
     public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
 
+    /// <summary>
+    /// Indicates whether the backchannel authentication process supports user codes for this client.
+    /// </summary>
     [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
-    public bool? BackChannelUserCodeParameter { get; set; }
+    public bool BackChannelUserCodeParameter { get; set; } = false;
 
     public static class Parameters
     {

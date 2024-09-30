@@ -137,7 +137,7 @@ public sealed class DiscoveryController : ControllerBase
 			BackChannelAuthenticationEndpoint = Resolve(Path.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
 			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
 			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
-			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
+			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgValuesSupported,
 		};
 
 		return Task.FromResult<ActionResult<ConfigurationResponse>>(response);

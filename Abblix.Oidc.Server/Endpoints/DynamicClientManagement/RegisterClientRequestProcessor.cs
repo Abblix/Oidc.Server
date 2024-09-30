@@ -170,6 +170,10 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
             SubjectType = model.SubjectType,
             SectorIdentifier = sectorIdentifier,
             PostLogoutRedirectUris = model.PostLogoutRedirectUris,
+            BackChannelTokenDeliveryMode = model.BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
+            BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
+            BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
         };
 
         if (model.UserInfoSignedResponseAlg.HasValue())

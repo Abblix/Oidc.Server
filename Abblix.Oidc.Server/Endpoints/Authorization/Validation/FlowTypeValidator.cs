@@ -62,20 +62,66 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
     protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
     {
         var responseType = context.Request.ResponseType;
+
+        if (!ResponseTypeAllowed(context))
+        {
+	        _logger.LogWarning("The response type {@ResponseType} is not allowed for the client", new object?[] { responseType });
+	        return UnsupportedResponseType("The response type is not allowed for the client");
+        }
+
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            _logger.LogWarning("The response type {@ResponseType} is not valid", new object?[] { responseType });
-
-            context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
-
-            return context.Error(
-                ErrorCodes.UnsupportedResponseType,
-                "The response type is not supported");
+	        _logger.LogWarning("The response type {@ResponseType} is not valid", new object?[] { responseType });
+	        return UnsupportedResponseType("The response type is not supported");
         }
 
         context.FlowType = flowType;
         context.ResponseMode = responseMode;
         return null;
+
+        AuthorizationRequestValidationError UnsupportedResponseType(string message)
+        {
+	        context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
+
+	        return context.Error(
+		        ErrorCodes.UnsupportedResponseType,
+		        message);
+        }
+    }
+
+    /// <summary>
+    /// Validates whether the requested response type in an authorization request matches any of the allowed
+    /// response types registered for the client.
+    /// This ensures that the client is using a valid and permitted OAuth/OpenID Connect flow.
+    /// </summary>
+    /// <param name="context">The authorization validation context containing the client and request details.</param>
+    /// <returns>
+    /// A boolean indicating whether the requested response type is allowed for the client.
+    /// </returns>
+    private static bool ResponseTypeAllowed(AuthorizationValidationContext context)
+    {
+	    var responseType = context.Request.ResponseType;
+
+	    // If the response type is not specified, it means the request is invalid
+	    if (responseType == null)
+		    return false;
+
+	    // Define the string comparer commonly used for comparison
+	    var responseTypeComparer = StringComparer.Ordinal;
+
+	    // Sort the requested response type array to ensure order-independent comparison
+	    Array.Sort(responseType, responseTypeComparer);
+
+	    // Check if any of the allowed response types exactly match the pre-sorted requested response type
+	    return context.ClientInfo.AllowedResponseTypes.Any(
+		    allowedResponseType =>
+		    {
+			    // Sort the allowed response type array to ensure consistent comparison regardless of the order
+			    Array.Sort(allowedResponseType, responseTypeComparer);
+
+			    // Use sequence comparison to check if the allowed response type matches the requested one
+			    return allowedResponseType.SequenceEqual(responseType, responseTypeComparer);
+		    });
     }
 
     /// <summary>
