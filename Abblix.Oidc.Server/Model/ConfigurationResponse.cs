@@ -68,10 +68,6 @@ public record ConfigurationResponse
         public const string PushedAuthorizationRequestEndpoint = "pushed_authorization_request_endpoint";
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
         public const string RequireSignedRequestObject = "require_signed_request_object";
-        public const string BackchannelTokenDeliveryModesSupported = "backchannel_token_delivery_modes_supported";
-        public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
-        public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
-        public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
     }
 
     /// <summary>
@@ -282,31 +278,4 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
     public bool RequireSignedRequestObject { init; get; } //TODO use it!
-
-    /// <summary>
-    /// Lists the backchannel token delivery modes supported by the OpenID Provider,
-    /// indicating how backchannel tokens can be delivered during the authentication process.
-    /// </summary>
-    [JsonPropertyName(Parameters.BackchannelTokenDeliveryModesSupported)]
-    public IEnumerable<string>? BackChannelTokenDeliveryModesSupported { get; init; }
-
-    /// <summary>
-    /// The URL of the backchannel authentication endpoint, where clients can initiate backchannel authentication requests.
-    /// </summary>
-    [JsonPropertyName(Parameters.BackchannelAuthenticationEndpoint)]
-    public Uri? BackChannelAuthenticationEndpoint { get; init; }
-
-    /// <summary>
-    /// Lists the signing algorithms supported for backchannel authentication requests, ensuring
-    /// the security and authenticity of the requests.
-    /// </summary>
-    [JsonPropertyName(Parameters.BackchannelAuthenticationRequestSigningAlgValuesSupported)]
-    public IEnumerable<string>? BackChannelAuthenticationRequestSigningAlgValuesSupported { get; init; }
-
-    /// <summary>
-    /// Indicates whether the OpenID Provider supports the backchannel user code parameter,
-    /// which can be used to authenticate users during the backchannel authentication process.
-    /// </summary>
-    [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
-    public bool? BackChannelUserCodeParameterSupported { get; init; }
 }
