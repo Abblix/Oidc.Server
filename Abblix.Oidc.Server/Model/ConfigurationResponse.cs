@@ -284,7 +284,7 @@ public record ConfigurationResponse
     /// integrity of request objects received by the provider.
     /// </summary>
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
-    public bool? RequireSignedRequestObject { init; get; } //TODO use it!
+    public bool? RequireSignedRequestObject { init; get; }
 
     /// <summary>
     /// Lists the supported backchannel token delivery modes for client-initiated backchannel authentication.
