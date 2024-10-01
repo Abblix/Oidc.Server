@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// (CIBA). These modes specify how the authentication server communicates the result of the backchannel authentication
 /// process to the client.
 /// </summary>
-public class BackchannelTokenDeliveryModes
+public static class BackchannelTokenDeliveryModes
 {
     /// <summary>
     /// The "poll" mode where the client periodically polls the authorization server to check if the user has been

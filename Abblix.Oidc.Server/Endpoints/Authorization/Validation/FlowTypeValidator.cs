@@ -90,9 +90,8 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
     }
 
     /// <summary>
-    /// Validates whether the requested response type in an authorization request matches any of the allowed
-    /// response types registered for the client.
-    /// This ensures that the client is using a valid and permitted OAuth/OpenID Connect flow.
+    /// Validates whether the requested response type in an authorization request matches any of the allowed response
+    /// types registered for the client. This ensures the client uses a valid and permitted OAuth/OpenID Connect flow.
     /// </summary>
     /// <param name="context">The authorization validation context containing the client and request details.</param>
     /// <returns>
@@ -106,22 +105,14 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
 	    if (responseType == null)
 		    return false;
 
-	    // Define the string comparer commonly used for comparison
-	    var responseTypeComparer = StringComparer.Ordinal;
+	    // Convert the requested response type array into a hashset for faster lookup
+	    var responseTypeSet = responseType.ToHashSet(StringComparer.Ordinal);
 
-	    // Sort the requested response type array to ensure order-independent comparison
-	    Array.Sort(responseType, responseTypeComparer);
-
-	    // Check if any of the allowed response types exactly match the pre-sorted requested response type
-	    return context.ClientInfo.AllowedResponseTypes.Any(
-		    allowedResponseType =>
-		    {
-			    // Sort the allowed response type array to ensure consistent comparison regardless of the order
-			    Array.Sort(allowedResponseType, responseTypeComparer);
-
-			    // Use sequence comparison to check if the allowed response type matches the requested one
-			    return allowedResponseType.SequenceEqual(responseType, responseTypeComparer);
-		    });
+	    // Check if any of the allowed response types matches the requested response type
+	    return Array.Exists(
+		    context.ClientInfo.AllowedResponseTypes,
+		    allowedResponseType => responseTypeSet.Count == allowedResponseType.Length &&
+		                           Array.TrueForAll(allowedResponseType, responseTypeSet.Contains));
     }
 
     /// <summary>
