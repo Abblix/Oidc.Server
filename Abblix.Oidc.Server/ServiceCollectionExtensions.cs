@@ -111,7 +111,8 @@ public static class ServiceCollectionExtensions
 			.AddRandomGenerators()
 			.AddLogoutNotification()
 			.AddStorages()
-			.AddUserInfo();
+			.AddUserInfo()
+			.AddRequestObject();
 	}
 
 	/// <summary>

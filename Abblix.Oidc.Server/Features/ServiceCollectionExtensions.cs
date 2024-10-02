@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SessionManagement;
@@ -386,6 +387,22 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds request object fetching capabilities to the dependency injection container.
+    /// Registers services required for processing JWT request objects, including their validation
+    /// and binding to the appropriate request properties.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to which the user claims provider services will be
+    /// added. This collection is a mechanism for adding and retrieving dependencies in .NET applications, often used
+    /// to configure dependency injection in ASP.NET Core applications.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/> after adding the services, allowing for further
+    /// modifications and additions to be chained.</returns>
+    public static IServiceCollection AddRequestObject(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IRequestObjectFetcher, RequestObjectFetcher>();
         return services;
     }
 }

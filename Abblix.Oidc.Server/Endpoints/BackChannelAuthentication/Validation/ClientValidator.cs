@@ -68,7 +68,7 @@ public class ClientValidator : IBackChannelAuthenticationContextValidator
         if (!clientInfo.AllowedGrantTypes.Contains(GrantTypes.Ciba))
         {
             return new BackChannelAuthenticationValidationError(
-                ErrorCodes.UnauthorizedClient, "The client does not allow the given grant type");
+                ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
         }
 
         context.ClientInfo = clientInfo;

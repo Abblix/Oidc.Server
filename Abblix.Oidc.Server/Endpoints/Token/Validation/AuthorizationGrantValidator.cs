@@ -29,12 +29,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
 /// Validates the authorization grant in the context of a token request, ensuring that the request is authorized
-/// and that the associated redirect URI matches the one used during the initial authorization request.
+/// and that the associated redirect URI matches the one used during the initial authorization request
 /// </summary>
 /// <remarks>
 /// This validator interacts with the <see cref="IAuthorizationGrantHandler"/> to perform the necessary checks
 /// on the authorization grant. It ensures that the token request is made for an authorized grant and verifies
-/// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context.
+/// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context
 /// </remarks>
 public class AuthorizationGrantValidator: ITokenContextValidator
 {
@@ -63,6 +63,7 @@ public class AuthorizationGrantValidator: ITokenContextValidator
     /// </returns>
     public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
     {
+        // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.AllowedGrantTypes.Contains(context.Request.GrantType))
         {
             return new TokenRequestError(
@@ -73,19 +74,25 @@ public class AuthorizationGrantValidator: ITokenContextValidator
         var result = await _grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
         switch (result)
         {
+            // Deny the request if the grant is invalid, providing the specific reason for rejection
             case InvalidGrantResult { Error: var error, ErrorDescription: var description }:
                 return new TokenRequestError(error, description);
 
+            // Ensure that the redirect URI used matches the original authorization request
+            // to prevent redirection attacks
             case AuthorizedGrant { Context.RedirectUri: var redirectUri }
                 when redirectUri != context.Request.RedirectUri:
                 return new TokenRequestError(
                     ErrorCodes.InvalidGrant,
                     "The redirect Uri value does not match to the value used before");
 
+            // Accept the request if the grant is valid, and securely store it in the validation context
+            // for further processing
             case AuthorizedGrant grant:
                 context.AuthorizedGrant = grant;
                 return null;
 
+            // Handle any unexpected results in a way that ensures predictability in the flow
             default:
                 throw new UnexpectedTypeException(nameof(result), result.GetType());
         }

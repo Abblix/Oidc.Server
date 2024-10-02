@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <summary>
 /// Handles the authorization process for backchannel authentication requests under the Client-Initiated Backchannel
 /// Authentication (CIBA) grant type.
-/// This handler is responsible for validating the token request based on the backchannel authentication flow, ensuring
+/// This handler validates the token request based on the backchannel authentication flow, ensuring
 /// that the client is authorized and that the user has been authenticated before tokens are issued.
 /// </summary>
 public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
@@ -44,16 +44,20 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
     /// </summary>
     /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
     /// <param name="parameterValidator">The service to validate request parameters.</param>
+    /// <param name="timeProvider">Provides access to the current time.</param>
     public BackChannelAuthenticationGrantHandler(
         IBackChannelAuthenticationStorage storage,
-        IParameterValidator parameterValidator)
+        IParameterValidator parameterValidator,
+        TimeProvider timeProvider)
     {
         _storage = storage;
         _parameterValidator = parameterValidator;
+        _timeProvider = timeProvider;
     }
 
     private readonly IBackChannelAuthenticationStorage _storage;
     private readonly IParameterValidator _parameterValidator;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
@@ -82,44 +86,58 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
     /// </returns>
     public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
-        // Check if the request contains a valid authentication request ID.
+        // Check if the request contains a valid authentication request ID
         _parameterValidator.Required(request.AuthenticationRequestId, nameof(request.AuthenticationRequestId));
 
-        // Try to retrieve the corresponding backchannel authentication request from storage.
+        // Try to retrieve the corresponding backchannel authentication request from storage
         var authenticationRequest = await _storage.TryGetAsync(request.AuthenticationRequestId);
 
-        // Determine the outcome of the authorization based on the state of the backchannel authentication request.
-        return authenticationRequest switch
+        // Determine the outcome of the authorization based on the state of the backchannel authentication request
+        switch (authenticationRequest)
         {
-            // If the request is not found or has expired, return an error indicating token expiration.
-            null => new InvalidGrantResult(
-                ErrorCodes.ExpiredToken,
-                "The authentication request has expired."),
+            // If the user has been authenticated, remove the request and return the authorized grant
+            case { Status: BackChannelAuthenticationStatus.Authenticated, AuthorizedGrant: { } authorizedGrant }:
+                await _storage.RemoveAsync(request.AuthenticationRequestId);
+                return authorizedGrant;
 
-            // If the client making the request is not the same as the one that initiated the authentication,
-            // return an unauthorized error.
-            { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId
-                => new InvalidGrantResult(
+            // If the request is not found or has expired, return an error indicating token expiration
+            case null:
+                return new InvalidGrantResult(
+                    ErrorCodes.ExpiredToken,
+                    "The authentication request has expired");
+
+            // If the client making the request is not the same as the one that initiated the authentication
+            case { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId:
+                return new InvalidGrantResult(
                     ErrorCodes.UnauthorizedClient,
-                    "The authentication request was started by another client."),
+                    "The authentication request was started by another client");
+
+            // If the request is still pending and not yet time to poll again
+            case { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: {} nextPollAt }
+                when _timeProvider.GetUtcNow() < nextPollAt:
+
+                return new InvalidGrantResult(
+                    ErrorCodes.SlowDown,
+                    "The authorization request is still pending as the user hasn't been authenticated");
 
             // If the user has not yet been authenticated and the request is still pending,
-            // return an error indicating that authorization is pending.
-            { Status: BackChannelAuthenticationStatus.Pending } => new InvalidGrantResult(
-                ErrorCodes.AuthorizationPending,
-                "The authorization request is still pending as the user hasn't been authenticated."),
+            // return an error indicating that authorization is pending
+            case { Status: BackChannelAuthenticationStatus.Pending }:
+                return new InvalidGrantResult(
+                    ErrorCodes.AuthorizationPending,
+                    "The authorization request is still pending. " +
+                    "The polling interval must be increased by at least 5 seconds for all subsequent requests.");
 
-            // If the user denied the authentication request, return an error indicating access is denied.
-            { Status: BackChannelAuthenticationStatus.Denied } => new InvalidGrantResult(
-                ErrorCodes.AccessDenied,
-                "The authorization request is denied by the user."),
+            // If the user denied the authentication request, return an error indicating access is denied
+            case { Status: BackChannelAuthenticationStatus.Denied }:
+                return new InvalidGrantResult(
+                    ErrorCodes.AccessDenied,
+                    "The authorization request is denied by the user.");
 
-            // If the user has been authenticated, return the authorized grant for token issuance.
-            { Status: BackChannelAuthenticationStatus.Authenticated } => authenticationRequest.AuthorizedGrant,
-
-            // Handle any unexpected statuses by throwing an exception.
-            _ => throw new InvalidOperationException(
-                $"The authentication request status is unexpected: {authenticationRequest.Status}.")
-        };
+            // Capture any unexpected case as an exception
+            default:
+                throw new InvalidOperationException(
+                    $"The authentication request status is unexpected: {authenticationRequest.Status}.");
+        }
     }
 }

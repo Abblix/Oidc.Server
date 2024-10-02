@@ -108,7 +108,10 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
                     context.LoginHintToken = loginHintToken;
                     break;
 
-                    // If JWT validation fails, return an error
+                case (JwtValidationError { Error: JwtError.InvalidToken }, _):
+                    break;
+
+                // If JWT validation fails, return an error
                 case (JwtValidationError, _):
                     return new BackChannelAuthenticationValidationError(
                         ErrorCodes.InvalidRequest,

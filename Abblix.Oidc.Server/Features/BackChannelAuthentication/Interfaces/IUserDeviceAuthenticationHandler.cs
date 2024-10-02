@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -34,12 +35,14 @@ public interface IUserDeviceAuthenticationHandler
 {
     /// <summary>
     /// Initiates the authentication process for the user on their device, based on a validated backchannel
-    /// authentication request. This may involve sending a notification to the user’s device, starting an out-of-band
+    /// authentication request.
+    /// This may involve sending a notification to the user’s device, starting an out-of-band
     /// authentication process, or performing other steps required to authenticate the user asynchronously.
     /// </summary>
     /// <param name="request">The validated backchannel authentication request containing user and client information
     /// required to initiate the authentication process.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation to initiate the authentication process.
+    /// <returns>
+    /// A <see cref="Task"/> representing the asynchronous operation to initiate the authentication process.
     /// </returns>
-    Task<AuthSession> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request);
+    Task<Result<AuthSession>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request);
 }

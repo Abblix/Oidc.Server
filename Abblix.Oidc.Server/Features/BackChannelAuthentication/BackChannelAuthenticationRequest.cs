@@ -25,26 +25,26 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
 /// <summary>
-/// Represents a backchannel authentication request in the context of Client-Initiated Backchannel Authentication
-/// (CIBA), which is used to authenticate users without requiring direct interaction with their device at the time
-/// of authentication.
+/// Represents a backchannel authentication request as part of the Client-Initiated Backchannel Authentication (CIBA)
+/// protocol.
+/// This request facilitates the authentication of users without requiring immediate interaction with their devices,
+/// allowing for a more flexible and user-friendly authentication experience.
 /// </summary>
+/// <param name="AuthorizedGrant">
+/// The authorized grant associated with this authentication request,
+/// containing details about the user's authorization context.
+/// </param>
 public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant)
 {
     /// <summary>
-    /// Holds the current status of the backchannel authentication request.
-    /// This property tracks the lifecycle of the authentication process, indicating whether it is pending, completed,
-    /// or encountered an error. Managing the status is crucial to properly handling polling or notification mechanisms
-    /// as clients await a response to the backchannel authentication request.
+    /// Specifies the next time the client should poll for updates regarding the authentication request.
+    /// This helps manage the timing of polling requests efficiently.
     /// </summary>
-    public BackChannelAuthenticationStatus Status { get; init; } = BackChannelAuthenticationStatus.Pending;
+    public DateTimeOffset? NextPollAt { get; set; }
 
     /// <summary>
-    /// Represents the grant that has been authorized as a result of the backchannel authentication request.
-    /// Once the user has been successfully authenticated and the request validated, this property contains the
-    /// necessary data to issue tokens. It encapsulates information about the authenticated session, including
-    /// permissions and resources that the client is granted access to. This is a key element for securely
-    /// issuing access and ID tokens following the completion of the backchannel authentication process.
+    /// Indicates the current status of the backchannel authentication request.
+    /// Defaults to Pending, reflecting that the request has not yet been resolved.
     /// </summary>
-    public AuthorizedGrant AuthorizedGrant { get; init; } = AuthorizedGrant;
+    public BackChannelAuthenticationStatus Status { get; set; } = BackChannelAuthenticationStatus.Pending;
 }

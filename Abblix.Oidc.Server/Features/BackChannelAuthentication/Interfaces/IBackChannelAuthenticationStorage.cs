@@ -22,8 +22,41 @@
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
+/// <summary>
+/// Defines the contract for a storage system responsible for persisting and retrieving
+/// backchannel authentication requests in the context of Client-Initiated Backchannel Authentication (CIBA).
+/// </summary>
 public interface IBackChannelAuthenticationStorage
 {
+	/// <summary>
+	/// Asynchronously stores a backchannel authentication request in the storage system.
+	/// This method saves the provided authentication request and sets its expiration based on the specified duration.
+	/// </summary>
+	/// <param name="authenticationRequest">The backchannel authentication request to store.</param>
+	/// <param name="expiresIn">The duration after which the stored request will expire.</param>
+	/// <returns>
+	/// A task that represents the asynchronous operation, containing the ID of the stored authentication request.
+	/// </returns>
 	Task<string> StoreAsync(BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn);
+
+	/// <summary>
+	/// Tries to retrieve a backchannel authentication request by its unique identifier.
+	/// This method checks if a request exists for the specified ID and returns it if found.
+	/// </summary>
+	/// <param name="authenticationRequestId">The unique identifier of the authentication request to retrieve.</param>
+	/// <returns>
+	/// A task that represents the asynchronous operation, containing the authentication request if found;
+	/// otherwise, null.
+	/// </returns>
 	Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId);
+
+	/// <summary>
+	/// Removes a backchannel authentication request from the storage system using its unique identifier.
+	/// This method allows for cleanup of expired or completed authentication requests.
+	/// </summary>
+	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
+	/// <returns>
+	/// A task that represents the asynchronous operation of removing the request from storage.
+	/// </returns>
+	Task RemoveAsync(string authenticationRequestId);
 }

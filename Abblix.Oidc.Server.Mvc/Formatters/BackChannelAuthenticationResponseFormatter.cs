@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -58,23 +57,22 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     {
         return Task.FromResult<ActionResult>(response switch
         {
-            // If the authentication was successful, return a 200 OK response with the success details.
+            // If the authentication was successful, return a 200 OK response with the success details
             BackChannelAuthenticationSuccess success => new OkObjectResult(success),
 
-            // If the error indicates an invalid client, return a 401 Unauthorized response.
-            BackChannelAuthenticationError { Error: ErrorCodes.InvalidClient, ErrorDescription: var description }
-                => new UnauthorizedObjectResult(new ErrorResponse(ErrorCodes.InvalidClient, description)),
+            // If the error indicates an invalid client, return a 401 Unauthorized response
+            BackChannelAuthenticationUnauthorized { Error: var error, ErrorDescription: var description }
+                => new UnauthorizedObjectResult(new ErrorResponse(error, description)),
 
-            // If access was denied, return a 403 Forbidden response.
-            BackChannelAuthenticationError { Error: ErrorCodes.AccessDenied, ErrorDescription: var description }
-                => new ObjectResult(new ErrorResponse(ErrorCodes.InvalidClient, description))
-                        { StatusCode = StatusCodes.Status403Forbidden },
+            // If access was denied, return a 403 Forbidden response
+            BackChannelAuthenticationForbidden { Error: var error, ErrorDescription: var description }
+                => new ObjectResult(new ErrorResponse(error, description)) { StatusCode = StatusCodes.Status403Forbidden },
 
-            // For any other type of error, return a 400 Bad Request response.
+            // For any other type of error, return a 400 Bad Request response
             BackChannelAuthenticationError { Error: var error, ErrorDescription: var description }
                 => new BadRequestObjectResult(new ErrorResponse(error, description)),
 
-            // If the response type is unexpected, throw an exception for further debugging.
+            // If the response type is unexpected, throw an exception for further debugging
             _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
         });
     }
