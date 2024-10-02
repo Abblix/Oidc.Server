@@ -90,7 +90,7 @@ public class RequestObjectFetcher : IRequestObjectFetcher
 
         _logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
 
-        var result = await ValidateAsync<T>(requestObject);
+        var result = await ValidateAsync(requestObject);
         switch (result)
         {
             // If the JWT is valid and contains a JSON payload, bind it to the request
@@ -114,7 +114,6 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// Validates the JWT request object to ensure it complies with the required signing algorithm
     /// and structure, based on the OIDC options.
     /// </summary>
-    /// <typeparam name="T">The type of the request model.</typeparam>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains a <see cref="JwtValidationResult"/>
@@ -124,7 +123,7 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// This method uses the configured OIDC options to determine whether the JWT must be signed and validates
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
-    private async Task<Result<JsonObject>> ValidateAsync<T>(string requestObject)
+    private async Task<Result<JsonObject>> ValidateAsync(string requestObject)
     {
         // Set validation options, requiring the token to be signed if specified in the OIDC options
         var options = ValidationOptions.ValidateIssuerSigningKey;
