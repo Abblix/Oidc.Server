@@ -50,7 +50,7 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
     /// <param name="options">Options that define how request object validation is handled, including whether
     /// request objects must be signed.</param>
-    protected RequestObjectFetcher(
+    public RequestObjectFetcher(
         ILogger<RequestObjectFetcher> logger,
         IJsonObjectBinder jsonObjectBinder,
         IServiceProvider serviceProvider,
