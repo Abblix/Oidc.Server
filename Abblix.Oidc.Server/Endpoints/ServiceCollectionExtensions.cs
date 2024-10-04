@@ -379,10 +379,13 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddBackChannelAuthenticationContextValidators()
+
             .AddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>()
             .AddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>()
             .AddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>()
             .AddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>()
+
+            .AddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>()
             .AddScoped<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
     }
 
