@@ -35,6 +35,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 {
+    private static readonly string[] RequiringRedirectUri = {
+        GrantTypes.AuthorizationCode,
+        GrantTypes.Implicit,
+        GrantTypes.RefreshToken,
+    };
+
     /// <summary>
     /// Validates Redirect URIs in the client registration request.
     /// </summary>
@@ -46,48 +52,52 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     {
         var request = context.Request;
 
-        if (request.RedirectUris.Length == 0)
-            return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} is required");
-
-        foreach (var uri in request.RedirectUris)
+        if (request.GrantTypes.Intersect(RequiringRedirectUri, StringComparer.Ordinal).Any())
         {
-            if (uri is not { IsAbsoluteUri : true })
-                return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} must contain only absolute URIs");
+            if (request.RedirectUris.Length == 0)
+                return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} is required");
 
-            if (uri.Fragment.HasValue())
-                return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} must not contain fragment");
-
-            var applicationType = context.Request.ApplicationType;
-            switch (applicationType)
+            foreach (var uri in request.RedirectUris)
             {
-                case ApplicationTypes.Web when uri.Scheme != Uri.UriSchemeHttps:
-                    // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
+                if (uri is not { IsAbsoluteUri : true })
                     return ErrorFactory.InvalidRedirectUri(
-                        $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
+                        $"{Parameters.RedirectUris} must contain only absolute URIs");
 
-                case ApplicationTypes.Web when IsLocalhost(uri):
-                    // they MUST NOT use localhost as the hostname
-                    return ErrorFactory.InvalidRedirectUri(
-                        $"{Parameters.RedirectUris} must not use host name {uri.Host}");
+                if (uri.Fragment.HasValue())
+                    return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} must not contain fragment");
 
-                case ApplicationTypes.Web:
-                    break;
+                var applicationType = context.Request.ApplicationType;
+                switch (applicationType)
+                {
+                    case ApplicationTypes.Web when uri.Scheme != Uri.UriSchemeHttps:
+                        // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
+                        return ErrorFactory.InvalidRedirectUri(
+                            $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
-                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsLocalhost(uri):
-                    // Native Clients MUST only register redirect_uris using the http: scheme with localhost as the hostname
-                    return ErrorFactory.InvalidRedirectUri(
-                        $"Native Clients MUST only register {Parameters.RedirectUris} using the http: scheme with localhost as the hostname");
+                    case ApplicationTypes.Web when IsLocalhost(uri):
+                        // they MUST NOT use localhost as the hostname
+                        return ErrorFactory.InvalidRedirectUri(
+                            $"{Parameters.RedirectUris} must not use host name {uri.Host}");
 
-                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
-                    // Native Clients MUST only register redirect_uris using custom URI schemes
-                    return ErrorFactory.InvalidRedirectUri(
-                        $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes");
+                    case ApplicationTypes.Web:
+                        break;
 
-                case ApplicationTypes.Native:
-                    break;
+                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsLocalhost(uri):
+                        // Native Clients MUST only register redirect_uris using the http: scheme with localhost as the hostname
+                        return ErrorFactory.InvalidRedirectUri(
+                            $"Native Clients MUST only register {Parameters.RedirectUris} using the http: scheme with localhost as the hostname");
 
-                default:
-                    throw new UnexpectedTypeException(nameof(applicationType), applicationType.GetType());
+                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
+                        // Native Clients MUST only register redirect_uris using custom URI schemes
+                        return ErrorFactory.InvalidRedirectUri(
+                            $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes");
+
+                    case ApplicationTypes.Native:
+                        break;
+
+                    default:
+                        throw new UnexpectedTypeException(nameof(applicationType), applicationType.GetType());
+                }
             }
         }
 

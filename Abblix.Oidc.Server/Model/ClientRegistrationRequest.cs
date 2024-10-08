@@ -41,7 +41,6 @@ public record ClientRegistrationRequest
     /// Array of redirection URIs for the OP to redirect the End-User after getting authorization.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
-    [Required]
     [ElementsRequired]
     public Uri[] RedirectUris { get; set; } = default!;
 
