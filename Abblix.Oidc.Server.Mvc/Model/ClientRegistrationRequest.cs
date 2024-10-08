@@ -23,6 +23,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -69,7 +70,8 @@ public record ClientRegistrationRequest
     [AllowedValues(
         Common.Constants.GrantTypes.AuthorizationCode,
         Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken)]
+        Common.Constants.GrantTypes.RefreshToken,
+        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
 
     /// <summary>

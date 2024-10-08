@@ -63,7 +63,8 @@ public record ClientRegistrationRequest
     [AllowedValues(
         Common.Constants.GrantTypes.AuthorizationCode,
         Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken)]
+        Common.Constants.GrantTypes.RefreshToken,
+        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
 
     /// <summary>
@@ -73,7 +74,7 @@ public record ClientRegistrationRequest
     public string ApplicationType { get; init; } = ApplicationTypes.Web;
 
     /// <summary>
-    /// Array of e-mail addresses of people responsible for this client.
+    /// E-mail addresses of people responsible for this client.
     /// </summary>
     [JsonPropertyName(Parameters.Contacts)]
     public string[]? Contacts { get; init; }

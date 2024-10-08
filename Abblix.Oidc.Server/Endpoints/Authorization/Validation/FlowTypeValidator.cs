@@ -24,10 +24,7 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-
 using Microsoft.Extensions.Logging;
-
-
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -38,8 +35,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
 {
+    private readonly ILogger _logger;
+
     /// <summary>
-    /// Initializes a new instance of the <see cref="FlowTypeValidator"/> class with a logger.
+    /// Initializes a new instance of the <see cref="FlowTypeValidator" /> class with a logger.
     /// The logger is used for recording the validation activities, aiding in troubleshooting and auditing.
     /// </summary>
     /// <param name="logger">The logger to be used for logging purposes.</param>
@@ -48,15 +47,13 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
         _logger = logger;
     }
 
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the flow type specified in the authorization request.
     /// This method checks if the flow type is supported and aligns with the OAuth 2.0 specifications.
     /// </summary>
     /// <param name="context">The validation context containing client and request information.</param>
     /// <returns>
-    /// An <see cref="AuthorizationRequestValidationError"/> if the flow type is not valid or supported,
+    /// An <see cref="AuthorizationRequestValidationError" /> if the flow type is not valid or supported,
     /// or null if the flow type is valid.
     /// </returns>
     protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
@@ -65,14 +62,15 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
 
         if (!ResponseTypeAllowed(context))
         {
-	        _logger.LogWarning("The response type {@ResponseType} is not allowed for the client", new object?[] { responseType });
-	        return UnsupportedResponseType("The response type is not allowed for the client");
+            _logger.LogWarning("The response type {@ResponseType} is not allowed for the client",
+                new object?[] { responseType });
+            return UnsupportedResponseType("The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-	        _logger.LogWarning("The response type {@ResponseType} is not valid", new object?[] { responseType });
-	        return UnsupportedResponseType("The response type is not supported");
+            _logger.LogWarning("The response type {@ResponseType} is not valid", new object?[] { responseType });
+            return UnsupportedResponseType("The response type is not supported");
         }
 
         context.FlowType = flowType;
@@ -81,11 +79,11 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
 
         AuthorizationRequestValidationError UnsupportedResponseType(string message)
         {
-	        context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
+            context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
 
-	        return context.Error(
-		        ErrorCodes.UnsupportedResponseType,
-		        message);
+            return context.Error(
+                ErrorCodes.UnsupportedResponseType,
+                message);
         }
     }
 
@@ -99,20 +97,20 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
     /// </returns>
     private static bool ResponseTypeAllowed(AuthorizationValidationContext context)
     {
-	    var responseType = context.Request.ResponseType;
+        var responseType = context.Request.ResponseType;
 
-	    // If the response type is not specified, it means the request is invalid
-	    if (responseType == null)
-		    return false;
+        // If the response type is not specified, it means the request is invalid
+        if (responseType == null)
+            return false;
 
-	    // Convert the requested response type array into a hashset for faster lookup
-	    var responseTypeSet = responseType.ToHashSet(StringComparer.Ordinal);
+        // Convert the requested response type array into a hashset for faster lookup
+        var responseTypeSet = responseType.ToHashSet(StringComparer.Ordinal);
 
-	    // Check if any of the allowed response types matches the requested response type
-	    return Array.Exists(
-		    context.ClientInfo.AllowedResponseTypes,
-		    allowedResponseType => responseTypeSet.Count == allowedResponseType.Length &&
-		                           Array.TrueForAll(allowedResponseType, responseTypeSet.Contains));
+        // Check if any of the allowed response types matches the requested response type
+        return Array.Exists(
+            context.ClientInfo.AllowedResponseTypes,
+            allowedResponseType => responseTypeSet.Count == allowedResponseType.Length &&
+                                   Array.TrueForAll(allowedResponseType, responseTypeSet.Contains));
     }
 
     /// <summary>
@@ -122,19 +120,20 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
     /// <param name="flowType">The detected flow type, if successful.</param>
     /// <param name="responseMode">The default response mode for the detected flow type, if successful.</param>
     /// <returns>A boolean value indicating whether the detection was successful.</returns>
-	private static bool TryDetectFlowType([NotNullWhen(true)] string[]? responseType, out FlowTypes flowType, out string responseMode)
-	{
-		var code = responseType.HasFlag(ResponseTypes.Code);
-		var token = responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
+    private static bool TryDetectFlowType([NotNullWhen(true)] string[]? responseType, out FlowTypes flowType,
+        out string responseMode)
+    {
+        var code = responseType.HasFlag(ResponseTypes.Code);
+        var token = responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
 
-		(var result, flowType, responseMode) = (code, token) switch
-		{
-			(code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
-			(code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
-			(code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
-			_ => (false, default, default!),
-		};
+        (var result, flowType, responseMode) = (code, token) switch
+        {
+            (code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
+            (code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
+            (code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
+            _ => (false, default, default!)
+        };
 
-		return result;
-	}
+        return result;
+    }
 }
