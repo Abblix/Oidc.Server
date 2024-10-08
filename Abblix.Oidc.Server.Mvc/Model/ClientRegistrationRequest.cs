@@ -48,7 +48,6 @@ public record ClientRegistrationRequest
     /// These URIs are used in the client's authorization request and are crucial for the redirect flow in OAuth2 and OpenID Connect.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
-    [Required]
     [ElementsRequired]
     public Uri[] RedirectUris { get; set; } = default!;
 
