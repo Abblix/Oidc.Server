@@ -117,6 +117,7 @@ public sealed class DiscoveryController : ControllerBase
 			ResponseModesSupported = authorizationHandler.Metadata.ResponseModesSupported,
 
 			TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+			TokenEndpointAuthSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
 
 			SubjectTypesSupported = subjectTypeConverter.SubjectTypesSupported,
 			PromptValuesSupported = authorizationHandler.Metadata.PromptValuesSupported,
@@ -125,19 +126,19 @@ public sealed class DiscoveryController : ControllerBase
 
 			RequestParameterSupported = authorizationHandler.Metadata.RequestParameterSupported,
 			RequestObjectSigningAlgValuesSupported = authorizationHandler.Metadata.RequestParameterSupported
-				? jwtValidator.SigningAlgValuesSupported
+				? jwtValidator.SigningAlgorithmsSupported
 				: null,
 
 			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
-			IdTokenSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
-			UserInfoSigningAlgValuesSupported = jwtCreator.SigningAlgValuesSupported,
+			IdTokenSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
+			UserInfoSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
 
 			BackChannelAuthenticationEndpoint = Resolve(Path.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
 			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
 			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
-			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgValuesSupported,
+			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
 		};
 
 		return Task.FromResult<ActionResult<ConfigurationResponse>>(response);

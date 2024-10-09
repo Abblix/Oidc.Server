@@ -19,6 +19,27 @@
 // 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
 
 using System.Text.Json.Serialization;
 
@@ -60,6 +81,7 @@ public record ConfigurationResponse
         public const string ResponseTypesSupported = "response_types_supported";
         public const string ResponseModesSupported = "response_modes_supported";
         public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
+        public const string TokenEndpointAuthSigningAlgValuesSupported = "token_endpoint_auth_signing_alg_values_supported";
         public const string IdTokenSigningAlgValuesSupported = "id_token_signing_alg_values_supported";
         public const string SubjectTypesSupported = "subject_types_supported";
         public const string CodeChallengeMethodsSupported = "code_challenge_methods_supported";
@@ -226,6 +248,14 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethodsSupported)]
     public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = default!;
+
+    /// <summary>
+    /// Lists the signing algorithms supported by the OpenID Provider for authenticating clients at the token endpoint.
+    /// These algorithms are used to verify the signatures of the authentication requests sent to the token endpoint,
+    /// ensuring the integrity and authenticity of the requests.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlgValuesSupported)]
+    public IEnumerable<string>? TokenEndpointAuthSigningAlgValuesSupported { get; init; }
 
     /// <summary>
     /// Lists the ID token signing algorithm values supported by the OpenID Provider,

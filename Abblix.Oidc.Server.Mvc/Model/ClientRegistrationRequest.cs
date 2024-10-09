@@ -166,7 +166,6 @@ public record ClientRegistrationRequest
     /// Specifies the algorithm that the OpenID Provider should use to sign ID Tokens sent to this client.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -188,7 +187,6 @@ public record ClientRegistrationRequest
     /// Indicates the preferred algorithm for signing UserInfo responses sent to this client.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -244,7 +242,6 @@ public record ClientRegistrationRequest
     /// Endpoint. Specifies the algorithm to be used by the client for signing JWTs used in client authentication.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
     /// <summary>
@@ -403,7 +400,7 @@ public record ClientRegistrationRequest
             RequestObjectSigningAlg = RequestObjectSigningAlg,
 
             IdTokenEncryptedResponseAlg = IdTokenEncryptedResponseAlg,
-            IdTokenEncryptedResponseEnc = RequestObjectEncryptionEnc,
+            IdTokenEncryptedResponseEnc = IdTokenEncryptedResponseEnc,
             IdTokenSignedResponseAlg = IdTokenSignedResponseAlg,
 
             TokenEndpointAuthMethod = TokenEndpointAuthMethod,

@@ -125,17 +125,18 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     /// exchanging the authorization code for a token. This method ensures that the correct transformation is applied.
     /// It supports both 'plain' and 'S256' methods, with 'S256' being the recommended approach for stronger security.
     /// </summary>
-    /// <param name="method">The PKCE challenge method, either 'plain' or 'S256'.</param>
+    /// <param name="method">The PKCE challenge method, either 'plain', 'S256' or 'S512'.</param>
     /// <param name="codeVerifier">The code verifier submitted by the client during the token request.</param>
     /// <returns>The transformed code challenge based on the specified method.</returns>
     private static string CalculateChallenge(string method, string codeVerifier) => method switch
     {
         // Encodes the code verifier using SHA256 and URL-safe base64 encoding for 'S256' method.
-        CodeChallengeMethods.S256 =>
-            HttpServerUtility.UrlTokenEncode(
-                SHA256.HashData(
-                    Encoding.ASCII.GetBytes(
-                        codeVerifier))),
+        CodeChallengeMethods.S256 => HttpServerUtility.UrlTokenEncode(
+            SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
+
+        // Encodes the code verifier using SHA512 and URL-safe base64 encoding for 'S512' method.
+        CodeChallengeMethods.S512 => HttpServerUtility.UrlTokenEncode(
+            SHA512.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
 
         // Returns the code verifier as-is for the 'plain' method.
         CodeChallengeMethods.Plain => codeVerifier,

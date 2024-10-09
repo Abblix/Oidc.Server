@@ -112,7 +112,8 @@ public static class ServiceCollectionExtensions
 			.AddLogoutNotification()
 			.AddStorages()
 			.AddUserInfo()
-			.AddRequestObject();
+			.AddRequestObject()
+			.AddBackChannelAuthentication();
 	}
 
 	/// <summary>

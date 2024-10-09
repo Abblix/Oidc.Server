@@ -81,6 +81,7 @@ public record AuthorizationEndpointMetadata
     /// </summary>
     public List<string> CodeChallengeMethodsSupported { get; init; } = new()
     {
+        CodeChallengeMethods.S512,
         CodeChallengeMethods.S256,
         CodeChallengeMethods.Plain,
     };

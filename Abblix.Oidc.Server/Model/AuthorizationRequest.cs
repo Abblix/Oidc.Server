@@ -155,7 +155,7 @@ public record AuthorizationRequest
 	/// verifier.
 	/// </summary>
 	[JsonPropertyName(Parameters.CodeChallengeMethod)]
-    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256)]
+    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>

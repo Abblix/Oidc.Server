@@ -26,6 +26,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
@@ -404,5 +406,18 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IRequestObjectFetcher, RequestObjectFetcher>();
         return services;
+    }
+
+    /// <summary>
+    /// Configures services for handling back-channel authentication requests, enabling secure server-to-server
+    /// authentication flows.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddBackChannelAuthentication(this IServiceCollection services)
+    {
+        return services
+            .AddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>()
+            .AddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
     }
 }
