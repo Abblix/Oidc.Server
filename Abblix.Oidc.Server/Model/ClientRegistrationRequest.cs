@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -148,7 +147,6 @@ public record ClientRegistrationRequest
     /// JWS algorithm for the ID Token issued to this client.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -167,7 +165,6 @@ public record ClientRegistrationRequest
     /// JWS algorithm for UserInfo Responses.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
     /// <summary>

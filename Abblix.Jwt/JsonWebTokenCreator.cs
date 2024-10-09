@@ -40,7 +40,7 @@ public sealed class JsonWebTokenCreator : IJsonWebTokenCreator
     /// This property reflects the JWT security token handler's default outbound algorithm mapping,
     /// indicating the algorithms available for signing the tokens.
     /// </summary>
-    public IEnumerable<string> SigningAlgValuesSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
+    public IEnumerable<string> SignedResponseAlgorithmsSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
 
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encrypting key.

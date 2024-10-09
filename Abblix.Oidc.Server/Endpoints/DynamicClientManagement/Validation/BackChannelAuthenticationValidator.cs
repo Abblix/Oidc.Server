@@ -102,7 +102,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
         // Check if the signing algorithm specified in the request is supported
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;
         if (signingAlgorithm.HasValue() &&
-            !_jwtValidator.SigningAlgValuesSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
+            !_jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
         {
             return new ClientRegistrationValidationError(
                 ErrorCodes.InvalidRequest,

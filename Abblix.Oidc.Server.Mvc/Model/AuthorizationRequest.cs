@@ -170,7 +170,7 @@ public record AuthorizationRequest
 	/// supporting enhanced security for public clients in the PKCE flow.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.CodeChallengeMethod)]
-    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256)]
+    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>

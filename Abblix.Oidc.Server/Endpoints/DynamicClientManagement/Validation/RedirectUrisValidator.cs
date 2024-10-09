@@ -108,5 +108,6 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     }
 
     // Helper method to determine if the provided URI uses localhost or loopback address
-    private static bool IsLocalhost(Uri uri) => uri.IsLoopback || uri.Host == "localhost";
+    private static bool IsLocalhost(Uri uri)
+        => uri.IsLoopback || string.Equals(uri.Host, "localhost", StringComparison.Ordinal);
 }

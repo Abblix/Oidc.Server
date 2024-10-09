@@ -71,13 +71,19 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     {
         switch (response)
         {
+            case UserInfoFoundResponse {
+                ClientInfo.UserInfoSignedResponseAlgorithm: SigningAlgorithms.None,
+                User: var user,
+            }:
+                
+                return new JsonResult(user);
+
             case UserInfoFoundResponse
                 {
                     ClientInfo: var clientInfo,
                     User: var user,
                     Issuer: var issuer,
-                }
-                when clientInfo.UserInfoSignedResponseAlgorithm != SigningAlgorithms.None:
+                }:
 
                 var token = new JsonWebToken
                 {
@@ -95,9 +101,6 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
                     ContentType = MediaTypes.Jwt,
                     Content = await _clientJwtFormatter.FormatAsync(token, clientInfo),
                 };
-
-            case UserInfoFoundResponse { User: var user }:
-                return new JsonResult(user);
 
             case UserInfoErrorResponse error:
                 return new BadRequestObjectResult(error);

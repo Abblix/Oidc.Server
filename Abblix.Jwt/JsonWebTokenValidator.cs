@@ -38,7 +38,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// by the JwtSecurityTokenHandler for inbound tokens, as well as an option to accept tokens without a signature.
     /// This allows for flexibility in validating JWTs with various security requirements.
     /// </summary>
-    public IEnumerable<string> SigningAlgValuesSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
+    public IEnumerable<string> SigningAlgorithmsSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
 
     /// <summary>
     /// Asynchronously validates a JWT string against specified validation parameters.

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -52,8 +53,6 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
-using Abblix.Oidc.Server.Features.BackChannelAuthentication;
-using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -340,6 +339,8 @@ public static class ServiceCollectionExtensions
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>()
                 .Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }
 
@@ -383,10 +384,7 @@ public static class ServiceCollectionExtensions
             .AddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>()
             .AddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>()
             .AddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>()
-            .AddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>()
-
-            .AddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>()
-            .AddScoped<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+            .AddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
     }
 
     public static IServiceCollection AddBackChannelAuthenticationContextValidators(this IServiceCollection services)

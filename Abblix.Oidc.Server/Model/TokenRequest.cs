@@ -91,7 +91,7 @@ public record TokenRequest
 	public Uri[]? Resources { get; set; }
 
 	/// <summary>
-	/// The refresh token used to obtain a new access token. Required when using the refresh token grant type.
+	/// The refresh token used to get a new access token. Required when using the refresh token grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.RefreshToken)]
 	public string? RefreshToken { get; set; }
@@ -101,7 +101,6 @@ public record TokenRequest
 	/// This defines the permissions or resources the client is requesting access to.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
-	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.OfflineAccess)]
 	public string[] Scope { get; set; } = Array.Empty<string>();
 
 	/// <summary>
