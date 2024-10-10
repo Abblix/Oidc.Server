@@ -130,7 +130,8 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 return (clientSecret, expiresAt);
 
             default:
-                // It is not needed for Clients selecting a token_endpoint_auth_method of private_key_jwt unless symmetric encryption will be used.
+                // It is unnecessary for Clients selecting a token_endpoint_auth_method of private_key_jwt
+                // unless symmetric encryption will be used
                 return (clientSecret: null, expiresAt: null);
         }
     }

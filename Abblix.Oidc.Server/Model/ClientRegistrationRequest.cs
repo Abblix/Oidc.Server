@@ -201,11 +201,6 @@ public record ClientRegistrationRequest
     /// Requested Authentication Method Reference values for this client.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    [AllowedValues(
-        ClientAuthenticationMethods.ClientSecretBasic,
-        ClientAuthenticationMethods.ClientSecretPost,
-        ClientAuthenticationMethods.PrivateKeyJwt,
-        ClientAuthenticationMethods.None)]
     public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
 
     /// <summary>

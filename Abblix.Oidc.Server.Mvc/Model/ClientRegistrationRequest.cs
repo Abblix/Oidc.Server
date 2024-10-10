@@ -44,12 +44,13 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// Array of URIs to which the OpenID Provider will redirect the User Agent after obtaining authorization.
-    /// These URIs are used in the client's authorization request and are crucial for the redirect flow in OAuth2 and OpenID Connect.
+    /// Array of URIs to which the OpenID Provider will redirect the User Agent after getting authorization.
+    /// These URIs are used in the client's authorization request and are crucial for the redirect flow in OAuth2 and
+    /// OpenID Connect.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = default!;
+    public Uri[] RedirectUris { get; set; } = Array.Empty<Uri>();
 
     /// <summary>
     /// JSON array containing a list of the OAuth 2.0 response_type values.
@@ -229,12 +230,6 @@ public record ClientRegistrationRequest
     /// Specifies how the client will authenticate to the Token Endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    [AllowedValues(
-        ClientAuthenticationMethods.ClientSecretBasic,
-        ClientAuthenticationMethods.ClientSecretPost,
-        ClientAuthenticationMethods.ClientSecretJwt,
-        ClientAuthenticationMethods.PrivateKeyJwt,
-        ClientAuthenticationMethods.None)]
     public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
 
     /// <summary>
