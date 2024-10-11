@@ -79,7 +79,7 @@ public static class ErrorCodes
 	/// The authorization server encountered an unexpected condition that prevented it from fulfilling the request.
 	/// </summary>
 	/// <remarks>
-	/// This error code is needed because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
+	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
 	/// </remarks>
 	public const string ServerError = "server_error";
 
@@ -87,7 +87,7 @@ public static class ErrorCodes
 	/// The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.
 	/// </summary>
 	/// <remarks>
-	/// This error code is needed because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
+	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
 	/// </remarks>
 	public const string TemporarilyUnavailable = "temporarily_unavailable";
 
@@ -187,4 +187,46 @@ public static class ErrorCodes
 	/// The target resource or identifier provided in the request is invalid.
 	/// </summary>
 	public const string InvalidTarget = "invalid_target";
+
+	/// <summary>
+	/// The authorization request is still pending as the end-user has not yet been authenticated.
+	/// </summary>
+	public const string AuthorizationPending = "authorization_pending";
+
+	/// <summary>
+	/// A variant of "authorization_pending", the authorization request is still pending and polling should continue,
+	/// but the interval MUST be increased by at least 5 seconds for this and all further requests.
+	/// </summary>
+	public const string SlowDown = "slow_down";
+
+	/// <summary>
+	/// The auth_req_id has expired. The Client will need to make a new Authentication Request.
+	/// </summary>
+	public const string ExpiredToken = "expired_token";
+
+	/// <summary>
+	/// The login_hint_token provided in the authentication request is not valid because it has expired.
+	/// </summary>
+	public const string ExpiredLoginHintToken = "expired_login_hint_token";
+
+	/// <summary>
+	/// The OpenID Provider is not able to identify which end-user the Client wishes to be authenticated by the hint
+	/// provided in the request (login_hint_token, id_token_hint, or login_hint).
+	/// </summary>
+	public const string UnknownUserId = "unknown_user_id";
+
+	/// <summary>
+	/// User code is required but was missing from the request.
+	/// </summary>
+	public const string MissingUserCode = "missing_user_code";
+
+	/// <summary>
+	/// The user code was invalid.
+	/// </summary>
+	public const string InvalidUserCode = "invalid_user_code";
+
+	/// <summary>
+	/// The binding message is invalid or unacceptable for use in the context of the given request.
+	/// </summary>
+	public const string InvalidBindingMessage = "invalid_binding_message";
 }

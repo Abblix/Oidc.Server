@@ -41,11 +41,7 @@ public static class JsonWebKeyExtensions
 	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
 	public static SigningCredentials ToSigningCredentials(this JsonWebKey jsonWebKey)
 	{
-		return jsonWebKey.Algorithm switch
-		{
-			SigningAlgorithms.RS256 => new SigningCredentials(jsonWebKey.ToSecurityKey(), SigningAlgorithms.RS256),
-			_ => throw new InvalidOperationException($"Not supported algorithm: {jsonWebKey.Algorithm}"),
-		};
+		return new SigningCredentials(jsonWebKey.ToSecurityKey(), jsonWebKey.Algorithm);
 	}
 
 	/// <summary>
@@ -68,7 +64,7 @@ public static class JsonWebKeyExtensions
 	{
 		return jsonWebKey.Algorithm switch
 		{
-			SigningAlgorithms.RS256 => new EncryptingCredentials(
+			SecurityAlgorithms.RsaSha256 => new EncryptingCredentials(
 				jsonWebKey.ToSecurityKey(),
 				SecurityAlgorithms.RsaOAEP,
 				SecurityAlgorithms.Aes128CbcHmacSha256),

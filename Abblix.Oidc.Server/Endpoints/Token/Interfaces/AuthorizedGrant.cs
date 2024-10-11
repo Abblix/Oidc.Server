@@ -38,9 +38,8 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     : GrantAuthorizationResult
 {
     /// <summary>
-    /// An array of tokens that have been issued as part of this grant.
-    /// This may include access tokens, refresh tokens, or other types of tokens
-    /// depending on the authorization flow and client request.
+    /// An array of tokens that have been issued as part of this grant. This may include access tokens, refresh tokens
+    /// or other types of tokens depending on the authorization flow and client request.
     /// </summary>
     public TokenInfo[]? IssuedTokens { get; init; }
 }

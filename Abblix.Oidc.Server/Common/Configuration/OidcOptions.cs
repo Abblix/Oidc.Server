@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -176,4 +176,33 @@ public record OidcOptions
 	/// and permissions based on these definitions.
 	/// </summary>
 	public ResourceDefinition[]? Resources { get; set; }
+
+	/// <summary>
+	/// Configuration options for the backchannel authentication flow,
+	/// used in scenarios such as Client-Initiated Backchannel Authentication (CIBA).
+	/// </summary>
+	public BackChannelAuthenticationOptions BackChannelAuthentication { get; set; } = new();
+
+	/// <summary>
+	/// Specifies the length of session identifiers used by the OIDC server.
+	/// The length determines the uniqueness and security of the session identifiers.
+	/// </summary>
+	public int SessionIdLength { get; set; } = 64;
+
+	/// <summary>
+	/// Specifies the length of token identifiers used by the OIDC server.
+	/// This value determines the length of the unique ID assigned to tokens.
+	/// </summary>
+	public int TokenIdLength { get; set; } = 64;
+
+	/// <summary>
+	/// Determines whether the OIDC server requires Pushed Authorization Requests (PAR).
+	/// </summary>
+	public bool RequirePushedAuthorizationRequests { get; set; } = false;
+
+	/// <summary>
+	/// Determines whether request objects must be signed by the client,
+	/// enhancing security for certain sensitive operations.
+	/// </summary>
+	public bool RequireSignedRequestObject { get; set; } = false;
 }

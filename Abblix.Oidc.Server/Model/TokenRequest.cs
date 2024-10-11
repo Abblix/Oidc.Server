@@ -28,8 +28,10 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to get various types of tokens
-/// (e.g., access token, refresh token) from the authorization server.
+/// Represents a request to get various types of tokens (e.g., access token, refresh token) from
+/// the authorization server. This is part of the OAuth 2.0 and OpenID Connect token exchange flow,
+/// where clients can request tokens based on different grant types like 'authorization_code', 'refresh_token'
+/// and others.
 /// </summary>
 public record TokenRequest
 {
@@ -44,10 +46,11 @@ public record TokenRequest
 		public const string Username = "username";
 		public const string Password = "password";
 		public const string CodeVerifier = "code_verifier";
+		public const string AuthenticationRequestId = "auth_req_id";
 	}
 
 	/// <summary>
-	/// The grant type of the token request, indicating the method being used to obtain the token.
+	/// The grant type of the token request, indicating the method being used to get the token.
 	/// Common values include 'authorization_code', 'refresh_token', 'password', etc.
 	/// </summary>
 	[JsonPropertyName(Parameters.GrantType)]
@@ -62,57 +65,67 @@ public record TokenRequest
 	public string GrantType { get; set; } = default!;
 
 	/// <summary>
-	/// The authorization code received from the authorization server. This is used in the authorization code grant type.
+	/// The authorization code received from the authorization server.
+	/// This is used in the authorization code grant type to exchange for an access token.
 	/// </summary>
 	[JsonPropertyName(Parameters.Code)]
 	public string? Code { get; set; }
 
 	/// <summary>
-	/// The redirect URI where the response will be sent. This must match the redirect URI registered with the authorization server.
+	/// The redirect URI where the response will be sent.
+	/// This must match the redirect URI registered with the authorization server during the initial request.
 	/// </summary>
 	[JsonPropertyName(Parameters.RedirectUri)]
 	public Uri? RedirectUri { get; set; }
 
 	/// <summary>
-	/// The resource for which the access token is being requested.
-	/// This is optional and is used in scenarios such as OAuth 2.0 for APIs.
+	/// The resource URI(s) for which the access token is being requested.
+	/// This parameter is optional and used in scenarios such as OAuth 2.0 for APIs
+	/// to specify the resource(s) being accessed.
 	/// </summary>
 	/// <remarks>
-	/// Defined in RFC 8707.
+	/// Defined in RFC 8707 as a way to express the resource(s) the client is requesting access to.
 	/// </remarks>
 	[JsonPropertyName(Parameters.Resource)]
 	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]
 	public Uri[]? Resources { get; set; }
 
 	/// <summary>
-	/// The refresh token used to obtain a new access token. Required for the refresh token grant type.
+	/// The refresh token used to get a new access token. Required when using the refresh token grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.RefreshToken)]
 	public string? RefreshToken { get; set; }
 
 	/// <summary>
-	/// The scope of the access request, expressed as a list of space-delimited, case-sensitive strings.
+	/// The scope of the access request, expressed as a space-separated list of case-sensitive strings.
+	/// This defines the permissions or resources the client is requesting access to.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
-	[AllowedValues(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone, Scopes.OfflineAccess)]
 	public string[] Scope { get; set; } = Array.Empty<string>();
 
 	/// <summary>
-	/// The username of the resource owner. Required for the password grant type.
+	/// The username of the resource owner, required when using the resource owner password credentials grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.Username)]
 	public string? UserName { get; set; }
 
 	/// <summary>
-	/// The password of the resource owner. Required for the password grant type.
+	/// The password of the resource owner, required when using the resource owner password credentials grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.Password)]
 	public string? Password { get; set; }
 
 	/// <summary>
-	/// The code verifier for the PKCE (Proof Key for Code Exchange) process.
-	/// Required for public clients using the authorization code grant type.
+	/// The code verifier used in the PKCE (Proof Key for Code Exchange) process.
+	/// Required for public clients using the authorization code grant type to enhance security.
 	/// </summary>
 	[JsonPropertyName(Parameters.CodeVerifier)]
 	public string? CodeVerifier { get; set; }
+
+	/// <summary>
+	/// The authentication request ID, used in CIBA (Client-Initiated Backchannel Authentication) flow.
+	/// This identifier references a backchannel authentication request initiated by the client.
+	/// </summary>
+	[JsonPropertyName(Parameters.AuthenticationRequestId)]
+	public string? AuthenticationRequestId { get; set; }
 }

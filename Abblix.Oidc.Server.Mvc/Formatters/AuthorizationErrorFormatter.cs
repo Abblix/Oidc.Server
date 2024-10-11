@@ -54,7 +54,7 @@ public class AuthorizationErrorFormatter
     }
 
     private readonly IParametersProvider _parametersProvider;
-    protected readonly IIssuerProvider _issuerProvider;
+    private readonly IIssuerProvider _issuerProvider;
 
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,

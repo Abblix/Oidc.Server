@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Provides a general-purpose distributed caching mechanism with serialization support,
-/// enabling the storage and retrieval of any type of serialized objects.
+/// enabling the storage and retrieval of serialized objects.
 /// </summary>
 public sealed class DistributedCacheStorage : IEntityStorage
 {

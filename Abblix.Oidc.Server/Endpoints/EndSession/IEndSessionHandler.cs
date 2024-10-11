@@ -26,5 +26,5 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
 public interface IEndSessionHandler
 {
-    Task<EndSessionResponse> HandleAsync(Server.Model.EndSessionRequest endSessionRequest);
+    Task<EndSessionResponse> HandleAsync(Model.EndSessionRequest endSessionRequest);
 }

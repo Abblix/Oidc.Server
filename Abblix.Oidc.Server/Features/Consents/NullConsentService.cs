@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// consent-related checks and workflows. If your application requires user consent for accessing specific scopes
 /// or resources, replace this service with a custom implementation that appropriately handles such requirements.
 /// </remarks>
-public class NullConsentService : IUserConsentsProvider, IConsentService
+public class NullConsentService : IUserConsentsProvider
 {
 	/// <summary>
 	/// Retrieves the user consents for a given authorization request and authentication session.

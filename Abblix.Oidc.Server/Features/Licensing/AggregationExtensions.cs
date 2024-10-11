@@ -31,7 +31,7 @@ public static class AggregationExtensions
     /// Determines the greater of two nullable values, treating null as positive infinity.
     /// </summary>
     /// <typeparam name="T">The type of the values being compared, constrained to value types that implement
-    /// <see cref="IComparable{T}"/>.</typeparam>
+    /// <see cref="IComparable"/>.</typeparam>
     /// <param name="accumulatorValue">The first nullable value to compare.</param>
     /// <param name="currentValue">The second nullable value to compare.</param>
     /// <returns>The greater of the two values if at least one is non-null; otherwise, null. If both values are

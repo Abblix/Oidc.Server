@@ -31,22 +31,21 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Provides a response formatter for Check Session frames.
 /// </summary>
-internal class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
+public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
 {
     /// <summary>
     /// Formats a response for a Check Session frame asynchronously.
     /// </summary>
     /// <param name="response">The Check Session response containing HTML content.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation,
+    /// with the formatted response as an <see cref="ActionResult"/>.</returns>
     public Task<ActionResult> FormatResponseAsync(CheckSessionResponse response)
     {
-        var content = response.HtmlContent;
-
         var result = new ContentResult
         {
             StatusCode = StatusCodes.Status200OK,
             ContentType = MediaTypeNames.Text.Html,
-            Content = content,
+            Content = response.HtmlContent,
         };
 
         return Task.FromResult<ActionResult>(result);

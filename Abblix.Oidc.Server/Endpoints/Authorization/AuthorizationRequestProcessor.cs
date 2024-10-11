@@ -45,17 +45,17 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 {
 	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthorizationRequestProcessor"/> class.
-	/// This constructor sets up the necessary services for processing authorization requests,
-	/// including user authentication, consent handling, authorization code generation, access
-	/// and identity token services, and time-related functionality.
+	/// Constructor that initializes the required services for handling authorization requests.
+	/// These services collectively enable the class to handle key parts of the OAuth2/OpenID Connect flow,
+	/// such as authenticating users, managing user consent, issuing tokens, and handling authorization codes.
 	/// </summary>
-	/// <param name="authSessionService">Service for handling user authentication.</param>
-	/// <param name="consentsProvider">Service for managing user consent.</param>
-	/// <param name="authorizationCodeService">Service for generating and managing authorization codes.</param>
-	/// <param name="accessTokenService">Service for creating access tokens.</param>
-	/// <param name="identityTokenService">Service for generating identity tokens.</param>
-	/// <param name="clock">Service for managing time-related operations.</param>
+	/// <param name="authSessionService">Handles user authentication sessions.</param>
+	/// <param name="consentsProvider">Manages the storage and retrieval of user consent data.</param>
+	/// <param name="authorizationCodeService">Generates and validates authorization codes during
+	/// the authorization process.</param>
+	/// <param name="accessTokenService">Issues access tokens upon successful authorization.</param>
+	/// <param name="identityTokenService">Generates ID tokens for user identity verification in OIDC.</param>
+	/// <param name="clock">Facilitates time-based logic (e.g., token expiration, session timeouts).</param>
 	public AuthorizationRequestProcessor(
 		IAuthSessionService authSessionService,
 		IUserConsentsProvider consentsProvider,
@@ -80,60 +80,76 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	private readonly TimeProvider _clock;
 
 	/// <summary>
-	/// Asynchronously processes a valid authorization request.
-	/// This method orchestrates the flow of handling an authorization request, including user authentication,
-	/// consent validation, and token generation. It determines the appropriate response based on the request's
-	/// parameters and the user's session state, which may include prompting for login, consent or directly generating
-	/// authorization codes and tokens.
+	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
+	/// the need for user consent, and generating appropriate tokens. This method serves as the central logic for
+	/// determining how the system should respond based on the client's request and the user's current state.
 	/// </summary>
-	/// <param name="request">The valid authorization request to process.</param>
+	/// <param name="request">A validated authorization request containing parameters required for processing.</param>
 	/// <returns>
-	/// An <see cref="AuthorizationResponse"/> representing the outcome of the processed authorization request.
-	/// This response could be a successful authentication, an error, or a requirement for further user interaction
-	/// (like login or consent).
+	/// An authorization response object, which can either represent a successful authentication, an error,
+	/// or a signal that further user interaction is required (e.g., login, consent).
 	/// </returns>
 	public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
 	{
-		request.ClientInfo.CheckClient();
+		// Ensures the client is permitted to make requests by the current license.
+		request.ClientInfo.CheckClientLicense();
+
 		var model = request.Model;
 
+		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
 		var authSessions = await GetAvailableAuthSessionsAsync(model);
 
-		if (authSessions.Count == 0 || model.Prompt == Prompts.Login)
+		AuthSession authSession;
+		switch (authSessions.Count, model.Prompt)
 		{
-			if (model.Prompt == Prompts.None)
-			{
+			// If no sessions exist and the prompt forbids user interaction,
+			// respond that login is required without allowing user interaction.
+			case (0, Prompts.None):
 				return new AuthorizationError(
 					model,
 					ErrorCodes.LoginRequired,
 					"The Authorization Server requires End-User authentication.",
 					request.ResponseMode,
 					model.RedirectUri);
-			}
 
-			return new LoginRequired(model);
-		}
-
-		if (authSessions.Count > 1 || model.Prompt == Prompts.SelectAccount)
-		{
-			if (model.Prompt == Prompts.None)
-			{
+			// If multiple sessions exist but the prompt forbids interaction,
+			// respond that account selection is required but user interaction is not allowed.
+			case (> 1, Prompts.None):
 				return new AuthorizationError(
 					model,
 					ErrorCodes.AccountSelectionRequired,
 					"The End-User is to select a session at the Authorization Server.",
 					request.ResponseMode,
 					model.RedirectUri);
-			}
 
-			return new AccountSelectionRequired(model, authSessions.ToArray());
+			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
+			case (0, _) or (_, Prompts.Login):
+				// Otherwise, prompt the user to log in.
+				return new LoginRequired(model);
+
+			// If multiple sessions exist, or the request requires account selection, prompt the user to select an account.
+			case (> 1, _) or (_, Prompts.SelectAccount):
+				return new AccountSelectionRequired(model, authSessions.ToArray());
+
+			// If a single session exists, proceed with that session for further processing.
+			case (1, _):
+				authSession = authSessions.Single();
+				break;
+
+			// Catch any unexpected cases where the session count or prompt state does not match the expected conditions.
+			default:
+				throw new InvalidOperationException(
+					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {model.Prompt}");
 		}
 
-		var authSession = authSessions.Single();
-
+		// Retrieve user consents (i.e., permissions granted for requested scopes/resources).
+		// The 'prompt=consent' case is not forgotten but processed inside this call.
 		var userConsents = await _consentsProvider.GetUserConsentsAsync(request, authSession);
+
+		// If consent for required scopes or resources is still pending, handle consent requirements.
 		if (userConsents.Pending is { Scopes.Length: > 0 } or { Resources.Length: > 0 })
 		{
+			// If user interaction is disallowed but consent is necessary, return an error.
 			if (model.Prompt == Prompts.None)
 			{
 				return new AuthorizationError(
@@ -144,38 +160,43 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 					model.RedirectUri);
 			}
 
+			// Prompt for consent if necessary permissions are not yet granted.
 			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
 
 		var clientId = request.ClientInfo.ClientId;
-		var grantedConsents = userConsents.Granted;
-		var scopes = grantedConsents.Scopes
-			.Concat(grantedConsents.Resources.SelectMany(rd => rd.Scopes))
-			.Select(sd => sd.Scope)
-			.Distinct()
-			.ToArray();
-		var resources = Array.ConvertAll(grantedConsents.Resources, resource => resource.Resource);
-		var authContext = new AuthorizationContext(clientId, scopes, model.Claims)
+
+		// Build an authorization context containing necessary data like client ID, scopes, and claims.
+		// The authorization context is used to carry the granted scopes, resources and other key details through
+		// the flow.
+		var authContext = new AuthorizationContext(
+			clientId,
+			userConsents.Granted.Scopes,
+			userConsents.Granted.Resources,
+			model.Claims)
 		{
 			RedirectUri = model.RedirectUri,
 			Nonce = model.Nonce,
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
-			Resources = resources,
 		};
 
+		// Mark the client as affected by this session and update the session's state.
+		// Ensures the client is tied to the current session, updating its state to include the session's client ID.
 		if (!authSession.AffectedClientIds.Contains(clientId))
 		{
 			authSession.AffectedClientIds.Add(clientId);
 			await _authSessionService.SignInAsync(authSession);
 		}
 
+		// Initialize a successful authentication result.
 		var result = new SuccessfullyAuthenticated(
 			model,
 			request.ResponseMode,
 			authSession.SessionId,
 			authSession.AffectedClientIds);
 
+		// Check if the response type requires an authorization code, and generate it if needed.
 		var codeRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Code);
 		if (codeRequired)
 		{
@@ -184,6 +205,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 				request.ClientInfo.AuthorizationCodeExpiresIn);
 		}
 
+		// Check if an access token is required, and generate it if needed.
 		var tokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Token);
 		if (tokenRequired)
 		{
@@ -194,6 +216,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 				request.ClientInfo);
 		}
 
+		// Check if an ID token is required, and generate it if needed.
 		var idTokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.IdToken);
 		if (idTokenRequired)
 		{
@@ -206,13 +229,21 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 				result.AccessToken?.EncodedJwt);
 		}
 
+		// Return the final authorization result containing codes and tokens as needed.
 		return result;
 	}
 
+	/// <summary>
+	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
+	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
+	/// </summary>
+	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
+	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
 	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
 	{
 		var authSessions = _authSessionService.GetAvailableAuthSessions();
 
+		// Filter sessions based on the maximum allowable authentication age, if specified.
 		if (model.MaxAge.HasValue)
 		{
 			// skip all sessions older than max_age value
@@ -221,14 +252,15 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 				.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
+		// Filter sessions based on the required ACR (Authentication Context Class Reference) values, if specified.
 		var acrValues = model.AcrValues;
 		if (acrValues is { Length: > 0 })
 		{
-			authSessions = authSessions
-				.Where(session => session.AuthContextClassRef.HasValue() &&
-				                       acrValues.Contains(session.AuthContextClassRef));
+			authSessions = authSessions.Where(
+				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
+		// Return the filtered list of sessions as an asynchronous task.
 		return authSessions.ToListAsync();
 	}
 }

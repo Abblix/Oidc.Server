@@ -33,6 +33,6 @@ public class ClientRegistrationRequestTest
         "{\"client_name\":\"dynamic_client_1 RqxLk9BdhK8qC3z\",\"grant_types\":[\"implicit\"],\"jwks\":{\"keys\":[{\"kty\":\"RSA\",\"e\":\"AQAB\",\"use\":\"sig\",\"alg\":\"RS256\",\"n\":\"gUOdYo2PpUUnZzozIPJ-7mK2Z5jYBxjj_5iB2TDnElt8yUc-mcCeOQrsaswPgKx2KMSJ50kwrFHHEuNyiDhgNMgtmJ98RuhggXaPF1fmmHss_Wc1OSqyGYLWbEzYGsRck5yTVP4xsPYAeP5xkkLze_FXJvwITNu2aGxXEYwokkrcWgL3AsXtYKClIwmacHhVNEMn-ALe3sMTifx4F8TqmNAlD4FPga094txHJNo2Ho6z4kn5L4uq_WXklDjaIDOqQZtdn0emXig3RHQcOtepFcXt7pcK9E2M3kxKFOMPpY8c4kaDfQ41jv23vbm9oDTh5s3TB0ZwcKJXj4-06gwTWw\"}]},\"token_endpoint_auth_method\":\"client_secret_basic\",\"response_types\":[\"id_token token\"],\"redirect_uris\":[\"https://www.certification.openid.net/test/a/Abblix/callback\"],\"contacts\":[\"certification@oidf.org\"]}")]
     public void DeserializeClientRegistrationRequestTest(string json)
     {
-        var request = JsonSerializer.Deserialize<ClientRegistrationRequest>(json);
+        JsonSerializer.Deserialize<ClientRegistrationRequest>(json);
     }
 }

@@ -29,10 +29,10 @@ using Parameters = Abblix.Oidc.Server.Model.IntrospectionRequest.Parameters;
 namespace Abblix.Oidc.Server.Mvc.Model;
 
 /// <summary>
-/// Represents a request for token introspection, extending from <see cref="ClientRequest"/>.
+/// Represents a request for token introspection.
 /// This record is used to determine the active state and meta-information about a token.
 /// </summary>
-public record IntrospectionRequest : ClientRequest
+public record IntrospectionRequest
 {
 	/// <summary>
 	/// The token that the client wants to introspect.
@@ -55,7 +55,7 @@ public record IntrospectionRequest : ClientRequest
 	/// This method is used to translate the request data into a format that can be processed by the core logic of the server.
 	/// </summary>
 	/// <returns>A <see cref="Core.IntrospectionRequest"/> object populated with data from this request.</returns>
-	public new Core.IntrospectionRequest Map()
+	public Core.IntrospectionRequest Map()
 	{
 		return new Core.IntrospectionRequest
 		{

@@ -37,7 +37,8 @@ public interface IEntityStorage
     /// <param name="value">The entity to be stored in the cache.</param>
     /// <param name="options">Configuration options for the cache entry, such as expiration times.</param>
     /// <param name="token">An optional cancellation token that can be used to cancel the storage operation.</param>
-    /// <returns>A task that represents the asynchronous operation, providing awareness of completion or faults.</returns>
+    /// <returns>A task that represents the asynchronous operation, providing awareness of completion or faults.
+    /// </returns>
     Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null);
 
     /// <summary>
@@ -45,7 +46,8 @@ public interface IEntityStorage
     /// </summary>
     /// <typeparam name="T">The type of the entity to retrieve.</typeparam>
     /// <param name="key">The unique cache key associated with the entity to retrieve.</param>
-    /// <param name="removeOnRetrieval">Indicates whether the entity should be removed from the storage after retrieval.</param>
+    /// <param name="removeOnRetrieval">Indicates whether the entity should be removed from the storage after retrieval.
+    /// </param>
     /// <param name="token">An optional cancellation token that can be used to cancel the retrieval operation.</param>
     /// <returns>A task that returns the retrieved entity, if found, or null if no entity is found.</returns>
     Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null);

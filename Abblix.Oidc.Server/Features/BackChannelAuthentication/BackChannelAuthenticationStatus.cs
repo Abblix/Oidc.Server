@@ -20,6 +20,27 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
-public abstract record BackChannelAuthenticationResponse;
+/// <summary>
+/// Represents the various states of a backchannel authentication request.
+/// This enumeration defines the possible statuses that an authentication request can have,
+/// facilitating the management of the authentication process in Client-Initiated Backchannel Authentication (CIBA).
+/// </summary>
+public enum BackChannelAuthenticationStatus
+{
+    /// <summary>
+    /// Indicates that the authentication request is pending and has not yet been processed.
+    /// </summary>
+    Pending,
+
+    /// <summary>
+    /// Indicates that the authentication request has been denied, either by the user or the system.
+    /// </summary>
+    Denied,
+
+    /// <summary>
+    /// Indicates that the authentication request has been successfully authenticated.
+    /// </summary>
+    Authenticated,
+}

@@ -63,10 +63,12 @@ public record ValidIntrospectionRequest : IntrospectionRequestValidationResult
 	/// </remarks>
 	public static ValidIntrospectionRequest InvalidToken(IntrospectionRequest model)
 	{
-		// Note that to avoid disclosing too much of the authorization server's state to a third party, the authorization server
-		// SHOULD NOT include any additional information about an inactive token, including why the token is inactive.
+		// Note that to avoid disclosing too much of the authorization server's state to a third party,
+		// the authorization server SHOULD NOT include any additional information about an inactive token,
+		// including why the token is inactive.
 
-		// That is why we do not return the token here even if it is valid, but for example it was issued for another client.
+		// That is why we do not return the token here even if it is valid, but for example,
+		// it was issued for another client.
 		return new(model);
 	}
 

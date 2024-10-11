@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -32,17 +33,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </summary>
 public record TokenValidationContext(TokenRequest Request, ClientRequest ClientRequest)
 {
+    private ClientInfo? _clientInfo;
+
     /// <summary>
     /// Information about the client making the request, derived from the client authentication process.
     /// </summary>
-    public ClientInfo ClientInfo { get; set; }
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when trying to access this property before it is set.
+    /// </exception>
+    public ClientInfo ClientInfo { get => _clientInfo.NotNull(nameof(ClientInfo)); set => _clientInfo = value; }
 
     /// <summary>
     /// Represents the result of an authorized grant, containing both the session and context of the authorization.
     /// This object is essential for ensuring that the grant is valid and for extracting any additional information
     /// needed for token generation.
     /// </summary>
-    public AuthorizedGrant AuthorizedGrant { get; set; }
+    public AuthorizedGrant AuthorizedGrant { get; set; } = default!;
 
     /// <summary>
     /// Defines the scope of access requested or authorized. This array of scope definitions helps in determining

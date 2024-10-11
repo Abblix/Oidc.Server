@@ -31,7 +31,7 @@ public interface IJsonWebTokenValidator
 	/// Indicates which algorithms are accepted by the validator for verifying the signatures of incoming JWTs,
 	/// ensuring that only tokens signed with recognized and secure algorithms are considered valid.
 	/// </summary>
-	IEnumerable<string> SigningAlgValuesSupported { get; }
+	IEnumerable<string> SigningAlgorithmsSupported { get; }
 
 	/// <summary>
 	/// Asynchronously validates a JWT against a set of specified parameters.
