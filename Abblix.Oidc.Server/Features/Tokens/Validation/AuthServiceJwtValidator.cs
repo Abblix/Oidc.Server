@@ -29,12 +29,20 @@ using Abblix.Oidc.Server.Features.Licensing;
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
 /// <summary>
-/// Validates JWTs (JSON Web Tokens) used in the authentication service.
-/// Ensures tokens meet the necessary criteria for issuer, audience and signing keys,
-/// as defined in the OAuth 2.0 and OpenID Connect standards.
+/// Validates JSON Web Tokens (JWTs) issued by the authentication service, ensuring they are authentic and compliant
+/// with the expected issuer, audience, and cryptographic signatures.
 /// </summary>
 public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 {
+	/// <summary>
+	/// Initializes a new instance of the <see cref="AuthServiceJwtValidator"/> class.
+	/// </summary>
+	/// <param name="validator">The service used to perform the core JWT validation.</param>
+	/// <param name="clientInfoProvider">The provider used to retrieve information about clients during
+	/// audience validation.</param>
+	/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT.</param>
+	/// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
+	/// decrypting tokens.</param>
 	public AuthServiceJwtValidator(
 		IJsonWebTokenValidator validator,
 		IClientInfoProvider clientInfoProvider,
@@ -53,11 +61,14 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 	private readonly IAuthServiceKeysProvider _serviceKeysProvider;
 
 	/// <summary>
-	/// Validates a JWT for authenticity and compliance with the expected issuer, audience, and cryptographic signatures.
+	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
-	/// <param name="jwt">The JWT to validate.</param>
-	/// <param name="options">Validation options to apply. Default is <see cref="ValidationOptions.Default"/>.</param>
-	/// <returns>A task representing the asynchronous validation operation, which upon completion yields a <see cref="JwtValidationResult"/>.</returns>
+	/// <param name="jwt">The JWT string to validate.</param>
+	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
+	/// <returns>
+	/// A task representing the asynchronous validation operation, which yields a <see cref="JwtValidationResult"/>
+	/// indicating the result of the validation.
+	/// </returns>
 	public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
 	{
 		return _validator.ValidateAsync(
@@ -72,6 +83,11 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 			});
 	}
 
+	/// <summary>
+	/// Validates the issuer of the JWT against the expected issuer.
+	/// </summary>
+	/// <param name="issuer">The issuer value to validate.</param>
+	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
 	private Task<bool> ValidateIssuerAsync(string issuer)
 	{
 		var result = issuer == _issuerProvider.GetIssuer();
@@ -83,6 +99,11 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 		return Task.FromResult(result);
 	}
 
+	/// <summary>
+	/// Validates the audience of the JWT by checking if it matches any known client information.
+	/// </summary>
+	/// <param name="audiences">A collection of audience values to validate.</param>
+	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
 	private async Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
 	{
 		foreach (var audience in audiences)

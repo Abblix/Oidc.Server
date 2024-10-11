@@ -24,7 +24,21 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
+/// <summary>
+/// Defines the contract for a token context validator, responsible for validating different aspects of a token request
+/// within a given context. Implementations of this interface ensure that the token request adheres to
+/// the expected security and business rules.
+/// </summary>
 public interface ITokenContextValidator
 {
+    /// <summary>
+    /// Asynchronously validates the token request within the provided context, checking for compliance with
+    /// the necessary validation rules such as client authentication, scope validation, grant validation, etc.
+    /// </summary>
+    /// <param name="context">The context containing the token request and related information that needs to be validated.</param>
+    /// <returns>
+    /// A <see cref="TokenRequestError"/> containing error details if the validation fails;
+    /// otherwise, returns null indicating that the validation was successful.
+    /// </returns>
     Task<TokenRequestError?> ValidateAsync(TokenValidationContext context);
 }

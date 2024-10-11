@@ -96,7 +96,7 @@ public static class ErrorFactory
 	/// <param name="description">A human-readable description of the error.</param>
 	/// <returns>
 	/// An <see cref="AuthorizationRequestValidationError"/> instance with the specified error details.</returns>
-	private static AuthorizationRequestValidationError ValidationError(string error, string description) => new(
+	public static AuthorizationRequestValidationError ValidationError(string error, string description) => new(
 		error,
 		description,
 		null,

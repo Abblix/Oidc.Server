@@ -20,6 +20,16 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
+namespace Abblix.Oidc.Server.Model;
 
-public record BackChannelAuthentication;
+/// <summary>
+/// Represents an error response in the backchannel authentication process.
+/// This record encapsulates details about the error, including an error code and a human-readable
+/// description of what went wrong. It is returned when the authentication request fails due to various
+/// reasons such as invalid parameters, unauthorized access, or other validation issues.
+/// </summary>
+/// <param name="Error">The error code that identifies the type of error encountered during the backchannel
+/// authentication process.</param>
+/// <param name="ErrorDescription">A human-readable description providing more details about the error.</param>
+public record BackChannelAuthenticationError(string Error, string ErrorDescription)
+    : BackChannelAuthenticationResponse;

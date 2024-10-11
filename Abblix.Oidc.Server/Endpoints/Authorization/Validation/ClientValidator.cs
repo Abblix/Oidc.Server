@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -74,7 +75,7 @@ public class ClientValidator : IAuthorizationContextValidator
         if (clientInfo == null)
         {
             _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(clientId));
-            return context.InvalidRequest("The client is not authorized");
+            return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
         context.ClientInfo = clientInfo;

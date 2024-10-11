@@ -86,7 +86,7 @@ public readonly record struct Sanitized
         return builder != null ? builder.ToString() : source;
     }
 
-    private void ReplaceTo(ref StringBuilder? builder, string source, int i, string? replacement)
+    private static void ReplaceTo(ref StringBuilder? builder, string source, int i, string? replacement)
     {
         builder ??= new StringBuilder(source, 0, i, source.Length + (replacement?.Length ?? 0) - 1);
         builder.Append(replacement);

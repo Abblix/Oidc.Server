@@ -27,11 +27,20 @@ using Abblix.Oidc.Server.Common.Interfaces;
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 /// <summary>
-/// Provides functionality to format and sign JSON Web Tokens (JWTs) specifically for use within the authentication service.
-/// This class leverages signing and optional encryption to generate JWTs that authenticate and authorize internal service operations.
+/// Provides functionality to format and sign JSON Web Tokens (JWTs) specifically for use within the authentication
+/// service. This class processes tokens issued by the authentication service itself, including access tokens,
+/// refresh tokens and Registration Access Tokens generated during client registration via the dynamic registration API.
+/// It leverages signing and optional encryption to generate JWTs that authenticate and authorize internal service
+/// operations.
 /// </summary>
 public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 {
+	/// <summary>
+	/// Initializes a new instance of the <see cref="AuthServiceJwtFormatter"/> class.
+	/// </summary>
+	/// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
+	/// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
+	/// encrypting JWTs.</param>
 	public AuthServiceJwtFormatter(
 		IJsonWebTokenCreator jwtCreator,
 		IAuthServiceKeysProvider serviceKeysProvider)
@@ -45,14 +54,16 @@ public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 
 	/// <summary>
 	/// Formats and signs a JWT for use by the authentication service, applying the appropriate cryptographic operations
-	/// based on the JWT's specified requirements and the available cryptographic keys.
+	/// based on the JWT specified requirements and the available cryptographic keys.
 	/// </summary>
 	/// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
-	/// <returns>A <see cref="Task"/> that represents the asynchronous operation, resulting in the JWT formatted as a string.</returns>
+	/// <returns>A <see cref="Task"/> that represents the asynchronous operation, resulting in the JWT formatted
+	/// as a string.</returns>
 	/// <remarks>
-	/// This method selects the appropriate signing key based on the algorithm specified in the JWT's header.
+	/// This method selects the appropriate signing key based on the algorithm specified in the JWT header.
 	/// If encryption is supported and keys are available, it also encrypts the JWT. The result is a JWT string
-	/// that is ready for use in authenticating and authorizing service operations.
+	/// that is ready for use in authenticating and authorizing service operations, including access tokens,
+	/// refresh tokens and Registration Access Tokens.
 	/// </remarks>
 	public async Task<string> FormatAsync(JsonWebToken token)
 	{
@@ -60,7 +71,7 @@ public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 		var signingCredentials = await _serviceKeysProvider.GetSigningKeys(true)
 			.FirstByAlgorithmAsync(token.Header.Algorithm);
 
-		// Optionally select an encryption key if available
+		// Optionally, select an encryption key if available
 		var encryptingCredentials = await _serviceKeysProvider.GetEncryptionKeys()
 			.FirstOrDefaultAsync();
 

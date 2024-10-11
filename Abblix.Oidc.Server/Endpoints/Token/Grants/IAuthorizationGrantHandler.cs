@@ -35,18 +35,18 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public interface IAuthorizationGrantHandler
 {
 	/// <summary>
-	/// The grant types this handler is responsible for.
+	/// Allows the authorization server to determine which grant types are supported by this handler.
 	/// </summary>
 	IEnumerable<string> GrantTypesSupported { get; }
 
 	/// <summary>
-	/// Processes an authorization request asynchronously, validates the request against the supported grant type
+	/// Processes an authorization request asynchronously, validates the request against the supported grant type,
 	/// and generates a response indicating the authorization result.
 	/// </summary>
-	/// <param name="request">The authorization request containing required parameters for the grant type.</param>
-	/// <param name="clientInfo">Client information associated with the request, used for validation and generating
-	/// the response.</param>
-	/// <returns>A task that when completed successfully, returns a GrantAuthorizationResult indicating the outcome
-	/// of the authorization process.</returns>
+	/// <param name="request">The authorization request containing the required parameters for the grant type.</param>
+	/// <param name="clientInfo">Client information associated with the request, used for validation and
+	/// to generate the authorization response.</param>
+	/// <returns>A task that, when completed successfully, returns a <see cref="GrantAuthorizationResult"/> indicating
+	/// the outcome of the authorization process, including any tokens or error messages.</returns>
 	Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
 }

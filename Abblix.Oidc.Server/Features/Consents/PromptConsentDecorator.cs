@@ -38,7 +38,7 @@ public class PromptConsentDecorator: IUserConsentsProvider
     /// provider.
     /// </summary>
     /// <param name="inner">The inner-to -<see cref="IUserConsentsProvider"/> delegate calls to when no explicit
-    /// prompting is needed.</param>
+    /// prompting is necessary.</param>
     public PromptConsentDecorator(IUserConsentsProvider inner)
     {
         _inner = inner;

@@ -22,4 +22,10 @@
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 
+/// <summary>
+/// Serves as the base type for results of backchannel authentication request validation.
+/// This abstract record encapsulates the outcome of the validation process, which can be
+/// further specialized into specific validation results, such as successful validation
+/// or validation failures due to various reasons.
+/// </summary>
 public abstract record BackChannelAuthenticationValidationResult;

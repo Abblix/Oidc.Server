@@ -130,7 +130,8 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 return (clientSecret, expiresAt);
 
             default:
-                // It is not needed for Clients selecting a token_endpoint_auth_method of private_key_jwt unless symmetric encryption will be used.
+                // It is unnecessary for Clients selecting a token_endpoint_auth_method of private_key_jwt
+                // unless symmetric encryption will be used
                 return (clientSecret: null, expiresAt: null);
         }
     }
@@ -170,6 +171,10 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
             SubjectType = model.SubjectType,
             SectorIdentifier = sectorIdentifier,
             PostLogoutRedirectUris = model.PostLogoutRedirectUris,
+            BackChannelTokenDeliveryMode = model.BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
+            BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
+            BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
         };
 
         if (model.UserInfoSignedResponseAlg.HasValue())

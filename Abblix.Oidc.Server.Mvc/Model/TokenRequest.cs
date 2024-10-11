@@ -83,12 +83,6 @@ public record TokenRequest
     /// Scopes specify the level of access required and the associated permissions.
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.Scope)]
-    [AllowedValues(
-        Scopes.OpenId,
-        Scopes.Profile,
-        Scopes.Email,
-        Scopes.Phone,
-        Scopes.OfflineAccess)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
     public string[] Scope { get; set; } = Array.Empty<string>();
 

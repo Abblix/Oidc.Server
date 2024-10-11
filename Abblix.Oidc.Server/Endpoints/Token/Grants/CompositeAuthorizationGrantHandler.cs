@@ -28,15 +28,26 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// Represents a composite handler that manages multiple authorization grant handlers. This class allows for the delegation
-/// of authorization requests to specific handlers based on the grant type specified in the request. It supports a dynamic
-/// registration of grant handlers, facilitating the extension and customization of the authorization process to accommodate
-/// various grant types defined by the OAuth 2.0 specification.
+/// A composite handler that coordinates multiple authorization grant handlers for processing OAuth 2.0 token requests.
+/// This class allows for flexible and extensible handling of various grant types by delegating specific grant processing
+/// tasks to individual handlers. It dynamically aggregates all available grant handlers, facilitating the addition
+/// of new handlers without modifying the core authorization flow.
 /// </summary>
 public class CompositeAuthorizationGrantHandler: IAuthorizationGrantHandler
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CompositeAuthorizationGrantHandler"/> class.
+    /// The constructor aggregates the collection of grant handlers and organizes them by grant type for efficient
+    /// delegation. Each handler can support one or more grant types, and these are mapped to their respective handlers.
+    /// This design simplifies the extension of grant type handling, as new grant types can be added without changing
+    /// existing logic.
+    /// </summary>
+    /// <param name="grantHandlers">
+    /// A collection of grant handlers, each responsible for a specific set of grant types.</param>
     public CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantHandler> grantHandlers)
     {
+        // Create a dictionary where each grant type is mapped to its corresponding handler.
+        // This allows for fast lookup of handlers based on the requested grant type.
         _grantHandlers = new Dictionary<string, IAuthorizationGrantHandler>(
             from handler in grantHandlers
             from grantType in handler.GrantTypesSupported
@@ -47,21 +58,30 @@ public class CompositeAuthorizationGrantHandler: IAuthorizationGrantHandler
     private readonly Dictionary<string, IAuthorizationGrantHandler> _grantHandlers;
 
     /// <summary>
-    /// The collection of grant types supported by the composite handler, aggregating the grant types
-    /// from all registered individual grant handlers.
+    /// Provides a list of all the supported grant types across the registered grant handlers.
+    /// This allows the composite handler to advertise the full set of supported grant types, which
+    /// can be used for validation and discovery of capabilities by client applications.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported => _grantHandlers.Keys;
 
     /// <summary>
-    /// Asynchronously authorizes a token request based on its grant type. Delegates the authorization
-    /// process to the appropriate grant handler that supports the specified grant type in the request.
+    /// Processes a token request asynchronously by delegating the request to the appropriate handler based on
+    /// the grant type. If a handler for the requested grant type is found, it delegates the request to that handler
+    /// for processing. Otherwise, it returns an error indicating that the grant type is not supported.
+    /// This method abstracts away the complexity of identifying and invoking the correct handler, simplifying the main
+    /// authorization flow.
     /// </summary>
-    /// <param name="request">The token request containing the grant type and other relevant data.</param>
-    /// <param name="clientInfo">Client information associated with the request, used for validation and processing.</param>
-    /// <returns>A task that resolves to a <see cref="GrantAuthorizationResult"/>,
-    /// indicating the outcome of the authorization attempt.</returns>
+    /// <param name="request">
+    /// The token request, which includes the grant type and relevant parameters for processing the request.</param>
+    /// <param name="clientInfo">
+    /// The client information used to validate and process the request, ensuring the request is authorized.</param>
+    /// <returns>A task that resolves to the result of the authorization process.
+    /// If successful, it contains the granted authorization;
+    /// otherwise, it contains an error explaining why the authorization failed.</returns>
     public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
+        // Check if there is a handler for the requested grant type.
+        // If no handler exists, return an error indicating that the grant type is unsupported.
         if (!_grantHandlers.TryGetValue(request.GrantType, out var grantHandler))
         {
             return new InvalidGrantResult(
@@ -69,13 +89,7 @@ public class CompositeAuthorizationGrantHandler: IAuthorizationGrantHandler
                 "The grant type is not supported");
         }
 
-        if (!clientInfo.AllowedGrantTypes.Contains(request.GrantType))
-        {
-            return new InvalidGrantResult(
-                ErrorCodes.UnauthorizedClient,
-                "The grant type is not allowed for this client");
-        }
-
+        // Delegate the authorization request to the handler that supports the specified grant type.
         return await grantHandler.AuthorizeAsync(request, clientInfo);
     }
 }

@@ -30,7 +30,7 @@ public interface IJsonWebTokenCreator
 	/// <summary>
 	/// Lists the all supported signing algorithms for JWT creation.
 	/// </summary>
-	IEnumerable<string> SigningAlgValuesSupported { get; }
+	IEnumerable<string> SignedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.

@@ -79,7 +79,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 	public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
 	{
 		var clientInfo = request.ClientInfo;
-		clientInfo.CheckClient();
+		clientInfo.CheckClientLicense();
 
 		var authContext = _tokenContextEvaluator.EvaluateAuthorizationContext(request);
 

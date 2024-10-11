@@ -19,6 +19,27 @@
 // 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
 
 using System.Text.Json.Serialization;
 
@@ -33,7 +54,9 @@ namespace Abblix.Oidc.Server.Model;
 public record ConfigurationResponse
 {
     /// <summary>
-    /// Nested class containing string constants for JSON property names.
+    /// Nested class containing string constants for JSON property names used in the configuration response.
+    /// These names map directly to the fields returned by the OpenID Connect discovery document, ensuring
+    /// proper serialization and deserialization of configuration data.
     /// </summary>
     public static class Parameters
     {
@@ -58,6 +81,7 @@ public record ConfigurationResponse
         public const string ResponseTypesSupported = "response_types_supported";
         public const string ResponseModesSupported = "response_modes_supported";
         public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
+        public const string TokenEndpointAuthSigningAlgValuesSupported = "token_endpoint_auth_signing_alg_values_supported";
         public const string IdTokenSigningAlgValuesSupported = "id_token_signing_alg_values_supported";
         public const string SubjectTypesSupported = "subject_types_supported";
         public const string CodeChallengeMethodsSupported = "code_challenge_methods_supported";
@@ -68,6 +92,10 @@ public record ConfigurationResponse
         public const string PushedAuthorizationRequestEndpoint = "pushed_authorization_request_endpoint";
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
         public const string RequireSignedRequestObject = "require_signed_request_object";
+        public const string BackchannelTokenDeliveryModesSupported = "backchannel_token_delivery_modes_supported";
+        public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
+        public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
+        public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
     }
 
     /// <summary>
@@ -133,7 +161,8 @@ public record ConfigurationResponse
     public Uri? RegistrationEndpoint { init; get; }
 
     /// <summary>
-    /// The URL for the Pushed Authorization Request endpoint, which allows clients to pre-register authorization requests.
+    /// The URL for the Pushed Authorization Request endpoint, which allows clients to pre-register authorization
+    /// requests.
     /// </summary>
     [JsonPropertyName(Parameters.PushedAuthorizationRequestEndpoint)]
     public Uri? PushedAuthorizationRequestEndpoint { get; set; }
@@ -142,7 +171,7 @@ public record ConfigurationResponse
     /// Indicates whether the provider requires clients to use the Pushed Authorization Requests (PAR) only.
     /// </summary>
     [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
-    public bool RequirePushedAuthorizationRequests { get; set; } //TODO use it!
+    public bool? RequirePushedAuthorizationRequests { get; set; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports front channel logout, allowing clients to log out users
@@ -221,6 +250,14 @@ public record ConfigurationResponse
     public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = default!;
 
     /// <summary>
+    /// Lists the signing algorithms supported by the OpenID Provider for authenticating clients at the token endpoint.
+    /// These algorithms are used to verify the signatures of the authentication requests sent to the token endpoint,
+    /// ensuring the integrity and authenticity of the requests.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlgValuesSupported)]
+    public IEnumerable<string>? TokenEndpointAuthSigningAlgValuesSupported { get; init; }
+
+    /// <summary>
     /// Lists the ID token signing algorithm values supported by the OpenID Provider,
     /// indicating the algorithms that can be used to sign the ID token.
     /// </summary>
@@ -246,7 +283,7 @@ public record ConfigurationResponse
     /// enabling clients to send a fully self-contained authorization request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestParameterSupported)]
-    public bool RequestParameterSupported { init; get; } = default!;
+    public bool RequestParameterSupported { init; get; }
 
     /// <summary>
     /// Lists the prompt values supported by the OpenID Provider,
@@ -261,7 +298,7 @@ public record ConfigurationResponse
     /// and authentication of the information source.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSigningAlgValuesSupported)]
-    public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; } = default!;
+    public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for request objects.
@@ -269,7 +306,7 @@ public record ConfigurationResponse
     /// security measures against tampering and ensuring the authenticity of the request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectSigningAlgValuesSupported)]
-    public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; } = default!;
+    public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.
@@ -277,5 +314,30 @@ public record ConfigurationResponse
     /// integrity of request objects received by the provider.
     /// </summary>
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
-    public bool RequireSignedRequestObject { init; get; } //TODO use it!
+    public bool? RequireSignedRequestObject { init; get; }
+
+    /// <summary>
+    /// Lists the supported backchannel token delivery modes for client-initiated backchannel authentication.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackchannelTokenDeliveryModesSupported)]
+    public IEnumerable<string>? BackChannelTokenDeliveryModesSupported { get; init; }
+
+    /// <summary>
+    /// The backchannel authentication endpoint for initiating CIBA (Client-Initiated Backchannel Authentication)
+    /// requests.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackchannelAuthenticationEndpoint)]
+    public Uri? BackChannelAuthenticationEndpoint { get; init; }
+
+    /// <summary>
+    /// Lists the supported signing algorithms for backchannel authentication requests.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackchannelAuthenticationRequestSigningAlgValuesSupported)]
+    public IEnumerable<string>? BackChannelAuthenticationRequestSigningAlgValuesSupported { get; init; }
+
+    /// <summary>
+    /// Indicates whether the OpenID Provider supports the backchannel user code parameter for CIBA.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
+    public bool? BackChannelUserCodeParameterSupported { get; init; }
 }

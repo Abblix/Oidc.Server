@@ -44,7 +44,7 @@ public class TokenStatusValidatorDecorator : IJsonWebTokenValidator
 	private readonly ITokenRegistry _tokenRegistry;
 	private readonly IJsonWebTokenValidator _innerValidator;
 
-	public IEnumerable<string> SigningAlgValuesSupported => _innerValidator.SigningAlgValuesSupported;
+	public IEnumerable<string> SigningAlgorithmsSupported => _innerValidator.SigningAlgorithmsSupported;
 
 	/// <summary>
 	/// Validates a JSON Web Token (JWT) and checks its revocation status.

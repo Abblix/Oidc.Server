@@ -25,15 +25,18 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 /// <summary>
-/// Formats and signs JSON Web Tokens (JWTs) according RFC 7519 for the authentication service itself.
-/// These tokens are utilized in various API endpoints for authentication and authorization purposes.
+/// Defines the interface for formatting and signing JSON Web Tokens (JWTs) within the authentication service.
+/// Implementations of this interface are responsible for processing tokens, such as access tokens, refresh tokens,
+/// and Registration Access Tokens, by applying the necessary cryptographic operations to produce a valid JWT.
 /// </summary>
 public interface IAuthServiceJwtFormatter
 {
     /// <summary>
-    /// Formats a JWT asynchronously for the authentication service itself.
+    /// Formats and signs a JWT for use within the authentication service, applying cryptographic operations such as
+    /// signing and optionally encrypting the token based on the specified requirements.
     /// </summary>
-    /// <param name="token">The JWT to format.</param>
-    /// <returns>A formatted JWT as a string.</returns>
+    /// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
+    /// <returns>A task representing the asynchronous operation, which results in the JWT formatted as a string.
+    /// </returns>
     Task<string> FormatAsync(JsonWebToken token);
 }

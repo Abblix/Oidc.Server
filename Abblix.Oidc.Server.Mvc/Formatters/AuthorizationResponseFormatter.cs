@@ -74,11 +74,13 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
         _authorizationRequestStorage = authorizationRequestStorage;
         _sessionManagementService = sessionManagementService;
         _httpContextAccessor = httpContextAccessor;
+        _issuerProvider = issuerProvider;
     }
 
     private readonly IAuthorizationRequestStorage _authorizationRequestStorage;
     private readonly ISessionManagementService _sessionManagementService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IIssuerProvider _issuerProvider;
     private readonly IOptions<OidcOptions> _options;
 
     /// <summary>

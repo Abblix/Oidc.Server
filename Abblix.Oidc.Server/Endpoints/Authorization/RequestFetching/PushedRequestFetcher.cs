@@ -20,10 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -35,13 +37,19 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
     /// <summary>
     /// Initializes a new instance of the <see cref="PushedRequestFetcher"/> class.
     /// </summary>
-    /// <param name="authorizationRequestStorage">The storage system used to retrieve pushed authorization
-    /// request objects.</param>
-    public PushedRequestFetcher(IAuthorizationRequestStorage authorizationRequestStorage)
+    /// <param name="options">
+    /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
+    /// <param name="authorizationRequestStorage">
+    /// The storage system used to retrieve pushed authorization request objects.</param>
+    public PushedRequestFetcher(
+        IOptionsSnapshot<OidcOptions> options,
+        IAuthorizationRequestStorage authorizationRequestStorage)
     {
+        _options = options;
         _authorizationRequestStorage = authorizationRequestStorage;
     }
 
+    private readonly IOptionsSnapshot<OidcOptions> _options;
     private readonly IAuthorizationRequestStorage _authorizationRequestStorage;
 
     /// <summary>
@@ -52,15 +60,18 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
     /// </param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains the fetched pushed authorization
-    /// request object or an error if not found.</returns>
+    /// request object or an error if not found.
+    /// </returns>
     /// <remarks>
     /// This method checks if the provided authorization request contains a URN that references a pushed authorization
     /// request stored in the system. If the URN is valid and corresponds to a stored request, the method retrieves
     /// and returns the request object. If the request object cannot be found or the URN is invalid,
     /// an error is returned.
+    /// Additionally, it checks the server configuration to enforce the Pushed Authorization Request (PAR) requirement.
     /// </remarks>
     public async Task<FetchResult> FetchAsync(AuthorizationRequest request)
     {
+        // If the request contains a URN, attempt to retrieve the pushed authorization request from storage
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
@@ -72,6 +83,13 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
             };
         }
 
+        // If PAR is required by server configuration, return an error if no pushed authorization request is provided
+        if (_options.Value.RequirePushedAuthorizationRequests)
+        {
+            return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
+        }
+
+        // If no URN is provided and PAR is not required, return the original request
         return request;
     }
 }

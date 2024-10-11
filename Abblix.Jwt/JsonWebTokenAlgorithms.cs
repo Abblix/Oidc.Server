@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.IdentityModel.Tokens.Jwt;
-
 namespace Abblix.Jwt;
 
 internal static class JsonWebTokenAlgorithms
@@ -33,8 +31,24 @@ internal static class JsonWebTokenAlgorithms
     /// for supported algorithms used by both JsonWebTokenCreator and JsonWebTokenValidator classes,
     /// leveraging JwtSecurityTokenHandler under the hood.
     /// </summary>
-    public static readonly IEnumerable<string> SigningAlgValuesSupported =
-        JwtSecurityTokenHandler.DefaultOutboundAlgorithmMap.Values
-            .Append(SigningAlgorithms.None)
-            .ToArray();
+    public static readonly IEnumerable<string> SigningAlgValuesSupported = new[]
+    {
+        SigningAlgorithms.RS256,
+        SigningAlgorithms.RS384,
+        SigningAlgorithms.RS512,
+
+        SigningAlgorithms.PS256,
+        SigningAlgorithms.PS384,
+        SigningAlgorithms.PS512,
+
+        SigningAlgorithms.ES256,
+        SigningAlgorithms.ES384,
+        SigningAlgorithms.ES512,
+
+        SigningAlgorithms.HS256,
+        SigningAlgorithms.HS384,
+        SigningAlgorithms.HS512,
+
+        SigningAlgorithms.None,
+    };
 }

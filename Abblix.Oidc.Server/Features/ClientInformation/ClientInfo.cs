@@ -46,7 +46,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret.
     /// This classification influences the authorization flow and token endpoint authentication method that
-    /// the client can utilize. Public clients, such as mobile or desktop applications, cannot securely store secrets,
+    /// the client can utilize. Public clients, such as mobile or desktop applications, can’t securely store secrets,
     /// while confidential clients, like server-side web applications, can.
     /// </summary>
     public ClientType ClientType { get; set; } = ClientType.Public;
@@ -129,7 +129,7 @@ public record ClientInfo(string ClientId)
     public string[] AllowedGrantTypes { get; set; } = { GrantTypes.AuthorizationCode };
 
     /// <summary>
-    /// Allows the client to request tokens that enable access to the user's resources while they are offline.
+    /// Allows the client to request tokens that enable access to the user's resources while they’re offline.
     /// </summary>
     public bool? OfflineAccessAllowed { get; set; } = false;
 
@@ -200,9 +200,40 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Used in conjunction with pairwise subject identifiers to calculate the subject value returned to the client.
-    /// This field is particularly relevant for ensuring user privacy by providing a different subject identifier
+    /// This field is particularly relevant to ensuring user privacy by providing a different subject identifier
     /// to each client, even if it's the same end-user. It typically contains a URL or a unique identifier
     /// representing the client's sector.
     /// </summary>
     public string? SectorIdentifier { get; set; }
+
+    /// <summary>
+    /// Indicates whether the login hint token should be parsed and validated as a JSON Web Token (JWT).
+    /// </summary>
+    /// <remarks>
+    /// If this property is set to <c>false</c>, it means the login hint token is not in JWT format.
+    /// In this case, the client is responsible for parsing and validating the token as part of the validation flow,
+    /// as the authorization server will not handle its validation automatically.
+    /// </remarks>
+    public bool ParseLoginHintTokenAsJwt { get; set; } = true;
+
+    /// <summary>
+    /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
+    /// during backchannel authentication.
+    /// </summary>
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    /// <summary>
+    /// The endpoint where backchannel client notifications are sent for this client.
+    /// </summary>
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The signing algorithm used for backchannel authentication requests sent to this client.
+    /// </summary>
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    /// <summary>
+    /// Indicates whether the backchannel authentication process supports user codes for this client.
+    /// </summary>
+    public bool BackChannelUserCodeParameter { get; set; } = false;
 }

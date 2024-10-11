@@ -56,7 +56,7 @@ public class OidcClient : IDisposable
 	{
 		var discoveryResponse = JsonDocument.Parse(await _client.GetStringAsync(".well-known/openid-configuration"));
 
-		Uri Discover(string name) => new(discoveryResponse.RootElement.GetProperty(name).GetString());
+		Uri Discover(string name) => Uri.TryCreate(discoveryResponse.RootElement.GetProperty(name).GetString(), UriKind.RelativeOrAbsolute, out var uri) ? uri : default;
 
 		_authorizationEndpoint = Discover("authorization_endpoint");
 		_tokenEndpoint = Discover("token_endpoint");

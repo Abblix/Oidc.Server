@@ -34,7 +34,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 {
 	/// <summary>
 	/// Initializes a new instance of the <see cref="AuthorizationCodeService"/> class,
-	/// configuring it with the necessary components for authorization code generation and storage.
+	/// configuring it with the necessary elements for authorization code generation and storage.
 	/// </summary>
 	/// <param name="authorizationCodeGenerator">The generator that creates unique authorization codes.</param>
 	/// <param name="storage">The storage mechanism for persisting and retrieving authorization codes and their
@@ -52,7 +52,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 
 	/// <summary>
 	/// Generates a unique authorization code for a given authorization grant result and client information.
-	/// This code is subsequently used by the client to request an access token.
+	/// The client subsequently uses this code to request an access token.
 	/// </summary>
 	/// <param name="authorizedGrant">An object encapsulating the result of the authorization grant, including
 	/// user authentication session and authorization context details.</param>
@@ -123,5 +123,5 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 	/// </summary>
 	/// <param name="authorizationCode">The authorization code to convert.</param>
 	/// <returns>A string that represents the standardized key for the authorization code.</returns>
-	private string ToKeyString(string authorizationCode) => $"{nameof(authorizationCode)}:{authorizationCode}";
+	private static string ToKeyString(string authorizationCode) => $"{nameof(authorizationCode)}:{authorizationCode}";
 }

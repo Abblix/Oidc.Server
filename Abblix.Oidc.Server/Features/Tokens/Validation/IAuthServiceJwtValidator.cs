@@ -28,9 +28,18 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// Validates JWT issued by the OpenID service using specified options.
 /// </summary>
 /// <returns>
-/// Returns parsed object model of JWT in case of success or detailed error otherwise.
+/// Returns parsed model of JWT in case of success or detailed error otherwise.
 /// </returns>
 public interface IAuthServiceJwtValidator
 {
+	/// <summary>
+	/// Asynchronously validates a JSON Web Token (JWT) based on the provided validation options.
+	/// This method ensures that the JWT is correctly formatted, signed, and adheres to the expected claims and audience.
+	/// </summary>
+	/// <param name="jwt">The JWT string to be validated.</param>
+	/// <param name="options">The validation options that control how the JWT is validated, including checks for issuer,
+	/// audience, expiration, and more. Defaults to <see cref="ValidationOptions.Default"/> if not specified.</param>
+	/// <returns>A task representing the asynchronous operation, resulting in a <see cref="JwtValidationResult"/>
+	/// that indicates whether the JWT is valid or provides details of any validation errors.</returns>
 	public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default);
 }

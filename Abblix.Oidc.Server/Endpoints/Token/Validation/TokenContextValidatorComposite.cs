@@ -24,18 +24,39 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
+/// <summary>
+/// Represents a composite validator for token context validation, executing a sequence of individual validators.
+/// This class allows multiple validators to be combined, each responsible for a specific validation step,
+/// and short-circuits the validation process if any step fails.
+/// </summary>
 public class TokenContextValidatorComposite : ITokenContextValidator
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TokenContextValidatorComposite"/> class
+    /// with the specified array of validators.
+    /// </summary>
+    /// <param name="validators">An array of validators representing the steps in the validation process.</param>
     public TokenContextValidatorComposite(ITokenContextValidator[] validators)
     {
         _validators = validators;
     }
 
     /// <summary>
-    /// The array of validators representing the steps in the validation process.
+    /// The array of validators that will be executed in sequence during the validation process.
     /// </summary>
     private readonly ITokenContextValidator[] _validators;
 
+    /// <summary>
+    /// Asynchronously validates the token request by executing each validator in the sequence.
+    /// The validation process stops at the first encountered error and returns it.
+    /// If all validators succeed, the method returns null, indicating successful validation.
+    /// </summary>
+    /// <param name="context">The context containing the token request and related information
+    /// that needs to be validated.</param>
+    /// <returns>
+    /// A <see cref="TokenRequestError"/> containing error details if any validation step fails;
+    /// otherwise, returns null indicating that all validation steps were successful.
+    /// </returns>
     public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
     {
         foreach (var validator in _validators)

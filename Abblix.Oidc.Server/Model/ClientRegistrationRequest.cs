@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -38,10 +37,9 @@ namespace Abblix.Oidc.Server.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// Array of redirection URIs for the OP to redirect the End-User after obtaining authorization.
+    /// Array of redirection URIs for the OP to redirect the End-User after getting authorization.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
-    [Required]
     [ElementsRequired]
     public Uri[] RedirectUris { get; set; } = default!;
 
@@ -63,7 +61,8 @@ public record ClientRegistrationRequest
     [AllowedValues(
         Common.Constants.GrantTypes.AuthorizationCode,
         Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken)]
+        Common.Constants.GrantTypes.RefreshToken,
+        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
 
     /// <summary>
@@ -73,7 +72,7 @@ public record ClientRegistrationRequest
     public string ApplicationType { get; init; } = ApplicationTypes.Web;
 
     /// <summary>
-    /// Array of e-mail addresses of people responsible for this client.
+    /// E-mail addresses of people responsible for this client.
     /// </summary>
     [JsonPropertyName(Parameters.Contacts)]
     public string[]? Contacts { get; init; }
@@ -98,7 +97,7 @@ public record ClientRegistrationRequest
     public Uri? LogoUri { get; init; }
 
     /// <summary>
-    /// URL of the home page of the client.
+    /// URL that points to the home page of the client.
     /// </summary>
     [JsonPropertyName(Parameters.ClientUri)]
     [AbsoluteUri]
@@ -148,7 +147,6 @@ public record ClientRegistrationRequest
     /// JWS algorithm for the ID Token issued to this client.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -167,7 +165,6 @@ public record ClientRegistrationRequest
     /// JWS algorithm for UserInfo Responses.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -204,18 +201,12 @@ public record ClientRegistrationRequest
     /// Requested Authentication Method Reference values for this client.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    [AllowedValues(
-        ClientAuthenticationMethods.ClientSecretBasic,
-        ClientAuthenticationMethods.ClientSecretPost,
-        ClientAuthenticationMethods.PrivateKeyJwt,
-        ClientAuthenticationMethods.None)]
     public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
 
     /// <summary>
     /// JWS algorithm that MUST be used for Private Key JWT Client Authentication at the Token Endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
     /// <summary>
@@ -312,16 +303,51 @@ public record ClientRegistrationRequest
     /// <c>true</c> if the front-channel logout requires a session identifier; otherwise, <c>false</c>.
     /// </value>
     /// <remarks>
-    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect specification.
-    /// When set to <c>true</c>, it indicates that the client requires a session identifier to be sent with front-channel logout requests.
+    /// This property corresponds to the 'frontchannel_logout_session_required' parameter in the OpenID Connect
+    /// specification. When set to <c>true</c>, it indicates that the client requires a session identifier
+    /// to be sent with front-channel logout requests.
     /// This is typically used to facilitate logout across multiple sessions or devices.
     /// </remarks>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
     public bool? FrontChannelLogoutSessionRequired { get; set; } = false;
 
+    /// <summary>
+    /// Array of URIs to which the OP will redirect the user's user agent after logging out.
+    /// These URIs are used to continue the user's browsing session after logout.
+    /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
     public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
+
+    /// <summary>
+    /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
+    /// during backchannel authentication.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
+    [AllowedValues(
+        BackchannelTokenDeliveryModes.Ping,
+        BackchannelTokenDeliveryModes.Poll,
+        BackchannelTokenDeliveryModes.Push)]
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    /// <summary>
+    /// The endpoint where backchannel client notifications are sent for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
+    [AbsoluteUri]
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The signing algorithm used for backchannel authentication requests sent to this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    /// <summary>
+    /// Indicates whether the backchannel authentication process supports user codes for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
+    public bool BackChannelUserCodeParameter { get; set; } = false;
 
     public static class Parameters
     {
@@ -363,5 +389,9 @@ public record ClientRegistrationRequest
         public const string FrontChannelLogoutUri = "frontchannel_logout_uri";
         public const string FrontChannelLogoutSessionRequired = "frontchannel_logout_session_required";
         public const string PostLogoutRedirectUris = "post_logout_redirect_uris";
+        public const string BackChannelTokenDeliveryMode = "backchannel_token_delivery_mode";
+        public const string BackChannelClientNotificationEndpoint = "backchannel_client_notification_endpoint";
+        public const string BackChannelAuthenticationRequestSigningAlg = "backchannel_authentication_request_signing_alg";
+        public const string BackChannelUserCodeParameter = "backchannel_user_code_parameter";
     }
 }

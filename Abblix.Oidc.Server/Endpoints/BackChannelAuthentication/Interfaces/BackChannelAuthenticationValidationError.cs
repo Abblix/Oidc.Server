@@ -23,7 +23,12 @@
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 
 /// <summary>
-/// Indicates that a back-channel authentication request is invalid and describes what was wrong and why.
+/// Represents a validation error that occurs during the backchannel authentication request validation process.
+/// This record encapsulates the error details, including an error code and a human-readable description
+/// of the issue that caused the validation to fail.
 /// </summary>
+/// <param name="Error">A code representing the specific error that occurred during validation.</param>
+/// <param name="ErrorDescription">A human-readable description providing more details about the validation error.
+/// </param>
 public record BackChannelAuthenticationValidationError(string Error, string ErrorDescription)
 	: BackChannelAuthenticationValidationResult;

@@ -20,12 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Represents the context of an authorization process, encapsulating key parameters necessary for processing
+/// Represents the context of an authorization process, encapsulating the key parameters required for processing
 /// authorization requests.
 /// </summary>
 /// <remarks>
@@ -38,30 +40,91 @@ namespace Abblix.Oidc.Server.Common;
 /// enabling fine-grained access control and personalized identity assertion in accordance with the client's needs
 /// and the authorization server's policies.
 /// </remarks>
-public record AuthorizationContext(string ClientId, string[] Scope, RequestedClaims? RequestedClaims)
+public record AuthorizationContext
 {
     /// <summary>
-    /// The unique identifier for the client making the authorization request, as registered in the authorization server.
-    /// This identifier is crucial for linking the authorization request and the issued tokens to a specific client application.
+    /// Initializes a new instance of the <see cref="AuthorizationContext"/> class.
     /// </summary>
-    public string ClientId { get; init; } = ClientId;
+    /// <param name="clientId">
+    /// The unique identifier of the client making the authorization request.
+    /// </param>
+    /// <param name="scope">
+    /// An array of scope values requested by the client, representing the access permissions being sought.
+    /// </param>
+    /// <param name="requestedClaims">
+    /// Optional claims that the client is requesting as part of the authorization process,
+    /// providing additional information about the user's identity.
+    /// </param>
+    [JsonConstructor]
+    public AuthorizationContext(string clientId, string[] scope, RequestedClaims? requestedClaims)
+    {
+        ClientId = clientId;
+        Scope = scope;
+        RequestedClaims = requestedClaims;
+    }
 
     /// <summary>
-    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or permissions
-    /// that the client is requesting on the user's behalf. They play a key role in enforcing principle of least privilege.
+    /// Initializes a new instance of the <see cref="AuthorizationContext"/> class with a client ID,
+    /// a collection of scopes, and optional requested claims.
     /// </summary>
-    public string[] Scope { get; init; } = Scope;
+    /// <param name="clientId">The unique identifier of the client making the authorization request.</param>
+    /// <param name="scopes">An array of scope definitions requested by the client.</param>
+    /// <param name="resources">An array of resource definitions associated with the authorization request.</param>
+    /// <param name="requestedClaims">Optional claims requested by the client for the authorization process.</param>
+    public AuthorizationContext(
+        string clientId,
+        ScopeDefinition[] scopes,
+        ResourceDefinition[] resources,
+        RequestedClaims? requestedClaims)
+        : this(clientId, GetScopeNames(scopes, resources), requestedClaims)
+    {
+        Resources = Array.ConvertAll(resources, resource => resource.Resource);
+    }
+
+    /// <summary>
+    /// Extracts unique scope names from the provided scope and resource definitions.
+    /// This method aggregates scopes defined in both scopes and resources to ensure
+    /// there are no duplicates, returning them as an array of strings.
+    /// </summary>
+    /// <param name="scopes">An array of scope definitions to extract names from.</param>
+    /// <param name="resources">An array of resource definitions to extract names from.</param>
+    /// <returns>
+    /// An array of unique scope names represented as strings, combining those from scopes
+    /// and resources.
+    /// </returns>
+    private static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
+    {
+        return scopes
+            .Concat(resources.SelectMany(rd => rd.Scopes))
+            .Select(sd => sd.Scope)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The unique identifier for the client making the authorization request, as registered in the authorization server.
+    /// This identifier is crucial for linking the authorization request and the issued tokens to a specific
+    /// client application.
+    /// </summary>
+    public string ClientId { get; init; }
+
+    /// <summary>
+    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or
+    /// permissions that the client is requesting on the user's behalf.
+    /// They play a key role in enforcing the principle of least privilege.
+    /// </summary>
+    public string[] Scope { get; init; }
 
     /// <summary>
     /// Optional. Specifies the individual Claims requested by the client, providing detailed instructions
     /// for the authorization server on the Claims to be returned, either in the ID Token or via the UserInfo endpoint.
-    /// This mechanism supports clients in obtaining consented user information in a structured and controlled manner.
     /// </summary>
-    public RequestedClaims? RequestedClaims { get; init; } = RequestedClaims;
+    public RequestedClaims? RequestedClaims { get; init; }
 
     /// <summary>
-    /// The URI where the authorization response should be sent. This URI must match one of the registered redirect URIs
-    /// for the client application, ensuring that authorization responses are delivered to the correct destination securely.
+    /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI
+    /// for the client application, ensuring that authorization responses are delivered to the correct destination
+    /// securely.
     /// </summary>
     public Uri? RedirectUri { get; init; }
 
@@ -90,4 +153,11 @@ public record AuthorizationContext(string ClientId, string[] Scope, RequestedCla
     /// to access.
     /// </summary>
     public Uri[]? Resources { get; init; }
+
+    public void Deconstruct(out string ClientId, out string[] Scope, out RequestedClaims? RequestedClaims)
+    {
+        ClientId = this.ClientId;
+        Scope = this.Scope;
+        RequestedClaims = this.RequestedClaims;
+    }
 }

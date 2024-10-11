@@ -36,4 +36,10 @@ public static class CodeChallengeMethods
 	/// Represents the "S256" code challenge method where the code verifier is hashed using SHA-256.
 	/// </summary>
 	public const string S256 = "S256";
+
+	/// <summary>
+	/// Represents the "S512" code challenge method where the code verifier is hashed using SHA-512.
+	/// This method provides a higher level of security through a stronger hashing algorithm.
+	/// </summary>
+	public const string S512 = "S512";
 }

@@ -23,6 +23,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -43,13 +44,13 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// Array of URIs to which the OpenID Provider will redirect the User Agent after obtaining authorization.
-    /// These URIs are used in the client's authorization request and are crucial for the redirect flow in OAuth2 and OpenID Connect.
+    /// Array of URIs to which the OpenID Provider will redirect the User Agent after getting authorization.
+    /// These URIs are used in the client's authorization request and are crucial for the redirect flow in OAuth2 and
+    /// OpenID Connect.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
-    [Required]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = default!;
+    public Uri[] RedirectUris { get; set; } = Array.Empty<Uri>();
 
     /// <summary>
     /// JSON array containing a list of the OAuth 2.0 response_type values.
@@ -69,7 +70,8 @@ public record ClientRegistrationRequest
     [AllowedValues(
         Common.Constants.GrantTypes.AuthorizationCode,
         Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken)]
+        Common.Constants.GrantTypes.RefreshToken,
+        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
 
     /// <summary>
@@ -165,7 +167,6 @@ public record ClientRegistrationRequest
     /// Specifies the algorithm that the OpenID Provider should use to sign ID Tokens sent to this client.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -187,7 +188,6 @@ public record ClientRegistrationRequest
     /// Indicates the preferred algorithm for signing UserInfo responses sent to this client.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
     /// <summary>
@@ -230,12 +230,6 @@ public record ClientRegistrationRequest
     /// Specifies how the client will authenticate to the Token Endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    [AllowedValues(
-        ClientAuthenticationMethods.ClientSecretBasic,
-        ClientAuthenticationMethods.ClientSecretPost,
-        ClientAuthenticationMethods.ClientSecretJwt,
-        ClientAuthenticationMethods.PrivateKeyJwt,
-        ClientAuthenticationMethods.None)]
     public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
 
     /// <summary>
@@ -243,7 +237,6 @@ public record ClientRegistrationRequest
     /// Endpoint. Specifies the algorithm to be used by the client for signing JWTs used in client authentication.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
-    [AllowedValues(SigningAlgorithms.None, SigningAlgorithms.RS256)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
     /// <summary>
@@ -335,6 +328,36 @@ public record ClientRegistrationRequest
     public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
 
     /// <summary>
+    /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
+    /// during backchannel authentication.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
+    [AllowedValues(
+        BackchannelTokenDeliveryModes.Ping,
+        BackchannelTokenDeliveryModes.Poll,
+        BackchannelTokenDeliveryModes.Push)]
+    public string? BackChannelTokenDeliveryMode { get; set; }
+
+    /// <summary>
+    /// The endpoint where backchannel client notifications are sent for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
+    [AbsoluteUri]
+    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The signing algorithm used for backchannel authentication requests sent to this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
+    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+
+    /// <summary>
+    /// Indicates whether the backchannel authentication process supports user codes for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
+    public bool BackChannelUserCodeParameter { get; set; } = false;
+
+    /// <summary>
     /// Maps the properties of this client registration request to a <see cref="Core.ClientRegistrationRequest"/>
     /// object. This method is used to translate the request data into a format that can be processed by the core
     /// registration logic.
@@ -372,7 +395,7 @@ public record ClientRegistrationRequest
             RequestObjectSigningAlg = RequestObjectSigningAlg,
 
             IdTokenEncryptedResponseAlg = IdTokenEncryptedResponseAlg,
-            IdTokenEncryptedResponseEnc = RequestObjectEncryptionEnc,
+            IdTokenEncryptedResponseEnc = IdTokenEncryptedResponseEnc,
             IdTokenSignedResponseAlg = IdTokenSignedResponseAlg,
 
             TokenEndpointAuthMethod = TokenEndpointAuthMethod,
@@ -389,6 +412,11 @@ public record ClientRegistrationRequest
             FrontChannelLogoutSessionRequired = FrontChannelLogoutSessionRequired,
 
             PostLogoutRedirectUris = PostLogoutRedirectUris,
+
+            BackChannelTokenDeliveryMode = BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = BackChannelClientNotificationEndpoint,
+            BackChannelAuthenticationRequestSigningAlg = BackChannelAuthenticationRequestSigningAlg,
+            BackChannelUserCodeParameter = BackChannelUserCodeParameter,
         };
     }
 }

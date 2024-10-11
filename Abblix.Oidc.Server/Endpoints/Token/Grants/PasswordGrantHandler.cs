@@ -31,14 +31,21 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// This class is responsible for handling the password grant type
-/// as part of the IAuthorizationGrantHandler process.
+/// Handles the authorization process for the password grant type within the OAuth 2.0 framework.
+/// This handler validates the user's credentials and processes token requests based on the password grant type.
+/// The password grant type allows clients to directly exchange a user's credentials (username and password)
+/// for an access token, typically for trusted clients.
 /// </summary>
 public class PasswordGrantHandler : IAuthorizationGrantHandler
 {
     /// <summary>
-    /// Initializes a new instance of the PasswordGrantHandler class.
+    /// Initializes a new instance of the <see cref="PasswordGrantHandler"/> class.
+    /// The constructor sets up the required services for validating user credentials and parameters.
+    /// The parameter validator ensures the required parameters for this grant type are present,
+    /// while the user credentials authenticator is responsible for verifying the username and password.
     /// </summary>
+    /// <param name="parameterValidator">A service for validating required request parameters.</param>
+    /// <param name="userCredentialsAuthenticator">A service for authenticating the user's credentials.</param>
     public PasswordGrantHandler(
         IParameterValidator parameterValidator,
         IUserCredentialsAuthenticator userCredentialsAuthenticator)
@@ -51,29 +58,40 @@ public class PasswordGrantHandler : IAuthorizationGrantHandler
     private readonly IUserCredentialsAuthenticator _userCredentialsAuthenticator;
 
     /// <summary>
-    /// Gets the grant type this handler supports.
+    /// Specifies the grant type that this handler supports, which is the "password" grant type.
+    /// This ensures that this handler is only invoked when processing requests with the password grant type.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported
     {
         get { yield return GrantTypes.Password; }
     }
 
+
     /// <summary>
-    /// Authorizes the token request asynchronously using the password grant type.
+    /// Asynchronously processes the token request using the password grant type.
+    /// The handler ensures the request contains the necessary parameters, validates the user's credentials,
+    /// and then proceeds to authorize the request if the credentials are valid.
+    /// It delegates credential validation to the user credentials authenticator, which handles the security
+    /// checks related to user authentication.
     /// </summary>
-    /// <param name="request">The token request to authorize.</param>
-    /// <param name="clientInfo">The client information associated with the request.</param>
-    /// <returns>A task representing the result of the authorization process, containing a GrantAuthorizationResult object.</returns>
+    /// <param name="request">The token request containing the user's credentials and other parameters.</param>
+    /// <param name="clientInfo">Information about the client making the request, used for validation and context.
+    /// </param>
+    /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
+    /// </returns>
     public Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
+        // Ensure that the request contains the required username and password parameters.
         _parameterValidator.Required(request.UserName, nameof(request.UserName));
         _parameterValidator.Required(request.Password, nameof(request.Password));
         
+        // Extract relevant details from the request and prepare the authorization context.
         var userName = request.UserName;
         var password = request.Password;
         var scope = request.Scope;
         var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
 
+        // Delegate the actual user credential validation and authentication to the custom authenticator.
         return _userCredentialsAuthenticator.ValidateAsync(userName, password, context);
     }
 }

@@ -364,7 +364,7 @@ FodyWeavers.xsd
 /.idea/.idea.Oidc.Server.dir/.idea
 
 .env
-/.idea/.idea.Abblix.Oidc/Docker/
+/.idea/
 /local-npm.cmd
 /local-rebuild.cmd
 /Certificates/myCA/private/Abblix Licensing.pem

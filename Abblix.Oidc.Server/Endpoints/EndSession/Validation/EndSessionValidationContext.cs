@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 
@@ -45,4 +46,10 @@ public record EndSessionValidationContext(EndSessionRequest Request)
 	/// </summary>
 	/// <exception cref="InvalidOperationException">Thrown when attempting to get a null value.</exception>
 	public ClientInfo? ClientInfo { get; set; }
+
+	/// <summary>
+	/// The ID token associated with the end-session request.
+	/// This token is typically used to validate the identity of the user who initiated the end-session process.
+	/// </summary>
+	public JsonWebToken? IdToken { get; set; }
 }

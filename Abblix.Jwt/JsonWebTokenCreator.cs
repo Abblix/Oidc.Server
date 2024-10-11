@@ -40,7 +40,7 @@ public sealed class JsonWebTokenCreator : IJsonWebTokenCreator
     /// This property reflects the JWT security token handler's default outbound algorithm mapping,
     /// indicating the algorithms available for signing the tokens.
     /// </summary>
-    public IEnumerable<string> SigningAlgValuesSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
+    public IEnumerable<string> SignedResponseAlgorithmsSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
 
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encrypting key.
@@ -65,7 +65,7 @@ public sealed class JsonWebTokenCreator : IJsonWebTokenCreator
         {
             TokenType = jwt.Header.Type,
             Issuer = jwt.Payload.Issuer,
-            Audience = jwt.Payload.Audiences?.SingleOrDefault(), //TODO replace JwtSecurityTokenHandler with own code to overcome this limitation
+            Audience = jwt.Payload.Audiences.SingleOrDefault(), //TODO replace JwtSecurityTokenHandler with own code to overcome this limitation
 
             IssuedAt = CheckDateOverflow(jwt.Payload.IssuedAt, nameof(jwt.Payload.IssuedAt)),
             NotBefore = CheckDateOverflow(jwt.Payload.NotBefore, nameof(jwt.Payload.NotBefore)),
