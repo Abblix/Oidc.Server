@@ -1,28 +1,79 @@
-name: CI/CD with Auto Versioning
+name: Build, Publish and Merge Release to Master
 
 on:
-  workflow_dispatch:
-#  push:
-#    branches: [ master ]
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      release_branch:
+        description: 'The release branch to be processed'
+        required: true
+        default: 'release/1.0.0'  # Example default branch
 
 jobs:
-  versioning:
+  startup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump github context
+        run:   echo "$GITHUB_CONTEXT"
+        shell: bash
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+
+  check_merge_conflict:
+    needs: startup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          git config --global user.signingkey ${{ secrets.GPG_KEY_ID }}
+          git config --global commit.gpgSign true
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0  # Fetch all history to avoid shallow clone issues
+      - name: Fetch and checkout release branch
+        run: |
+          git fetch origin ${{ github.event.inputs.release_branch }}:release_branch
+          git checkout release_branch
+      - name: Check for merge conflicts
+        run: |
+          git fetch origin master
+          git checkout master
+          git merge --no-commit --no-ff release_branch || (
+            echo "Merge to master conflict detected. Aborting."
+            git merge --abort
+            exit 1
+          )
+
+  get_version:
+    needs: check_merge_conflict
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.new_version }}
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4.1.2
-      - name: Bump version and push tag
-        id: set_version
-        uses: mathieudutour/github-tag-action@v6.2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch # Automatically bump patch version
-          release_branches: release.*,hotfix.*,master
-          pre_release_branches: feature.*
-
+          fetch-depth: 0  # Fetch all history and tags
+      - name: Debug - List tags
+        run: git tag -l
+      - name: Debug - Show commits
+        run: git log --oneline
+      - name: Get latest tag
+        id: get_version
+        run: |
+          tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.1")
+          version=${tag#v}  # Remove leading 'v' if present
+          echo "version=$version" >> $GITHUB_ENV
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Resolved version: $version"
+          
   build:
-    needs: versioning
+    needs: get_version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.1.2
@@ -37,14 +88,16 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.get_version.outputs.version }}
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@v4.3.1
         with:
           name: nuget-packages
           path: nupkg/*.nupkg
+
   publish:
     needs: build
+#    if: startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     steps:
       - name: Download NuGet packages artifacts
@@ -52,5 +105,35 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
-      - name: Push to NuGet
-        run: dotnet nuget push "**/*.nupkg" -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
+#      - name: Push to NuGet.org
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+#      - name: Push to GitHub Packages
+#        run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.GITHUB_TOKEN }} -s https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
+
+  merge_to_master:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+      - name: Checkout master branch
+        uses: actions/checkout@v4.1.2
+        with:
+          ref: master
+          fetch-depth: 0  # Fetch all history to avoid shallow clone issues
+      - name: Fetch and checkout release branch
+        run: |
+          git fetch origin ${{ github.event.inputs.release_branch }}:release_branch
+          git checkout release_branch
+      - name: Merge release branch into master
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git fetch origin master
+          git checkout master
+          git merge --no-ff --no-edit release_branch
+          git push origin master
+          
