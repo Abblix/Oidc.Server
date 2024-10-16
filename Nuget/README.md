@@ -47,6 +47,7 @@ Abblix OIDC Server fully implements a comprehensive suite of advanced standards 
 - **OpenID Connect Dynamic Client Registration**: [Detailed Specification](https://openid.net/specs/openid-connect-registration-1_0.html): Enables OpenID Connect clients to register dynamically with providers.
 - **OpenID Connect Core: Pairwise Pseudonymous Identifiers (PPID)**: [Core Specification](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg): Implements a privacy mechanism by generating unique identifiers for clients.
 - **OAuth 2.0 Resource Indicators**: [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707): Enables users to specify the resources they want access to, enhancing security and access control.
+- **OpenID Connect Client-Initiated Backchannel Authentication (CIBA)**: [Core Specification](https://openid.net/specs/openid-connect-backchannel-1_0.html): Enables secure user authentication via backchannel communication on devices without direct web access, ideal for IoT and financial services scenarios.
 
 ## Getting Started
 
