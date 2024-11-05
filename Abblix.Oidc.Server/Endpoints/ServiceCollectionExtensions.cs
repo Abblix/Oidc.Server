@@ -95,9 +95,9 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
 
             // Add individual authorization request fetchers as singletons
-            .AddSingleton<IAuthorizationRequestFetcher, PushedRequestFetcher>()
-            .AddSingleton<IAuthorizationRequestFetcher, RequestUriFetcher>()
-            .AddSingleton<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()
+            .AddScoped<IAuthorizationRequestFetcher, PushedRequestFetcher>()
+            .AddScoped<IAuthorizationRequestFetcher, RequestUriFetcher>()
+            .AddScoped<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()
 
             // Compose the individual fetchers into a composite fetcher
             .Compose<IAuthorizationRequestFetcher, Authorization.RequestFetching.CompositeRequestFetcher>();
