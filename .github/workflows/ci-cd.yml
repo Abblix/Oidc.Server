@@ -11,7 +11,7 @@ jobs:
     outputs:
       version: ${{ steps.set_version.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v4.1.2
+      - uses: actions/checkout@v4.2.2
       - name: Bump version and push tag
         id: set_version
         uses: mathieudutour/github-tag-action@v6.2
@@ -25,11 +25,11 @@ jobs:
     needs: versioning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.2
+      - uses: actions/checkout@v4.2.2
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4.0.0
+        uses: actions/setup-dotnet@v4.1.0
         with:
-          dotnet-version: '8.0'
+          dotnet-version: '9.0'
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
@@ -39,7 +39,7 @@ jobs:
       - name: Pack
         run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
       - name: Upload NuGet packages as artifacts
-        uses: actions/upload-artifact@v4.3.1
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: nuget-packages
           path: nupkg/*.nupkg
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download NuGet packages artifacts
-        uses: actions/download-artifact@v4.1.4
+        uses: actions/download-artifact@v4.1.8
         with:
           name: nuget-packages
           path: nupkg
