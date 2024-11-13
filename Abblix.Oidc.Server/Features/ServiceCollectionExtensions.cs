@@ -404,7 +404,7 @@ public static class ServiceCollectionExtensions
     /// modifications and additions to be chained.</returns>
     public static IServiceCollection AddRequestObject(this IServiceCollection services)
     {
-        services.TryAddSingleton<IRequestObjectFetcher, RequestObjectFetcher>();
+        services.TryAddScoped<IRequestObjectFetcher, RequestObjectFetcher>();
         return services;
     }
 
