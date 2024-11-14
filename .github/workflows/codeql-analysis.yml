@@ -45,7 +45,7 @@ jobs:
       matrix:
         include:
         - language: csharp
-          build-mode: manual
+          build-mode: autobuild
         # CodeQL supports the following values keywords for 'language': 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
@@ -74,7 +74,7 @@ jobs:
     # Custom manual build steps for C# using dotnet
     - if: matrix.build-mode == 'manual' && matrix.language == 'csharp'
       name: Install .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.x' # Adjust if you're using a different .NET version
 
