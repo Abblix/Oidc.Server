@@ -74,7 +74,7 @@ jobs:
     # Custom manual build steps for C# using dotnet
     - if: matrix.build-mode == 'manual' && matrix.language == 'csharp'
       name: Install .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.x' # Adjust if you're using a different .NET version
 
