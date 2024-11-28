@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.DependencyInjection;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -140,9 +139,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddPushedAuthorizationEndpoint(this IServiceCollection services)
     {
         return services
-            .AddScoped<IPushedAuthorizationHandler, PushedAuthorizationHandler>()
-            .AddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>(
+            .AddScoped<IPushedAuthorizationHandler, PushedAuthorizationHandler>(
                 Dependency.Override<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>())
+            .AddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>()
             .AddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
     }
 
