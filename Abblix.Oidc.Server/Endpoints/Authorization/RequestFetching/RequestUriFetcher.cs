@@ -91,6 +91,12 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
             return request; // Pass through if no valid RequestUri is provided
         }
 
+        if (requestUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.InvalidRequestUri, "The request URI must be an https URI");
+        }
+
         var clientId = request.ClientId;
         if (clientId is null)
         {
