@@ -46,7 +46,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret.
     /// This classification influences the authorization flow and token endpoint authentication method that
-    /// the client can utilize. Public clients, such as mobile or desktop applications, can’t securely store secrets,
+    /// the client can use. Public clients, such as mobile or desktop applications, can’t securely store secrets,
     /// while confidential clients, like server-side web applications, can.
     /// </summary>
     public ClientType ClientType { get; set; } = ClientType.Public;
@@ -236,4 +236,15 @@ public record ClientInfo(string ClientId)
     /// Indicates whether the backchannel authentication process supports user codes for this client.
     /// </summary>
     public bool BackChannelUserCodeParameter { get; set; } = false;
+
+    /// <summary>
+    /// The list of allowed URI values to validate the <c>request_uri</c> parameter in authorization requests.
+    /// </summary>
+    /// <remarks>
+    /// The <c>request_uri</c> parameter references a hosted authorization request object.
+    /// This property defines the valid URIs
+    /// that can be used in the <c>request_uri</c> parameter for authorization requests,
+    /// ensuring that only authorized and pre-approved URIs are accepted by the server.
+    /// </remarks>
+    public Uri[] RequestUris { get; set; } = Array.Empty<Uri>();
 }
