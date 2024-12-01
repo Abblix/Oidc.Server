@@ -71,7 +71,12 @@ public class ClientValidator : IAuthorizationContextValidator
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
         var clientId = context.Request.ClientId;
-        var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))).WithLicenseCheck();
+        if (clientId is null)
+        {
+            return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
+        }
+
+        var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
             _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(clientId));
