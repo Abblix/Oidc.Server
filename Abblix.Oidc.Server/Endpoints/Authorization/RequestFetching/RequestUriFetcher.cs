@@ -20,8 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 
@@ -29,9 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
 /// <summary>
 /// Handles fetching of authorization request objects from a specified request URI.
-/// This class is responsible for retrieving the pre-registered request objects from an external location
+/// This class is responsible for retrieving pre-registered request objects from an external location
 /// indicated by a URI, ensuring the request is complete and valid.
-/// It helps enable dynamic request objects, allowing authorization servers to fetch additional
+/// It enables dynamic request objects, allowing authorization servers to fetch additional
 /// data required for processing the authorization request.
 /// </summary>
 public class RequestUriFetcher : IAuthorizationRequestFetcher
@@ -41,20 +46,23 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
     /// This constructor sets up the necessary services for fetching the request objects over HTTP.
     /// </summary>
     /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
+    /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
     /// <param name="httpClientFactory">
     /// The factory used to create <see cref="HttpClient"/> instances for making HTTP requests to the specified URI.
     /// </param>
     public RequestUriFetcher(
         ILogger<RequestUriFetcher> logger,
+        IClientInfoProvider clientInfoProvider,
         IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
+        _clientInfoProvider = clientInfoProvider;
         _httpClientFactory = httpClientFactory;
     }
 
     private readonly ILogger _logger;
+    private readonly IClientInfoProvider _clientInfoProvider;
     private readonly IHttpClientFactory _httpClientFactory;
-
 
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
@@ -74,17 +82,44 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
     {
         if (request is { Request: not null, RequestUri: not null })
         {
-            // Log an error if both request parameters are provided, as this violates the request format rules.
             return ErrorFactory.InvalidRequest(
                 $"Only one of the parameters {Parameters.Request} and {Parameters.RequestUri} can be used");
         }
 
         if (request is not { RequestUri: { IsAbsoluteUri: true } requestUri })
         {
-            return request;
+            return request; // Pass through if no valid RequestUri is provided
         }
 
-        // If the request contains a valid absolute URI, proceed to fetch the request object.
+        if (requestUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.InvalidRequestUri, "The request URI must be an https URI");
+        }
+
+        var clientId = request.ClientId;
+        if (clientId is null)
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.UnauthorizedClient, "The client id is required");
+        }
+
+        var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        if (clientInfo == null)
+        {
+            _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(clientId));
+            return ErrorFactory.ValidationError(
+                ErrorCodes.UnauthorizedClient, "The client is not authorized");
+        }
+
+        var requestUriValidator = UriValidatorFactory.Create(true, clientInfo.RequestUris);
+        if (!requestUriValidator.IsValid(requestUri))
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.InvalidRequestUri, "The request URI is not allowed for the client");
+        }
+
+        // If the request contains a valid absolute URI, proceed to fetch the request object
         var client = _httpClientFactory.CreateClient();
         string requestObject;
         try
@@ -98,7 +133,7 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
                 $"Unable to get the request object from {Parameters.RequestUri}");
         }
 
-        // Return the updated request with the fetched request object and nullify the redirect URI.
+        // Return the updated request with the fetched request object and nullify the redirect URI
         return request with { RedirectUri = null, Request = requestObject };
     }
 }
