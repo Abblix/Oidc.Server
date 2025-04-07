@@ -26,6 +26,8 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Configuration;
+using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
+using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -52,7 +54,6 @@ public static class ServiceCollectionExtensions
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-
 	public static IServiceCollection AddOidcServices(this IServiceCollection services, Action<OidcOptions> configureOptions)
 	{
 		return services.AddOidcServices((options, _) => configureOptions(options));
@@ -82,13 +83,15 @@ public static class ServiceCollectionExtensions
     {
 		services
 			.AddOidcControllers()
+			.ConfigureRoutesFallback()
 			.AddHttpContextAccessor()
 
 		    .AddSingleton<IParameterValidator, ParameterValidator>()
 			.AddSingleton<IParametersProvider, ParametersProvider>()
 		    .AddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>()
-			.AddSingleton<IAuthSessionService, AuthenticationSchemeAdapter>()
+			.AddScoped<IAuthSessionService, AuthenticationSchemeAdapter>()
 			.AddSingleton<IUriResolver, UriResolver>()
+			.AddScoped<IEndpointResolver, EndpointResolver>()
 			.AddSingleton<IActionContextAccessor, ActionContextAccessor>()
 			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
 			.AddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>()
