@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -76,7 +77,6 @@ public sealed class DiscoveryController : ControllerBase
 	public Task<ActionResult<ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IOptionsSnapshot<OidcOptions> options,
 		[FromServices] IIssuerProvider issuerProvider,
-		[FromServices] IUriResolver uriResolver,
 		[FromServices] ILogoutNotifier logoutNotifier,
 		[FromServices] IClientAuthenticator clientAuthenticator,
 		[FromServices] IAuthorizationGrantHandler authorizationGrantHandler,
@@ -84,22 +84,26 @@ public sealed class DiscoveryController : ControllerBase
 		[FromServices] IJsonWebTokenCreator jwtCreator,
 		[FromServices] IJsonWebTokenValidator jwtValidator,
 		[FromServices] IAuthorizationHandler authorizationHandler,
-		[FromServices] ISubjectTypeConverter subjectTypeConverter)
+		[FromServices] ISubjectTypeConverter subjectTypeConverter,
+		[FromServices] IEndpointResolver endpointResolver)
 	{
 		var response = new ConfigurationResponse
 		{
 			Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 
-			JwksUri = Resolve(Path.Keys, OidcEndpoints.Keys),
-			AuthorizationEndpoint = Resolve(Path.Authorize, OidcEndpoints.Authorize),
-			TokenEndpoint = Resolve(Path.Token, OidcEndpoints.Token),
-			UserInfoEndpoint = Resolve(Path.UserInfo, OidcEndpoints.UserInfo),
-			EndSessionEndpoint = Resolve(Path.EndSession, OidcEndpoints.EndSession),
-			CheckSessionIframe = Resolve(Path.CheckSession, OidcEndpoints.CheckSession),
-			RevocationEndpoint = Resolve(Path.Revocation, OidcEndpoints.Revocation),
-			IntrospectionEndpoint = Resolve(Path.Introspection, OidcEndpoints.Introspection),
-			RegistrationEndpoint = Resolve(Path.Register, OidcEndpoints.Register),
-			PushedAuthorizationRequestEndpoint = Resolve(Path.PushAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
+			JwksUri = Resolve<DiscoveryController>(nameof(KeysAsync), OidcEndpoints.Keys),
+
+			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize),
+			UserInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo),
+			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession),
+			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession),
+			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest),
+
+			TokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token),
+			RevocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation),
+			IntrospectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection),
+
+			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.Register),
 
 			FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
@@ -135,7 +139,7 @@ public sealed class DiscoveryController : ControllerBase
 			IdTokenSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
 			UserInfoSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
 
-			BackChannelAuthenticationEndpoint = Resolve(Path.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
+			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
 			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
 			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
@@ -143,10 +147,13 @@ public sealed class DiscoveryController : ControllerBase
 
 		return Task.FromResult<ActionResult<ConfigurationResponse>>(response);
 
-		Uri? Resolve(string contentPath, OidcEndpoints enablingFlag)
-			=> options.Value.Discovery.AllowEndpointPathsDiscovery && options.Value.EnabledEndpoints.HasFlag(enablingFlag)
-				? uriResolver.Content(contentPath)
+		Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag) where T : ControllerBase
+		{
+			return options.Value.Discovery.AllowEndpointPathsDiscovery &&
+			       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
+				? endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName))
 				: null;
+		}
 	}
 
 	/// <summary>
