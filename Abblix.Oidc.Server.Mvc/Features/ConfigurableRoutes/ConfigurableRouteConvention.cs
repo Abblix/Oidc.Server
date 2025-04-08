@@ -65,9 +65,11 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     /// </exception>
     public void Apply(ApplicationModel application)
     {
-        foreach (var controller in application.Controllers)
-        foreach (var action in controller.Actions)
-        foreach (var selector in action.Selectors)
+        var selectors = application.Controllers
+            .SelectMany(controller => controller.Actions)
+            .SelectMany(action => action.Selectors);
+
+        foreach (var selector in selectors)
         {
             Apply(selector);
         }
