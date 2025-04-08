@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.Extensions.Configuration;
@@ -48,7 +49,8 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
         _configSection = configSection;
         _routeRegex = new Regex(
             $@"\[{prefix}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>[^\]]+))?\]",
-            RegexOptions.Compiled);
+            RegexOptions.Compiled,
+            TimeSpan.FromMilliseconds(100));
     }
 
     private readonly IConfigurationSection? _configSection;
@@ -92,18 +94,23 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     /// </exception>
     private string Resolve(string template)
     {
-        bool replaced;
+        var resolvedTokens = new HashSet<string>(StringComparer.Ordinal);
+        bool tokenFound;
         do
         {
-            replaced = false;
+            tokenFound = false;
+
+            var originalTemplate = template;
 
             template = _routeRegex.Replace(
-                template,
+                originalTemplate,
                 match =>
                 {
-                    replaced = true;
+                    tokenFound = true;
 
                     var token = match.Groups[TokenGroup].Value;
+                    if (!resolvedTokens.Add(token))
+                        throw new InvalidOperationException($"Circular dependency for token '{token}' in route '{originalTemplate}'.");
 
                     var resolvedPath = _configSection?.GetValue<string>(token);
                     if (resolvedPath != null)
@@ -116,7 +123,9 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
                     throw new InvalidOperationException($"Can't resolve the route {token}");
                 });
 
-        } while (replaced);
+            Debug.WriteLine($"Intermediate resolved template: {template}");
+
+        } while (tokenFound);
 
         return template;
     }
