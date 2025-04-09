@@ -73,13 +73,7 @@ public static class MvcUtils
 	public static string TrimAsync(string action)
 	{
 		const string asyncSuffix = "Async";
-		if (!action.EndsWith(asyncSuffix))
-		{
-			throw new InvalidOperationException(
-				$"Naming convention is broken, because the name of the action {action} must end with {asyncSuffix}");
-		}
-
-		return action[..^asyncSuffix.Length];
+		return action.EndsWith(asyncSuffix) ? action[..^asyncSuffix.Length] : action;
 	}
 
 	private static readonly RequiredAttribute RequiredAttribute = new();
