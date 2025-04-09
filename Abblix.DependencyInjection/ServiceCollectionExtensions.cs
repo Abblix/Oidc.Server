@@ -129,6 +129,13 @@ public static class ServiceCollectionExtensions
         return services.Replace(decoratorDescriptor);
     }
 
+    /// <summary>
+    /// Appends an element to the end of the array.
+    /// </summary>
+    /// <typeparam name="T">The type of elements in the array.</typeparam>
+    /// <param name="source">The source array.</param>
+    /// <param name="element">The element to append.</param>
+    /// <returns>A new array with the appended element, or a resized array if the source had elements.</returns>
     private static T[] Append<T>(this T[] source, T element)
     {
         switch (source)
@@ -143,6 +150,15 @@ public static class ServiceCollectionExtensions
         }
     }
 
+    /// <summary>
+    /// Retrieves the registered <see cref="ServiceDescriptor"/> for a given interface type.
+    /// </summary>
+    /// <typeparam name="TInterface">The service interface type.</typeparam>
+    /// <param name="services">The service collection to query.</param>
+    /// <returns>The matching <see cref="ServiceDescriptor"/>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the service is not registered in the collection.
+    /// </exception>
     private static ServiceDescriptor GetDescriptor<TInterface>(this IServiceCollection services)
         where TInterface : class
     {
@@ -150,6 +166,18 @@ public static class ServiceCollectionExtensions
                ?? throw new InvalidOperationException($"{typeof(TInterface).Name} is not registered");
     }
 
+    /// <summary>
+    /// Resolves or creates an instance from a <see cref="ServiceDescriptor"/> using the specified service provider.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider to resolve dependencies from.</param>
+    /// <param name="descriptor">The service descriptor to use.</param>
+    /// <returns>An instance of the service described by the descriptor.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the descriptor does not contain a valid instance, factory, or type.
+    /// </exception>
+    /// <remarks>
+    /// Helps simulate or replicate DI container behavior for specific descriptors.
+    /// </remarks>
     private static object CreateService(this IServiceProvider serviceProvider, ServiceDescriptor descriptor)
     {
         return descriptor switch
@@ -161,11 +189,32 @@ public static class ServiceCollectionExtensions
         };
     }
 
+    /// <summary>
+    /// Creates an instance of the specified service type <typeparamref name="T"/> using the provided dependencies.
+    /// </summary>
+    /// <typeparam name="T">The type of service to create.</typeparam>
+    /// <param name="serviceProvider">The service provider to resolve required services from.</param>
+    /// <param name="dependencies">A list of explicitly provided dependencies.</param>
+    /// <returns>An instance of type <typeparamref name="T"/>.</returns>
+    /// <remarks>
+    /// This overload simplifies strongly typed creation of services with custom dependency injection.
+    /// </remarks>
     public static T CreateService<T>(this IServiceProvider serviceProvider, params Dependency[] dependencies)
     {
         return (T)serviceProvider.CreateService(typeof(T), dependencies);
     }
 
+    /// <summary>
+    /// Creates an instance of the specified type using the provided dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider to resolve required services from.</param>
+    /// <param name="type">The type of service to create.</param>
+    /// <param name="dependencies">A list of explicitly provided dependencies.</param>
+    /// <returns>An instance of the specified <paramref name="type"/>.</returns>
+    /// <remarks>
+    /// This method allows partial control over dependency injection by mixing resolved and custom parameters.
+    /// Useful in plugin scenarios, factory setups, or advanced test setups.
+    /// </remarks>
     public static object CreateService(this IServiceProvider serviceProvider,
         Type type, params Dependency[] dependencies)
     {
@@ -208,7 +257,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="T">The type of the service to add.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies required by the service.</param>
+    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies
+    /// required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddScoped<T>(this IServiceCollection services, params Dependency[] dependencies)
         where T : class
@@ -224,7 +274,8 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TService">The type of the service to add.</typeparam>
     /// <typeparam name="TImplementation">The type of the implementation to use.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies required by the service.</param>
+    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies
+    /// required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddScoped<TService, TImplementation>(this IServiceCollection services,
         params Dependency[] dependencies)
@@ -240,7 +291,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="T">The type of the service to add.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies required by the service.</param>
+    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies
+    /// required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddSingleton<T>(this IServiceCollection services, params Dependency[] dependencies)
         where T : class
@@ -255,7 +307,8 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TService">The type of the service to add.</typeparam>
     /// <typeparam name="TImplementation">The type of the implementation to use.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies required by the service.</param>
+    /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies
+    /// required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
 
     public static IServiceCollection AddSingleton<TService, TImplementation>(this IServiceCollection services,
@@ -265,4 +318,89 @@ public static class ServiceCollectionExtensions
     {
         return services.AddSingleton<TService, TImplementation>(sp => sp.CreateService<TImplementation>(dependencies));
     }
+
+
+    /// <summary>
+    /// Changes the lifetime of a registered service of type <typeparamref name="T"/>
+    /// to the specified <paramref name="lifetime"/>.
+    /// </summary>
+    /// <typeparam name="T">The service type whose lifetime is to be changed.</typeparam>
+    /// <param name="services">The service collection to operate on.</param>
+    /// <param name="lifetime">The new <see cref="ServiceLifetime"/> to apply.</param>
+    /// <returns>The modified <see cref="IServiceCollection"/> instance.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the service descriptor for <typeparamref name="T"/> has an unexpected format.
+    /// </exception>
+    /// <remarks>
+    /// Useful when you need to override the lifetime of an existing registration (e.g., from Singleton to Scoped).
+    /// </remarks>
+    public static IServiceCollection ChangeLifetime<T>(this IServiceCollection services, ServiceLifetime lifetime)
+    {
+        var serviceType = typeof(T);
+
+        var serviceDescriptor = services.FindRequired<T>() switch
+        {
+            { ImplementationFactory: { } factory }
+                => ServiceDescriptor.Describe(serviceType, factory, lifetime),
+
+            { ImplementationType: { } implementationType }
+                => ServiceDescriptor.Describe(serviceType, implementationType, lifetime),
+
+            _ => throw new InvalidOperationException($"The unexpected service descriptor for type {serviceType}"),
+        };
+
+        services.Replace(serviceDescriptor);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Removes all registrations of type <typeparamref name="T"/> from the service collection.
+    /// </summary>
+    /// <typeparam name="T">The service type to remove.</typeparam>
+    /// <param name="services">The service collection to operate on.</param>
+    /// <returns>
+    /// <c>true</c> if any descriptors were removed; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// Can be used to clean up pre-registered services before adding custom implementations.
+    /// </remarks>
+    public static ServiceDescriptor[] RemoveAll<T>(this IServiceCollection services)
+    {
+        var serviceDescriptors = services.FindAll<T>().ToArray();
+        Array.ForEach(serviceDescriptors, serviceDescriptor => services.Remove(serviceDescriptor));
+        return serviceDescriptors;
+    }
+
+    /// <summary>
+    /// Finds the first registered service descriptor for type <typeparamref name="T"/>.
+    /// Throws if no descriptor is found.
+    /// </summary>
+    /// <typeparam name="T">The service type to locate.</typeparam>
+    /// <param name="services">The service collection to search.</param>
+    /// <returns>The matching <see cref="ServiceDescriptor"/>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if no descriptor is found for the specified type.
+    /// </exception>
+    public static ServiceDescriptor FindRequired<T>(this IServiceCollection services)
+        => services.Find<T>() ?? throw new InvalidOperationException($"A service descriptor was not found for type {typeof(T)}");
+
+    /// <summary>
+    /// Finds the first registered service descriptor for type <typeparamref name="T"/>,
+    /// or returns <c>null</c> if none exists.
+    /// </summary>
+    /// <typeparam name="T">The service type to locate.</typeparam>
+    /// <param name="services">The service collection to search.</param>
+    /// <returns>The matching <see cref="ServiceDescriptor"/>, or <c>null</c> if not found.</returns>
+    public static ServiceDescriptor? Find<T>(this IServiceCollection services)
+        => services.SingleOrDefault(s => s.ServiceType == typeof(T));
+
+    /// <summary>
+    /// Finds all registered service descriptors for type <typeparamref name="T"/>.
+    /// </summary>
+    /// <typeparam name="T">The service type to locate.</typeparam>
+    /// <param name="services">The service collection to search.</param>
+    /// <returns>An <see cref="IEnumerable{T}"/> of matching <see cref="ServiceDescriptor"/> instances.</returns>
+    public static IEnumerable<ServiceDescriptor> FindAll<T>(this IServiceCollection services)
+        => services.Where(s => s.ServiceType == typeof(T));
 }

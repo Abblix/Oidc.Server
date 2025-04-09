@@ -28,70 +28,74 @@ namespace Abblix.Oidc.Server.Mvc;
 /// </summary>
 public static class Path
 {
-    private const string Base = "~/connect";
+    internal const string RoutePrefix = "route";
+    
+    private const string Base = "[" + RoutePrefix + ":base?~/connect]";
 
     /// <summary>
     /// Path for the authorization endpoint.
     /// </summary>
-    public const string Authorize = Base + "/authorize";
+    public const string Authorize = "[" + RoutePrefix + ":authorize?" + Base + "/authorize]";
 
     /// <summary>
     /// Path for the pushed authorization request (PAR) endpoint.
     /// </summary>
-    public const string PushAuthorizationRequest = Base + "/par";
+    public const string PushAuthorizationRequest = "[" + RoutePrefix + ":par?" + Base + "/par]";
 
     /// <summary>
     /// Path for the user information endpoint.
     /// </summary>
-    public const string UserInfo = Base + "/userinfo";
+    public const string UserInfo = "[" + RoutePrefix + ":userinfo?" + Base + "/userinfo]";
 
     /// <summary>
     /// Path for the end session endpoint.
     /// </summary>
-    public const string EndSession = Base + "/endsession";
+    public const string EndSession = "[" + RoutePrefix + ":endsession?" + Base + "/endsession]";
 
     /// <summary>
     /// Path for the session checking endpoint.
     /// </summary>
-    public const string CheckSession = Base + "/checksession";
+    public const string CheckSession = "[" + RoutePrefix + ":checksession?" + Base + "/checksession]";
 
     /// <summary>
     /// Path for the token endpoint.
     /// </summary>
-    public const string Token = Base + "/token";
+    public const string Token = "[" + RoutePrefix + ":token?" + Base + "/token]";
 
     /// <summary>
     /// Path for the token revocation endpoint.
     /// </summary>
-    public const string Revocation = Base + "/revoke";
+    public const string Revocation = "[" + RoutePrefix + ":revoke?" + Base + "/revoke]";
 
     /// <summary>
     /// Path for the token introspection endpoint.
     /// </summary>
-    public const string Introspection = Base + "/introspect";
+    public const string Introspection = "[" + RoutePrefix + ":introspect?" + Base + "/introspect]";
 
     /// <summary>
     /// Path for the backchannel authentication endpoint.
     /// </summary>
-    public const string BackChannelAuthentication = Base + "/bc-authorize";
+    public const string BackChannelAuthentication = "[" + RoutePrefix + ":bc_authorize?" + Base + "/bc-authorize]";
 
     /// <summary>
     /// Path for the device authorization endpoint.
     /// </summary>
-    public const string DeviceAuthorization = Base + "/deviceauthorization";
+    public const string DeviceAuthorization = "[" + RoutePrefix + ":deviceauthorization?" + Base + "/deviceauthorization]";
 
     /// <summary>
     /// Path for the client registration endpoint.
     /// </summary>
-    public const string Register = Base + "/register";
+    public const string Register = "[" + RoutePrefix + ":register?" + Base + "/register]";
+
+    private const string WellKnown = "[" + RoutePrefix + ":well_known?~/.well-known]";
 
     /// <summary>
     /// Path for the OpenID configuration document.
     /// </summary>
-    public const string Configuration = "~/.well-known/openid-configuration";
+    public const string Configuration = "[" + RoutePrefix + ":configuration?" + WellKnown + "/openid-configuration]";
 
     /// <summary>
     /// Path for the JSON Web Key Set (JWKS) endpoint.
     /// </summary>
-    public const string Keys = "~/.well-known/jwks";
+    public const string Keys = "[" + RoutePrefix + ":jwks?" + WellKnown + "/jwks]";
 }

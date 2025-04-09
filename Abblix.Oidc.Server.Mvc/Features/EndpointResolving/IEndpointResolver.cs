@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,15 +20,22 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Common.Configuration;
+namespace Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 
 /// <summary>
-/// Defines discovery endpoint options.
+/// Defines a service that resolves the absolute URI for a specific controller action
+/// based on the application's endpoint routing configuration.
 /// </summary>
-public class DiscoveryOptions
+public interface IEndpointResolver
 {
-	/// <summary>
-	/// Allows exposing exact paths to OIDC endpoints via discovery manifest.
-	/// </summary>
-	public bool AllowEndpointPathsDiscovery { get; set; } = true;
+    /// <summary>
+    /// Resolves the absolute URI for a given controller and action name.
+    /// </summary>
+    /// <param name="controllerName">The name of the controller (without the "Controller" suffix).</param>
+    /// <param name="actionName">The name of the action method.</param>
+    /// <returns>
+    /// A <see cref="Uri"/> representing the full route to the specified controller action,
+    /// or <c>null</c> if no matching route was found.
+    /// </returns>
+    Uri? Resolve(string controllerName, string actionName);
 }
