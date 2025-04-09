@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
