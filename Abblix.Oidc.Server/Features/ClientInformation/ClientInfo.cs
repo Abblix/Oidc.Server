@@ -241,10 +241,89 @@ public record ClientInfo(string ClientId)
     /// The list of allowed URI values to validate the <c>request_uri</c> parameter in authorization requests.
     /// </summary>
     /// <remarks>
-    /// The <c>request_uri</c> parameter references a hosted authorization request object.
-    /// This property defines the valid URIs
-    /// that can be used in the <c>request_uri</c> parameter for authorization requests,
-    /// ensuring that only authorized and pre-approved URIs are accepted by the server.
+    /// The <c>request_uri</c> parameter references a pre-hosted authorization request object.
+    /// This property specifies the valid URIs that can be included in the <c>request_uri</c> parameter.
+    /// By defining this list, the server ensures that only pre-approved and secure URIs are accepted,
+    /// mitigating risks such as unauthorized or malicious requests.
     /// </remarks>
     public Uri[] RequestUris { get; set; } = Array.Empty<Uri>();
+
+    /// <summary>
+    /// Describes the type of application represented by the client, such as "web" or "native".
+    /// </summary>
+    public string ApplicationType { get; set; } = ApplicationTypes.Web;
+
+    /// <summary>
+    /// An array of contact email addresses associated with the client, primarily used for support purposes.
+    /// </summary>
+    public string[]? Contacts { get; set; }
+
+    /// <summary>
+    /// A human-readable name for the client application,
+    /// which can be displayed to users during the authorization process.
+    /// </summary>
+    public string? ClientName { get; set; }
+
+    /// <summary>
+    /// A URL pointing to a web page providing information about the client application.
+    /// This is typically used to offer additional context to users during the authorization process.
+    /// </summary>
+    public Uri? ClientUri { get; set; }
+
+    /// <summary>
+    /// The maximum time in seconds since the user's authentication that the client accepts.
+    /// Requests exceeding this time will require re-authentication of the user.
+    /// </summary>
+    public TimeSpan? DefaultMaxAge { get; set; }
+
+    /// <summary>
+    /// Indicates whether the authorization server must include the `auth_time` claim in the ID token.
+    /// </summary>
+    public bool? RequireAuthTime { get; set; }
+
+    /// <summary>
+    /// Specifies the default Authentication Context Class Reference (ACR) values for the client.
+    /// These values indicate the types of authentication methods or levels of assurance required.
+    /// </summary>
+    public string[]? DefaultAcrValues { get; set; }
+
+    /// <summary>
+    /// Specifies the algorithm used to encrypt identity tokens issued to the client.
+    /// </summary>
+    public string? IdentityTokenEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// Specifies the encryption method used to encrypt identity tokens issued to the client.
+    /// </summary>
+    public string? IdentityTokenEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
+    /// Specifies the algorithm used to encrypt UserInfo responses returned to the client.
+    /// </summary>
+    public string? UserInfoEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// Specifies the encryption method used to encrypt UserInfo responses returned to the client.
+    /// </summary>
+    public string? UserInfoEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
+    /// Specifies the algorithm required for signing request objects sent to the authorization server.
+    /// </summary>
+    public string? RequestObjectSigningAlgorithm { get; set; }
+
+    /// <summary>
+    /// Specifies the algorithm required for encrypting request objects sent to the authorization server.
+    /// </summary>
+    public string? RequestObjectEncryptionAlgorithm { get; set; }
+
+    /// <summary>
+    /// Specifies the encryption method required for encrypting request objects sent to the authorization server.
+    /// </summary>
+    public string? RequestObjectEncryptionMethod { get; set; }
+
+    /// <summary>
+    /// Specifies the algorithm used to sign client authentication requests at the token endpoint.
+    /// </summary>
+    public string? TokenEndpointAuthSigningAlgorithm { get; set; }
 }

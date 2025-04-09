@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;

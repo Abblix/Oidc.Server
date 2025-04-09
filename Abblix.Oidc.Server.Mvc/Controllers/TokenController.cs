@@ -50,7 +50,7 @@ public class TokenController : ControllerBase
     /// </summary>
     /// <param name="handler">The service responsible for handling token issuance logic.</param>
     /// <param name="formatter">The service tasked with formatting the token issuance response.</param>
-    /// <param name="tokenRequest">Details of the token request, including grant type and required parameters.</param>
+    /// <param name="tokenRequest">Details of the token request, including a grant type and required parameters.</param>
     /// <param name="clientRequest">Contextual information about the client making the request.</param>
     /// <returns>A task that results in an action containing the token response, formatted as per OIDC specifications.
     /// </returns>
@@ -84,7 +84,8 @@ public class TokenController : ControllerBase
     /// <param name="handler">The service responsible for processing token revocation requests.</param>
     /// <param name="formatter">The service responsible for formatting the revocation response.</param>
     /// <param name="revocationRequest">Details of the revocation request, including the token to be revoked.</param>
-    /// <param name="clientRequest">Additional contextual information about the client making the revocation request.</param>
+    /// <param name="clientRequest">Additional contextual information about the client making the revocation request.
+    /// </param>
     /// <returns>A task that results in an action indicating the outcome of the revocation process.</returns>
     /// <remarks>
     /// Adheres to the OAuth 2.0 Token Revocation standard, allowing clients to manage the lifecycle of their tokens
@@ -120,8 +121,8 @@ public class TokenController : ControllerBase
     /// <returns>A task that results in an action providing detailed information about the state of the queried token.
     /// </returns>
     /// <remarks>
-    /// Implements the OAuth 2.0 Token Introspection specification, allowing clients to verify the status of tokens in
-    /// a secure manner.
+    /// Implements the OAuth 2.0 Token Introspection specification, allowing clients to verify the status of tokens
+    /// securely.
     /// <see href="https://www.rfc-editor.org/rfc/rfc7662#section-2">OAuth 2.0 Token Introspection Documentation</see>
     /// </remarks>
     [HttpPost(Path.Introspection)]

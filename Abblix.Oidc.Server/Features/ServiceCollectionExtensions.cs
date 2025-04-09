@@ -262,7 +262,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddIdentityToken(this IServiceCollection services)
     {
         return services
-            .AddSingleton<IIdentityTokenService, IdentityTokenService>();
+            .AddScoped<IIdentityTokenService, IdentityTokenService>();
     }
 
     /// <summary>
@@ -384,7 +384,7 @@ public static class ServiceCollectionExtensions
     /// modifications and additions to be chained.</returns>
     public static IServiceCollection AddUserInfo(this IServiceCollection services)
     {
-        services.TryAddSingleton<IUserClaimsProvider, UserClaimsProvider>();
+        services.TryAddScoped<IUserClaimsProvider, UserClaimsProvider>();
         services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();

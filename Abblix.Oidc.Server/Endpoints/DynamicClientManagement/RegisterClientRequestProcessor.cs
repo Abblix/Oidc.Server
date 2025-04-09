@@ -37,7 +37,7 @@ using ClientRegistrationResponse = Abblix.Oidc.Server.Endpoints.DynamicClientMan
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles the registration of new clients by generating necessary credentials and adding client information to
+/// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
 public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
@@ -145,17 +145,6 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     {
         var clientInfo = new ClientInfo(clientId)
         {
-            ClientSecrets = clientSecret.HasValue()
-                ? new[]
-                {
-                    new ClientSecret
-                    {
-                        Sha512Hash = _hashService.Sha(HashAlgorithm.Sha512, clientSecret),
-                        ExpiresAt = expiresAt,
-                    }
-                }
-                : null,
-
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
             AllowedGrantTypes = model.GrantTypes,
@@ -175,7 +164,39 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
             BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
             BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
             BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
+            ApplicationType = model.ApplicationType,
+            Contacts = model.Contacts,
+            ClientName = model.ClientName,
+            ClientUri = model.ClientUri,
+            DefaultMaxAge = model.DefaultMaxAge,
+            RequireAuthTime = model.RequireAuthTime,
+            DefaultAcrValues = model.DefaultAcrValues,
+            IdentityTokenEncryptedResponseAlgorithm = model.IdTokenEncryptedResponseAlg,
+            IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
+            UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
+            UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
+            RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
+            RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
+            TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
         };
+
+        if (clientSecret.HasValue())
+        {
+            clientInfo.ClientSecrets = new[]
+            {
+                new ClientSecret
+                {
+                    Sha512Hash = _hashService.Sha(HashAlgorithm.Sha512, clientSecret),
+                    ExpiresAt = expiresAt,
+                }
+            };
+        }
+
+        if (model.RequestUris != null)
+        {
+            clientInfo.RequestUris = model.RequestUris;
+        }
 
         if (model.UserInfoSignedResponseAlg.HasValue())
         {
