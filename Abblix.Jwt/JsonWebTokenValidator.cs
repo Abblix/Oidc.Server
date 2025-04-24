@@ -210,12 +210,14 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
         ClaimValueTypes.Boolean => JsonValue.Create(bool.Parse(value)),
         ClaimValueTypes.Integer or ClaimValueTypes.Integer64 => JsonValue.Create(long.Parse(value)),
         ClaimValueTypes.Integer32 => JsonValue.Create(int.Parse(value)),
-        ClaimValueTypes.Date or ClaimValueTypes.DateTime => JsonValue.Create(DateTimeOffset.Parse(value)),
-        ClaimValueTypes.Time => JsonValue.Create(TimeSpan.Parse(value)),
+        ClaimValueTypes.Date or ClaimValueTypes.DateTime
+            => JsonValue.Create(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture)),
+        ClaimValueTypes.Time => JsonValue.Create(TimeSpan.Parse(value, CultureInfo.InvariantCulture)),
 
         ClaimValueTypes.Double => JsonValue.Create(double.Parse(value, CultureInfo.InvariantCulture)),
         ClaimValueTypes.HexBinary => JsonValue.Create(Convert.FromHexString(value)),
-        ClaimValueTypes.Base64Binary or ClaimValueTypes.Base64Octet => JsonValue.Create(Convert.FromBase64String(value)),
+        ClaimValueTypes.Base64Binary or ClaimValueTypes.Base64Octet
+            => JsonValue.Create(Convert.FromBase64String(value)),
 
         ClaimValueTypes.UInteger32 => JsonValue.Create(uint.Parse(value, CultureInfo.InvariantCulture)),
         ClaimValueTypes.UInteger64 => JsonValue.Create(ulong.Parse(value, CultureInfo.InvariantCulture)),
