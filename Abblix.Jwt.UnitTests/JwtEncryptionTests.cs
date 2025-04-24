@@ -36,6 +36,7 @@ public class JwtEncryptionTests
     public async Task JwtFullCycleTest()
     {
         var issuedAt = DateTimeOffset.UtcNow;
+        var expiresIn = TimeSpan.FromSeconds(10);
 
         var token = new JsonWebToken
         {
@@ -44,7 +45,7 @@ public class JwtEncryptionTests
                 JwtId = Guid.NewGuid().ToString("N"),
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
-                ExpiresAt = issuedAt + TimeSpan.FromDays(1),
+                ExpiresAt = issuedAt + expiresIn,
                 Issuer = "abblix.com",
                 Audiences = [nameof(JwtFullCycleTest)],
                 ["test"] = "value",
@@ -81,6 +82,12 @@ public class JwtEncryptionTests
 
         var address = result.Token.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
         Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
+
+        await Task.Delay(expiresIn);
+
+        var (error, description) = Assert.IsType<JwtValidationError>(await validator.ValidateAsync(jwt, parameters));
+        Assert.Equal(JwtError.InvalidToken, error);
+        Assert.Equal("", description);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

@@ -58,41 +58,41 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// <returns>The result of the JWT validation process, either indicating success or detailing any validation errors.</returns>
     private static JwtValidationResult Validate(string jwt, ValidationParameters parameters)
     {
-        var tokenValidationParameters = new TokenValidationParameters
+        var validationParameters = new TokenValidationParameters
         {
             NameClaimType = JwtClaimTypes.Subject,
-
             ValidateIssuer = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer),
             ValidateAudience = parameters.Options.HasFlag(ValidationOptions.ValidateAudience),
             RequireSignedTokens = parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens),
             ValidateIssuerSigningKey = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey),
             ValidateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime),
+            ClockSkew = parameters.ClockSkew,
         };
 
-        if (tokenValidationParameters.ValidateIssuer)
+        if (validationParameters.ValidateIssuer)
         {
             var validateIssuer = parameters.ValidateIssuer
                 .NotNull(nameof(parameters.ValidateIssuer));
 
-            tokenValidationParameters.IssuerValidator = (issuer, _, _) =>
+            validationParameters.IssuerValidator = (issuer, _, _) =>
                 validateIssuer(issuer).Result ? issuer : null;
         }
 
-        if (tokenValidationParameters.ValidateAudience)
+        if (validationParameters.ValidateAudience)
         {
             var validateAudience = parameters.ValidateAudience
                 .NotNull(nameof(parameters.ValidateAudience));
 
-            tokenValidationParameters.AudienceValidator = (audiences, _, _) =>
+            validationParameters.AudienceValidator = (audiences, _, _) =>
                 validateAudience(audiences).Result;
         }
 
-        if (tokenValidationParameters.ValidateIssuerSigningKey)
+        if (validationParameters.ValidateIssuerSigningKey)
         {
             var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
                 .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
 
-            tokenValidationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
+            validationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
             {
                 var signingKeys = resolveIssuerSigningKeys(securityToken.Issuer);
 
@@ -105,7 +105,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
 
         var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys;
         if (resolveTokenDecryptionKeys != null)
-            tokenValidationParameters.TokenDecryptionKeyResolver = (_, securityToken, keyId, _) =>
+            validationParameters.TokenDecryptionKeyResolver = (_, securityToken, keyId, _) =>
             {
                 var decryptionKeys = resolveTokenDecryptionKeys(securityToken.Issuer);
 
@@ -119,7 +119,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
         SecurityToken token;
         try
         {
-            handler.ValidateToken(jwt, tokenValidationParameters, out token);
+            handler.ValidateToken(jwt, validationParameters, out token);
         }
         catch (Exception ex)
         {
