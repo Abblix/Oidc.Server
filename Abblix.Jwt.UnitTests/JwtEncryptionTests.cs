@@ -87,7 +87,7 @@ public class JwtEncryptionTests
 
         var (error, description) = Assert.IsType<JwtValidationError>(await validator.ValidateAsync(jwt, parameters));
         Assert.Equal(JwtError.InvalidToken, error);
-        Assert.Equal("", description);
+        Assert.Contains("Lifetime validation failed", description);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)
