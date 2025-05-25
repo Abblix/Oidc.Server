@@ -33,7 +33,5 @@ public class ConfigurableRouteConventionTests
     [InlineData(Path.Configuration,              "~/.well-known/openid-configuration")]
     [InlineData(Path.Keys,                       "~/.well-known/jwks")]
     public void Resolve_AllPathConstants_ReturnExpected(string template, string expected)
-    {
-        Assert.Equal(expected, _convention.Resolve(template));
-    }
+        => Assert.Equal(expected, _convention.Resolve(template));
 }
