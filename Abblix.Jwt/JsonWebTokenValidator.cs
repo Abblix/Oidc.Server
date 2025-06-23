@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json.Nodes;
@@ -57,41 +58,41 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// <returns>The result of the JWT validation process, either indicating success or detailing any validation errors.</returns>
     private static JwtValidationResult Validate(string jwt, ValidationParameters parameters)
     {
-        var tokenValidationParameters = new TokenValidationParameters
+        var validationParameters = new TokenValidationParameters
         {
             NameClaimType = JwtClaimTypes.Subject,
-
             ValidateIssuer = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer),
             ValidateAudience = parameters.Options.HasFlag(ValidationOptions.ValidateAudience),
             RequireSignedTokens = parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens),
             ValidateIssuerSigningKey = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey),
             ValidateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime),
+            ClockSkew = parameters.ClockSkew,
         };
 
-        if (tokenValidationParameters.ValidateIssuer)
+        if (validationParameters.ValidateIssuer)
         {
             var validateIssuer = parameters.ValidateIssuer
                 .NotNull(nameof(parameters.ValidateIssuer));
 
-            tokenValidationParameters.IssuerValidator = (issuer, _, _) =>
+            validationParameters.IssuerValidator = (issuer, _, _) =>
                 validateIssuer(issuer).Result ? issuer : null;
         }
 
-        if (tokenValidationParameters.ValidateAudience)
+        if (validationParameters.ValidateAudience)
         {
             var validateAudience = parameters.ValidateAudience
                 .NotNull(nameof(parameters.ValidateAudience));
 
-            tokenValidationParameters.AudienceValidator = (audiences, _, _) =>
+            validationParameters.AudienceValidator = (audiences, _, _) =>
                 validateAudience(audiences).Result;
         }
 
-        if (tokenValidationParameters.ValidateIssuerSigningKey)
+        if (validationParameters.ValidateIssuerSigningKey)
         {
             var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
                 .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
 
-            tokenValidationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
+            validationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
             {
                 var signingKeys = resolveIssuerSigningKeys(securityToken.Issuer);
 
@@ -104,7 +105,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
 
         var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys;
         if (resolveTokenDecryptionKeys != null)
-            tokenValidationParameters.TokenDecryptionKeyResolver = (_, securityToken, keyId, _) =>
+            validationParameters.TokenDecryptionKeyResolver = (_, securityToken, keyId, _) =>
             {
                 var decryptionKeys = resolveTokenDecryptionKeys(securityToken.Issuer);
 
@@ -118,7 +119,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
         SecurityToken token;
         try
         {
-            handler.ValidateToken(jwt, tokenValidationParameters, out token);
+            handler.ValidateToken(jwt, validationParameters, out token);
         }
         catch (Exception ex)
         {
@@ -142,17 +143,59 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
                 ExpiresAt = jwToken.ValidTo,
                 Issuer = jwToken.Issuer,
                 Audiences = jwToken.Audiences,
-            }
+            },
         };
 
-        foreach (var claim in jwToken.Claims.ExceptBy(JwtSecurityTokenHandlerConstants.ClaimTypesToExclude, claim => claim.Type))
-        {
-            result.Payload[claim.Type] = ToJsonNode(claim.ValueType, claim.Value);
-        }
+        MergeClaims(jwToken.Claims, result.Payload.Json, JwtSecurityTokenHandlerConstants.ClaimTypesToExclude);
 
         return new ValidJsonWebToken(result);
     }
 
+    /// <summary>
+    /// Merges a set of claims into a <see cref="JsonObject"/>, excluding specified claim types.
+    /// </summary>
+    /// <remarks>
+    /// Each claim is converted to a <see cref="JsonNode"/> using <c>ToJsonNode</c>.
+    /// - Claims with a single value are stored as a <see cref="JsonValue"/>.
+    /// - Claims with multiple values are stored in a <see cref="JsonArray"/>.
+    ///
+    /// Excluded claim types will be skipped entirely.
+    /// Ensure that returned <see cref="JsonNode"/> instances are not reused elsewhere in the JSON tree,
+    /// as <c>System.Text.Json.Nodes</c> does not allow a node to have more than one parent.
+    /// </remarks>
+    /// <param name="claims">The collection of claims to merge.</param>
+    /// <param name="json">The target <see cref="JsonObject"/> to populate with merged claims.</param>
+    /// <param name="claimTypesToExclude">An array of claim type identifiers that should be excluded from the merge.
+    /// </param>
+    /// <exception cref="InvalidOperationException">Thrown if a grouped claim contains no values,
+    /// which should not occur under normal circumstances.</exception>
+    private static void MergeClaims(IEnumerable<Claim> claims, JsonObject json, string[] claimTypesToExclude)
+    {
+        var claimGroups = claims
+            .Where(claim => !claimTypesToExclude.Contains(claim.Type))
+            .GroupBy(claim => claim.Type, claim => ToJsonNode(claim.ValueType, claim.Value));
+
+        foreach (var claimGroup in claimGroups)
+        {
+            using var enumerator = claimGroup.GetEnumerator();
+            if (!enumerator.MoveNext())
+                throw new InvalidOperationException("Claim group contains no claims.");
+
+            var claimValue = enumerator.Current;
+            if (enumerator.MoveNext())
+            {
+                // convert values to array
+                var jsonArray = new JsonArray { claimValue };
+                do
+                {
+                    jsonArray.Add(enumerator.Current);
+                } while (enumerator.MoveNext());
+
+                claimValue = jsonArray;
+            }
+            json[claimGroup.Key] = claimValue;
+        }
+    }
 
     /// <summary>
     /// Creates a <see cref="JsonNode"/> representation of a claim value based on its type.
@@ -160,16 +203,26 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// <param name="valueType">The type of the claim value.</param>
     /// <param name="value">The string representation of the claim value.</param>
     /// <returns>A <see cref="JsonNode"/> representing the claim value.</returns>
-    private static JsonNode? ToJsonNode(string valueType, string value)
-        => valueType switch
-        {
-            JsonClaimValueTypes.Json => JsonNode.Parse(value).NotNull(nameof(value)),
+    private static JsonNode? ToJsonNode(string valueType, string value) => valueType switch
+    {
+        JsonClaimValueTypes.Json => JsonNode.Parse(value).NotNull(nameof(value)),
 
-            ClaimValueTypes.Boolean => JsonValue.Create(bool.Parse(value)),
-            ClaimValueTypes.Integer => JsonValue.Create(long.Parse(value)),
-            ClaimValueTypes.Integer32 => JsonValue.Create(int.Parse(value)),
-            ClaimValueTypes.Integer64 => JsonValue.Create(long.Parse(value)),
+        ClaimValueTypes.Boolean => JsonValue.Create(bool.Parse(value)),
+        ClaimValueTypes.Integer or ClaimValueTypes.Integer64 => JsonValue.Create(long.Parse(value)),
+        ClaimValueTypes.Integer32 => JsonValue.Create(int.Parse(value)),
+        ClaimValueTypes.Date or ClaimValueTypes.DateTime
+            => JsonValue.Create(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture)),
+        ClaimValueTypes.Time => JsonValue.Create(TimeSpan.Parse(value, CultureInfo.InvariantCulture)),
 
-            _ => value,
-        };
+        ClaimValueTypes.Double => JsonValue.Create(double.Parse(value, CultureInfo.InvariantCulture)),
+        ClaimValueTypes.HexBinary => JsonValue.Create(Convert.FromHexString(value)),
+        ClaimValueTypes.Base64Binary or ClaimValueTypes.Base64Octet
+            => JsonValue.Create(Convert.FromBase64String(value)),
+
+        ClaimValueTypes.UInteger32 => JsonValue.Create(uint.Parse(value, CultureInfo.InvariantCulture)),
+        ClaimValueTypes.UInteger64 => JsonValue.Create(ulong.Parse(value, CultureInfo.InvariantCulture)),
+
+        // Default fallback: treat all other unknown types as string
+        _ => JsonValue.Create(value),
+    };
 }

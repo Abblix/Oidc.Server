@@ -221,5 +221,4 @@ public static class JsonWebTokenExtensions
     /// </remarks>
     public static JsonNode? ToJsonNode(this JsonElement jsonElement)
         => JsonNode.Parse(jsonElement.GetRawText());
-
 }

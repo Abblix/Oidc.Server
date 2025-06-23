@@ -48,7 +48,7 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     {
         _configSection = configSection;
         _routeRegex = new Regex(
-            $@"\[{prefix}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>[^\]]+))?\]",
+            $@"\[{prefix}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>.+))?\]",
             RegexOptions.Compiled,
             TimeSpan.FromMilliseconds(100));
     }
@@ -79,7 +79,7 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     /// Applies token replacement to a single selector's route template.
     /// </summary>
     /// <param name="selector">The <see cref="SelectorModel"/> whose route template may contain tokens.</param>
-    private void Apply(SelectorModel selector)
+    public void Apply(SelectorModel selector)
     {
         var model = selector.AttributeRouteModel;
         if (!string.IsNullOrEmpty(model?.Template))
@@ -94,22 +94,17 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     /// <exception cref="InvalidOperationException">
     /// Thrown if a token cannot be resolved and no fallback is provided.
     /// </exception>
-    private string Resolve(string template)
+    public string Resolve(string template)
     {
         var resolvedTokens = new HashSet<string>(StringComparer.Ordinal);
-        bool tokenFound;
-        do
+        while (true)
         {
-            tokenFound = false;
-
             var originalTemplate = template;
 
             template = _routeRegex.Replace(
                 originalTemplate,
                 match =>
                 {
-                    tokenFound = true;
-
                     var token = match.Groups[TokenGroup].Value;
                     if (!resolvedTokens.Add(token))
                         throw new InvalidOperationException($"Circular dependency for token '{token}' in route '{originalTemplate}'.");
@@ -125,9 +120,11 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
                     throw new InvalidOperationException($"Can't resolve the route {token}");
                 });
 
-            Debug.WriteLine($"Intermediate resolved template: {template}");
+            if (string.Equals(originalTemplate, template, StringComparison.Ordinal))
+                break;
 
-        } while (tokenFound);
+            Debug.WriteLine($"The template {originalTemplate} resolved to {template}");
+        }
 
         return template;
     }
