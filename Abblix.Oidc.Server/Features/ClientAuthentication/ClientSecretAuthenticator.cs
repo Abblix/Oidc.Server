@@ -115,13 +115,13 @@ public abstract class ClientSecretAuthenticator
 	private bool TryValidateClientSecret(ClientInfo client, string secret)
 	{
 		// We store only client secret hashes, so we have to hash the raw secret to compare. And we do it lazy.
-		var matchingSha256Secrets = FindMatchingSecrets(client,
-			clientSecret => clientSecret.Sha512Hash, HashAlgorithm.Sha512, secret);
+		var matchingSha512Secrets = FindMatchingSecrets(
+			client, clientSecret => clientSecret.Sha512Hash, HashAlgorithm.Sha512, secret);
 
-		var matchingSha512Secrets = FindMatchingSecrets(client,
-			clientSecret => clientSecret.Sha256Hash, HashAlgorithm.Sha256, secret);
+		var matchingSha256Secrets = FindMatchingSecrets(
+			client, clientSecret => clientSecret.Sha256Hash, HashAlgorithm.Sha256, secret);
 
-		var matchingSecret = matchingSha256Secrets.Concat(matchingSha512Secrets)
+		var matchingSecret = matchingSha512Secrets.Concat(matchingSha256Secrets)
 			.MaxBy(item => item.ExpiresAt);
 
 		if (matchingSecret == null)

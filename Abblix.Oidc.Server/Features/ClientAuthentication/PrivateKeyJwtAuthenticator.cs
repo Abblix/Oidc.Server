@@ -81,6 +81,11 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
     /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
+        if (request.ClientAssertionType is null)
+        {
+            return null;
+        }
+
         if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
         {
             _logger.LogWarning(

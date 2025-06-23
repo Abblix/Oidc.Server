@@ -36,7 +36,7 @@ public class AuthorizationContextExtensionsTests
     {
         var ac = new AuthorizationContext(
             "clientId",
-            new []{ "scope1", "scope2" },
+            ["scope1", "scope2"],
             new RequestedClaims { UserInfo = new Dictionary<string, RequestedClaimDetails>
             {
                 { "abc", new RequestedClaimDetails { Essential = true } },
