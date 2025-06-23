@@ -70,14 +70,13 @@ public static class JsonObjectExtensions
     /// </remarks>
     public static JsonObject SetProperty(this JsonObject json, string name, JsonNode? value)
     {
-        if (json.TryGetPropertyValue(name, out _))
+        if (value == null)
         {
-            if (value == null)
-                json.Remove(name);
+            json.Remove(name);
         }
-        else if (value != null)
+        else
         {
-            json.Add(name, value);
+            json[name] = value;
         }
 
         return json;
