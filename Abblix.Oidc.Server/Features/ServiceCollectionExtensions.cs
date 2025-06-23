@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -416,8 +417,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddBackChannelAuthentication(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>()
-            .AddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
+        services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
+        services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        return services;
     }
 }
