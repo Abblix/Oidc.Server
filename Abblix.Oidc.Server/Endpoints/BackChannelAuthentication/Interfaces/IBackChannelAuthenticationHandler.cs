@@ -42,6 +42,7 @@ public interface IBackChannelAuthenticationHandler
     /// <returns>
     /// A task that represents the asynchronous operation, containing the backchannel authentication response.
     /// </returns>
-    Task<BackChannelAuthenticationResponse> HandleAsync(BackChannelAuthenticationRequest request,
+    Task<BackChannelAuthenticationResponse> HandleAsync(
+        BackChannelAuthenticationRequest request,
         ClientRequest clientRequest);
 }

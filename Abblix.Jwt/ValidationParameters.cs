@@ -23,62 +23,65 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Represents the parameters used for validating a JSON Web Token (JWT).
+/// Defines parameters used during the validation of a JSON Web Token (JWT).
 /// </summary>
 public record ValidationParameters
 {
 	/// <summary>
-	/// Gets or sets the validation options.
+	/// Options that control various aspects of JWT validation.
 	/// </summary>
 	public ValidationOptions Options { get; init; } = ValidationOptions.Default;
 
 	/// <summary>
-	/// Gets or sets the delegate for issuer validation.
+	/// Delegate used to verify the validity of a token issuer.
 	/// </summary>
 	public ValidateIssuersDelegate? ValidateIssuer { get; set; }
 
 	/// <summary>
-	/// Gets or sets the delegate for audience validation.
+	/// Delegate used to validate one or more token audiences.
 	/// </summary>
 	public ValidateAudienceDelegate? ValidateAudience { get; set; }
 
 	/// <summary>
-	/// Gets or sets the delegate for resolving issuer signing keys.
+	/// Delegate that resolves the signing keys for a given issuer, used during token signature validation.
 	/// </summary>
 	public ResolveIssuerSigningKeysDelegate? ResolveIssuerSigningKeys { get; set; }
 
 	/// <summary>
-	/// Gets or sets the delegate for resolving token decryption keys.
+	/// Delegate that resolves decryption keys for a given issuer, used during token decryption.
 	/// </summary>
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
 
 	/// <summary>
-	/// Represents a delegate that asynchronously resolves a collection of JSON Web Keys (JWKs) for a given issuer,
-	/// used for validating the signing of a JWT.
+	/// Time window applied to accommodate clock discrepancies when validating timestamps.
 	/// </summary>
-	/// <param name="issuer">The issuer for which to resolve the signing keys.</param>
-	/// <returns>An asynchronous enumerable of JSON Web Keys.</returns>
+	public TimeSpan ClockSkew { get; set; } = TimeSpan.Zero;
+
+	/// <summary>
+	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.
+	/// </summary>
+	/// <param name="issuer">Issuer whose signing keys are to be resolved.</param>
+	/// <returns>An asynchronous stream of JSON Web Keys.</returns>
 	public delegate IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeysDelegate(string issuer);
 
 	/// <summary>
-	/// Represents a delegate that asynchronously resolves a collection of JSON Web Keys (JWKs) for a given issuer,
-	/// used for token decryption.
+	/// Resolves decryption keys (JWKs) asynchronously for a specified issuer.
 	/// </summary>
-	/// <param name="issuer">The issuer for which to resolve the decryption keys.</param>
-	/// <returns>An asynchronous enumerable of JSON Web Keys.</returns>
+	/// <param name="issuer">Issuer whose decryption keys are to be resolved.</param>
+	/// <returns>An asynchronous stream of JSON Web Keys.</returns>
 	public delegate IAsyncEnumerable<JsonWebKey> ResolveTokenDecryptionKeysDelegate(string issuer);
 
 	/// <summary>
-	/// Represents a delegate that validates a set of audiences against a specific criterion.
+	/// Validates a collection of audiences against expected values.
 	/// </summary>
-	/// <param name="audiences">The audiences to validate.</param>
-	/// <returns>A task that represents the asynchronous validation operation. The task result contains the validation outcome.</returns>
+	/// <param name="audiences">Audiences to be validated.</param>
+	/// <returns>A task that returns true if validation succeeds.</returns>
 	public delegate Task<bool> ValidateAudienceDelegate(IEnumerable<string> audiences);
 
 	/// <summary>
-	/// Represents a delegate that validates an issuer against a specific criterion.
+	/// Validates a token issuer against expected values.
 	/// </summary>
-	/// <param name="issuer">The issuer to validate.</param>
-	/// <returns>A task that represents the asynchronous validation operation. The task result contains the validation outcome.</returns>
+	/// <param name="issuer">Issuer to be validated.</param>
+	/// <returns>A task that returns true if validation succeeds.</returns>
 	public delegate Task<bool> ValidateIssuersDelegate(string issuer);
 };
