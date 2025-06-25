@@ -23,7 +23,7 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Enumeration for specifying various validation options for JWT tokens.
+/// Set of flags for specifying various validation options for JWT tokens.
 /// These options can be combined using bitwise operations to create a customized set of validation rules.
 /// </summary>
 [Flags]

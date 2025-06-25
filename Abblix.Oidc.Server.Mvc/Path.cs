@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Mvc;
 /// </summary>
 public static class Path
 {
-    internal const string RoutePrefix = "route";
+    public const string RoutePrefix = "route";
     
     private const string Base = "[" + RoutePrefix + ":base?~/connect]";
 
