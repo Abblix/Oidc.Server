@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
@@ -35,6 +36,7 @@ public class JwtEncryptionTests
     public async Task JwtFullCycleTest()
     {
         var issuedAt = DateTimeOffset.UtcNow;
+        var expiresIn = TimeSpan.FromSeconds(10);
 
         var token = new JsonWebToken
         {
@@ -43,9 +45,9 @@ public class JwtEncryptionTests
                 JwtId = Guid.NewGuid().ToString("N"),
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
-                ExpiresAt = issuedAt + TimeSpan.FromDays(1),
+                ExpiresAt = issuedAt + expiresIn,
                 Issuer = "abblix.com",
-                Audiences = new []{ nameof(JwtFullCycleTest) },
+                Audiences = [nameof(JwtFullCycleTest)],
                 ["test"] = "value",
                 ["address"] = new JsonObject
                 {
@@ -53,7 +55,8 @@ public class JwtEncryptionTests
                     { "city", "Springfield" },
                     { "state", "IL" },
                     { "zip", "62701" },
-                }
+                },
+                ["colors"] = new JsonArray("red", "green", "blue"),
             },
         };
 
@@ -73,6 +76,18 @@ public class JwtEncryptionTests
         var expectedClaims = ExtractClaims(token);
         var actualClaims = ExtractClaims(result.Token);
         Assert.Equal(expectedClaims, actualClaims);
+
+        var arrayValues = result.Token.Payload.Json.GetArrayOfStrings("colors");
+        Assert.Equal(["red", "green", "blue"], arrayValues);
+
+        var address = result.Token.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+        Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
+
+        await Task.Delay(expiresIn);
+
+        var (error, description) = Assert.IsType<JwtValidationError>(await validator.ValidateAsync(jwt, parameters));
+        Assert.Equal(JwtError.InvalidToken, error);
+        Assert.Contains("Lifetime validation failed", description);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)
