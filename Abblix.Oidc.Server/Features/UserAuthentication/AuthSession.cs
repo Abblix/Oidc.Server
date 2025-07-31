@@ -65,4 +65,13 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// This can be used to manage and track user consent and interaction with multiple clients within the same session.
     /// </summary>
     public ICollection<string> AffectedClientIds { get; init; } = new List<string>();
+
+    /// <summary>
+    /// A list of authentication methods used during the user's authentication process,
+    /// represented as Authentication Method Reference (AMR) values according to the OpenID Connect specification.
+    /// These values indicate how the user was authenticated, such as using a password, multifactor authentication,
+    /// biometric verification, or other supported mechanisms. This information is useful for auditing,
+    /// enforcing authentication policies, or satisfying specific security requirements.
+    /// </summary>
+    public ICollection<string> AuthenticationMethodReferences { get; init; } = new List<string>();
 }

@@ -201,4 +201,16 @@ public class JsonWebTokenPayload
 		get => Json.GetProperty<string>(JwtClaimTypes.Nonce);
 		set => Json.SetProperty(JwtClaimTypes.Nonce, value);
 	}
+
+	public IEnumerable<string> AuthenticationMethodReferences
+	{
+		get => Json.GetArrayOfStrings(JwtClaimTypes.AuthenticationMethodReferences);
+		set => Json.SetArrayOrString(JwtClaimTypes.AuthenticationMethodReferences, value);
+	}
+
+	public string? AuthContextClassRef
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.AuthContextClassRef);
+		set => Json.SetProperty(JwtClaimTypes.AuthContextClassRef, value);
+	}
 }

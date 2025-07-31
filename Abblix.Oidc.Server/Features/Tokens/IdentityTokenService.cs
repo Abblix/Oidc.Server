@@ -136,7 +136,7 @@ internal class IdentityTokenService : IIdentityTokenService
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
-				[JwtClaimTypes.AuthContextClassRef] = authSession.AuthContextClassRef,
+				AuthContextClassRef = authSession.AuthContextClassRef,
 
 				Audiences = new[] { authContext.ClientId },
 				Nonce = authContext.Nonce,

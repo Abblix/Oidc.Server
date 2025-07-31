@@ -47,6 +47,8 @@ public static class AuthSessionExtensions
         payload.IdentityProvider = authSession.IdentityProvider;
         payload.SessionId = authSession.SessionId;
         payload.AuthenticationTime = authSession.AuthenticationTime;
+        payload.AuthenticationMethodReferences = authSession.AuthenticationMethodReferences;
+        payload.AuthContextClassRef = authSession.AuthContextClassRef;
     }
 
     /// <summary>
@@ -58,9 +60,20 @@ public static class AuthSessionExtensions
     /// This method allows for the reconstruction of an authentication session from the claims encoded in a JWT.
     /// It is particularly useful when processing JWTs to extract authentication and user session details.
     /// </remarks>
-    public static AuthSession ToAuthSession(this JsonWebTokenPayload payload) => new(
-        payload.Subject.NotNull(nameof(payload.Subject)),
-        payload.SessionId.NotNull(nameof(payload.SessionId)),
-        payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
-        payload.IdentityProvider.NotNull(nameof(payload.IdentityProvider)));
+    public static AuthSession ToAuthSession(this JsonWebTokenPayload payload)
+    {
+        var authSession = new AuthSession(
+            payload.Subject.NotNull(nameof(payload.Subject)),
+            payload.SessionId.NotNull(nameof(payload.SessionId)),
+            payload.AuthenticationTime.NotNull(nameof(payload.AuthenticationTime)),
+            payload.IdentityProvider.NotNull(nameof(payload.IdentityProvider)))
+            {
+                AuthContextClassRef = payload.AuthContextClassRef,
+            };
+
+        foreach (var authenticationMethodReference in payload.AuthenticationMethodReferences)
+            authSession.AuthenticationMethodReferences.Add(authenticationMethodReference);
+
+        return authSession;
+    }
 }
