@@ -69,10 +69,8 @@ public static class AuthSessionExtensions
             payload.IdentityProvider.NotNull(nameof(payload.IdentityProvider)))
             {
                 AuthContextClassRef = payload.AuthContextClassRef,
+                AuthenticationMethodReferences = payload.AuthenticationMethodReferences?.ToList(),
             };
-
-        foreach (var authenticationMethodReference in payload.AuthenticationMethodReferences)
-            authSession.AuthenticationMethodReferences.Add(authenticationMethodReference);
 
         return authSession;
     }
