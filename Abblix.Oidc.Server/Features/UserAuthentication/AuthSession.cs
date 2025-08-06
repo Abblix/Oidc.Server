@@ -73,5 +73,5 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// biometric verification, or other supported mechanisms. This information is useful for auditing,
     /// enforcing authentication policies, or satisfying specific security requirements.
     /// </summary>
-    public ICollection<string> AuthenticationMethodReferences { get; init; } = new List<string>();
+    public ICollection<string>? AuthenticationMethodReferences { get; init; }
 }
