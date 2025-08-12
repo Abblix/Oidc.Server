@@ -35,9 +35,11 @@ public static class AuthenticationMethodReferences
     public const string KnowledgeBased = "kba";         // Knowledge-based authentication
     public const string MultiChannel = "mca";           // Multiple-channel authentication
     public const string MultiFactor = "mfa";            // Multiple-factor authentication
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
     public const string OneTimePassword = "otp";        // One-time password
     public const string Pin = "pin";                    // PIN or pattern
     public const string ProofOfPossession = "pop";      // Proof-of-possession of a key
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
     public const string Password = "pwd";               // Password-based authentication
     public const string RiskBased = "rba";              // Risk-based authentication
     public const string RetinaScan = "retina";          // Retina scan biometric
