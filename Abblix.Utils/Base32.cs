@@ -20,147 +20,160 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text;
-
 namespace Abblix.Utils;
 
+using System;
+
 /// <summary>
-/// Provides methods for encoding and decoding data using Base32 and Base32Hex encoding schemes.
+/// Provides methods for encoding and decoding data using Base32 and Base32hex formats as defined in RFC 4648.
+/// Supports optional padding and ignores padding characters during decoding.
 /// </summary>
 public static class Base32
 {
-    private const int LettersCount = 'Z' - 'A' + 1;
-    private const int DigitsCount = '9' - '0' + 1;
+    /// <summary>
+    /// Encodes the specified binary data into a Base32 string using the standard RFC 4648 alphabet (A–Z, 2–7).
+    /// </summary>
+    /// <param name="input">The binary data to encode.</param>
+    /// <param name="padding">
+    /// <c>true</c> to include '=' characters to pad the output string to a multiple of 8 characters;
+    /// <c>false</c> to omit padding.
+    /// </param>
+    /// <returns>
+    /// A Base32-encoded string representation of the input data. If <paramref name="padding"/> is <c>true</c>,
+    /// the result length is always a multiple of 8 by adding '=' characters as needed.
+    /// </returns>
+    public static string Encode(ReadOnlySpan<byte> input, bool padding = true)
+        => EncodeCore(input, padding, ToChar);
 
     /// <summary>
-    /// Encodes a byte array into a Base32 string.
+    /// Encodes the specified binary data into a Base32hex string using the extended hexadecimal alphabet (0–9, A–V).
     /// </summary>
-    /// <param name="data">The data to encode.</param>
-    /// <param name="padding">Indicates whether to add padding characters.</param>
-    /// <returns>The Base32 encoded string.</returns>
-    public static string Encode(byte[]? data, bool padding = true) => Encode(
-        data,
-        padding,
-        index => index < LettersCount ? 'A' + index : '2' + index - LettersCount);
+    /// <param name="input">The binary data to encode.</param>
+    /// <param name="padding">
+    /// <c>true</c> to include '=' characters to pad the output string to a multiple of 8 characters;
+    /// <c>false</c> to omit padding.
+    /// </param>
+    /// <returns>
+    /// A Base32hex-encoded string representation of the input data. If <paramref name="padding"/> is <c>true</c>,
+    /// the result length is always a multiple of 8 by adding '=' characters as needed.
+    /// </returns>
+    public static string EncodeHex(ReadOnlySpan<byte> input, bool padding = true)
+        => EncodeCore(input, padding, ToHexChar);
 
     /// <summary>
-    /// Encodes a byte array into a Base32 Hex string.
+    /// Decodes a Base32-encoded string into a byte array.
+    /// Ignores any '=' padding characters at the end of the input.
     /// </summary>
-    /// <param name="data">The data to encode.</param>
-    /// <param name="padding">Indicates whether to add padding characters.</param>
-    /// <returns>The Base32 Hex encoded string.</returns>
-    public static string EncodeHex(byte[]? data, bool padding = true) => Encode(
-        data,
-        padding,
-        index => index < DigitsCount ? '0' + index : 'A' + index - DigitsCount);
+    /// <param name="input">The Base32 string to decode (may include padding '=').</param>
+    /// <returns>A byte array containing the original binary data.</returns>
+    /// <exception cref="ArgumentException">Thrown if the input contains invalid Base32 characters.</exception>
+    public static byte[] Decode(ReadOnlySpan<char> input)
+        => DecodeCore(input, ToValue);
 
     /// <summary>
-    /// Encodes a byte array into a string using the specified encoder function.
+    /// Decodes a Base32hex-encoded string into a byte array.
+    /// Ignores any '=' padding characters at the end of the input.
     /// </summary>
-    /// <param name="data">The data to encode.</param>
-    /// <param name="padding">Indicates whether to add padding characters.</param>
-    /// <param name="encoder">The function to convert a 5-bit index to a character.</param>
+    /// <param name="input">The Base32hex string to decode (may include padding '=').</param>
+    /// <returns>A byte array containing the original binary data.</returns>
+    /// <exception cref="ArgumentException">Thrown if the input contains invalid Base32hex characters.</exception>
+    public static byte[] DecodeHex(ReadOnlySpan<char> input)
+        => DecodeCore(input, ToHexValue);
+
+    /// <summary>
+    /// Core method for encoding binary data into Base32 or Base32hex strings.
+    /// </summary>
+    /// <param name="input">The binary data to encode.</param>
+    /// <param name="padding">Whether to pad the output to a multiple of 8 characters.</param>
+    /// <param name="mapChar">Function mapping 5-bit values to output characters.</param>
     /// <returns>The encoded string.</returns>
-    private static string Encode(IReadOnlyList<byte>? data, bool padding, Func<int, int> encoder)
+    private static string EncodeCore(ReadOnlySpan<byte> input, bool padding, Func<int, char> mapChar)
     {
-        if (data == null || data.Count == 0)
-            return string.Empty;
+        var fullLength = (input.Length + 4) / 5 * 8;
+        Span<char> buffer = stackalloc char[fullLength];
+        int bitBuffer = 0, bitsLeft = 0, pos = 0;
 
-        var encodedLength = (data.Count + 4) / 5 * 8;
-        var result = new StringBuilder(encodedLength);
-
-        for (var i = 0; i < data.Count; i += 5)
+        foreach (var b in input)
         {
-            var byteCount = Math.Min(5, data.Count - i);
-
-            ulong buffer = 0;
-            for (var j = 0; j < byteCount; j++)
+            bitBuffer = (bitBuffer << 8) | b;
+            bitsLeft += 8;
+            while (5 <= bitsLeft)
             {
-                buffer = buffer << 8 | data[i + j];
-            }
-
-            for (var bitCount = byteCount * 8; 0 < bitCount; bitCount -= 5)
-            {
-                var index = bitCount < 5
-                    ? (buffer & (ulong)(0x1F >> 5 - bitCount)) << 5 - bitCount
-                    : buffer >> bitCount - 5 & 0x1F;
-
-                var symbol = encoder((int)index);
-                result.Append((char)symbol);
+                bitsLeft -= 5;
+                buffer[pos++] = mapChar((bitBuffer >> bitsLeft) & 0x1F);
             }
         }
 
-        if (padding)
-            result.Append('=', encodedLength - result.Length);
+        if (bitsLeft > 0)
+        {
+            buffer[pos++] = mapChar((bitBuffer << (5 - bitsLeft)) & 0x1F);
+        }
 
-        return result.ToString();
+        var result = new string(buffer[..pos]);
+        return padding ? result.PadRight(fullLength, '=') : result;
     }
 
     /// <summary>
-    /// Decodes a Base32 encoded string into a byte array.
+    /// Core method for decoding Base32 or Base32hex strings into binary data.
     /// </summary>
-    /// <param name="encoded">The Base32 encoded string.</param>
+    /// <param name="input">The encoded string (may include padding '=').</param>
+    /// <param name="mapValue">Function mapping characters to 5-bit values.</param>
     /// <returns>The decoded byte array.</returns>
-    public static byte[] Decode(string? encoded) => Decode(
-        encoded,
-        c => c switch
+    private static byte[] DecodeCore(ReadOnlySpan<char> input, Func<char, int> mapValue)
+    {
+        var trimmed = input.TrimEnd('=');
+        var estimated = trimmed.Length * 5 / 8;
+        Span<byte> output = stackalloc byte[estimated];
+        int bitBuffer = 0, bitsLeft = 0, idx = 0;
+
+        foreach (var c in trimmed)
+        {
+            bitBuffer = (bitBuffer << 5) | mapValue(c);
+            bitsLeft += 5;
+
+            if (bitsLeft < 8)
+                continue;
+
+            bitsLeft -= 8;
+            output[idx++] = (byte)((bitBuffer >> bitsLeft) & 0xFF);
+        }
+
+        return output[..idx].ToArray();
+    }
+
+    /// <summary>
+    /// Maps a 5-bit value (0–31) to the corresponding Base32 character (A–Z, 2–7).
+    /// </summary>
+    private static char ToChar(int value) => value < 26 ? (char)('A' + value) : (char)('2' + (value - 26));
+
+    /// <summary>
+    /// Maps a 5-bit value (0–31) to the corresponding Base32hex character (0–9, A–V).
+    /// </summary>
+    private static char ToHexChar(int value) => value < 10 ? (char)('0' + value) : (char)('A' + (value - 10));
+
+    /// <summary>
+    /// Maps a Base32 character to its numeric value (0–31), accepting both uppercase and lowercase.
+    /// </summary>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="c"/> is not a valid Base32 symbol.</exception>
+    private static int ToValue(char c)
+        => c switch
         {
             >= 'A' and <= 'Z' => c - 'A',
-            >= '2' and <= '7' => c - '2' + LettersCount,
-            _ => throw new ArgumentException($"Base32 string contains invalid character {c}"),
-        });
+            >= 'a' and <= 'z' => c - 'a',
+            >= '2' and <= '7' => c - '2' + 26,
+            _ => throw new ArgumentException($"Invalid Base32 character: {c}", nameof(c)),
+        };
 
     /// <summary>
-    /// Decodes a Base32 Hex encoded string into a byte array.
+    /// Maps a Base32hex character to its numeric value (0–31), accepting both uppercase and lowercase.
     /// </summary>
-    /// <param name="encoded">The Base32 Hex encoded string.</param>
-    /// <returns>The decoded byte array.</returns>
-    public static byte[] DecodeHex(string? encoded) => Decode(
-        encoded,
-        c => c switch
+    /// <exception cref="ArgumentException">Thrown if <paramref name="c"/> is not a valid Base32hex symbol.</exception>
+    private static int ToHexValue(char c)
+        => c switch
         {
-            >= 'A' and <= 'Z' => c - 'A' + DigitsCount,
             >= '0' and <= '9' => c - '0',
-            _ => throw new ArgumentException($"Base32 hex string contains invalid character {c}"),
-        });
-
-    /// <summary>
-    /// Decodes an encoded string into a byte array using the specified decoder function.
-    /// </summary>
-    /// <param name="encoded">The encoded string.</param>
-    /// <param name="decoder">The function to convert a character to a 5-bit index.</param>
-    /// <returns>The decoded byte array.</returns>
-    private static byte[] Decode(string? encoded, Func<int, int> decoder)
-    {
-        if (string.IsNullOrEmpty(encoded))
-            return Array.Empty<byte>();
-
-        var decodedLength = encoded.Length / 8 * 5;
-        var result = new List<byte>(decodedLength);
-
-        for (var i = 0; i < encoded.Length; i += 8)
-        {
-            ulong buffer = 0;
-            var validCharsCount = 0;
-            for (var j = 0; j < 8; j++)
-            {
-                if (encoded.Length <= i + j)
-                    break;
-
-                var c = encoded[i + j];
-                if (c == '=')
-                    break;
-
-                buffer = buffer << 5 | (uint)decoder(c);
-                validCharsCount++;
-            }
-
-            for (var bitCount = validCharsCount * 5; 8 <= bitCount; bitCount -= 8)
-            {
-                result.Add((byte)(buffer >> bitCount - 8 & 0xFF));
-            }
-        }
-
-        return result.ToArray();
-    }
+            >= 'A' and <= 'V' => c - 'A' + 10,
+            >= 'a' and <= 'v' => c - 'a' + 10,
+            _ => throw new ArgumentException($"Invalid Base32hex character: {c}", nameof(c)),
+        };
 }

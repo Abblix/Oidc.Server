@@ -154,10 +154,10 @@ public record AuthorizationContext
     /// </summary>
     public Uri[]? Resources { get; init; }
 
-    public void Deconstruct(out string ClientId, out string[] Scope, out RequestedClaims? RequestedClaims)
+    public void Deconstruct(out string clientId, out string[] scope, out RequestedClaims? requestedClaims)
     {
-        ClientId = this.ClientId;
-        Scope = this.Scope;
-        RequestedClaims = this.RequestedClaims;
+        clientId = ClientId;
+        scope = Scope;
+        requestedClaims = RequestedClaims;
     }
 }

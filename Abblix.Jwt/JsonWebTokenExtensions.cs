@@ -86,11 +86,39 @@ public static class JsonWebTokenExtensions
     /// a single string value or an array of strings.
     /// </remarks>
     public static IEnumerable<string> GetArrayOfStrings(this JsonObject json, string name)
-    {
-        if (!json.TryGetPropertyValue(name, out var jsonNode))
-            yield break;
+        => json.TryGetPropertyValue(name, out var property) ? GetArrayOfStrings(property) : Enumerable.Empty<string>();
 
-        switch (jsonNode)
+    /// <summary>
+    /// Retrieves an array of strings from a <see cref="JsonObject"/> based on a specified property name,
+    /// or returns <c>null</c> if the property does not exist.
+    /// </summary>
+    /// <param name="json">The <see cref="JsonObject"/> from which to retrieve the array of strings.</param>
+    /// <param name="name">The property name to retrieve the values from.</param>
+    /// <returns>
+    /// An enumerable of strings if the property exists; otherwise, <c>null</c>.
+    /// </returns>
+    /// <remarks>
+    /// This method is useful when distinguishing between a missing property (<c>null</c>) and a property
+    /// that is present but empty. It supports both single string values and arrays of strings.
+    /// </remarks>
+    public static IEnumerable<string>? GetArrayOfStringsOrNull(this JsonObject json, string name)
+        => json.TryGetPropertyValue(name, out var property) ? GetArrayOfStrings(property) : null;
+
+    /// <summary>
+    /// Parses a <see cref="JsonNode"/> as a collection of strings, supporting both single string values and JSON arrays.
+    /// </summary>
+    /// <param name="property">The <see cref="JsonNode"/> to parse.</param>
+    /// <returns>
+    /// An enumerable of strings extracted from the node. If the node is a single string, it yields one item;
+    /// if it is a JSON array, it yields all string elements; if <c>null</c>, yields nothing.
+    /// </returns>
+    /// <remarks>
+    /// This method is intended for internal use in scenarios like JWT claim parsing or generic JSON processing
+    /// where string values might be encoded as either a single value or an array.
+    /// </remarks>
+    private static IEnumerable<string> GetArrayOfStrings(JsonNode? property)
+    {
+        switch (property)
         {
             case null:
                 break;
@@ -120,6 +148,25 @@ public static class JsonWebTokenExtensions
     public static void SetArrayOrString(this JsonObject json, string name, IEnumerable<string> values)
     {
         json.SetProperty(name, values.ToJsonNode());
+    }
+
+    /// <summary>
+    /// Sets a property on a <see cref="JsonObject"/> to either a single string, a JSON array of strings, or <c>null</c>,
+    /// depending on the contents of the provided <paramref name="values"/> collection.
+    /// </summary>
+    /// <param name="json">The <see cref="JsonObject"/> to update.</param>
+    /// <param name="name">The name of the property to set.</param>
+    /// <param name="values">
+    /// The collection of string values to assign. If <c>null</c>, the property is set to <c>null</c>.
+    /// If the collection contains a single value, it is stored as a string; if multiple values, as a JSON array.
+    /// </param>
+    /// <remarks>
+    /// This method is useful for serializing claims or properties where the value can be a single string,
+    /// an array of strings, or omitted entirely (null), such as in JWT payloads or OpenID Connect claims.
+    /// </remarks>
+    public static void SetArrayOrStringOrNull(this JsonObject json, string name, IEnumerable<string>? values)
+    {
+        json.SetProperty(name, values?.ToJsonNode());
     }
 
     /// <summary>
