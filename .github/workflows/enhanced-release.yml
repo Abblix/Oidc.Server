@@ -3,9 +3,13 @@ name: Enhanced Release Automation
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Explicit version (e.g., 1.6.0) - leave empty for auto-increment'
+        required: false
+        type: string
       version_bump:
-        description: 'Version bump type'
-        required: true
+        description: 'Version bump type (used if version not specified)'
+        required: false
         default: 'patch'
         type: choice
         options:
@@ -22,20 +26,49 @@ jobs:
   versioning:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.set_version.outputs.new_version }}
+      version: ${{ steps.set_version.outputs.version }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
     steps:
       - uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
-      - name: Bump version and push tag
+      - name: Get version from project files or input
         id: set_version
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ github.event.inputs.version_bump }}
-          release_branches: release.*,hotfix.*,master
-          pre_release_branches: feature.*
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            # Use explicit version from input
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using explicit version: $VERSION"
+          else
+            # Extract version from project file
+            VERSION=$(grep -oP '<PackageVersion>\K[^<]+' Abblix.Oidc.Server/Abblix.Oidc.Server.csproj || echo "")
+            if [ -z "$VERSION" ]; then
+              echo "Error: Could not extract version from project files"
+              exit 1
+            fi
+            echo "Using project file version: $VERSION"
+          fi
+          
+          # Get previous version from latest git tag
+          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_VERSION" ]; then
+            PREVIOUS_VERSION=${PREVIOUS_VERSION#v}  # Remove 'v' prefix if present
+            echo "Previous version: $PREVIOUS_VERSION"
+          fi
+          
+          # Check if tag already exists
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists - using existing tag"
+          else
+            echo "Creating new tag v$VERSION"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git push origin "v$VERSION"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
 
   build-and-test:
     needs: versioning
@@ -49,11 +82,11 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --no-restore -c Release
+        run: dotnet build --no-restore -c Release -p:AssemblyVersion=${{ needs.versioning.outputs.version }}.0 -p:PackageVersion=${{ needs.versioning.outputs.version }}
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet pack --no-build -c Release -o nupkg -p:AssemblyVersion=${{ needs.versioning.outputs.version }}.0 -p:PackageVersion=${{ needs.versioning.outputs.version }}
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@v4.4.3
         with:
@@ -137,10 +170,24 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Generate changelog between versions
-          if [ -n "${{ needs.versioning.outputs.previous_version }}" ]; then
-            echo "## Changes since ${{ needs.versioning.outputs.previous_version }}" > CHANGELOG.md
-            git log --oneline ${{ needs.versioning.outputs.previous_version }}..HEAD --pretty=format:"- %s" >> CHANGELOG.md
+          # Check if we have a signed tag and use its message
+          if git tag -v "v${{ needs.versioning.outputs.version }}" >/dev/null 2>&1; then
+            echo "Using signed tag message as release notes"
+            git tag -l --format='%(contents)' "v${{ needs.versioning.outputs.version }}" > CHANGELOG.md
+          elif [ -n "${{ needs.versioning.outputs.previous_version }}" ]; then
+            # Generate changelog between versions with proper git references
+            echo "## Changes since v${{ needs.versioning.outputs.previous_version }}" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            # Use git log with proper tag references
+            PREV_TAG="v${{ needs.versioning.outputs.previous_version }}"
+            CURR_TAG="v${{ needs.versioning.outputs.version }}"
+            
+            if git rev-parse "$PREV_TAG" >/dev/null 2>&1 && git rev-parse "$CURR_TAG" >/dev/null 2>&1; then
+              git log --oneline "$PREV_TAG..$CURR_TAG" --pretty=format:"- %s" >> CHANGELOG.md || echo "- Various improvements and fixes" >> CHANGELOG.md
+            else
+              echo "- Various improvements and fixes" >> CHANGELOG.md
+            fi
           else
             echo "## Initial Release" > CHANGELOG.md
           fi
@@ -160,8 +207,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.0.8
         with:
-          tag_name: ${{ needs.versioning.outputs.version }}
-          name: Release ${{ needs.versioning.outputs.version }}
+          tag_name: v${{ needs.versioning.outputs.version }}
+          name: Release v${{ needs.versioning.outputs.version }}
           body_path: CHANGELOG.md
           files: nupkg/*.nupkg
           prerelease: ${{ github.event.inputs.pre_release }}
