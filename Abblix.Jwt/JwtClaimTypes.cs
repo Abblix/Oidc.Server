@@ -160,4 +160,11 @@ public static class JwtClaimTypes
     /// This claim is used to define the maximum lifespan of the JWT.
     /// </summary>
     public const string ExpiresAt = IanaClaimTypes.Exp;
+
+    /// <summary>
+    /// The 'amr' (Authentication Methods References) claim lists the authentication methods used during authentication.
+    /// It typically includes values like 'pwd' (password), 'mfa' (multi-factor authentication), or other method identifiers,
+    /// and can help relying parties understand the strength and nature of the authentication.
+    /// </summary>
+    public const string AuthenticationMethodReferences = IanaClaimTypes.Amr;
 }

@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
@@ -44,7 +46,7 @@ internal static class StringExtensions
 	/// <param name="separator">The character separator.</param>
 	/// <param name="values">The parsed values if successful; otherwise, null.</param>
 	/// <returns>True if parsing is successful; otherwise, false.</returns>
-	public static bool TryParse(this string source, string[] allowedValues, char separator, out string[] values)
+	public static bool TryParse(this string source, string[] allowedValues, char separator, [NotNullWhen(true)] out string[]? values)
 	{
 		if (string.IsNullOrEmpty(source))
 		{
@@ -60,7 +62,7 @@ internal static class StringExtensions
 				value => string.Equals(value, sourceValue, StringComparison.OrdinalIgnoreCase));
 			if (allowedValue == null)
 			{
-				values = default!;
+				values = null;
 				return false;
 			}
 
