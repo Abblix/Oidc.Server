@@ -27,6 +27,7 @@
 
 ## Table of Contents
 - [About](#-about)
+- [What's New](#-whats-new)
 - [Certification](#-certification)
 - [How to Build](#-how-to-build)
 - [Documentation](#-documentation)
@@ -43,6 +44,19 @@
 - **Maintainability**: Clear structure and separation facilitate better management of the codebase.
 
 The library also supports Dependency Injection through the standard .NET DI container, aiding in the organization and management of code. Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms, simplifying the integration of OpenID Connect into your services.
+
+## ✨ What's New
+
+### Version 1.6.0 (Latest)
+
+🚀 **Performance Improvements**
+- **Base32 Encoding Optimization**: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes.
+
+🔐 **Enhanced Authentication Session Management**
+- **AMR (Authentication Method Reference) Support**: Added comprehensive support for Authentication Method Reference values in authentication sessions, providing better tracking and validation of authentication methods used by users.
+- **Extended Session Capabilities**: Improved authentication session handling with enhanced method tracking and validation capabilities.
+
+> **Migration Note**: This release maintains full backward compatibility. No breaking changes were introduced.
 
 ## 🎓 Certification
 
