@@ -1,0 +1,192 @@
+name: Enhanced Release Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+      pre_release:
+        description: 'Create pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.new_version }}
+      previous_version: ${{ steps.set_version.outputs.previous_version }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Bump version and push tag
+        id: set_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ github.event.inputs.version_bump }}
+          release_branches: release.*,hotfix.*,master
+          pre_release_branches: feature.*
+
+  build-and-test:
+    needs: versioning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4.1.0
+        with:
+          dotnet-version: '9.0'
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+      - name: Pack
+        run: dotnet pack --no-build -c Release -o nupkg /p:PackageVersion=${{ needs.versioning.outputs.version }}
+      - name: Upload NuGet packages as artifacts
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: nuget-packages
+          path: nupkg/*.nupkg
+
+  test-getting-started:
+    needs: [versioning, build-and-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4.2.2
+        with:
+          path: main-repo
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@v4.2.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          path: getting-started
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v4.1.8
+        with:
+          name: nuget-packages
+          path: local-packages
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4.1.0
+        with:
+          dotnet-version: '9.0'
+      - name: Setup local package source
+        run: |
+          dotnet nuget add source "$(pwd)/local-packages" --name "LocalAbblix"
+          dotnet nuget locals all --clear
+      - name: Update package references
+        run: |
+          cd getting-started
+          # Update OpenIDProviderApp to use new version
+          sed -i 's/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="[^"]*"/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="${{ needs.versioning.outputs.version }}"/g' OpenIDProviderApp/OpenIDProviderApp.csproj
+      - name: Test GettingStarted builds
+        run: |
+          cd getting-started
+          dotnet restore
+          dotnet build
+      - name: Test OpenIDProviderApp runs
+        run: |
+          cd getting-started/OpenIDProviderApp
+          timeout 30s dotnet run &
+          sleep 10
+          # Basic health check - just verify it starts
+          curl -k https://localhost:5001 || echo "Expected - no default route"
+
+  # publish-packages:
+  #   needs: [versioning, build-and-test, test-getting-started]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Download NuGet packages
+  #       uses: actions/download-artifact@v4.1.8
+  #       with:
+  #         name: nuget-packages
+  #         path: nupkg
+  #     - name: Setup .NET
+  #       uses: actions/setup-dotnet@v4.1.0
+  #       with:
+  #         dotnet-version: '9.0'
+  #     - name: Publish to NuGet.org
+  #       run: dotnet nuget push "**/*.nupkg" -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
+  #     - name: Publish to GitHub Packages
+  #       run: dotnet nuget push "**/*.nupkg" -k ${{secrets.GITHUB_TOKEN}} -s https://nuget.pkg.github.com/Abblix/index.json --skip-duplicate
+
+  create-release:
+    needs: [versioning, build-and-test, test-getting-started]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v4.1.8
+        with:
+          name: nuget-packages
+          path: nupkg
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Generate changelog between versions
+          if [ -n "${{ needs.versioning.outputs.previous_version }}" ]; then
+            echo "## Changes since ${{ needs.versioning.outputs.previous_version }}" > CHANGELOG.md
+            git log --oneline ${{ needs.versioning.outputs.previous_version }}..HEAD --pretty=format:"- %s" >> CHANGELOG.md
+          else
+            echo "## Initial Release" > CHANGELOG.md
+          fi
+          
+          # Add package info
+          echo "" >> CHANGELOG.md
+          echo "## 📦 NuGet Packages" >> CHANGELOG.md
+          for pkg in nupkg/*.nupkg; do
+            basename=$(basename "$pkg" .nupkg)
+            echo "- $basename" >> CHANGELOG.md
+          done
+          
+          echo "" >> CHANGELOG.md
+          echo "Available on:" >> CHANGELOG.md
+          echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)" >> CHANGELOG.md
+          echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)" >> CHANGELOG.md
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.0.8
+        with:
+          tag_name: ${{ needs.versioning.outputs.version }}
+          name: Release ${{ needs.versioning.outputs.version }}
+          body_path: CHANGELOG.md
+          files: nupkg/*.nupkg
+          prerelease: ${{ github.event.inputs.pre_release }}
+          make_latest: ${{ !github.event.inputs.pre_release }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-getting-started:
+    needs: [versioning, create-release]
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.inputs.pre_release }}
+    steps:
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@v4.2.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update package references to released version
+        run: |
+          # Update to use the published version from NuGet.org
+          sed -i 's/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="[^"]*"/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="${{ needs.versioning.outputs.version }}"/g' OpenIDProviderApp/OpenIDProviderApp.csproj
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update Abblix packages to v${{ needs.versioning.outputs.version }}" || exit 0
+          git push

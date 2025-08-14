@@ -1,0 +1,3 @@
+- do not mention Claude in comments and descriptions
+- do not describe test plans in pull requests
+- Do not mention Claude in comments and descriptions
