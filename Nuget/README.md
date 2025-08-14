@@ -2,6 +2,14 @@
 
 **Abblix OIDC Server** is a robust .NET library that implements the OpenID Connect protocol on the server side. It is designed to meet high standards of flexibility, reusability, and reliability, using well-known software design patterns such as modular and hexagonal architectures. These patterns ensure that different parts of the library can work independently, improving the library's modularity, testability, and maintainability. The library also supports Dependency Injection using the standard .NET DI container, which aids in better organization and management of code. Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms to simplify the integration of OpenID Connect into your services.
 
+## What's New in Version 1.6.0
+
+**Performance Enhancements**: Significant improvements to Base32 encoding operations, resulting in better overall system performance for token generation and validation processes.
+
+**Enhanced Session Management**: Added comprehensive Authentication Method Reference (AMR) support for better tracking and validation of authentication methods used during user sessions.
+
+This release maintains full backward compatibility with no breaking changes.
+
 ## NuGet Packages Description
 
 - **Abblix.OIDC.Server**

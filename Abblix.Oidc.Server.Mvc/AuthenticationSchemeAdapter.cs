@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using Abblix.Jwt;
@@ -118,17 +119,47 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 			AuthContextClassRef = properties.GetString(JwtClaimTypes.AuthContextClassRef),
 		};
 
-		var affectedClientIdsJson = properties.GetString(nameof(AuthSession.AffectedClientIds));
-		if (affectedClientIdsJson != null)
-		{
-			var affectedClientIds = JsonSerializer.Deserialize<List<string>>(affectedClientIdsJson);
-			if (affectedClientIds != null)
-			{
-				authSession = authSession with { AffectedClientIds = affectedClientIds };
-			}
-		}
+		if (TryGetStringArray(properties, nameof(AuthSession.AffectedClientIds), out var affectedClientIds))
+			authSession = authSession with { AffectedClientIds = affectedClientIds };
+
+		if (TryGetStringArray(properties, JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
+			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
 
 		return authSession;
+	}
+
+	/// <summary>
+	/// Attempts to retrieve a list of strings from the <see cref="AuthenticationProperties"/>
+	/// using the specified key. The value is expected to be stored as a JSON-serialized array of strings.
+	/// </summary>
+	/// <param name="properties">
+	/// The <see cref="AuthenticationProperties"/> instance containing the serialized data.
+	/// </param>
+	/// <param name="key">
+	/// The key used to locate the JSON-serialized array within the <paramref name="properties"/>.
+	/// </param>
+	/// <param name="values">
+	/// When this method returns <c>true</c>, contains the deserialized list of strings associated with the specified key.
+	/// Otherwise, the value is <c>null</c>.
+	/// </param>
+	/// <returns>
+	/// <c>true</c> if a non-null, valid JSON array of strings was successfully retrieved and deserialized; otherwise, <c>false</c>.
+	/// </returns>
+	private static bool TryGetStringArray(
+		AuthenticationProperties properties,
+		string key,
+		[NotNullWhen(true)] out List<string>? values)
+	{
+		var json = properties.GetString(key);
+		if (json != null)
+		{
+			values = JsonSerializer.Deserialize<List<string>>(json);
+			if (values != null)
+				return true;
+		}
+
+		values = null;
+		return false;
 	}
 
 	/// <summary>
@@ -145,6 +176,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		properties.SetString(JwtClaimTypes.SessionId, authSession.SessionId);
 		properties.SetString(JwtClaimTypes.AuthenticationTime, authSession.AuthenticationTime.ToUnixTimeSeconds().ToString());
 		properties.SetString(JwtClaimTypes.AuthContextClassRef, authSession.AuthContextClassRef);
+		properties.SetString(JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences));
 		properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
 
 		return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
