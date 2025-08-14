@@ -369,3 +369,7 @@ FodyWeavers.xsd
 /local-rebuild.cmd
 /Certificates/myCA/private/Abblix Licensing.pem
 /LicenseGenerator
+
+# Development configuration
+CLAUDE.md
+.claude/
