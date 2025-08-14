@@ -40,8 +40,9 @@ Ensure these secrets are configured in your repository:
 
 ### Manual Publishing (Alternative)
 
-You can also use the standalone script for local publishing:
+You can also use the standalone scripts for local publishing:
 
+#### **Linux/macOS (Bash)**
 ```bash
 # Set environment variables
 export GITHUB_TOKEN="your_github_token"
@@ -52,6 +53,32 @@ export NUGET_API_KEY="your_nuget_api_key"
 
 # Or specify different directory
 ./scripts/publish-packages.sh /path/to/packages
+```
+
+#### **Windows (Command Prompt)**
+```cmd
+REM Set environment variables
+set GITHUB_TOKEN=your_github_token
+set NUGET_API_KEY=your_nuget_api_key
+
+REM Run the script
+scripts\publish-packages.cmd nupkg
+
+REM Or specify different directory
+scripts\publish-packages.cmd C:\path\to\packages
+```
+
+#### **Windows (PowerShell)**
+```powershell
+# Set environment variables
+$env:GITHUB_TOKEN = "your_github_token"
+$env:NUGET_API_KEY = "your_nuget_api_key"
+
+# Run the script
+.\scripts\publish-packages.ps1 nupkg
+
+# Or specify different directory
+.\scripts\publish-packages.ps1 "C:\path\to\packages"
 ```
 
 ## Publishing Process
@@ -65,7 +92,10 @@ export NUGET_API_KEY="your_nuget_api_key"
 ### From Local Script
 1. Download packages from GitHub release
 2. Set environment variables (`GITHUB_TOKEN`, `NUGET_API_KEY`)
-3. Run `./scripts/publish-packages.sh`
+3. Run the appropriate script for your platform:
+   - **Linux/macOS**: `./scripts/publish-packages.sh`
+   - **Windows CMD**: `scripts\publish-packages.cmd`
+   - **Windows PowerShell**: `.\scripts\publish-packages.ps1`
 4. Confirm each publishing step interactively
 
 ## Verification

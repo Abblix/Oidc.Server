@@ -184,7 +184,10 @@
 ### 🛠️ **Option B: Manual Publishing** 
 - [ ] **Download Packages**: From GitHub release or workflow artifacts
 - [ ] **Set API Keys**: `GITHUB_TOKEN` and `NUGET_API_KEY` environment variables
-- [ ] **Run Script**: `./scripts/publish-packages.sh nupkg`
+- [ ] **Run Script**: Choose platform-specific script:
+  - **Linux/macOS**: `./scripts/publish-packages.sh nupkg`
+  - **Windows CMD**: `scripts\publish-packages.cmd nupkg`
+  - **Windows PowerShell**: `.\scripts\publish-packages.ps1 nupkg`
 - [ ] **Confirm Steps**: Interactive approval for each publishing destination
 - [ ] **Verify Publication**: Check both GitHub Packages and NuGet.org
 
