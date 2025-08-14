@@ -3,22 +3,17 @@
 ## Pre-Release Preparation
 
 ### 🌿 Git Flow & Feature Integration
-- [ ] Identify all feature branches for this release
-- [ ] Create release branch from `develop`
+- [x] Identify all feature branches for this release
+- [x] **Accept PRs and merge feature branches to develop using Git Flow**:
+  - [x] PR #28: `feature/base32-improvements` (Base32 performance optimizations)
+  - [x] PR #27: `feature/extend-auth-session` (AMR support, dependency updates)
+- [x] Create release branch from updated `develop`
   ```bash
-  git flow release start v{version}
-  # or manually: git checkout -b release/v{version} develop
+  git flow release start v1.6.0
   ```
-- [ ] Merge all target feature branches into release branch:
-  - [ ] Feature branch 1: `________________________`
-  - [ ] Feature branch 2: `________________________`
-  - [ ] Feature branch 3: `________________________`
-  - [ ] Feature branch 4: `________________________`
-  - [ ] Feature branch 5: `________________________`
-  - [ ] *(Add more as needed)*
-- [ ] Resolve any merge conflicts
-- [ ] Verify all features work together (integration testing)
-- [ ] Delete merged feature branches (optional)
+- [x] Resolve any merge conflicts (none occurred)
+- [x] Verify all features work together (integration testing)
+- [x] Delete merged feature branches (done automatically by git flow)
 
 ### 🔍 Code Quality & Testing
 - [ ] All unit tests pass (`dotnet test`)
