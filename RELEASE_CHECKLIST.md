@@ -163,11 +163,20 @@
   - [ ] Commit fixes and re-run the workflow
   - [ ] May need to delete failed git tag before retrying
 
-**🚨 CRITICAL ISSUE IDENTIFIED:**
-- **Problem**: GitHub Actions created v1.4.0 instead of expected v1.6.0
-- **Root Cause**: Workflow ran from `develop` branch, but `github-tag-action` configuration only creates tags from `release.*,hotfix.*,master` branches
-- **Solution**: Must run workflow from proper Git Flow release branch (`release/1.6.0`) or from `master` branch
-- **Current Status**: Workflow succeeded in building/testing but failed at versioning step
+**🚨 CRITICAL ISSUE RESOLVED:**
+- **Problem**: GitHub Actions created v1.3.2/v1.4.0 instead of expected v1.6.0
+- **Root Cause**: Workflow used conventional commit-based versioning instead of respecting project file versions
+- **Additional Issues**: 
+  - Changelog generation failed with git reference errors
+  - Build didn't use proper version parameters
+  - Incompatible with Git Flow process using signed tags
+- **Solution Applied**: Enhanced workflow to support explicit versioning
+  - ✅ Added explicit version input parameter
+  - ✅ Extract version from project files when not specified
+  - ✅ Support existing signed tags and use their messages
+  - ✅ Fixed changelog generation with proper git references
+  - ✅ Ensure proper AssemblyVersion/PackageVersion in build
+- **Status**: Workflow fixed in commit 4ee190a, ready for future releases
 
 ## Manual Publishing Process
 
