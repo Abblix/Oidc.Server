@@ -259,6 +259,35 @@
   - [ ] Add more detailed explanations, breaking changes, migration notes
   - [ ] Update if any important context is missing from auto-generated changelog
 
+## Git Flow Release Completion
+
+### 🌿 **Complete Git Flow Release Process**
+- [x] **After successful automation and package publishing** ✅:
+  - [x] Packages published to both NuGet.org and GitHub Packages ✅
+  - [x] GitHub release created and verified ✅
+  - [x] All automation completed successfully ✅
+- [x] **Finish Git Flow release** ✅:
+  ```bash
+  git flow release finish v1.6.0
+  ```
+  **This automatically performs:**
+  - [x] Merges `release/v1.6.0` → `master` branch ✅
+  - [x] Creates signed tag `v1.6.0` on master ✅
+  - [x] Merges `release/v1.6.0` → `develop` branch ✅
+  - [x] Deletes `release/v1.6.0` branch ✅
+- [x] **Handle any merge conflicts** (if they occur) ✅:
+  - [x] Manually resolve conflicts in develop branch ✅
+  - [x] Commit resolved conflicts with proper message ✅
+- [x] **Push completed Git Flow branches** ✅:
+  ```bash
+  git push origin master develop --tags
+  ```
+- [x] **Verify Git Flow completion** ✅:
+  - [x] Check that `master` branch contains release changes ✅
+  - [x] Check that `develop` branch includes release fixes ✅
+  - [x] Verify signed tag exists: `git tag -v v1.6.0` ✅
+  - [x] Confirm release branch is deleted ✅
+
 ## Post-Release Activities
 
 ### 📢 Communication & Updates
@@ -270,7 +299,9 @@
 - [ ] Blog post announcement (if major release)
 
 ### 🔄 Dependency Updates
-- [ ] Update AuthenticationService to use new version
+- [x] Update AuthenticationService to use new version ✅
+- [x] Update Oidc.Server.GettingStarted to use new version ✅
+- [x] Update Templates to use new version and publish updated package ✅
 - [ ] Update AdminApp dependencies if needed
 - [ ] Update any example projects or demos
 - [ ] Update Docker images/containers if applicable
@@ -374,7 +405,11 @@ If critical issues are discovered:
 - All feature branches merged and tested together
 - All 5 packages published to both NuGet.org and GitHub Packages
 - GitHub release created with comprehensive notes and artifacts  
-- Git Flow properly completed (merged to main and develop)
+- **Git Flow properly completed**: `git flow release finish` executed successfully
+  - Release branch merged to `master` and `develop`
+  - Signed tag created on `master` branch
+  - Release branch cleaned up
+  - All changes pushed to remote repository
 - Post-release verification completed successfully
 
 ---
