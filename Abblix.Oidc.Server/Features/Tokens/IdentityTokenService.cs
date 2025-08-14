@@ -107,7 +107,7 @@ internal class IdentityTokenService : IIdentityTokenService
 			// as described in Section 5.3.2, when a response_type value is used that results in an Access Token being issued.
 			// However, when no Access Token is issued (which is the case for the response_type value id_token),
 			// the resulting Claims are returned in the ID Token.
-			scope = scope.Except(new[] { Scopes.Profile, Scopes.Email, Scopes.Address }).ToArray();
+			scope = scope.Except(new [] { Scopes.Profile, Scopes.Email, Scopes.Address }).ToArray();
 		}
 
 		var userInfo = await _userClaimsProvider.GetUserClaimsAsync(
@@ -136,9 +136,10 @@ internal class IdentityTokenService : IIdentityTokenService
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
-				[JwtClaimTypes.AuthContextClassRef] = authSession.AuthContextClassRef,
+				AuthContextClassRef = authSession.AuthContextClassRef,
+				AuthenticationMethodReferences = authSession.AuthenticationMethodReferences,
 
-				Audiences = new[] { authContext.ClientId },
+				Audiences = new [] { authContext.ClientId },
 				Nonce = authContext.Nonce,
 			},
 		};

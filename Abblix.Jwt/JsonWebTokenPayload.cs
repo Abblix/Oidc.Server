@@ -201,4 +201,45 @@ public class JsonWebTokenPayload
 		get => Json.GetProperty<string>(JwtClaimTypes.Nonce);
 		set => Json.SetProperty(JwtClaimTypes.Nonce, value);
 	}
+
+	/// <summary>
+	/// A list of authentication methods used to authenticate the subject,
+	/// represented as Authentication Method Reference (AMR) values.
+	/// </summary>
+	/// <remarks>
+	/// In multi-tenant and federated identity systems, this claim helps relying parties understand the authentication
+	/// strength applied to a user session.
+	///
+	/// Each value in the list corresponds to a specific method used during authentication,
+	/// such as <c>"pwd"</c> (password), <c>"mfa"</c> (multi-factor authentication), <c>"otp"</c> (one-time password),
+	/// or <c>"fido"</c> (FIDO-based authentication).
+	///
+	/// These values support policy enforcement at the tenant level, allowing services to require particular
+	/// authentication methods (e.g., tenants enforcing MFA) or to provide differentiated access
+	/// based on authentication robustness.
+	/// </remarks>
+	public IEnumerable<string>? AuthenticationMethodReferences
+	{
+		get => Json.GetArrayOfStringsOrNull(JwtClaimTypes.AuthenticationMethodReferences);
+		set => Json.SetArrayOrStringOrNull(JwtClaimTypes.AuthenticationMethodReferences, value);
+	}
+
+	/// <summary>
+	/// Represents the Authentication Context Class Reference (ACR)
+	/// indicating the authentication context achieved during authentication.
+	/// </summary>
+	/// <remarks>
+	/// In federated and multi-tenant environments, the <c>acr</c> claim helps assert that the user was authenticated
+	/// under a specific assurance level (e.g., <c>"urn:openbanking:psd2:sca"</c> or <c>"loa3"</c>).
+	///
+	/// This is particularly important for applications that integrate with external identity providers,
+	/// regulatory domains (such as finance or healthcare), or environments where different tenants require
+	/// varying levels of authentication rigor. The ACR value enables relying parties to make access decisions based on
+	/// agreed-upon trust frameworks and security profiles.
+	/// </remarks>
+	public string? AuthContextClassRef
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.AuthContextClassRef);
+		set => Json.SetProperty(JwtClaimTypes.AuthContextClassRef, value);
+	}
 }
