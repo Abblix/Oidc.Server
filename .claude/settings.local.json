@@ -6,7 +6,9 @@
       "Bash(git add:*)",
       "Bash(gh pr:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:sonarcloud.io)"
+      "WebFetch(domain:sonarcloud.io)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []
