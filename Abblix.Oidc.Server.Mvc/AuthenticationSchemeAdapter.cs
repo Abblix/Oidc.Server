@@ -48,11 +48,34 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
 	/// allowing operations on the HTTP context of the current request.</param>
 	public AuthenticationSchemeAdapter(IHttpContextAccessor httpContextAccessor)
+		: this(httpContextAccessor, CookieAuthenticationDefaults.AuthenticationScheme)
 	{
 		_httpContextAccessor = httpContextAccessor;
 	}
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class with a specific authentication scheme,
+	/// injecting dependencies needed to access and manage HTTP contexts.
+	/// </summary>
+	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
+	/// allowing operations on the HTTP context of the current request.</param>
+	/// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
+	/// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
+	public AuthenticationSchemeAdapter(
+		IHttpContextAccessor httpContextAccessor,
+		string authenticationScheme)
+	{
+		_httpContextAccessor = httpContextAccessor;
+		_authenticationScheme = authenticationScheme;
+	}
+
 	private readonly IHttpContextAccessor _httpContextAccessor;
+	
+	/// <summary>
+	/// The authentication scheme to use for all authentication operations (SignIn, SignOut, Authenticate).
+	/// This ensures consistent behavior when multiple authentication schemes are registered.
+	/// </summary>
+	private readonly string _authenticationScheme;
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
@@ -86,7 +109,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()
 	{
-		var authenticationResult = await HttpContext.AuthenticateAsync();
+		var authenticationResult = await HttpContext.AuthenticateAsync(_authenticationScheme);
 		if (!authenticationResult.Succeeded)
 			return null;
 
@@ -179,12 +202,12 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		properties.SetString(JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences));
 		properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
 
-		return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
+		return HttpContext.SignInAsync(_authenticationScheme, principal, properties);
 	}
 
 	/// <summary>
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
-	public Task SignOutAsync() => HttpContext.SignOutAsync();
+	public Task SignOutAsync() => HttpContext.SignOutAsync(_authenticationScheme);
 }
