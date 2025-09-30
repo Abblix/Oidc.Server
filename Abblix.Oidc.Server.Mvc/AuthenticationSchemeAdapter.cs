@@ -42,18 +42,6 @@ namespace Abblix.Oidc.Server.Mvc;
 public class AuthenticationSchemeAdapter : IAuthSessionService
 {
 	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class,
-	/// injecting dependencies needed to access and manage HTTP contexts.
-	/// </summary>
-	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
-	/// allowing operations on the HTTP context of the current request.</param>
-	public AuthenticationSchemeAdapter(IHttpContextAccessor httpContextAccessor)
-		: this(httpContextAccessor, CookieAuthenticationDefaults.AuthenticationScheme)
-	{
-		_httpContextAccessor = httpContextAccessor;
-	}
-
-	/// <summary>
 	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class with a specific authentication scheme,
 	/// injecting dependencies needed to access and manage HTTP contexts.
 	/// </summary>
@@ -63,7 +51,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 	public AuthenticationSchemeAdapter(
 		IHttpContextAccessor httpContextAccessor,
-		string authenticationScheme)
+		string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme)
 	{
 		_httpContextAccessor = httpContextAccessor;
 		_authenticationScheme = authenticationScheme;
