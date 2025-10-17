@@ -130,55 +130,13 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		};
 
 		var properties = authenticationResult.Properties;
-		if (TryGetStringArray(properties, nameof(AuthSession.AffectedClientIds), out var affectedClientIds))
+		if (properties.TryGetStringList(nameof(AuthSession.AffectedClientIds), out var affectedClientIds))
 			authSession = authSession with { AffectedClientIds = affectedClientIds };
 
-		if (TryGetClaimArray(principal, JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
+		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
 
 		return authSession;
-	}
-
-	/// <summary>
-	/// Attempts to retrieve a list of strings from a claim value.
-	/// The claim value is expected to be a JSON-serialized array of strings.
-	/// </summary>
-	private static bool TryGetClaimArray(
-		ClaimsPrincipal principal,
-		string claimType,
-		[NotNullWhen(true)] out List<string>? values)
-	{
-		var json = principal.FindFirstValue(claimType);
-		if (json != null)
-		{
-			values = JsonSerializer.Deserialize<List<string>>(json);
-			if (values != null)
-				return true;
-		}
-
-		values = null;
-		return false;
-	}
-
-	/// <summary>
-	/// Attempts to retrieve a list of strings from authentication properties.
-	/// The value is expected to be a JSON-serialized array of strings.
-	/// </summary>
-	private static bool TryGetStringArray(
-		AuthenticationProperties properties,
-		string key,
-		[NotNullWhen(true)] out List<string>? values)
-	{
-		var json = properties.GetString(key);
-		if (json != null)
-		{
-			values = JsonSerializer.Deserialize<List<string>>(json);
-			if (values != null)
-				return true;
-		}
-
-		values = null;
-		return false;
 	}
 
 	/// <summary>
