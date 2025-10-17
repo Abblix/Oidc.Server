@@ -33,10 +33,10 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.8" />
+      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.10" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" />
+      <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.10" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.10" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net6.0' OR '$(TargetFramework)' == 'net7.0' OR '$(TargetFramework)' == 'net8.0'">
