@@ -68,7 +68,7 @@ public class AuthorizationHandler : IAuthorizationHandler
     /// </summary>
     /// <param name="request">The authorization request to be handled. This can be a direct request or a reference
     /// to an external request that needs to be fetched.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an <see cref="AuthorizationResponse"/>.
+    /// <returns>A task that returns an <see cref="AuthorizationResponse"/>.
     /// This response can be either an authorization success response or an error response based on the fetching,
     /// validation and processing outcomes.</returns>
     /// <exception cref="UnexpectedTypeException">Thrown if the validation result is of an unexpected type.</exception>

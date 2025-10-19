@@ -51,7 +51,7 @@ public class RequestObjectFetchAdapter : IAuthorizationRequestFetcher
     /// </summary>
     /// <param name="request">The authorization request to be processed.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains a <see cref="FetchResult"/>
+    /// A task that returns a <see cref="FetchResult"/>
     /// which either represents a successfully processed request or an error indicating issues with the request object.
     /// </returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)

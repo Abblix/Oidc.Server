@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -57,7 +57,7 @@ public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 	/// based on the JWT specified requirements and the available cryptographic keys.
 	/// </summary>
 	/// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
-	/// <returns>A <see cref="Task"/> that represents the asynchronous operation, resulting in the JWT formatted
+	/// <returns>A task that returns the JWT formatted
 	/// as a string.</returns>
 	/// <remarks>
 	/// This method selects the appropriate signing key based on the algorithm specified in the JWT header.

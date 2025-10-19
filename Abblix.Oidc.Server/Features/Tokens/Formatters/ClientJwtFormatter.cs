@@ -53,7 +53,7 @@ public class ClientJwtFormatter : IClientJwtFormatter
     /// </summary>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued, including any requirements for encryption.</param>
-    /// <returns>A <see cref="Task"/> that represents the asynchronous operation, resulting in a JWT string formatted and ready for use by the client.</returns>
+    /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     /// <remarks>
     /// This method ensures the JWT is signed with the appropriate key from the authentication service. If the client's configuration supports encryption,
     /// the method also encrypts the JWT using the client's public key. The result is a JWT that conforms to the security requirements of both

@@ -44,7 +44,7 @@ public interface ILogoutTokenService
     ///     (sub) and the session identifier (sid) that uniquely identifies the session being logged out.
     ///     Additional information about the logout event, such as the reason for logout, can also be included if supported
     ///     by the implementation.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in a <see cref="JsonWebToken"/>.
+    /// <returns>A task that returns a <see cref="JsonWebToken"/>.
     /// This token is specifically formatted to conform to the OpenID Connect back-channel logout specification,
     /// containing claims such as 'sub', 'sid', and 'events' to indicate the logout event to the client.</returns>
     Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext);

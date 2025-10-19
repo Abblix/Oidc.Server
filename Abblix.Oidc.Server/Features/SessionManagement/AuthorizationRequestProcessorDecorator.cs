@@ -59,7 +59,7 @@ public class AuthorizationRequestProcessorDecorator: IAuthorizationRequestProces
     /// </summary>
     /// <param name="request">The authorization request to be processed, expected to be a valid and authenticated request.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. Upon completion, the task yields an <see cref="AuthorizationResponse"/>
+    /// A task that returns an <see cref="AuthorizationResponse"/>
     /// that may include session state information to be used by the client for session management purposes.
     /// </returns>
     /// <remarks>

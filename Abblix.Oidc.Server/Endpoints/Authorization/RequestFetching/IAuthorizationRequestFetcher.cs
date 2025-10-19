@@ -40,7 +40,7 @@ public interface IAuthorizationRequestFetcher
     /// The initial authorization request, which may contain a reference to a request object or inline request parameters.
     /// </param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the processed authorization request
+    /// A task that returns the processed authorization request
     /// details, encapsulated within a <see cref="FetchResult"/>.</returns>
     /// <remarks>
     /// This method is responsible for handling the specifics of fetching and interpreting the authorization request,

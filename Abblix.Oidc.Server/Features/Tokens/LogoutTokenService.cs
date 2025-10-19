@@ -71,7 +71,7 @@ public class LogoutTokenService : ILogoutTokenService
     /// <param name="clientInfo">Information about the client that will receive the logout token.</param>
     /// <param name="logoutContext">Contextual information about the logout event, including the user's subject ID
     /// and session ID.</param>
-    /// <returns>A task that represents the asynchronous operation of creating and encoding a logout token.
+    /// <returns>A task that returns a logout token.
     /// The task result is an <see cref="EncodedJsonWebToken"/>, which includes both the raw token object and its
     /// string representation.</returns>
     public async Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext)

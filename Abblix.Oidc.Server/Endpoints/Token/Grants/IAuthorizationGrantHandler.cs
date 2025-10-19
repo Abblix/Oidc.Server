@@ -48,7 +48,7 @@ public interface IAuthorizationGrantHandler
 	/// <param name="request">The authorization request containing the required parameters for the grant type.</param>
 	/// <param name="clientInfo">Client information associated with the request, used for validation and
 	/// to generate the authorization response.</param>
-	/// <returns>A task that, when completed successfully, returns a <see cref="Result{AuthorizedGrant, RequestError}"/> indicating
-	/// the outcome of the authorization process, including any tokens or error messages.</returns>
+	/// <returns>A task that returns a <see cref="Result{AuthorizedGrant, RequestError}"/> with the authorization outcome,
+	/// including any tokens or error messages.</returns>
 	Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
 }

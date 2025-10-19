@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -54,7 +54,7 @@ public class BackChannelAuthenticationStorage : IBackChannelAuthenticationStorag
 	/// <param name="authenticationRequest">The backchannel authentication request to store.</param>
 	/// <param name="expiresIn">The duration after which the stored request will expire.</param>
 	/// <returns>
-	/// A task that represents the asynchronous operation, containing the unique ID of the stored authentication request.
+	/// A task that returns the unique ID of the stored authentication request.
 	/// </returns>
 	public async Task<string> StoreAsync(BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn)
 	{
@@ -73,7 +73,7 @@ public class BackChannelAuthenticationStorage : IBackChannelAuthenticationStorag
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to retrieve.</param>
 	/// <returns>
-	/// A task that represents the asynchronous operation, containing the authentication request if found;
+	/// A task that returns the authentication request if found;
 	/// otherwise, null.
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId)
@@ -85,7 +85,7 @@ public class BackChannelAuthenticationStorage : IBackChannelAuthenticationStorag
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
-	/// A task that represents the asynchronous operation of removing the request from storage.
+	/// A task that completes when the request is removed from storage.
 	/// </returns>
 	public Task RemoveAsync(string authenticationRequestId)
 		=> _storage.RemoveAsync(ToKeyString(authenticationRequestId));

@@ -80,7 +80,7 @@ public class ClientJwtValidator: IClientJwtValidator
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result is a tuple containing the validation result
+    /// A task that returns a tuple containing the validation result
     /// and the associated client information if the issuer is validated.
     /// </returns>
     public async Task<(JwtValidationResult, ClientInfo?)> ValidateAsync(
@@ -109,8 +109,7 @@ public class ClientJwtValidator: IClientJwtValidator
     /// Validates the audience by checking if it matches the request URI.
     /// </summary>
     /// <param name="audiences">The collection of audiences to validate against the request URI.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result indicates whether
-    /// the audience is valid.</returns>
+    /// <returns>A task that returns whether the audience is valid.</returns>
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
         var requestUri = _requestInfoProvider.RequestUri;
@@ -131,7 +130,7 @@ public class ClientJwtValidator: IClientJwtValidator
     /// </summary>
     /// <param name="issuer">The issuer value to validate.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result indicates whether the issuer is valid
+    /// A task that returns whether the issuer is valid
     /// and corresponds to an authorized client.
     /// </returns>
     /// <exception cref="InvalidOperationException">Thrown if attempting to validate a different issuer than the one

@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -63,7 +63,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     /// <param name="request">The user information request.</param>
     /// <param name="response">The response from the user information endpoint.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted user information response.
+    /// A task that returns the formatted user information response.
     /// </returns>
     public async Task<ActionResult<UserInfoResponse>> FormatResponseAsync(
         UserInfoRequest request,

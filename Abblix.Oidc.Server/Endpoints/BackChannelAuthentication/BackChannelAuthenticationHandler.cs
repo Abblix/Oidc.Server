@@ -62,8 +62,7 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
     /// </summary>
     /// <param name="request">The initial backchannel authentication request to be processed.</param>
     /// <param name="clientRequest">The client request information associated with the authentication request.</param>
-    /// <returns>A task that represents the asynchronous operation,
-    /// resulting in a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that indicates the outcome of the process.
+    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that indicates the outcome of the process.
     /// </returns>
     public async Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> HandleAsync(
         BackChannelAuthenticationRequest request,

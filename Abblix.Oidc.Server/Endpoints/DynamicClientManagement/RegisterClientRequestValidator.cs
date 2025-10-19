@@ -54,10 +54,9 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     /// <param name="request">The <see cref="ClientRegistrationRequest"/> containing the details of the client seeking
     /// registration.</param>
     /// <returns>
-    /// A <see cref="Task"/> that when completed will yield a <see cref="Result<ValidClientRegistrationRequest, RequestError>"/>,
-    /// which may either indicate a successful validation through a <see cref="ValidClientRegistrationRequest"/>
-    /// instance or detail any issues encountered during validation as a
-    /// <see cref="Result<ValidClientRegistrationRequest, RequestError>"/>.
+    /// A task that returns a <see cref="Result{ValidClientRegistrationRequest, RequestError}"/>,
+    /// containing either a <see cref="ValidClientRegistrationRequest"/> on success or a <see cref="RequestError"/>
+    /// detailing any validation issues.
     /// </returns>
     /// <remarks>
     /// This method orchestrates the validation process by creating a validation context from the provided request
@@ -68,7 +67,12 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     public async Task<Result<ValidClientRegistrationRequest, RequestError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
-        Result<ValidClientRegistrationRequest, RequestError>? error = await _validator.ValidateAsync(context);
-        return error ?? new ValidClientRegistrationRequest(request, context.SectorIdentifier);
+        var error = await _validator.ValidateAsync(context);
+        if (error != null)
+        {
+            return error;
+        }
+
+        return new ValidClientRegistrationRequest(request, context.SectorIdentifier);
     }
 }

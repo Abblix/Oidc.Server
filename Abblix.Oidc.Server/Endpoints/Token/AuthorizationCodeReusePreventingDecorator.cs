@@ -69,7 +69,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
     /// </summary>
     /// <param name="request">The valid token request to process.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation, resulting in a <see cref="TokenResponse"/>.
+    /// A task that returns a <see cref="TokenResponse"/>.
     /// </returns>
     public async Task<Result<TokenIssued, TokenError>> ProcessAsync(ValidTokenRequest request)
     {

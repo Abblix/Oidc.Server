@@ -40,7 +40,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
     /// <param name="request">The token request.</param>
     /// <param name="response">The response from the token endpoint.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted token response.
+    /// A task that returns the formatted token response.
     /// </returns>
     public Task<ActionResult<TokenResponse>> FormatResponseAsync(
         TokenRequest request,

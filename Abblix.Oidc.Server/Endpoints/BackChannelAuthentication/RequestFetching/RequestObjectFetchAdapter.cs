@@ -50,7 +50,7 @@ public class RequestObjectFetchAdapter : IBackChannelAuthenticationRequestFetche
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation.
+    /// A task that returns a BackChannelAuthenticationRequest or error.
     /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/>
     /// that either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>

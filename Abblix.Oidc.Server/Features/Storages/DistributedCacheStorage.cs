@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -53,7 +53,7 @@ public sealed class DistributedCacheStorage : IEntityStorage
 	/// <param name="value">The object to store.</param>
 	/// <param name="options">Configuration options for the cache entry, such as expiration.</param>
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
+	/// <returns>A task that completes when the operation finishes.</returns>
 	public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
 	{
 		ArgumentNullException.ThrowIfNull(key);
@@ -76,7 +76,7 @@ public sealed class DistributedCacheStorage : IEntityStorage
 	/// <param name="key">The key associated with the object to retrieve.</param>
 	/// <param name="removeOnRetrieval">Whether to remove the object from the cache after retrieval.</param>
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
-	/// <returns>A task that represents the asynchronous operation, containing the retrieved object, if found;
+	/// <returns>A task that completes when the operation finishes. containing the retrieved object, if found;
 	/// otherwise, null.</returns>
 	public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
 	{
@@ -104,7 +104,7 @@ public sealed class DistributedCacheStorage : IEntityStorage
 	/// </summary>
 	/// <param name="key">The key of the object to remove.</param>
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
-	/// <returns>A task that represents the asynchronous operation of removing the object.</returns>
+	/// <returns>A task that completes when the operation finishes.of removing the object.</returns>
 	public Task RemoveAsync(string key, CancellationToken? token = null)
 		=> _cache.RemoveAsync(key, token ?? CancellationToken.None);
 }

@@ -40,8 +40,7 @@ public interface IBackChannelAuthenticationRequestProcessor
 	/// </summary>
 	/// <param name="request">The validated backchannel authentication request containing the original request data
 	/// and associated client information.</param>
-	/// <returns>A task that represents the asynchronous operation,
-	/// yielding a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that contains the result of the processing,
+	/// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that contains the result of the processing,
 	/// such as an authentication request ID and the expires_in value.</returns>
 	Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> ProcessAsync(ValidBackChannelAuthenticationRequest request);
 }

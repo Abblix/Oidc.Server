@@ -39,7 +39,7 @@ public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
     /// <param name="request">The client request.</param>
     /// <param name="response">The response to the client removal request.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted action result.
+    /// A task that returns the formatted action result.
     /// </returns>
     public Task<ActionResult> FormatResponseAsync(ClientRequest request, RemoveClientResponse response)
         => Task.FromResult(FormatResponse(response));

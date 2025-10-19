@@ -43,7 +43,7 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     /// <param name="request">The token revocation request.</param>
     /// <param name="response">The response to the token revocation request.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted action result.
+    /// A task that returns the formatted action result.
     /// </returns>
     public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, RevocationError> response)
     {

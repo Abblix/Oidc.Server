@@ -94,7 +94,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
     /// <param name="request">The authorization request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// <returns>A task that returns an action result containing
     /// the authorization response.</returns>
     /// <remarks>
     /// This endpoint is a key component of the OpenID Connect flow, initiating user authentication and
@@ -124,7 +124,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="formatter">The formatter used to generate a response with user claims.</param>
     /// <param name="userInfoRequest">The userinfo request containing the access token.</param>
     /// <param name="clientRequest">Additional request information provided by the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// <returns>A task that returns an action result containing
     /// the userinfo response.</returns>
     /// <remarks>
     /// This endpoint provides claims about the authenticated user, conforming to the
@@ -153,7 +153,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for processing end session requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the end session request.</param>
     /// <param name="request">The end session request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// <returns>A task that returns an action result for
     /// the end session process.</returns>
     /// <remarks>
     /// This endpoint supports the RP-Initiated Logout functionality, enabling clients to initiate
@@ -183,7 +183,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for the check session operation.</param>
     /// <param name="formatter">The formatter used to generate a response suitable for session checking
     /// within an iframe.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// <returns>A task that returns an action result for
     /// the check session response.</returns>
     /// <remarks>
     /// This endpoint is part of the OpenID Connect session management specification,

@@ -52,7 +52,7 @@ public class ClientRequestValidator : IClientRequestValidator
     /// Validates a client request asynchronously by checking the authorization header and client existence.
     /// </summary>
     /// <param name="request">The client request to validate.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the validation result.</returns>
+    /// <returns>A task that returns the validation result.</returns>
     public async Task<Result<ValidClientRequest, RequestError>> ValidateAsync(ClientRequest request)
     {
         var headerErrorDescription = await _registrationAccessTokenValidator.ValidateAsync(

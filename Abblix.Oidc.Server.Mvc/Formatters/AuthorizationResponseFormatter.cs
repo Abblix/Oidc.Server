@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -91,7 +91,7 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
     /// <param name="request">The authorization request containing details about the initial request from the client.
     /// </param>
     /// <param name="response">The authorization response model to format.</param>
-    /// <returns>A task that represents the asynchronous operation and results in an <see cref="ActionResult"/>
+    /// <returns>A task that returns an <see cref="ActionResult"/>
     /// that can be returned by an ASP.NET Core controller.</returns>
     public async Task<ActionResult> FormatResponseAsync(
         AuthorizationRequest request,
@@ -158,7 +158,7 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
     /// </summary>
     /// <param name="uri">The base URI to redirect to.</param>
     /// <param name="request">The authorization request to attach to the URI as a query parameter.</param>
-    /// <returns>A task that represents the asynchronous operation and results in a redirect action result.</returns>
+    /// <returns>A task that returns a redirect action result.</returns>
     private async Task<ActionResult> RedirectAsync(Uri uri, AuthorizationRequest request)
     {
         var response = await _authorizationRequestStorage.StoreAsync(

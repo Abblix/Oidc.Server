@@ -50,7 +50,7 @@ public class CompositeLogoutNotifier: ILogoutNotifier
     /// </summary>
     /// <param name="clientInfo">The information about the client that is being notified of the logout event.</param>
     /// <param name="logoutContext">Contextual information related to the logout event, including the user and session identifiers.</param>
-    /// <returns>A task that represents the asynchronous operation of notifying all clients.</returns>
+    /// <returns>A task that completes when all clients are notified.</returns>
     /// <remarks>
     /// This method ensures that each logout notifier is called, regardless of the individual notifier's outcome.
     /// It allows for a unified approach to logout notifications, accommodating various client requirements and logout mechanisms.

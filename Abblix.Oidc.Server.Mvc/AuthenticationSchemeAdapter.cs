@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -81,7 +81,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// converting the authentication results into an <see cref="AuthSession"/>.
 	/// </summary>
 	/// <returns>
-	/// A task that represents the asynchronous operation. The task result contains the <see cref="AuthSession"/>
+	/// A task that returns the <see cref="AuthSession"/>
 	/// of the authenticated user or null if the authentication fails.
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()

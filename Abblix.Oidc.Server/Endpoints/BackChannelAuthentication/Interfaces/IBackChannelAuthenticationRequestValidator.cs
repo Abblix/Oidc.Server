@@ -41,8 +41,7 @@ public interface IBackChannelAuthenticationRequestValidator
 	/// <param name="request">The backchannel authentication request to validate.</param>
 	/// <param name="clientRequest">The client request containing additional client-related data for validation.
 	/// </param>
-	/// <returns>A task that represents the asynchronous operation,
-	/// containing the result of the validation process as a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>.
+	/// <returns>A task that returns the result of the validation process as a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>.
 	/// </returns>
 	Task<Result<ValidBackChannelAuthenticationRequest, RequestError>> ValidateAsync(
 		BackChannelAuthenticationRequest request,

@@ -59,7 +59,7 @@ public class BackChannelLogoutNotifier : ILogoutNotifier
     /// notification should be sent.</param>
     /// <param name="logoutContext">The context of the logout event, containing details such as the subject identifier
     /// and session identifier, which are included in the logout token.</param>
-    /// <returns>A task that represents the asynchronous operation of notifying the client. The task completes when
+    /// <returns>A task that completes when
     /// the notification has been successfully sent to the client's back-channel logout endpoint.</returns>
     public async Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
     {

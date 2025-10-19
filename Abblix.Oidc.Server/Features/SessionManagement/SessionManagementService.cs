@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -108,7 +108,7 @@ public class SessionManagementService : ISessionManagementService
     /// Asynchronously generates the response content for the check session endpoint. This method retrieves an HTML template
     /// that includes JavaScript code for the client to check the session state.
     /// </summary>
-    /// <returns>A task that represents the asynchronous operation, resulting in a <see cref="CheckSessionResponse"/>
+    /// <returns>A task that returns a <see cref="CheckSessionResponse"/>
     /// containing the HTML content for the check session iframe and the name of the session management cookie.</returns>
     public async Task<CheckSessionResponse> GetCheckSessionResponseAsync()
     {

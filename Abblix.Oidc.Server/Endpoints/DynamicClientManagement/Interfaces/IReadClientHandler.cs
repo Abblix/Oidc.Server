@@ -33,8 +33,7 @@ public interface IReadClientHandler
     /// </summary>
     /// <param name="clientRequest">The client request containing the necessary information to identify the client
     /// whose configuration is to be read.</param>
-    /// <returns>A task that results in a <see cref="ReadClientResponse"/>, which may either contain the client's
-    /// configuration details if the request is valid, or an error response indicating the reason for failure.</returns>
+    /// <returns>A task that returns the client's configuration details or an error response.</returns>
     /// <remarks>
     /// This method processes the incoming request to read a client's configuration. It first validates the request
     /// to ensure that it meets the necessary criteria and that the client specified in the request exists and is

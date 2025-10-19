@@ -122,8 +122,8 @@ internal class AccessTokenService : IAccessTokenService
 	/// access.
 	/// </summary>
 	/// <param name="accessToken">The access token to be authenticated and analyzed.</param>
-	/// <returns>A task that, when completed, yields a tuple containing the <see cref="AuthSession"/> and
-	/// <see cref="AuthorizationContext"/> derived from the token.</returns>
+	/// <returns>A task that returns the <see cref="AuthSession"/> and <see cref="AuthorizationContext"/>
+	/// derived from the token.</returns>
 	/// <remarks>
 	/// This method facilitates the secure validation of access tokens, ensuring that only tokens issued by the trusted
 	/// authority and not tampered with are accepted. It decodes embedded claims to reconstruct the original

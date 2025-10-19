@@ -59,8 +59,7 @@ public class BackChannelAuthenticationRequestValidator : IBackChannelAuthenticat
 	/// <param name="request">The backchannel authentication request to be validated.</param>
 	/// <param name="clientRequest">The client request associated with the backchannel authentication request.</param>
 	/// <returns>
-	/// A task that represents the asynchronous operation.
-	/// The task result contains a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>,
+	/// A task that returns a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>,
 	/// which can be either a valid request or an error, depending on the outcome of the validation.
 	/// </returns>
 	public async Task<Result<ValidBackChannelAuthenticationRequest, RequestError>> ValidateAsync(
