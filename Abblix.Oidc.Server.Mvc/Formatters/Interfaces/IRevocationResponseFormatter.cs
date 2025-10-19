@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -37,5 +38,5 @@ public interface IRevocationResponseFormatter
     /// <param name="request">The revocation request.</param>
     /// <param name="response">The revocation response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(RevocationRequest request, RevocationResponse response);
+    Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, RevocationError> response);
 }

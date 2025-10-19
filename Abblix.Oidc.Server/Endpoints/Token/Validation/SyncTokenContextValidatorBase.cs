@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -38,11 +38,11 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="TokenRequestError"/> containing error details
+    /// A <see cref="Task"/> that resolves to a <see cref="RequestError"/> containing error details
     /// if the validation fails;
     /// otherwise, resolves to null indicating that the validation was successful.
     /// </returns>
-    public Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
+    public Task<RequestError?> ValidateAsync(TokenValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -52,8 +52,8 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> containing error details if the validation fails;
+    /// A <see cref="RequestError"/> containing error details if the validation fails;
     /// otherwise, returns null indicating that the validation was successful.
     /// </returns>
-    protected abstract TokenRequestError? Validate(TokenValidationContext context);
+    protected abstract RequestError? Validate(TokenValidationContext context);
 }

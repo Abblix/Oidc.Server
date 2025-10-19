@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -49,10 +49,10 @@ public class ScopeValidator : IBackChannelAuthenticationContextValidator
 	/// </summary>
 	/// <param name="context">The validation context that includes details about the request and the client.</param>
 	/// <returns>
-	/// A <see cref="BackChannelAuthenticationValidationError"/> if the scope validation fails,
+	/// A <see cref="RequestError"/> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-	public Task<BackChannelAuthenticationValidationError?> ValidateAsync(
+	public Task<RequestError?> ValidateAsync(
 		BackChannelAuthenticationValidationContext context)
 	{
 		return Task.FromResult(Validate(context));
@@ -66,15 +66,15 @@ public class ScopeValidator : IBackChannelAuthenticationContextValidator
 	/// <param name="context">
 	/// Contains the authorization request and the client information necessary for validation.</param>
 	/// <returns>
-	/// A <see cref="BackChannelAuthenticationValidationError"/> if the requested scopes are not valid or not allowed,
+	/// A <see cref="RequestError"/> if the requested scopes are not valid or not allowed,
 	/// or null if the validation passes.
 	/// </returns>
-	private BackChannelAuthenticationValidationError? Validate(BackChannelAuthenticationValidationContext context)
+	private RequestError? Validate(BackChannelAuthenticationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
 		    context.ClientInfo.OfflineAccessAllowed != true)
 		{
-			return new BackChannelAuthenticationValidationError(
+			return new RequestError(
 				ErrorCodes.InvalidScope,
 				"This client is not allowed to request for offline access");
 		}
@@ -85,7 +85,7 @@ public class ScopeValidator : IBackChannelAuthenticationContextValidator
 			    out var scopeDefinitions,
 			    out var errorDescription))
 		{
-			return new BackChannelAuthenticationValidationError(
+			return new RequestError(
 				ErrorCodes.InvalidScope, errorDescription);
 		}
 

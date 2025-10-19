@@ -20,9 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
@@ -50,15 +52,18 @@ public class TokenRequestValidator : ITokenRequestValidator
 	/// </summary>
 	/// <param name="tokenRequest">The token request containing all necessary parameters for validation.</param>
 	/// <param name="clientRequest">Client request information necessary for client authentication.</param>
-	/// <returns>A <see cref="Task"/> that resolves to a <see cref="TokenRequestValidationResult"/>,
+	/// <returns>A <see cref="Task"/> that resolves to a <see cref="Result{ValidTokenRequest, RequestError}"/>,
 	/// indicating the outcome of the validation process. This result can either denote a successful validation
 	/// or contain error information specifying why the request was invalid.</returns>
-	public async Task<TokenRequestValidationResult> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
+	public async Task<Result<ValidTokenRequest, RequestError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
 	{
 		// Context creation is a critical step in the validation process, encapsulating all necessary data.
 		var context = new TokenValidationContext(tokenRequest, clientRequest);
 
-		// Delegating the validation to the assigned validator and handling null error response as valid request.
-		return await _validator.ValidateAsync(context) ?? (TokenRequestValidationResult)new ValidTokenRequest(context);
+		var error = await _validator.ValidateAsync(context);
+		if (error != null)
+			return error;
+
+		return new ValidTokenRequest(context);
 	}
 }

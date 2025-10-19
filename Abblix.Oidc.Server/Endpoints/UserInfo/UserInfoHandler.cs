@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Model;
 
@@ -74,14 +73,9 @@ public class UserInfoHandler : IUserInfoHandler
     {
         var validationResult = await _validator.ValidateAsync(userInfoRequest, clientRequest);
 
-        return validationResult switch
-        {
-            ValidUserInfoRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            UserInfoRequestError { Error: var error, ErrorDescription: var description }
-                => new UserInfoErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => new UserInfoErrorResponse(error.ErrorCode, error.ErrorDescription)
+        );
     }
 }

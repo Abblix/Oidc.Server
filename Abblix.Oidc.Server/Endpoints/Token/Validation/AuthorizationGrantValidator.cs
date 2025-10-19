@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -57,44 +56,41 @@ public class AuthorizationGrantValidator: ITokenContextValidator
     /// </summary>
     /// <param name="context">The validation context containing the token request and client information.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> if the authorization grant is invalid,
+    /// A <see cref="RequestError"/> if the authorization grant is invalid,
     /// including an error code and description;
     /// otherwise, null indicating that the grant is valid and the context has been updated.
     /// </returns>
-    public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
+    public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
     {
         // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.AllowedGrantTypes.Contains(context.Request.GrantType))
         {
-            return new TokenRequestError(
+            return new RequestError(
                 ErrorCodes.UnauthorizedClient,
                 "The grant type is not allowed for this client");
         }
 
         var result = await _grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
-        switch (result)
+
+        if (result.TryGetFailure(out var error))
         {
-            // Deny the request if the grant is invalid, providing the specific reason for rejection
-            case InvalidGrantResult { Error: var error, ErrorDescription: var description }:
-                return new TokenRequestError(error, description);
-
-            // Ensure that the redirect URI used matches the original authorization request
-            // to prevent redirection attacks
-            case AuthorizedGrant { Context.RedirectUri: var redirectUri }
-                when redirectUri != context.Request.RedirectUri:
-                return new TokenRequestError(
-                    ErrorCodes.InvalidGrant,
-                    "The redirect Uri value does not match to the value used before");
-
-            // Accept the request if the grant is valid, and securely store it in the validation context
-            // for further processing
-            case AuthorizedGrant grant:
-                context.AuthorizedGrant = grant;
-                return null;
-
-            // Handle any unexpected results in a way that ensures predictability in the flow
-            default:
-                throw new UnexpectedTypeException(nameof(result), result.GetType());
+            return error;
         }
+
+        var grant = result.GetSuccess();
+
+        // Ensure that the redirect URI used matches the original authorization request
+        // to prevent redirection attacks
+        if (grant.Context.RedirectUri != context.Request.RedirectUri)
+        {
+            return new RequestError(
+                ErrorCodes.InvalidGrant,
+                "The redirect Uri value does not match to the value used before");
+        }
+
+        // Accept the request if the grant is valid, and securely store it in the validation context
+        // for further processing
+        context.AuthorizedGrant = grant;
+        return null;
     }
 }

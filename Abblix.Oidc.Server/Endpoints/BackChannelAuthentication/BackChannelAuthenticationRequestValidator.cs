@@ -20,9 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 
@@ -58,18 +60,19 @@ public class BackChannelAuthenticationRequestValidator : IBackChannelAuthenticat
 	/// <param name="clientRequest">The client request associated with the backchannel authentication request.</param>
 	/// <returns>
 	/// A task that represents the asynchronous operation.
-	/// The task result contains a <see cref="BackChannelAuthenticationValidationResult"/>,
+	/// The task result contains a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>,
 	/// which can be either a valid request or an error, depending on the outcome of the validation.
 	/// </returns>
-	public async Task<BackChannelAuthenticationValidationResult> ValidateAsync(
+	public async Task<Result<ValidBackChannelAuthenticationRequest, RequestError>> ValidateAsync(
 		BackChannelAuthenticationRequest request,
 		ClientRequest clientRequest)
 	{
 		var context = new BackChannelAuthenticationValidationContext(request, clientRequest);
 
-		var result = await _contextValidator.ValidateAsync(context) ??
-		             (BackChannelAuthenticationValidationResult)new ValidBackChannelAuthenticationRequest(context);
+		var error = await _contextValidator.ValidateAsync(context);
+		if (error != null)
+			return error;
 
-		return result;
+		return new ValidBackChannelAuthenticationRequest(context);
 	}
 }

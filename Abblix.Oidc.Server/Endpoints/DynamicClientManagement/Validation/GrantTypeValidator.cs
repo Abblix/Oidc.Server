@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -40,9 +39,9 @@ public class GrantTypeValidator : SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A ClientRegistrationValidationError if grant types are missing, or null if the request is valid.
+    /// A RequestError if grant types are missing, or null if the request is valid.
     /// </returns>
-    protected override ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    protected override RequestError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         var requiredGrantTypes = new HashSet<string>();

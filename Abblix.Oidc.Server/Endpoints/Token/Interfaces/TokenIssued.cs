@@ -31,8 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <param name="TokenType">The type of the token issued.</param>
 /// <param name="ExpiresIn">The lifetime in seconds of the access token.</param>
 /// <param name="IssuedTokenType">The URI identifying the type of the issued token.</param>
-public record TokenIssuedResponse(EncodedJsonWebToken AccessToken, string TokenType, TimeSpan ExpiresIn, Uri IssuedTokenType)
-	: TokenResponse
+public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, TimeSpan ExpiresIn, Uri IssuedTokenType)
 {
 	/// <summary>
 	/// The optional refresh token that can be used to obtain new access tokens.

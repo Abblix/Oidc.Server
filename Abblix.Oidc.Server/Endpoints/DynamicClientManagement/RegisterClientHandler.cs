@@ -73,14 +73,9 @@ public class RegisterClientHandler : IRegisterClientHandler
     {
         var validationResult = await _validator.ValidateAsync(clientRegistrationRequest);
 
-        return validationResult switch
-        {
-            ValidClientRegistrationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRegistrationValidationError { Error: var error, ErrorDescription: var description }
-                => new ClientRegistrationErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<ClientRegistrationResponse>(
+                new ClientRegistrationErrorResponse(error.ErrorCode, error.ErrorDescription)));
     }
 }

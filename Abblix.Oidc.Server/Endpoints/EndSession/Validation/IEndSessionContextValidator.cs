@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -35,7 +35,7 @@ public interface IEndSessionContextValidator
 	/// <param name="context">The end-session validation context.</param>
 	/// <returns>
 	/// A task that represents the asynchronous validation operation.
-	/// Returns an EndSessionRequestValidationError if validation fails, or null if successful.
+	/// Returns an RequestError if validation fails, or null if successful.
 	/// </returns>
-	Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context);
+	Task<RequestError?> ValidateAsync(EndSessionValidationContext context);
 }

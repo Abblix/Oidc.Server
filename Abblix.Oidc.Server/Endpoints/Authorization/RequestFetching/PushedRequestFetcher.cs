@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -69,7 +71,7 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
     /// an error is returned.
     /// Additionally, it checks the server configuration to enforce the Pushed Authorization Request (PAR) requirement.
     /// </remarks>
-    public async Task<FetchResult> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
         // If the request contains a URN, attempt to retrieve the pushed authorization request from storage
         if (request is { RequestUri: { } requestUrn } &&

@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -44,14 +45,10 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     /// <returns>
     /// A task that represents the asynchronous operation. The task result contains the formatted action result.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, RevocationResponse response)
+    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, RevocationError> response)
     {
-        return Task.FromResult<ActionResult>(response switch
-        {
-            TokenRevokedResponse => new OkResult(),
-            RevocationErrorResponse error => new BadRequestObjectResult(new ErrorResponse(error.Error,
-                error.ErrorDescription)),
-            _ => throw new ArgumentOutOfRangeException(nameof(response))
-        });
+        return Task.FromResult(response.Match<ActionResult>(
+            onSuccess: _ => new OkResult(),
+            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 }

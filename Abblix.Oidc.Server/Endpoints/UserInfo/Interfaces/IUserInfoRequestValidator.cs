@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 
@@ -37,6 +39,6 @@ public interface IUserInfoRequestValidator
 	/// <param name="userInfoRequest">The user info request to validate.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
-	/// which upon completion will yield a <see cref="UserInfoRequestValidationResult"/>.</returns>
-	Task<UserInfoRequestValidationResult> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest);
+	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, RequestError}"/>.</returns>
+	Task<Result<ValidUserInfoRequest, RequestError>> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest);
 }

@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -79,7 +80,7 @@ public class PasswordGrantHandler : IAuthorizationGrantHandler
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
-    public Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensure that the request contains the required username and password parameters.
         _parameterValidator.Required(request.UserName, nameof(request.UserName));

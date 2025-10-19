@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -52,18 +53,18 @@ public class ClientRequestValidator : IClientRequestValidator
     /// </summary>
     /// <param name="request">The client request to validate.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the validation result.</returns>
-    public async Task<ClientRequestValidationResult> ValidateAsync(ClientRequest request)
+    public async Task<Result<ValidClientRequest, RequestError>> ValidateAsync(ClientRequest request)
     {
         var headerErrorDescription = await _registrationAccessTokenValidator.ValidateAsync(
             request.AuthorizationHeader,
             request.ClientId.NotNull(nameof(request.ClientId)));
 
         if (headerErrorDescription != null)
-            return new ClientRequestValidationError(ErrorCodes.InvalidGrant, headerErrorDescription);
+            return new RequestError(ErrorCodes.InvalidGrant, headerErrorDescription);
 
         var clientInfo = await _clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
         if (clientInfo == null)
-            return new ClientRequestValidationError(ErrorCodes.InvalidClient, "Client does not exist on this server");
+            return new RequestError(ErrorCodes.InvalidClient, "Client does not exist on this server");
 
         return new ValidClientRequest(request, clientInfo);
     }

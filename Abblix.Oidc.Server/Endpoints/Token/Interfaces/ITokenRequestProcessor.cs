@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
@@ -42,5 +43,5 @@ public interface ITokenRequestProcessor
 	/// <param name="request">The validated token request from the client.</param>
 	/// <returns>A task that resolves to a <see cref="TokenResponse"/>, encapsulating the tokens to be issued to
 	/// the client.</returns>
-	Task<TokenResponse> ProcessAsync(ValidTokenRequest request);
+	Task<Result<TokenIssued, TokenError>> ProcessAsync(ValidTokenRequest request);
 }

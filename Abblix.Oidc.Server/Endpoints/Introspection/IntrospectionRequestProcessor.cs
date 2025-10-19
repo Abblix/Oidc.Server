@@ -21,8 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-
-
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
 
@@ -44,9 +43,9 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionResponse"/>.
 	/// The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public Task<IntrospectionResponse> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult(Process(request));
+	public Task<Result<IntrospectionSuccess, IntrospectionError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, IntrospectionError>>(Process(request));
 
-	private static IntrospectionResponse Process(ValidIntrospectionRequest request)
+	private static IntrospectionSuccess Process(ValidIntrospectionRequest request)
 	{
 		if (request.Token == null)
 		{
@@ -58,13 +57,13 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 
 			// Note that to avoid disclosing too much of the authorization server's state to a third party, the authorization server
 			// SHOULD NOT include any additional information about an inactive token, including why the token is inactive.
-			return new IntrospectionSuccessResponse(false, null);
+			return new IntrospectionSuccess(false, null);
 		}
 
 		// The authorization server MAY respond differently to different protected resources making the same request.
 		// For instance, an authorization server MAY limit which scopes from a given token are returned for each protected resource
 		// to prevent a protected resource from learning more about the larger network than is necessary for its operation.
 
-		return new IntrospectionSuccessResponse(true, request.Token.Payload.Json);
+		return new IntrospectionSuccess(true, request.Token.Payload.Json);
 	}
 }

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,12 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Represents a validation error for a client registration request in the context of OpenID Connect.
+/// Represents an error response for ending a user's session.
 /// </summary>
-/// <param name="Error">A string representing the error code for the validation error.</param>
-/// <param name="ErrorDescription">A string providing a description of the validation error.</param>
-public record ClientRegistrationValidationError(string Error, string ErrorDescription)
-    : ClientRegistrationRequestValidationResult;
+/// <param name="Error">The error code describing the reason for the error.</param>
+/// <param name="ErrorDescription">A description providing additional information about the error.</param>
+/// <returns>An instance of EndSessionErrorResponse representing the error response.</returns>
+public record EndSessionError(string Error, string ErrorDescription);

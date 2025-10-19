@@ -68,14 +68,9 @@ public class ReadClientHandler : IReadClientHandler
     {
         var validationResult = await _validator.ValidateAsync(clientRequest);
 
-        return validationResult switch
-        {
-            ValidClientRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new ReadClientErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<ReadClientResponse>(
+                new ReadClientErrorResponse(error.ErrorCode, error.ErrorDescription)));
     }
 }

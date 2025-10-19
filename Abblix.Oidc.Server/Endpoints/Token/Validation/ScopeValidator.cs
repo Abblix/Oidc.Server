@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -52,11 +52,11 @@ public class ScopeValidator: SyncTokenContextValidatorBase
     /// <param name="context">The context containing the token request information,
     /// including the scopes to be validated.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> if any of the requested scopes are invalid or not permitted,
+    /// A <see cref="RequestError"/> if any of the requested scopes are invalid or not permitted,
     /// including an error code and a message describing the issue;
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
-    protected override TokenRequestError? Validate(TokenValidationContext context)
+    protected override RequestError? Validate(TokenValidationContext context)
     {
         if (!_scopeManager.Validate(
                 context.Request.Scope,
@@ -64,7 +64,7 @@ public class ScopeValidator: SyncTokenContextValidatorBase
                 out var scopeDefinitions,
                 out var errorDescription))
         {
-            return new TokenRequestError(ErrorCodes.InvalidScope, errorDescription);
+            return new RequestError(ErrorCodes.InvalidScope, errorDescription);
         }
 
         context.Scope = scopeDefinitions;

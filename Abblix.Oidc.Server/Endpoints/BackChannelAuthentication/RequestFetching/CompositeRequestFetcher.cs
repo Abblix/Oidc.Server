@@ -21,9 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -53,25 +52,17 @@ public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
     /// If all fetchers succeed, the method returns the final successful result.
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
-    /// <returns>A <see cref="FetchResult"/> that represents the outcome of the fetching process.
-    /// It could be a success, fault, or an unexpected type error if the result is not handled correctly.</returns>
-    public async Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
+    /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/> that represents the outcome of the fetching process.</returns>
+    public async Task<Result<BackChannelAuthenticationRequest, RequestError>> FetchAsync(BackChannelAuthenticationRequest request)
     {
         foreach (var fetcher in _fetchers)
         {
             var result = await fetcher.FetchAsync(request);
-            switch (result)
+            if (result.TryGetFailure(out var error))
             {
-                case Result<BackChannelAuthenticationRequest>.Success(var success):
-                    request = success;
-                    continue;
-
-                case Result<BackChannelAuthenticationRequest>.Error error:
-                    return error;
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
+                return error;
             }
+            request = result.GetSuccess();
         }
 
         return request;

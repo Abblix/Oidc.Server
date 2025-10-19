@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -53,10 +53,10 @@ public class SigningAlgorithmsValidator: SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
-    /// A <see cref="ClientRegistrationValidationError"/> if any signing algorithm is not supported;
+    /// A <see cref="RequestError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    protected override RequestError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return Validate(request.RequestObjectSigningAlg, Parameters.RequestObjectSigningAlg)
@@ -73,13 +73,13 @@ public class SigningAlgorithmsValidator: SyncClientRegistrationContextValidator
     /// <param name="description">
     /// A description used in the error message to identify which signing algorithm is invalid.</param>
     /// <returns>
-    /// A <see cref="ClientRegistrationValidationError"/> if the algorithm is not supported; otherwise, null.
+    /// A <see cref="RequestError"/> if the algorithm is not supported; otherwise, null.
     /// </returns>
-    private ClientRegistrationValidationError? Validate(string? alg, string description)
+    private RequestError? Validate(string? alg, string description)
     {
         if (alg is not null && !_jwtValidator.SigningAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
-            return new ClientRegistrationValidationError(
+            return new RequestError(
                 ErrorCodes.InvalidRequest,
                 $"The signing algorithm for {description} is not supported");
         }

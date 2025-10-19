@@ -21,7 +21,9 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -52,23 +54,16 @@ public class CompositeRequestFetcher : IAuthorizationRequestFetcher
     /// <param name="request">The authorization request to be processed.</param>
     /// <returns>A <see cref="FetchResult"/> that represents the outcome of the fetching process. It could be a success,
     /// fault, or an unexpected type error if the result is not handled correctly.</returns>
-    public async Task<FetchResult> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
         foreach (var fetcher in _fetchers)
         {
             var result = await fetcher.FetchAsync(request);
-            switch (result)
-            {
-                case FetchResult.Success success:
-                    request = success.Request;
-                    continue;
 
-                case FetchResult.Fault fault:
-                    return fault;
+            if (result.TryGetFailure(out var error))
+                return error;
 
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
-            }
+            request = result.GetSuccess();
         }
 
         return request;

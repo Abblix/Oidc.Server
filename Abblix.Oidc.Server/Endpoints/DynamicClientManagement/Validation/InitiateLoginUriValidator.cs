@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Common;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -36,9 +36,9 @@ public class InitiateLoginUriValidator: SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A ClientRegistrationValidationError if the validation fails, or null if the request is valid.
+    /// A RequestError if the validation fails, or null if the request is valid.
     /// </returns>
-    protected override ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    protected override RequestError? Validate(ClientRegistrationValidationContext context)
     {
         var model = context.Request;
         if (model.InitiateLoginUri != null)

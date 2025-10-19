@@ -20,10 +20,28 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+
+
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Represents a validation error response for introspection requests, including error code and description.
+/// Represents a successful introspection response, indicating whether the token is active and providing its claims.
 /// </summary>
-public record IntrospectionRequestValidationError(string Error, string ErrorDescription)
-	: IntrospectionRequestValidationResult;
+/// <remarks>
+/// Specific implementations may extend this structure with their own service-specific response names as
+/// top-level members of this JSON object. Response names intended for use across domains must be registered
+/// in the "OAuth Token Introspection Response" registry as defined in Section 3.1.
+/// </remarks>
+public record IntrospectionSuccess(bool Active, JsonObject? Claims)
+{
+    /// <summary>
+    /// Gets or sets whether the token is active.
+    /// </summary>
+    public bool Active { get; } = Active;
+
+    /// <summary>
+    /// Gets or sets the claims associated with the token.
+    /// </summary>
+    public JsonObject? Claims { get; } = Claims;
+}

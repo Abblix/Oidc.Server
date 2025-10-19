@@ -20,28 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json.Nodes;
-
-
-namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 
 /// <summary>
-/// Represents a successful introspection response, indicating whether the token is active and providing its claims.
+/// Represents an error response for token revocation.
+/// Contains error and error description information to be sent to the client.
 /// </summary>
-/// <remarks>
-/// Specific implementations may extend this structure with their own service-specific response names as
-/// top-level members of this JSON object. Response names intended for use across domains must be registered
-/// in the "OAuth Token Introspection Response" registry as defined in Section 3.1.
-/// </remarks>
-public record IntrospectionSuccessResponse(bool Active, JsonObject? Claims) : IntrospectionResponse
-{
-    /// <summary>
-    /// Gets or sets whether the token is active.
-    /// </summary>
-    public bool Active { get; } = Active;
-
-    /// <summary>
-    /// Gets or sets the claims associated with the token.
-    /// </summary>
-    public JsonObject? Claims { get; } = Claims;
-}
+public record RevocationError(string Error, string ErrorDescription);

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 
@@ -38,5 +39,5 @@ public interface IUserCredentialsAuthenticator
 	/// <param name="password">The password provided by the user.</param>
 	/// <param name="context">The authorization context associated with the request.</param>
 	/// <returns>A task that represents the asynchronous validation operation and returns the grant authorization result.</returns>
-	Task<GrantAuthorizationResult> ValidateAsync(string userName, string password, AuthorizationContext context);
+	Task<Result<AuthorizedGrant, RequestError>> ValidateAsync(string userName, string password, AuthorizationContext context);
 }

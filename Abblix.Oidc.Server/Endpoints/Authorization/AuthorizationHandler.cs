@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -84,22 +85,16 @@ public class AuthorizationHandler : IAuthorizationHandler
     public async Task<AuthorizationResponse> HandleAsync(AuthorizationRequest request)
     {
         var fetchResult = await _fetcher.FetchAsync(request);
-        switch (fetchResult)
-        {
-            case FetchResult.Success success:
-                request = success.Request;
-                break;
 
-            case FetchResult.Fault { Error: var error }:
-                return new AuthorizationError(request, error);
-        }
+        if (fetchResult.TryGetFailure(out var fetchError))
+            return new AuthorizationError(request, fetchError);
+
+        request = fetchResult.GetSuccess();
 
         var validationResult = await _validator.ValidateAsync(request);
-        return validationResult switch
-        {
-            ValidAuthorizationRequest validRequest => await _processor.ProcessAsync(validRequest),
-            AuthorizationRequestValidationError error => new AuthorizationError(request, error),
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(request, error)));
     }
 }

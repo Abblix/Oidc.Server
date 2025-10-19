@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -51,7 +51,7 @@ public class IdTokenHintValidator : IEndSessionContextValidator
     /// </summary>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>An error if validation fails, null if successful.</returns>
-    public async Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
     {
         var request = context.Request;
 
@@ -72,14 +72,14 @@ public class IdTokenHintValidator : IEndSessionContextValidator
                         }
                         catch (Exception)
                         {
-                            return new EndSessionRequestValidationError(
+                            return new RequestError(
                                 ErrorCodes.InvalidRequest,
                                 "The audience in the id token hint is missing or have multiple values.");
                         }
                     }
                     else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
                     {
-                        return new EndSessionRequestValidationError(
+                        return new RequestError(
                             ErrorCodes.InvalidRequest,
                             "The id token hint contains token issued for the client other than specified");
                     }
@@ -88,7 +88,7 @@ public class IdTokenHintValidator : IEndSessionContextValidator
                     break;
 
                 case JwtValidationError:
-                    return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
+                    return new RequestError(ErrorCodes.InvalidRequest,
                         "The id token hint contains invalid token");
 
                 default:

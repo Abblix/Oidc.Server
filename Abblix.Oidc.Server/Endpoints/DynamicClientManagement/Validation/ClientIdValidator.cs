@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
@@ -53,8 +53,8 @@ public class ClientIdValidator : IClientRegistrationContextValidator
     /// Validates the client specified in the client registration request by checking if it already exists and is registered.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A ClientRegistrationValidationError if the validation fails, or null if the request is valid.</returns>
-    public async Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context)
+    /// <returns>A RequestError if the validation fails, or null if the request is valid.</returns>
+    public async Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
         if (clientId.HasValue())

@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 
@@ -43,5 +45,5 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// </summary>
 public interface ITokenRequestValidator
 {
-	Task<TokenRequestValidationResult> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
+	Task<Result<ValidTokenRequest, RequestError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
 }

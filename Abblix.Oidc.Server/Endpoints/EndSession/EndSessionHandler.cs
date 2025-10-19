@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
@@ -38,19 +38,13 @@ public class EndSessionHandler : IEndSessionHandler
     private readonly IEndSessionRequestValidator _validator;
     private readonly IEndSessionRequestProcessor _processor;
 
-    public async Task<EndSessionResponse> HandleAsync(Model.EndSessionRequest endSessionRequest)
+    public async Task<Result<EndSessionSuccess, EndSessionError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
         var validationResult = await _validator.ValidateAsync(endSessionRequest);
 
-        var response = validationResult switch
-        {
-            ValidEndSessionRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            EndSessionRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new EndSessionErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<Result<EndSessionSuccess, EndSessionError>>(
+                new EndSessionError(error.ErrorCode, error.ErrorDescription)));
     }
 }

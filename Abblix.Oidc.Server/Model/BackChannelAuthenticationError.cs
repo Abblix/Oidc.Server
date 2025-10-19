@@ -31,5 +31,4 @@ namespace Abblix.Oidc.Server.Model;
 /// <param name="Error">The error code that identifies the type of error encountered during the backchannel
 /// authentication process.</param>
 /// <param name="ErrorDescription">A human-readable description providing more details about the error.</param>
-public record BackChannelAuthenticationError(string Error, string ErrorDescription)
-    : BackChannelAuthenticationResponse;
+public record BackChannelAuthenticationError(string Error, string ErrorDescription);

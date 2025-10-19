@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Utils;
 
@@ -51,10 +51,10 @@ public class TokenEndpointAuthMethodValidator: SyncClientRegistrationContextVali
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A <see cref="ClientRegistrationValidationError"/> if the authentication method is not valid or supported,
+    /// A <see cref="RequestError"/> if the authentication method is not valid or supported,
     /// or null if the request is valid.
     /// </returns>
-    protected override ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    protected override RequestError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
@@ -63,7 +63,7 @@ public class TokenEndpointAuthMethodValidator: SyncClientRegistrationContextVali
             !_clientAuthenticator.ClientAuthenticationMethodsSupported.Contains(
                 request.TokenEndpointAuthMethod, StringComparer.Ordinal))
         {
-            return new ClientRegistrationValidationError(
+            return new RequestError(
                 ErrorCodes.InvalidRequest,
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }

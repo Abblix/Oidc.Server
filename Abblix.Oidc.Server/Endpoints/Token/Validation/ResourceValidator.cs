@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -49,10 +49,10 @@ public class ResourceValidator: SyncTokenContextValidatorBase
     /// </summary>
     /// <param name="context">The context of the token validation including the request and client information.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> if the validation fails, indicating the nature of the error and providing
+    /// A <see cref="RequestError"/> if the validation fails, indicating the nature of the error and providing
     /// an error message; otherwise, null if the resource validation passes successfully.
     /// </returns>
-    protected override TokenRequestError? Validate(TokenValidationContext context)
+    protected override RequestError? Validate(TokenValidationContext context)
     {
         var request = context.Request;
 
@@ -66,7 +66,7 @@ public class ResourceValidator: SyncTokenContextValidatorBase
                     out var resources,
                     out var errorDescription))
             {
-                return new TokenRequestError(ErrorCodes.InvalidTarget, errorDescription);
+                return new RequestError(ErrorCodes.InvalidTarget, errorDescription);
             }
 
             context.Resources = resources;

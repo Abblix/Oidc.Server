@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -76,7 +77,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 	/// the user, crucial for OpenID Connect authentication flows. This method ensures secure and compliant token
 	/// generation.
 	/// </remarks>
-	public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
+	public async Task<Result<TokenIssued, TokenError>> ProcessAsync(ValidTokenRequest request)
 	{
 		var clientInfo = request.ClientInfo;
 		clientInfo.CheckClientLicense();
@@ -88,7 +89,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 			authContext,
 			clientInfo);
 
-		var response = new TokenIssuedResponse(
+		var response = new TokenIssued(
 			accessToken,
 			TokenTypes.Bearer,
 			clientInfo.AccessTokenExpiresIn,

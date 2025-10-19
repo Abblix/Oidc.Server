@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
@@ -59,7 +59,7 @@ public class ClientValidator : IEndSessionContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client information.</param>
     /// <returns>An error if the validation fails, or null if the request is valid.</returns>
-    public async Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
             return null;
@@ -68,7 +68,7 @@ public class ClientValidator : IEndSessionContextValidator
         if (clientInfo == null)
         {
             _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(context.ClientId));
-            return new EndSessionRequestValidationError(
+            return new RequestError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");
         }

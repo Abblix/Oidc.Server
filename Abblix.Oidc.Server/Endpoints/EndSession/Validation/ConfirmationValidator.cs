@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
@@ -37,16 +37,16 @@ public class ConfirmationValidator:  IEndSessionContextValidator
     /// <param name="context">The end-session validation context.</param>
     /// <returns>A task representing the asynchronous operation.
     /// The result is a validation error if confirmation is missing; otherwise, null.</returns>
-    public Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private static EndSessionRequestValidationError? Validate(EndSessionValidationContext context)
+    private static RequestError? Validate(EndSessionValidationContext context)
     {
         var request = context.Request;
 
         if (request.Confirmed != true && !request.IdTokenHint.HasValue())
         {
-            return new EndSessionRequestValidationError(
+            return new RequestError(
                 ErrorCodes.ConfirmationRequired,
                 "The request requires to be confirmed by user");
         }

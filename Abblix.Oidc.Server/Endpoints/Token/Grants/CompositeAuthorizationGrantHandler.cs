@@ -20,10 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -78,13 +80,13 @@ public class CompositeAuthorizationGrantHandler: IAuthorizationGrantHandler
     /// <returns>A task that resolves to the result of the authorization process.
     /// If successful, it contains the granted authorization;
     /// otherwise, it contains an error explaining why the authorization failed.</returns>
-    public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Check if there is a handler for the requested grant type.
         // If no handler exists, return an error indicating that the grant type is unsupported.
         if (!_grantHandlers.TryGetValue(request.GrantType, out var grantHandler))
         {
-            return new InvalidGrantResult(
+            return new RequestError(
                 ErrorCodes.UnsupportedGrantType,
                 "The grant type is not supported");
         }

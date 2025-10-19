@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -70,7 +71,7 @@ public class PushedAuthorizationRequestValidator : IPushedAuthorizationRequestVa
     /// <param name="clientRequest"></param>
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
-    public async Task<AuthorizationRequestValidationResult> ValidateAsync(
+    public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
@@ -88,17 +89,20 @@ public class PushedAuthorizationRequestValidator : IPushedAuthorizationRequestVa
 
         var result = await _authorizationRequestValidator.ValidateAsync(authorizationRequest);
 
-        if (result is ValidAuthorizationRequest {
-                Model: { ClientId: var clientId, RedirectUri: var redirectUri },
-                ResponseMode: var responseMode
-            } && clientInfo.ClientId != clientId)
+        if (result.TryGetSuccess(out var validRequest))
         {
-            return new AuthorizationRequestValidationError(
+            var clientId = validRequest.Model.ClientId;
+            var redirectUri = validRequest.Model.RedirectUri;
+            var responseMode = validRequest.ResponseMode;
 
-                ErrorCodes.InvalidRequest,
-                "The pushed authorization request must be bound to the client that posted it",
-                redirectUri,
-                responseMode);
+            if (clientInfo.ClientId != clientId)
+            {
+                return new AuthorizationRequestValidationError(
+                    ErrorCodes.InvalidRequest,
+                    "The pushed authorization request must be bound to the client that posted it",
+                    redirectUri,
+                    responseMode);
+            }
         }
 
         return result;

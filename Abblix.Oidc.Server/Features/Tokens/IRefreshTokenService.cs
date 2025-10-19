@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -45,5 +46,5 @@ public interface IRefreshTokenService
 	/// <summary>
 	/// Authenticates a user by refresh token.
 	/// </summary>
-	public Task<GrantAuthorizationResult> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
+	public Task<Result<AuthorizedGrant, RequestError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
 }

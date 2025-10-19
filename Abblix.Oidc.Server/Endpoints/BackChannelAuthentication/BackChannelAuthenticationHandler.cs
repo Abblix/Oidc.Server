@@ -20,11 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 
@@ -64,39 +63,27 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
     /// <param name="request">The initial backchannel authentication request to be processed.</param>
     /// <param name="clientRequest">The client request information associated with the authentication request.</param>
     /// <returns>A task that represents the asynchronous operation,
-    /// resulting in a <see cref="BackChannelAuthenticationResponse"/> that indicates the outcome of the process.
+    /// resulting in a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that indicates the outcome of the process.
     /// </returns>
-    public async Task<BackChannelAuthenticationResponse> HandleAsync(
+    public async Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
-        // Fetch the request if necessary
         var fetchResult = await _fetcher.FetchAsync(request);
-        switch (fetchResult)
+        if (fetchResult.TryGetSuccess(out var fetchedRequest))
         {
-            case Result<BackChannelAuthenticationRequest>.Success(var requestObject):
-                request = requestObject;
-                break;
-
-            case Result<BackChannelAuthenticationRequest>.Error(var error, var description):
-                return new BackChannelAuthenticationError(error, description);
-
-            default:
-                throw new UnexpectedTypeException(nameof(fetchResult), fetchResult.GetType());
+            request = fetchedRequest;
+        }
+        else if (fetchResult.TryGetFailure(out var error))
+        {
+            return new BackChannelAuthenticationError(error.ErrorCode, error.ErrorDescription);
         }
 
-        // Validate the fetched request
         var validationResult = await _validator.ValidateAsync(request, clientRequest);
 
-        // Process the validated request or handle validation errors
-        return validationResult switch
-        {
-            ValidBackChannelAuthenticationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            BackChannelAuthenticationValidationError { Error: var error, ErrorDescription: var description }
-                => new BackChannelAuthenticationError(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>>(
+                new BackChannelAuthenticationError(error.ErrorCode, error.ErrorDescription)));
     }
 }

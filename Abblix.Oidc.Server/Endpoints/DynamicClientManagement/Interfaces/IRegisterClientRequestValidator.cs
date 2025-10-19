@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -34,5 +36,5 @@ public interface IRegisterClientRequestValidator
     /// </summary>
     /// <param name="request">The client registration request to validate.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the validation result.</returns>
-    Task<ClientRegistrationRequestValidationResult> ValidateAsync(ClientRegistrationRequest request);
+    Task<Result<ValidClientRegistrationRequest, RequestError>> ValidateAsync(ClientRegistrationRequest request);
 }

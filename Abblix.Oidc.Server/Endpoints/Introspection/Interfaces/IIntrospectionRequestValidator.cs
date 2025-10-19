@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 
 
@@ -36,8 +38,8 @@ public interface IIntrospectionRequestValidator
 	/// </summary>
 	/// <param name="introspectionRequest">The IntrospectionRequest to be validated.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
-	/// <returns>An IntrospectionRequestValidationResult indicating the result of the validation.</returns>
-	Task<IntrospectionRequestValidationResult> ValidateAsync(
+	/// <returns>An Result<ValidIntrospectionRequest, RequestError> indicating the result of the validation.</returns>
+	Task<Result<ValidIntrospectionRequest, RequestError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest);
 }

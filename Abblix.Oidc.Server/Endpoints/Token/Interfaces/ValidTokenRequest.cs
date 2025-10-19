@@ -47,7 +47,6 @@ public record ValidTokenRequest(
 	ClientInfo ClientInfo,
 	ScopeDefinition[] Scope,
 	ResourceDefinition[] Resources)
-	: TokenRequestValidationResult
 {
 	public ValidTokenRequest(TokenValidationContext context)
 		: this(

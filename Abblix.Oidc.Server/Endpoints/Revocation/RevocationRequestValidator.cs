@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
@@ -78,7 +80,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a
-	/// <see cref="RevocationRequestValidationResult"/>. The result indicates whether the request is valid or
+	/// <see cref="Result<ValidRevocationRequest, RequestError>"/>. The result indicates whether the request is valid or
 	/// contains any errors.
 	/// </returns>
 	/// <remarks>
@@ -86,7 +88,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 	/// the authenticated client, protecting against cross-client token revocation. In case of validation failure,
 	/// it logs a warning with the specific cause.
 	/// </remarks>
-	public async Task<RevocationRequestValidationResult> ValidateAsync(
+	public async Task<Result<ValidRevocationRequest, RequestError>> ValidateAsync(
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest)
 	{
@@ -94,7 +96,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 		var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			return new RevocationRequestValidationError(
+			return new RequestError(
 				ErrorCodes.InvalidClient,
 				"The client is not authorized");
 		}

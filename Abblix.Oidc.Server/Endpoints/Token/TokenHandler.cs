@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
-using TokenResponse = Abblix.Oidc.Server.Endpoints.Token.Interfaces.TokenResponse;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
@@ -70,21 +69,15 @@ public class TokenHandler : ITokenHandler
     /// It employs rigorous validation to prevent unauthorized access and to maintain the integrity of the token
     /// lifecycle management process.
     /// </remarks>
-    public async Task<TokenResponse> HandleAsync(
+    public async Task<Result<TokenIssued, TokenError>> HandleAsync(
         TokenRequest tokenRequest,
         ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(tokenRequest, clientRequest);
 
-        var response = validationResult switch
-        {
-            ValidTokenRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            TokenRequestError { Error: var error, ErrorDescription: var description }
-                => new TokenErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<Result<TokenIssued, TokenError>>(
+                new TokenError(error.ErrorCode, error.ErrorDescription)));
     }
 }

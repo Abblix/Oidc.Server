@@ -23,6 +23,7 @@
 using System;
 using System.Threading.Tasks;
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -64,7 +65,8 @@ public class AuthorizationCodeGrantHandlerTests
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
 
 		// assert
-		Assert.IsType<AuthorizedGrant>(result);
+		Assert.True(result.TryGetSuccess(out var grant));
+		Assert.NotNull(grant);
 	}
 
 	[Theory]
@@ -77,13 +79,11 @@ public class AuthorizationCodeGrantHandlerTests
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
 
 		// assert
-		Assert.IsType<InvalidGrantResult>(result);
-		var invalidGrantResult = (InvalidGrantResult)result;
-
-		Assert.Equal(ErrorCodes.InvalidGrant, invalidGrantResult.Error);
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.ErrorCode);
 	}
 
-	private async Task<GrantAuthorizationResult> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	private async Task<Result<AuthorizedGrant, RequestError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
 	{
 		// arrange
 		var clientInfo = new ClientInfo("client1");

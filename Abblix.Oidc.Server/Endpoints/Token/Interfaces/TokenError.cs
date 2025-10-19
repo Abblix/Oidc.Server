@@ -20,10 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Represents the base class for the result of a user info request validation.
-/// This class is intended to be extended by specific validation result types.
+/// Represents an error response in the token endpoint of an OAuth flow.
 /// </summary>
-public record UserInfoRequestValidationResult;
+/// <param name="Error">The error code indicating why the token request failed.</param>
+/// <param name="ErrorDescription">A detailed description of the error.</param>
+public record TokenError(string Error, string ErrorDescription);

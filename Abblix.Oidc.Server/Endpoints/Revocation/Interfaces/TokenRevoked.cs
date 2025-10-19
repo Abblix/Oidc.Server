@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 
 /// <summary>
-/// Represents the response for ending a user's session.
+/// Represents a response indicating that the token has been successfully revoked.
 /// </summary>
-public abstract record EndSessionResponse;
+public record TokenRevoked;

@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -52,22 +52,22 @@ public class ClientValidator : IBackChannelAuthenticationContextValidator
     /// The validation context containing the backchannel authentication request and client information.
     /// </param>
     /// <returns>
-    /// A <see cref="BackChannelAuthenticationValidationError"/> if the client is not valid,
+    /// A <see cref="RequestError"/> if the client is not valid,
     /// or null if the client is authorized.
     /// </returns>
-    public async Task<BackChannelAuthenticationValidationError?> ValidateAsync(
+    public async Task<RequestError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
         var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
         if (clientInfo == null)
         {
-            return new BackChannelAuthenticationValidationError(
+            return new RequestError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
         if (!clientInfo.AllowedGrantTypes.Contains(GrantTypes.Ciba))
         {
-            return new BackChannelAuthenticationValidationError(
+            return new RequestError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
         }
 

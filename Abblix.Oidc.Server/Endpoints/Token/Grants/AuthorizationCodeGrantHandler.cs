@@ -22,6 +22,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -83,7 +84,7 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     /// Information about the client, used to verify that the request is valid for this client.</param>
     /// <returns>A task that represents the asynchronous authorization operation.
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
-    public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensures the authorization code is provided in the request.
         _parameterValidator.Required(request.Code, nameof(request.Code));
@@ -91,32 +92,38 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
         // Validates the authorization code and retrieves the authorization context associated with the code.
         var result = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
 
-        // Verifies that the authorization code was issued for the requesting client.
-        return result switch
+        if (result.TryGetFailure(out var error))
         {
-            // If the client making the request is not the same as the one that initiated the authentication,
-            // return an unauthorized error.
-            AuthorizedGrant { Context.ClientId: var clientId } when clientId != clientInfo.ClientId
-                => new InvalidGrantResult(
-                    ErrorCodes.UnauthorizedClient,
-                    "Code was issued for another client"),
+            return error;
+        }
 
-            // Checks if PKCE is required but the code verifier is missing from the request.
-            AuthorizedGrant { Context.CodeChallenge: not null } when string.IsNullOrEmpty(request.CodeVerifier)
-                => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is required"),
+        var grant = result.GetSuccess();
 
-            // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
-            AuthorizedGrant { Context: { CodeChallenge: { } challenge, CodeChallengeMethod: { } method } }
-                when !string.Equals(
-                    challenge,
-                    CalculateChallenge(method, request.CodeVerifier),
-                    StringComparison.OrdinalIgnoreCase)
+        // Verifies that the authorization code was issued for the requesting client.
+        if (grant.Context.ClientId != clientInfo.ClientId)
+        {
+            return new RequestError(
+                ErrorCodes.UnauthorizedClient,
+                "Code was issued for another client");
+        }
 
-                => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is not valid"),
+        // Checks if PKCE is required but the code verifier is missing from the request.
+        if (grant.Context.CodeChallenge != null && string.IsNullOrEmpty(request.CodeVerifier))
+        {
+            return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is required");
+        }
 
-            // Returns the authorized grant if all checks pass.
-            _ => result,
-        };
+        // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
+        if (grant.Context.CodeChallenge != null &&
+            !string.Equals(
+                grant.Context.CodeChallenge,
+                CalculateChallenge(grant.Context.CodeChallengeMethod!, request.CodeVerifier),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+        }
+
+        return grant;
     }
 
     /// <summary>

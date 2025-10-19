@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -53,7 +53,7 @@ public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidato
     /// The validation context containing the backchannel authentication request and its parameters.</param>
     /// <returns>A task representing the asynchronous operation, returning an error if validation fails,
     /// or null if validation succeeds.</returns>
-    public Task<BackChannelAuthenticationValidationError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<RequestError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -63,7 +63,7 @@ public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidato
     /// The validation context containing the backchannel authentication request and its parameters.</param>
     /// <returns>
     /// An error if the requested expiry exceeds the allowed maximum, or null if validation is successful.</returns>
-    private BackChannelAuthenticationValidationError? Validate(BackChannelAuthenticationValidationContext context)
+    private RequestError? Validate(BackChannelAuthenticationValidationContext context)
     {
         if (!context.Request.RequestedExpiry.HasValue)
         {
@@ -75,7 +75,7 @@ public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidato
         }
         else
         {
-            return new BackChannelAuthenticationValidationError(
+            return new RequestError(
                 ErrorCodes.InvalidRequest,
                 "Requested expiry is too long");
         }

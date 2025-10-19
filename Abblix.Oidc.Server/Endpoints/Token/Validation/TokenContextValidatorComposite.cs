@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -54,10 +54,10 @@ public class TokenContextValidatorComposite : ITokenContextValidator
     /// <param name="context">The context containing the token request and related information
     /// that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> containing error details if any validation step fails;
+    /// A <see cref="RequestError"/> containing error details if any validation step fails;
     /// otherwise, returns null indicating that all validation steps were successful.
     /// </returns>
-    public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
+    public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
     {
         foreach (var validator in _validators)
         {

@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 
@@ -40,9 +42,9 @@ public interface IBackChannelAuthenticationRequestValidator
 	/// <param name="clientRequest">The client request containing additional client-related data for validation.
 	/// </param>
 	/// <returns>A task that represents the asynchronous operation,
-	/// containing the result of the validation process as a  <see cref="BackChannelAuthenticationValidationResult"/>.
+	/// containing the result of the validation process as a <see cref="Result{ValidBackChannelAuthenticationRequest, RequestError}"/>.
 	/// </returns>
-	Task<BackChannelAuthenticationValidationResult> ValidateAsync(
+	Task<Result<ValidBackChannelAuthenticationRequest, RequestError>> ValidateAsync(
 		BackChannelAuthenticationRequest request,
 		ClientRequest clientRequest);
 }

@@ -52,7 +52,6 @@ public record ValidBackChannelAuthenticationRequest(
 	JsonWebToken? IdToken,
 	ScopeDefinition[] Scope,
 	ResourceDefinition[] Resources)
-	: BackChannelAuthenticationValidationResult
 {
 	/// <summary>
 	/// Initializes a new instance of the <see cref="ValidBackChannelAuthenticationRequest"/> class using

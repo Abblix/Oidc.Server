@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -54,16 +54,16 @@ public class ClientValidator: ITokenContextValidator
     /// </summary>
     /// <param name="context">The validation context containing the token request and client information.</param>
     /// <returns>
-    /// A <see cref="TokenRequestError"/> if the client cannot be authenticated,
+    /// A <see cref="RequestError"/> if the client cannot be authenticated,
     /// otherwise null indicating successful validation.
     /// </returns>
-    public async Task<TokenRequestError?> ValidateAsync(TokenValidationContext context)
+    public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
     {
         var clientRequest = context.ClientRequest;
         var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
         if (clientInfo == null)
         {
-            return new TokenRequestError(ErrorCodes.InvalidClient, "The client is not authorized");
+            return new RequestError(ErrorCodes.InvalidClient, "The client is not authorized");
         }
 
         context.ClientInfo = clientInfo;

@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Represents an error response for token revocation.
-/// Contains error and error description information to be sent to the client.
+/// Represents an error response for introspection requests, including error code and description.
 /// </summary>
-public record RevocationErrorResponse(string Error, string ErrorDescription) : RevocationResponse;
+public record IntrospectionError(string Error, string ErrorDescription);

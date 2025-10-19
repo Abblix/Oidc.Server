@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
 
@@ -72,21 +72,15 @@ public class RevocationHandler : IRevocationHandler
     /// their invalidation. It ensures that revocation requests are thoroughly vetted before any action is taken,
     /// preventing unauthorized or malicious attempts to revoke tokens.
     /// </remarks>
-    public async Task<RevocationResponse> HandleAsync(
+    public async Task<Result<TokenRevoked, RevocationError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(revocationRequest, clientRequest);
 
-        var response = validationResult switch
-        {
-            ValidRevocationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            RevocationRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new RevocationErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<Result<TokenRevoked, RevocationError>>(
+                new RevocationError(error.ErrorCode, error.ErrorDescription)));
     }
 }

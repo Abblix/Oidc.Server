@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -143,12 +144,12 @@ public class RefreshTokenService : IRefreshTokenService
 	/// <param name="refreshToken">The refresh token to be validated and authorized.</param>
 	/// <returns>A task that, upon successful validation, results in an <see cref="AuthorizedGrant"/>
 	/// encapsulating the reconstituted authentication session and authorization context.</returns>
-	public Task<GrantAuthorizationResult> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
+	public Task<Result<AuthorizedGrant, RequestError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
 	{
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 		var result = new RefreshTokenAuthorizedGrant(authSession, authContext, refreshToken);
 
-		return Task.FromResult<GrantAuthorizationResult>(result);
+		return Task.FromResult<Result<AuthorizedGrant, RequestError>>(result);
 	}
 }

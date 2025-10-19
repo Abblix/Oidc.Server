@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -52,7 +52,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
     /// </summary>
     /// <param name="context">The context containing the client registration request.</param>
     /// <returns>A task that represents the result of the validation, either an error or null if valid.</returns>
-    public Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -61,7 +61,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
     /// </summary>
     /// <param name="context">The context containing the client registration request.</param>
     /// <returns>A validation error if the request is invalid, or null if the request is valid.</returns>
-    private ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    private RequestError? Validate(ClientRegistrationValidationContext context)
     {
         switch (context.Request)
         {
@@ -74,7 +74,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll,
                 BackChannelClientNotificationEndpoint: not null,
             }:
-                return new ClientRegistrationValidationError(
+                return new RequestError(
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is invalid if the token delivery mode is set to poll");
 
@@ -83,7 +83,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push,
                 BackChannelClientNotificationEndpoint: null,
             }:
-                return new ClientRegistrationValidationError(
+                return new RequestError(
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
@@ -94,7 +94,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
 
             // If the token delivery mode is not supported, return an error
             default:
-                return new ClientRegistrationValidationError(
+                return new RequestError(
                     ErrorCodes.InvalidRequest,
                     "The specified token delivery mode is not supported");
         }
@@ -104,7 +104,7 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
         if (signingAlgorithm.HasValue() &&
             !_jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
         {
-            return new ClientRegistrationValidationError(
+            return new RequestError(
                 ErrorCodes.InvalidRequest,
                 "The specified signing algorithm is not supported");
         }

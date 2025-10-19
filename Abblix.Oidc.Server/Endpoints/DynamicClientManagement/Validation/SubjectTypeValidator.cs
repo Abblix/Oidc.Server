@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// This class validates the subject type in a client registration request. It checks if the subject type is pairwise,
 /// and if so, verifies the sector identifier URI and its content. It also ensures that all redirect URIs use the HTTPS scheme.
-/// If any validation fails, it returns a ClientRegistrationValidationError.
+/// If any validation fails, it returns a RequestError.
 /// </summary>
 public class SubjectTypeValidator: IClientRegistrationContextValidator
 {
@@ -57,9 +57,9 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A ClientRegistrationValidationError if any validation fails, or null if the request is valid.
+    /// A RequestError if any validation fails, or null if the request is valid.
     /// </returns>
-    public async Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         if (request.SubjectType == SubjectTypes.Pairwise)

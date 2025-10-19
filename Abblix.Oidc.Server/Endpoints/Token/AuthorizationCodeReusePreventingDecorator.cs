@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -70,7 +71,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
     /// <returns>
     /// A task that represents the asynchronous operation, resulting in a <see cref="TokenResponse"/>.
     /// </returns>
-    public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, TokenError>> ProcessAsync(ValidTokenRequest request)
     {
         if (request is not {
                 Model: { GrantType: GrantTypes.AuthorizationCode, Code: {} code },
@@ -90,16 +91,16 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
                 await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
-            return new TokenErrorResponse(
+            return new TokenError(
                 ErrorCodes.InvalidGrant,
                 "The authorization code was already used");
         }
 
         // Proceed with processing the request using the decorated processor
-        var response = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(request);
 
         // Register issued tokens as part of the authorization code grant
-        if (response is TokenIssuedResponse { AccessToken: var accessToken, RefreshToken: var refreshToken })
+        if (result.TryGetSuccess(out var tokenResponse))
         {
             var issuedTokensList = new List<TokenInfo>();
 
@@ -111,8 +112,8 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
                 }
             }
 
-            TryRegisterToken(accessToken.Token);
-            TryRegisterToken(refreshToken?.Token);
+            TryRegisterToken(tokenResponse.AccessToken.Token);
+            TryRegisterToken(tokenResponse.RefreshToken?.Token);
 
             if (issuedTokensList.Count > 0)
             {
@@ -123,6 +124,6 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
             }
         }
 
-        return response;
+        return result;
     }
 }

@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 
 
@@ -36,5 +38,5 @@ public interface IEndSessionRequestValidator
 	/// </summary>
 	/// <param name="request">The end-session request to validate.</param>
 	/// <returns>A task representing the asynchronous operation, returning the validation result.</returns>
-	Task<EndSessionRequestValidationResult> ValidateAsync(EndSessionRequest request);
+	Task<Result<ValidEndSessionRequest, RequestError>> ValidateAsync(EndSessionRequest request);
 }

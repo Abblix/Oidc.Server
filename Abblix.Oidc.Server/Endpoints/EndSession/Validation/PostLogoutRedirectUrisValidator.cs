@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -51,12 +51,12 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
     /// <param name="context">The end-session validation context.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation.
-    /// Returns an EndSessionRequestValidationError if validation fails, or null if successful.
+    /// Returns an RequestError if validation fails, or null if successful.
     /// </returns>
-    public Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private EndSessionRequestValidationError? Validate(EndSessionValidationContext context)
+    private RequestError? Validate(EndSessionValidationContext context)
     {
         var request = context.Request;
 
@@ -66,7 +66,7 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
 
         if (context.ClientInfo == null)
         {
-             return new EndSessionRequestValidationError(
+             return new RequestError(
                  ErrorCodes.UnauthorizedClient,
                  $"Unable to determine a client from {Parameters.ClientId} or {Parameters.IdTokenHint}, but it is necessary to validate {Parameters.PostLogoutRedirectUri} value");
         }
@@ -79,7 +79,7 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
             new Sanitized(redirectUri),
             context.ClientInfo.ClientId);
 
-        return new EndSessionRequestValidationError(
+        return new RequestError(
             ErrorCodes.InvalidRequest,
             "The post-logout redirect URI is not valid for specified client");
     }

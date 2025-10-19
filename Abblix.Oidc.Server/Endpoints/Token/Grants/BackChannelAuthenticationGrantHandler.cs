@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -27,6 +28,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -84,7 +86,7 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
     /// This could be a valid grant if the user has been authenticated, or an error if the request is pending, denied
     /// or invalid.
     /// </returns>
-    public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Check if the request contains a valid authentication request ID
         _parameterValidator.Required(request.AuthenticationRequestId, nameof(request.AuthenticationRequestId));
@@ -102,13 +104,13 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
 
             // If the request is not found or has expired, return an error indicating token expiration
             case null:
-                return new InvalidGrantResult(
+                return new RequestError(
                     ErrorCodes.ExpiredToken,
                     "The authentication request has expired");
 
             // If the client making the request is not the same as the one that initiated the authentication
             case { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId:
-                return new InvalidGrantResult(
+                return new RequestError(
                     ErrorCodes.UnauthorizedClient,
                     "The authentication request was started by another client");
 
@@ -116,21 +118,21 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
             case { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: {} nextPollAt }
                 when _timeProvider.GetUtcNow() < nextPollAt:
 
-                return new InvalidGrantResult(
+                return new RequestError(
                     ErrorCodes.SlowDown,
                     "The authorization request is still pending as the user hasn't been authenticated");
 
             // If the user has not yet been authenticated and the request is still pending,
             // return an error indicating that authorization is pending
             case { Status: BackChannelAuthenticationStatus.Pending }:
-                return new InvalidGrantResult(
+                return new RequestError(
                     ErrorCodes.AuthorizationPending,
                     "The authorization request is still pending. " +
                     "The polling interval must be increased by at least 5 seconds for all subsequent requests.");
 
             // If the user denied the authentication request, return an error indicating access is denied
             case { Status: BackChannelAuthenticationStatus.Denied }:
-                return new InvalidGrantResult(
+                return new RequestError(
                     ErrorCodes.AccessDenied,
                     "The authorization request is denied by the user.");
 

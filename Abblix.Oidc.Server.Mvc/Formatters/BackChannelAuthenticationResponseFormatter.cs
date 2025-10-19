@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,7 +42,7 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     /// as HTTP status codes and payloads.
     /// </summary>
     /// <param name="request">The original back-channel authentication request that triggered the response.</param>
-    /// <param name="response">The back-channel authentication response that needs to be formatted into an HTTP result.
+    /// <param name="response">The back-channel authentication response result that needs to be formatted into an HTTP result.
     /// </param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation,
     /// with the formatted response as an <see cref="ActionResult"/>.</returns>
@@ -53,27 +54,22 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
-        BackChannelAuthenticationResponse response)
+        Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError> response)
     {
-        return Task.FromResult<ActionResult>(response switch
-        {
-            // If the authentication was successful, return a 200 OK response with the success details
-            BackChannelAuthenticationSuccess success => new OkObjectResult(success),
+        return Task.FromResult(response.Match(
+            onSuccess: success => new OkObjectResult(success) as ActionResult,
+            onFailure: error => error switch
+            {
+                BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }
+                    => new UnauthorizedObjectResult(new ErrorResponse(err, description)),
 
-            // If the error indicates an invalid client, return a 401 Unauthorized response
-            BackChannelAuthenticationUnauthorized { Error: var error, ErrorDescription: var description }
-                => new UnauthorizedObjectResult(new ErrorResponse(error, description)),
+                BackChannelAuthenticationForbidden { Error: var err, ErrorDescription: var description }
+                    => new ObjectResult(new ErrorResponse(err, description)) { StatusCode = StatusCodes.Status403Forbidden },
 
-            // If access was denied, return a 403 Forbidden response
-            BackChannelAuthenticationForbidden { Error: var error, ErrorDescription: var description }
-                => new ObjectResult(new ErrorResponse(error, description)) { StatusCode = StatusCodes.Status403Forbidden },
+                { Error: var err, ErrorDescription: var description }
+                    => new BadRequestObjectResult(new ErrorResponse(err, description)),
 
-            // For any other type of error, return a 400 Bad Request response
-            BackChannelAuthenticationError { Error: var error, ErrorDescription: var description }
-                => new BadRequestObjectResult(new ErrorResponse(error, description)),
-
-            // If the response type is unexpected, throw an exception for further debugging
-            _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
-        });
+                _ => throw new UnexpectedTypeException(nameof(error), error.GetType()),
+            }));
     }
 }

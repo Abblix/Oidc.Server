@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Model;
@@ -59,13 +60,14 @@ public class AuthorizationRequestValidator : IAuthorizationRequestValidator
 	/// An <see cref="AuthorizationRequestValidationResult"/> representing the outcome of the validation process,
 	/// which may be the result of processing by one or more validators in the chain.
 	/// </returns>
-	public async Task<AuthorizationRequestValidationResult> ValidateAsync(AuthorizationRequest request)
+	public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request)
 	{
 		var context = new AuthorizationValidationContext(request);
 
-		var result = await _validator.ValidateAsync(context) ??
-		             (AuthorizationRequestValidationResult)new ValidAuthorizationRequest(context);
+		var error = await _validator.ValidateAsync(context);
+		if (error != null)
+			return error;
 
-		return result;
+		return new ValidAuthorizationRequest(context);
 	}
 }

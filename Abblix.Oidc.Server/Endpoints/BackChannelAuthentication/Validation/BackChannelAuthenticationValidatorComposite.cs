@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -54,10 +54,10 @@ public class BackChannelAuthenticationValidatorComposite : IBackChannelAuthentic
     /// <param name="context">The backchannel authentication validation context to be validated.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation.
-    /// The task result contains a <see cref="BackChannelAuthenticationValidationError"/>
+    /// The task result contains a <see cref="RequestError"/>
     /// if a validation error is found, or null if validation succeeds.
     /// </returns>
-    public async Task<BackChannelAuthenticationValidationError?> ValidateAsync(
+    public async Task<RequestError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
         foreach (var validator in _validators)

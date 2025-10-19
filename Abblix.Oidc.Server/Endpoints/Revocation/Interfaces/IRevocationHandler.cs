@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 
@@ -48,7 +49,7 @@ public interface IRevocationHandler
     /// Implementations must ensure that revocation requests are authenticated and authorized before proceeding
     /// with token revocation, adhering to the OAuth 2.0 Token Revocation specification (RFC 7009).
     /// </remarks>
-    Task<RevocationResponse> HandleAsync(
+    Task<Result<TokenRevoked, RevocationError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest);
 }

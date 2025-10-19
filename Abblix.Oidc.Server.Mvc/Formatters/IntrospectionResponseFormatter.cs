@@ -25,6 +25,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -46,20 +47,14 @@ public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
     /// This method is used to format introspection responses.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, IntrospectionResponse response)
+    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, IntrospectionError> response)
     {
-        return Task.FromResult(response switch
-        {
-            IntrospectionSuccessResponse success => Format(success),
-
-            IntrospectionErrorResponse error =>
-                new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(response)),
-        });
+        return Task.FromResult(response.Match(
+            onSuccess: FormatSuccess,
+            onFailure: error => new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 
-    private static ActionResult Format(IntrospectionSuccessResponse success)
+    private static ActionResult FormatSuccess(IntrospectionSuccess success)
     {
         var result = success.Claims ?? new JsonObject();
         result.SetProperty("active", success.Active ? "true" : "false");

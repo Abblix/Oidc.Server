@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -38,7 +38,7 @@ public interface IClientRegistrationContextValidator
 	/// <param name="context">The context containing client registration data to validate.</param>
 	/// <returns>
 	/// A task that represents the asynchronous validation operation. The task result is a
-	/// ClientRegistrationValidationError if validation fails, or null if the request is valid.
+	/// RequestError if validation fails, or null if the request is valid.
 	/// </returns>
-	Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context);
+	Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context);
 }

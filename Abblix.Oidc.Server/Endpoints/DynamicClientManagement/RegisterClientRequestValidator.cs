@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -52,10 +54,10 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     /// <param name="request">The <see cref="ClientRegistrationRequest"/> containing the details of the client seeking
     /// registration.</param>
     /// <returns>
-    /// A <see cref="Task"/> that when completed will yield a <see cref="ClientRegistrationRequestValidationResult"/>,
+    /// A <see cref="Task"/> that when completed will yield a <see cref="Result<ValidClientRegistrationRequest, RequestError>"/>,
     /// which may either indicate a successful validation through a <see cref="ValidClientRegistrationRequest"/>
     /// instance or detail any issues encountered during validation as a
-    /// <see cref="ClientRegistrationRequestValidationResult"/>.
+    /// <see cref="Result<ValidClientRegistrationRequest, RequestError>"/>.
     /// </returns>
     /// <remarks>
     /// This method orchestrates the validation process by creating a validation context from the provided request
@@ -63,10 +65,10 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     /// conditions are considered valid, thus maintaining the integrity and security of the client registration process.
     /// </remarks>
 
-    public async Task<ClientRegistrationRequestValidationResult> ValidateAsync(ClientRegistrationRequest request)
+    public async Task<Result<ValidClientRegistrationRequest, RequestError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
-        ClientRegistrationRequestValidationResult? error = await _validator.ValidateAsync(context);
+        Result<ValidClientRegistrationRequest, RequestError>? error = await _validator.ValidateAsync(context);
         return error ?? new ValidClientRegistrationRequest(request, context.SectorIdentifier);
     }
 }

@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
@@ -54,17 +54,16 @@ public class RequestObjectFetchAdapter : IAuthorizationRequestFetcher
     /// A task that represents the asynchronous operation. The task result contains a <see cref="FetchResult"/>
     /// which either represents a successfully processed request or an error indicating issues with the request object.
     /// </returns>
-    public async Task<FetchResult> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
         var fetchResult = await _requestObjectFetcher.FetchAsync(request, request.Request);
-        return fetchResult switch
-        {
-            Result<AuthorizationRequest>.Success(var authorizationRequest) => authorizationRequest,
 
-            Result<AuthorizationRequest>.Error(var error, var description)
-                => ErrorFactory.ValidationError(error, description),
+        if (fetchResult.TryGetSuccess(out var authorizationRequest))
+            return authorizationRequest;
 
-            _ => throw new UnexpectedTypeException(nameof(fetchResult), fetchResult.GetType()),
-        };
+        if (fetchResult.TryGetFailure(out var error))
+            return ErrorFactory.ValidationError(error.ErrorCode, error.ErrorDescription);
+
+        throw new InvalidOperationException("Unexpected result state");
     }
 }

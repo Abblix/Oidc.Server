@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -50,9 +51,9 @@ public class RequestObjectFetchAdapter : IBackChannelAuthenticationRequestFetche
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>
     /// A task that represents the asynchronous operation.
-    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest}"/>
+    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/>
     /// that either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
-    public Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
+    public Task<Result<BackChannelAuthenticationRequest, RequestError>> FetchAsync(BackChannelAuthenticationRequest request)
         => _requestObjectFetcher.FetchAsync(request, request.Request);
 }

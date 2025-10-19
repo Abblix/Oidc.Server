@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -59,10 +59,10 @@ public class ResourceValidator: IBackChannelAuthenticationContextValidator
     /// An <see cref="AuthorizationRequestValidationError"/> containing error details if validation fails,
     /// or null if the validation is successful, indicating that all requested resources are recognized and permissible.
     /// </returns>
-    public Task<BackChannelAuthenticationValidationError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<RequestError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private BackChannelAuthenticationValidationError? Validate(BackChannelAuthenticationValidationContext context)
+    private RequestError? Validate(BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
 
@@ -76,7 +76,7 @@ public class ResourceValidator: IBackChannelAuthenticationContextValidator
                     out var resources,
                     out var errorDescription))
             {
-                return new BackChannelAuthenticationValidationError(ErrorCodes.InvalidTarget, errorDescription);
+                return new RequestError(ErrorCodes.InvalidTarget, errorDescription);
             }
 
             context.Resources = resources;

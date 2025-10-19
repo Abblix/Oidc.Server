@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 
@@ -81,30 +82,21 @@ public class PushedAuthorizationHandler : IPushedAuthorizationHandler
         ClientRequest clientRequest)
     {
         var fetchResult = await _fetcher.FetchAsync(authorizationRequest);
-        switch (fetchResult)
-        {
-            case FetchResult.Success success:
-                authorizationRequest = success.Request;
-                break;
 
-            case FetchResult.Fault { Error: var error }:
-                return new AuthorizationError(authorizationRequest, error);
-        }
+        if (fetchResult.TryGetFailure(out var fetchError))
+            return new AuthorizationError(authorizationRequest, fetchError);
+
+        authorizationRequest = fetchResult.GetSuccess();
 
         var validationResult = await _validator.ValidateAsync(authorizationRequest, clientRequest);
 
-        return validationResult switch
-        {
-            ValidAuthorizationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            AuthorizationRequestValidationError error => new AuthorizationError(
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(
                 authorizationRequest,
                 error.Error,
                 error.ErrorDescription,
                 error.ResponseMode,
-                error.RedirectUri),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
+                error.RedirectUri)));
     }
 }

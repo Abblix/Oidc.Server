@@ -23,14 +23,13 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
@@ -85,50 +84,40 @@ public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticat
 	/// The validated backchannel authentication request containing details such as client info, scope, and resources.
 	/// </param>
 	/// <returns>A task that represents the result of processing the backchannel authentication request, returning
-	/// the success response with a polling interval and expiry details.</returns>
-	public async Task<BackChannelAuthenticationResponse> ProcessAsync(ValidBackChannelAuthenticationRequest request)
+	/// a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/>.</returns>
+	public async Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
 	{
-		// Validate the client's license or eligibility for making the backchannel authentication request.
 		request.ClientInfo.CheckClientLicense();
 
-		AuthorizedGrant authorizedGrant;
-
-		// Initiate the authentication flow on the user's device to retrieve the associated session
 		var authResult = await _userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
-		switch (authResult)
+
+		AuthorizedGrant authorizedGrant;
+		if (authResult.TryGetSuccess(out var authSession))
 		{
-			case Result<AuthSession>.Success(var authSession):
-				// Create the authorization context with details from the request
-				var authContext = new AuthorizationContext(
-					request.ClientInfo.ClientId,
-					request.Scope,
-					request.Resources,
-					request.Model.Claims);
+			var authContext = new AuthorizationContext(
+				request.ClientInfo.ClientId,
+				request.Scope,
+				request.Resources,
+				request.Model.Claims);
 
-				authorizedGrant = new AuthorizedGrant(authSession, authContext);
-				break;
-
-			// Client authentication failed (e.g., invalid client credentials, unknown client,
-			// no client authentication included, or unsupported authentication method)
-			case Result<AuthSession>.Error(ErrorCodes.UnauthorizedClient, var description):
-				return new BackChannelAuthenticationUnauthorized(ErrorCodes.AccessDenied, description);
-
-			// The resource owner or OpenID Provider denied the request
-			case Result<AuthSession>.Error(ErrorCodes.AccessDenied, var description):
-				return new BackChannelAuthenticationForbidden(ErrorCodes.AccessDenied, description);
-
-			// Return a generic error response for other issues
-			case Result<AuthSession>.Error(var error, var description):
-				return new BackChannelAuthenticationError(error, description);
-
-			// Treat any unexpected results as exceptions
-			default:
-				throw new UnexpectedTypeException(nameof(authResult), authResult.GetType());
+			authorizedGrant = new AuthorizedGrant(authSession, authContext);
+		}
+		else if (authResult.TryGetFailure(out var error))
+		{
+			return error.ErrorCode switch
+			{
+				ErrorCodes.UnauthorizedClient => new BackChannelAuthenticationUnauthorized(ErrorCodes.AccessDenied, error.ErrorDescription),
+				ErrorCodes.AccessDenied => new BackChannelAuthenticationForbidden(ErrorCodes.AccessDenied, error.ErrorDescription),
+				_ => new BackChannelAuthenticationError(error.ErrorCode, error.ErrorDescription)
+			};
+		}
+		else
+		{
+			throw new InvalidOperationException("Unexpected result state");
 		}
 
 		var pollingInterval = _options.Value.BackChannelAuthentication.PollingInterval;
 
-		// Persist the backchannel authentication request with an initial pending status
 		var authenticationRequestId = await _storage.StoreAsync(
 			new BackChannelAuthenticationRequest(authorizedGrant)
 			{

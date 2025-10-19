@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 
@@ -40,9 +41,9 @@ public interface IBackChannelAuthenticationHandler
     ///     The authorization request containing the details of the backchannel authentication request.</param>
     /// <param name="clientRequest"></param>
     /// <returns>
-    /// A task that represents the asynchronous operation, containing the backchannel authentication response.
+    /// A task that represents the asynchronous operation, containing a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/>.
     /// </returns>
-    Task<BackChannelAuthenticationResponse> HandleAsync(
+    Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest);
 }

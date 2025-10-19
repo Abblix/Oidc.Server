@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates Redirect URIs in a client registration request.
 /// This internal class checks if the URIs are absolute, do not contain fragments,
 /// and comply with security requirements based on the application type.
-/// If any validation fails, it returns a ClientRegistrationValidationError.
+/// If any validation fails, it returns a RequestError.
 /// </summary>
 internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 {
@@ -49,10 +49,10 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A <see cref="ClientRegistrationValidationError"/> if any validation fails,
+    /// A <see cref="RequestError"/> if any validation fails,
     /// or null if the request is valid.
     /// </returns>
-    protected override ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context)
+    protected override RequestError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

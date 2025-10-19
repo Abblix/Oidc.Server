@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -78,7 +79,7 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
     /// If both are present, it returns an error since only one should be used.
     /// Otherwise, it proceeds to fetch the request object from the `RequestUri` and returns the result.
     /// </remarks>
-    public async Task<FetchResult> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
         if (request is { Request: not null, RequestUri: not null })
         {

@@ -71,15 +71,9 @@ public class RemoveClientHandler : IRemoveClientHandler
     {
         var validationResult = await _validator.ValidateAsync(clientRequest);
 
-        var response = validationResult switch
-        {
-            ValidClientRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new RemoveClientErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        return await validationResult.MatchAsync(
+            onSuccess: _processor.ProcessAsync,
+            onFailure: error => Task.FromResult<RemoveClientResponse>(
+                new RemoveClientErrorResponse(error.ErrorCode, error.ErrorDescription)));
     }
 }

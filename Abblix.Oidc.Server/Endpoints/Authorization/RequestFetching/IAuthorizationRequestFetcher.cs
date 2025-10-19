@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -46,5 +48,5 @@ public interface IAuthorizationRequestFetcher
     /// or validating the request object provided inline via the 'request' parameter. It ensures the request adheres
     /// to the expected format and validation requirements before further processing.
     /// </remarks>
-    Task<FetchResult> FetchAsync(AuthorizationRequest request);
+    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request);
 }

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RequestObject;
 
@@ -38,7 +39,7 @@ public interface IRequestObjectFetcher
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="Result{T}"/> object,
+    /// A task representing the asynchronous operation. The task result contains a <see cref="Result{T, RequestError}"/> object,
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
     /// <remarks>
@@ -46,6 +47,6 @@ public interface IRequestObjectFetcher
     /// the payload is bound to the request model.
     /// If the JWT is invalid or not present, an appropriate error result is returned.
     /// </remarks>
-    Task<Result<T>> FetchAsync<T>(T request, string? requestObject)
+    Task<Result<T, RequestError>> FetchAsync<T>(T request, string? requestObject)
         where T : class;
 }
