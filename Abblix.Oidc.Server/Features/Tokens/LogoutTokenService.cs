@@ -113,7 +113,7 @@ public class LogoutTokenService : ILogoutTokenService
                 ExpiresAt = issuedAt + logoutOptions.LogoutTokenExpiresIn,
 
                 Issuer = logoutContext.Issuer,
-                Audiences = new[] { clientInfo.ClientId },
+                Audiences = [clientInfo.ClientId],
 
                 Subject = subjectId,
                 SessionId = logoutContext.SessionId,

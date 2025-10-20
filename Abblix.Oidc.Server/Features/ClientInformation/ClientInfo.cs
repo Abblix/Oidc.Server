@@ -61,13 +61,13 @@ public record ClientInfo(string ClientId)
     /// Specifies the URIs where the user-agent can be redirected after authorization.
     /// These URIs must be pre-registered and match the redirect URI provided in the authorization request.
     /// </summary>
-    public Uri[] RedirectUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] RedirectUris { get; set; } = [];
 
     /// <summary>
     /// Specifies the URIs where the user-agent can be redirected after logging out from the client application.
     /// This allows for a seamless user experience upon logout.
     /// </summary>
-    public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] PostLogoutRedirectUris { get; set; } = [];
 
     /// <summary>
     /// Indicates whether the client is to use Proof Key for Code Exchange (PKCE) in the authorization code flow,
@@ -121,12 +121,12 @@ public record ClientInfo(string ClientId)
     /// Defines the response types that the client is permitted to use.
     /// This controls how tokens are issued in response to an authorization request.
     /// </summary>
-    public string[][] AllowedResponseTypes { get; set; } = { new[] { ResponseTypes.Code } };
+    public string[][] AllowedResponseTypes { get; set; } = [[ResponseTypes.Code]];
 
     /// <summary>
     /// Specifies the grant types the client is authorized to use when obtaining tokens from the token endpoint.
     /// </summary>
-    public string[] AllowedGrantTypes { get; set; } = { GrantTypes.AuthorizationCode };
+    public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Allows the client to request tokens that enable access to the user's resources while they’re offline.
@@ -246,7 +246,7 @@ public record ClientInfo(string ClientId)
     /// By defining this list, the server ensures that only pre-approved and secure URIs are accepted,
     /// mitigating risks such as unauthorized or malicious requests.
     /// </remarks>
-    public Uri[] RequestUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] RequestUris { get; set; } = [];
 
     /// <summary>
     /// Describes the type of application represented by the client, such as "web" or "native".
@@ -326,4 +326,11 @@ public record ClientInfo(string ClientId)
     /// Specifies the algorithm used to sign client authentication requests at the token endpoint.
     /// </summary>
     public string? TokenEndpointAuthSigningAlgorithm { get; set; }
+
+    /// <summary>
+    /// Expiration time for this dynamically registered client in distributed cache.
+    /// If not set, the default expiration configured in the server settings is used.
+    /// Implements pseudo-sliding expiration: TTL is reset on each access.
+    /// </summary>
+    public TimeSpan? ExpiresAfter { get; set; }
 }

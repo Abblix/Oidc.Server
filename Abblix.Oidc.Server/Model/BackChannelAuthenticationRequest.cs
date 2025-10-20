@@ -39,7 +39,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [JsonPropertyName(Parameters.Scope)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
-    public string[] Scope { get; init; } = Array.Empty<string>();
+    public string[] Scope { get; init; } = [];
 
     /// <summary>
     /// A token issued by the client that the authorization server uses to notify the client about the result

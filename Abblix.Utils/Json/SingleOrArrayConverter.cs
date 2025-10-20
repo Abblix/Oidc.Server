@@ -55,7 +55,7 @@ public class SingleOrArrayConverter<T> : JsonConverter<T[]>
                 return null;
 
             case JsonTokenType.String:
-                return new[] { ReadFrom(ref reader, elementType, converter, options) };
+                return [ReadFrom(ref reader, elementType, converter, options)];
 
             case JsonTokenType.StartArray:
                 break;

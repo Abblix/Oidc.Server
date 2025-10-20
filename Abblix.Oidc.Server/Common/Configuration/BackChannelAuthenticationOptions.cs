@@ -63,7 +63,7 @@ public record BackChannelAuthenticationOptions
     /// </summary>
     public int RequestIdLength { get; set; } = 64;
 
-    public IEnumerable<string>? TokenDeliveryModesSupported { get; set; } = new[] { BackchannelTokenDeliveryModes.Poll };
+    public IEnumerable<string>? TokenDeliveryModesSupported { get; set; } = [BackchannelTokenDeliveryModes.Poll];
 
     public bool UserCodeParameterSupported { get; set; } = false;
 }

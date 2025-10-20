@@ -63,13 +63,13 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
         if (!ResponseTypeAllowed(context))
         {
             _logger.LogWarning("The response type {@ResponseType} is not allowed for the client",
-                new object?[] { responseType });
+                [responseType]);
             return UnsupportedResponseType("The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            _logger.LogWarning("The response type {@ResponseType} is not valid", new object?[] { responseType });
+            _logger.LogWarning("The response type {@ResponseType} is not valid", [responseType]);
             return UnsupportedResponseType("The response type is not supported");
         }
 

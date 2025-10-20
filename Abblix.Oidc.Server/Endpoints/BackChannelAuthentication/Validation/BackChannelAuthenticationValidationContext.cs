@@ -61,14 +61,14 @@ public record BackChannelAuthenticationValidationContext(
     /// These scopes define the permissions and access levels that the client is requesting from
     /// the authorization server.
     /// </summary>
-    public ScopeDefinition[] Scope { get; set; } = Array.Empty<ScopeDefinition>();
+    public ScopeDefinition[] Scope { get; set; } = [];
 
     /// <summary>
     /// A collection of resource definitions requested as part of the authorization process.
     /// These resources specify the URIs that the client is requesting access to, enhancing the granularity
     /// of resource-level authorization.
     /// </summary>
-    public ResourceDefinition[] Resources { get; set; } = Array.Empty<ResourceDefinition>();
+    public ResourceDefinition[] Resources { get; set; } = [];
 
     /// <summary>
     /// Represents the login hint token, which is an optional token used to provide hints about the user's identity

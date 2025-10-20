@@ -54,12 +54,12 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
     /// Defines the scope of access requested or authorized. This array of scope definitions helps in determining
     /// the extent of access granted to the client and any constraints or conditions applied to the token.
     /// </summary>
-    public ScopeDefinition[] Scope { get; set; } = Array.Empty<ScopeDefinition>();
+    public ScopeDefinition[] Scope { get; set; } = [];
 
     /// <summary>
     /// Specifies additional resources that the client has requested or that have been included in the authorization.
     /// These definitions provide context on the resources that are accessible with the issued token, enhancing
     /// the token's utility for fine-grained access control.
     /// </summary>
-    public ResourceDefinition[] Resources { get; set; } = Array.Empty<ResourceDefinition>();
+    public ResourceDefinition[] Resources { get; set; } = [];
 }

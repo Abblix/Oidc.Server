@@ -53,7 +53,7 @@ public record OidcOptions
 	/// redirect URIs, and other OAuth2/OIDC parameters. Proper client configuration is essential for securing client
 	/// applications and enabling them to interact with the OIDC server according to the OAuth2 and OIDC specifications.
 	/// </summary>
-	public IEnumerable<ClientInfo> Clients { get; set; } = Array.Empty<ClientInfo>();
+	public IEnumerable<ClientInfo> Clients { get; set; } = [];
 
 	/// <summary>
 	/// The URL to a user interface or service that allows users to select an account during the authentication process.
@@ -105,7 +105,7 @@ public record OidcOptions
 	/// allowing clients to verify that the tokens have not been tampered with and were indeed issued by this server.
 	/// It is recommended to rotate these keys periodically to maintain the security of the token signing process.
 	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = Array.Empty<JsonWebKey>();
+	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
 
 	/// <summary>
 	/// Options related to the check session mechanism in OIDC. This configuration controls how the OIDC server manages
@@ -134,7 +134,7 @@ public record OidcOptions
 	/// These keys are used to encrypt ID tokens and, optionally, access tokens when the OIDC server sends them to clients.
 	/// Clients use the corresponding public keys to decrypt the tokens and access the contained claims.
 	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = Array.Empty<JsonWebKey>();
+	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
 
 	/// <summary>
 	/// The duration for which a Pushed Authorization Request (PAR) is valid. PAR is a security enhancement that allows

@@ -41,7 +41,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [BindProperty(Name = Parameters.Scope)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-    public string[] Scope { get; init; } = Array.Empty<string>();
+    public string[] Scope { get; init; } = [];
 
     /// <summary>
     /// A token issued by the client that the authorization server uses to notify the client about the result

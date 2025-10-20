@@ -101,7 +101,7 @@ public record TokenRequest
 	/// This defines the permissions or resources the client is requesting access to.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
-	public string[] Scope { get; set; } = Array.Empty<string>();
+	public string[] Scope { get; set; } = [];
 
 	/// <summary>
 	/// The username of the resource owner, required when using the resource owner password credentials grant type.

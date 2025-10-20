@@ -36,11 +36,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 {
-    private static readonly string[] RequiringRedirectUri = {
+    private static readonly string[] RequiringRedirectUri =
+    [
         GrantTypes.AuthorizationCode,
         GrantTypes.Implicit,
-        GrantTypes.RefreshToken,
-    };
+        GrantTypes.RefreshToken
+    ];
 
     /// <summary>
     /// Validates Redirect URIs in the client registration request.

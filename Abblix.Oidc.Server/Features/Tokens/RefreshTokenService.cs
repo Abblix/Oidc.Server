@@ -113,7 +113,7 @@ public class RefreshTokenService : IRefreshTokenService
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
-				Audiences = new[] { clientInfo.ClientId },
+				Audiences = [clientInfo.ClientId],
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);

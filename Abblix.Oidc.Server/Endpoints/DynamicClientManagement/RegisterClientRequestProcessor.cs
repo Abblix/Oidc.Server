@@ -183,14 +183,14 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
 
         if (clientSecret.HasValue())
         {
-            clientInfo.ClientSecrets = new[]
-            {
+            clientInfo.ClientSecrets =
+            [
                 new ClientSecret
                 {
                     Sha512Hash = _hashService.Sha(HashAlgorithm.Sha512, clientSecret),
                     ExpiresAt = expiresAt,
                 }
-            };
+            ];
         }
 
         if (model.RequestUris != null)
@@ -241,7 +241,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 //ExpiresAt = issuedAt + ..., //TODO think about the expiration of this token
 
                 Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
-                Audiences = new[] { clientId },
+                Audiences = [clientId],
                 Subject = clientId,
             },
         };

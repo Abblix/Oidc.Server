@@ -53,7 +53,7 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
         var claimNames = scopes
             .SelectMany(scope => _scopeManager.TryGet(scope, out var scopeDefinition)
                 ? scopeDefinition.ClaimTypes
-                : Array.Empty<string>())
+                : [])
             .Prepend(JwtClaimTypes.Subject);
 
         if (requestedClaims != null)
