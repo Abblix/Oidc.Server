@@ -33,20 +33,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// This class determines if the requested flow type is supported and matches the
 /// expected patterns for authorization requests, as part of the validation process.
 /// </summary>
-public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
+/// <param name="logger">The logger to be used for logging purposes.</param>
+public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
-    private readonly ILogger _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FlowTypeValidator" /> class with a logger.
-    /// The logger is used for recording the validation activities, aiding in troubleshooting and auditing.
-    /// </summary>
-    /// <param name="logger">The logger to be used for logging purposes.</param>
-    public FlowTypeValidator(ILogger<FlowTypeValidator> logger)
-    {
-        _logger = logger;
-    }
-
     /// <summary>
     /// Validates the flow type specified in the authorization request.
     /// This method checks if the flow type is supported and aligns with the OAuth 2.0 specifications.
@@ -62,14 +51,14 @@ public class FlowTypeValidator : SyncAuthorizationContextValidatorBase
 
         if (!ResponseTypeAllowed(context))
         {
-            _logger.LogWarning("The response type {@ResponseType} is not allowed for the client",
+            logger.LogWarning("The response type {@ResponseType} is not allowed for the client",
                 [responseType]);
             return UnsupportedResponseType("The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            _logger.LogWarning("The response type {@ResponseType} is not valid", [responseType]);
+            logger.LogWarning("The response type {@ResponseType} is not valid", [responseType]);
             return UnsupportedResponseType("The response type is not supported");
         }
 

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -30,19 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// Provides validation for resource-related data within token requests, ensuring that all requested resources are
 /// recognized and appropriately scoped according to OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class ResourceValidator: SyncTokenContextValidatorBase
+/// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
+public class ResourceValidator(IResourceManager resourceManager): SyncTokenContextValidatorBase
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ResourceValidator"/> class with a specific resource manager.
-    /// </summary>
-    /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
-    public ResourceValidator(IResourceManager resourceManager)
-    {
-        _resourceManager = resourceManager;
-    }
-
-    private readonly IResourceManager _resourceManager;
-
     /// <summary>
     /// Validates the resources specified in a token request against known resource definitions.
     /// This validation ensures that only registered and approved resources are accessed by the client.
@@ -60,7 +50,7 @@ public class ResourceValidator: SyncTokenContextValidatorBase
         if (request.Resources is { Length: > 0 })
         {
             // Validate the requested resources using the resource manager.
-            if (!_resourceManager.Validate(
+            if (!resourceManager.Validate(
                     request.Resources,
                     request.Scope,
                     out var resources,

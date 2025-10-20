@@ -32,19 +32,9 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// <summary>
 /// Validates the post-logout redirect URIs for an end-session request.
 /// </summary>
-public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
+/// <param name="logger">The logger for capturing validation information.</param>
+public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PostLogoutRedirectUrisValidator"/> class.
-    /// </summary>
-    /// <param name="logger">The logger for capturing validation information.</param>
-    public PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger)
-    {
-        _logger = logger;
-    }
-
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the end-session request asynchronously.
     /// </summary>
@@ -75,7 +65,7 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        _logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
+        logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
             new Sanitized(redirectUri),
             context.ClientInfo.ClientId);
 

@@ -40,33 +40,17 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// It ensures that clients can obtain fresh access tokens without re-authenticating the user,
 /// enhancing user experience while maintaining security.
 /// </summary>
-public class RefreshTokenGrantHandler : IAuthorizationGrantHandler
+/// <param name="parameterValidator">
+/// Validates the presence and format of required parameters in the request. </param>
+/// <param name="jwtValidator">
+/// Validates the JWT structure of the refresh token to ensure its authenticity and integrity.</param>
+/// <param name="refreshTokenService">
+/// Handles the logic of authorizing clients and issuing new tokens based on refresh tokens.</param>
+public class RefreshTokenGrantHandler(
+	IParameterValidator parameterValidator,
+	IAuthServiceJwtValidator jwtValidator,
+	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="RefreshTokenGrantHandler"/> class.
-	/// The constructor sets up services responsible for validating refresh tokens, handling JWT validation,
-	/// and interacting with the refresh token storage service.
-	/// </summary>
-	/// <param name="parameterValidator">
-	/// Validates the presence and format of required parameters in the request. </param>
-	/// <param name="jwtValidator">
-	/// Validates the JWT structure of the refresh token to ensure its authenticity and integrity.</param>
-	/// <param name="refreshTokenService">
-	/// Handles the logic of authorizing clients and issuing new tokens based on refresh tokens.</param>
-	public RefreshTokenGrantHandler(
-		IParameterValidator parameterValidator,
-		IAuthServiceJwtValidator jwtValidator,
-		IRefreshTokenService refreshTokenService)
-	{
-		_parameterValidator = parameterValidator;
-		_jwtValidator = jwtValidator;
-		_refreshTokenService = refreshTokenService;
-	}
-
-	private readonly IParameterValidator _parameterValidator;
-	private readonly IAuthServiceJwtValidator _jwtValidator;
-	private readonly IRefreshTokenService _refreshTokenService;
-
 	/// <summary>
 	/// Indicates that this handler is responsible for processing the 'refresh_token' grant type.
 	/// The framework uses this information to ensure that this handler is only invoked for the refresh token flow.
@@ -91,10 +75,10 @@ public class RefreshTokenGrantHandler : IAuthorizationGrantHandler
 	public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 	{
 		// Validate that the refresh token parameter is present in the request, throwing an error if missing.
-		_parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
+		parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
-		var jwtValidationResult = await _jwtValidator.ValidateAsync(request.RefreshToken);
+		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);
 
 		switch (jwtValidationResult)
 		{
@@ -108,7 +92,7 @@ public class RefreshTokenGrantHandler : IAuthorizationGrantHandler
 			case ValidJsonWebToken { Token: {} token }:
 
 				// Authorize the request based on the refresh token and check if the token belongs to the correct client.
-				var result = await _refreshTokenService.AuthorizeByRefreshTokenAsync(token);
+				var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token);
 
 				if (result.TryGetFailure(out var authError))
 				{

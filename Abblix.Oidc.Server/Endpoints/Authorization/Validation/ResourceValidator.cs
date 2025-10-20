@@ -32,21 +32,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// and permitted for the requesting client, extending the base functionality of resource validation by incorporating
 /// integration with the authorization context.
 /// </summary>
-public class ResourceValidator: SyncAuthorizationContextValidatorBase
+/// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
+public class ResourceValidator(IResourceManager resourceManager) : SyncAuthorizationContextValidatorBase
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ResourceValidator"/> class, setting up the resource manager
-    /// responsible for maintaining and validating the definitions of resources.
-    /// </summary>
-    /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.
-    /// </param>
-    public ResourceValidator(IResourceManager resourceManager)
-    {
-        _resourceManager = resourceManager;
-    }
-
-    private readonly IResourceManager _resourceManager;
-
     /// <summary>
     /// Performs the validation of resource identifiers specified in the authorization request against the allowed
     /// resource definitions managed by the <see cref="IResourceManager"/>. This method ensures that the resources
@@ -62,11 +50,9 @@ public class ResourceValidator: SyncAuthorizationContextValidatorBase
     {
         var request = context.Request;
 
-        // Proceed with validation only if there are resources specified in the request.
         if (request.Resources is { Length: > 0 })
         {
-            // Validate the requested resources using the resource manager.
-            if (!_resourceManager.Validate(
+            if (!resourceManager.Validate(
                     request.Resources,
                     request.Scope,
                     out var resources,
@@ -78,7 +64,6 @@ public class ResourceValidator: SyncAuthorizationContextValidatorBase
             context.Resources = resources;
         }
 
-        // Return null indicating successful validation if there are no errors.
         return null;
     }
 }

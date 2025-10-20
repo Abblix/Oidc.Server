@@ -33,21 +33,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// This class is responsible for ensuring that the request meets all necessary criteria for successful authentication
 /// within the backchannel authentication flow.
 /// </summary>
-public class BackChannelAuthenticationRequestValidator : IBackChannelAuthenticationRequestValidator
+/// <param name="contextValidator">
+/// The context validator responsible for performing detailed validation of the request.</param>
+public class BackChannelAuthenticationRequestValidator(IBackChannelAuthenticationContextValidator contextValidator) : IBackChannelAuthenticationRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="BackChannelAuthenticationRequestValidator"/> class,
-	/// using the provided context validator to perform the validation logic.
-	/// </summary>
-	/// <param name="contextValidator">
-	/// The context validator responsible for performing detailed validation of the request.</param>
-	public BackChannelAuthenticationRequestValidator(IBackChannelAuthenticationContextValidator contextValidator)
-	{
-		_contextValidator = contextValidator;
-	}
-
-	private readonly IBackChannelAuthenticationContextValidator _contextValidator;
-
 	/// <summary>
 	/// Validates the specified backchannel authentication request.
 	/// This method creates a validation context from the request and client information,
@@ -68,7 +57,7 @@ public class BackChannelAuthenticationRequestValidator : IBackChannelAuthenticat
 	{
 		var context = new BackChannelAuthenticationValidationContext(request, clientRequest);
 
-		var error = await _contextValidator.ValidateAsync(context);
+		var error = await contextValidator.ValidateAsync(context);
 		if (error != null)
 			return error;
 

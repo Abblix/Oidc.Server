@@ -31,26 +31,13 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// generator to create a unique and secure identifier for each token. The generated identifier is then encoded using
 /// HTTP URL encoding to ensure it is safe to transmit in URL contexts.
 /// </summary>
-public class TokenIdGenerator : ITokenIdGenerator
+public class TokenIdGenerator(IOptions<OidcOptions> options) : ITokenIdGenerator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="TokenIdGenerator"/> class with configuration options for
-	/// token ID generation, such as the length of the token ID.
-	/// </summary>
-	/// <param name="options">The configuration options for OIDC, providing settings such as the token ID length.
-	/// </param>
-	public TokenIdGenerator(IOptions<OidcOptions> options)
-	{
-		_options = options;
-	}
-
-	private readonly IOptions<OidcOptions> _options;
-
 	/// <summary>
 	/// Creates a new unique identifier for a JWT. This method generates a 32-byte random number and encodes it using
 	/// HTTP URL-safe Base64 encoding, resulting in a string suitable for use as a JWT ID.
 	/// </summary>
 	/// <returns>A URL-safe, randomly generated unique identifier for a JWT.</returns>
 	public string GenerateTokenId()
-		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(_options.Value.TokenIdLength));
+		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.TokenIdLength));
 }

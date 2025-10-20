@@ -32,20 +32,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// This class checks if the requested signing algorithms are supported by the JWT creator, ensuring compliance
 /// with security standards.
 /// </summary>
-public class SignedResponseAlgorithmsValidator: SyncClientRegistrationContextValidator
+/// <param name="jwtCreator">The service responsible for creating signed JWTs.</param>
+public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) : SyncClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SignedResponseAlgorithmsValidator"/> class.
-    /// The constructor takes a JWT creator to access the supported signing algorithms for validation.
-    /// </summary>
-    /// <param name="jwtCreator">The service responsible for creating signed JWTs.</param>
-    public SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator)
-    {
-        _jwtCreator = jwtCreator;
-    }
-
-    private readonly IJsonWebTokenCreator _jwtCreator;
-
     /// <summary>
     /// Validates the signing algorithms specified for ID tokens and user info responses.
     /// This method ensures that the JWT creator supports the requested algorithms.
@@ -74,7 +63,7 @@ public class SignedResponseAlgorithmsValidator: SyncClientRegistrationContextVal
     /// </returns>
     private RequestError? Validate(string? alg, string description)
     {
-        if (alg is not null && !_jwtCreator.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
+        if (alg is not null && !jwtCreator.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
             return new RequestError(
                 ErrorCodes.InvalidRequest,

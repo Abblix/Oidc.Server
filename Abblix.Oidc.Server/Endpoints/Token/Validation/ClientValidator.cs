@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -34,19 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// <see cref="IClientAuthenticator"/> to perform the authentication, and if successful, attaches the client information
 /// to the validation context. If the authentication fails, it returns an error indicating that the client is not authorized.
 /// </remarks>
-public class ClientValidator: ITokenContextValidator
+/// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator): ITokenContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientValidator"/> class with the specified client authenticator.
-    /// </summary>
-    /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
-    public ClientValidator(IClientAuthenticator clientAuthenticator)
-    {
-        _clientAuthenticator = clientAuthenticator;
-    }
-
-    private readonly IClientAuthenticator _clientAuthenticator;
-
     /// <summary>
     /// Asynchronously validates the client in the token request context. This method checks if the client
     /// can be authenticated using the provided client request information. If the client is successfully authenticated,
@@ -60,7 +50,7 @@ public class ClientValidator: ITokenContextValidator
     public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
     {
         var clientRequest = context.ClientRequest;
-        var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
         if (clientInfo == null)
         {
             return new RequestError(ErrorCodes.InvalidClient, "The client is not authorized");

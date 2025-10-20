@@ -29,21 +29,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the backend logic for processing requests to remove clients from the system. This processor uses the provided
 /// client information manager to execute the removal operation.
 /// </summary>
-public class RemoveClientRequestProcessor : IRemoveClientRequestProcessor
+/// <param name="clientInfoManager">An instance of <see cref="IClientInfoManager"/> used to interact with and
+/// manage client information, facilitating the removal of clients based on their identifiers.</param>
+public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) : IRemoveClientRequestProcessor
 {
-    /// <summary>
-    /// Constructs a new instance of the <see cref="RemoveClientRequestProcessor"/> class, initializing it with
-    /// the necessary components to manage client information and perform removal operations.
-    /// </summary>
-    /// <param name="clientInfoManager">An instance of <see cref="IClientInfoManager"/> used to interact with and
-    /// manage client information, facilitating the removal of clients based on their identifiers.</param>
-    public RemoveClientRequestProcessor(IClientInfoManager clientInfoManager)
-    {
-        _clientInfoManager = clientInfoManager;
-    }
-
-    private readonly IClientInfoManager _clientInfoManager;
-
     /// <summary>
     /// Asynchronously executes the process of removing a client based on the provided request.
     /// This method ensures the client specified in the request is removed from the system,
@@ -61,7 +50,7 @@ public class RemoveClientRequestProcessor : IRemoveClientRequestProcessor
     /// </remarks>
     public async Task<RemoveClientResponse> ProcessAsync(ValidClientRequest request)
     {
-        await _clientInfoManager.RemoveClientAsync(request.ClientInfo.ClientId);
+        await clientInfoManager.RemoveClientAsync(request.ClientInfo.ClientId);
         return new RemoveClientSuccessfulResponse();
     }
 }

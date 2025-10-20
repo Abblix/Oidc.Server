@@ -31,20 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates the authentication method specified for the token endpoint in a client registration request.
 /// This validator ensures that the provided authentication method is supported by the OpenID provider.
 /// </summary>
-public class TokenEndpointAuthMethodValidator: SyncClientRegistrationContextValidator
+/// <param name="clientAuthenticator">The client authenticator used to validate authentication methods.</param>
+public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthenticator) : SyncClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TokenEndpointAuthMethodValidator"/> class.
-    /// This constructor injects the client authenticator service used for verifying supported authentication methods.
-    /// </summary>
-    /// <param name="clientAuthenticator">The client authenticator used to validate authentication methods.</param>
-    public TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthenticator)
-    {
-        _clientAuthenticator = clientAuthenticator;
-    }
-
-    private readonly IClientAuthenticator _clientAuthenticator;
-
     /// <summary>
     /// Validates the token endpoint authentication method specified in the client registration request.
     /// This method checks if the provided authentication method is among those supported by the OpenID provider.
@@ -58,9 +47,8 @@ public class TokenEndpointAuthMethodValidator: SyncClientRegistrationContextVali
     {
         var request = context.Request;
 
-        // Check if the authentication method is specified and supported
         if (request.TokenEndpointAuthMethod.HasValue() &&
-            !_clientAuthenticator.ClientAuthenticationMethodsSupported.Contains(
+            !clientAuthenticator.ClientAuthenticationMethodsSupported.Contains(
                 request.TokenEndpointAuthMethod, StringComparer.Ordinal))
         {
             return new RequestError(
@@ -68,6 +56,6 @@ public class TokenEndpointAuthMethodValidator: SyncClientRegistrationContextVali
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }
 
-        return null; // No errors; the request is valid
+        return null;
     }
 }

@@ -34,19 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// This class is responsible for validating the response mode specified in the authorization request
 /// as part of the SyncAuthorizationRequestValidationStep process.
 /// </summary>
-public class ResponseModeValidator : SyncAuthorizationContextValidatorBase
+/// <param name="logger">The logger to be used for logging purposes.</param>
+public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
-	/// <summary>
-	/// Initializes a new instance of the ResponseModeValidator class with a logger.
-	/// </summary>
-	/// <param name="logger">The logger to be used for logging purposes.</param>
-	public ResponseModeValidator(ILogger<ResponseModeValidator> logger)
-	{
-		_logger = logger;
-	}
-
-	private readonly ILogger _logger;
-
 	/// <summary>
 	/// Validates the response mode specified in the authorization request against the allowed
 	/// response modes for the detected flow type.
@@ -60,7 +50,7 @@ public class ResponseModeValidator : SyncAuthorizationContextValidatorBase
 		{
 			if (!IsResponseModeAllowed(responseMode, context.FlowType))
 			{
-				_logger.LogWarning("The response mode {ResponseMode} is not compatible with response type {ResponseType}",
+				logger.LogWarning("The response mode {ResponseMode} is not compatible with response type {ResponseType}",
 					responseMode,
 					context.Request.ResponseType);
 

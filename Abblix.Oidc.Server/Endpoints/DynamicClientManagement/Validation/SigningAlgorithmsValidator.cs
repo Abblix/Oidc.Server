@@ -33,20 +33,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// This class ensures that the requested signing algorithms are supported by the JWT validator,
 /// maintaining compliance with security standards.
 /// </summary>
-public class SigningAlgorithmsValidator: SyncClientRegistrationContextValidator
+/// <param name="jwtValidator">The service responsible for validating signing algorithms used in JWTs.</param>
+public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : SyncClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SigningAlgorithmsValidator"/> class.
-    /// The constructor takes a JWT validator to access the supported signing algorithms for validation.
-    /// </summary>
-    /// <param name="jwtValidator">The service responsible for validating signing algorithms used in JWTs.</param>
-    public SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator)
-    {
-        _jwtValidator = jwtValidator;
-    }
-
-    private readonly IJsonWebTokenValidator _jwtValidator;
-
     /// <summary>
     /// Validates the signing algorithms specified in the client registration request.
     /// This method checks if the requested algorithms are supported by the JWT validator for various purposes.
@@ -77,7 +66,7 @@ public class SigningAlgorithmsValidator: SyncClientRegistrationContextValidator
     /// </returns>
     private RequestError? Validate(string? alg, string description)
     {
-        if (alg is not null && !_jwtValidator.SigningAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
+        if (alg is not null && !jwtValidator.SigningAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
             return new RequestError(
                 ErrorCodes.InvalidRequest,

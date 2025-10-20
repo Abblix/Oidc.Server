@@ -35,35 +35,19 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// to fetch and validate the necessary user data. It supports converting user data into claims that adhere to
 /// OpenID Connect standards, tailored to the specific needs of the client making the request.
 /// </summary>
-public class UserClaimsProvider : IUserClaimsProvider
+/// <param name="logger">The logger used for logging information and errors.</param>
+/// <param name="userInfoProvider">The provider used to retrieve detailed user information based on specific claims.
+/// </param>
+/// <param name="scopeClaimsProvider">The provider that maps requested scopes to the corresponding set of claims.
+/// </param>
+/// <param name="subjectTypeConverter">The converter used to translate user identifiers into subject types as
+/// required by different client configurations.</param>
+public class UserClaimsProvider(
+    ILogger<UserClaimsProvider> logger,
+    IUserInfoProvider userInfoProvider,
+    IScopeClaimsProvider scopeClaimsProvider,
+    ISubjectTypeConverter subjectTypeConverter) : IUserClaimsProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UserClaimsProvider"/> class.
-    /// </summary>
-    /// <param name="logger">The logger used for logging information and errors.</param>
-    /// <param name="userInfoProvider">The provider used to retrieve detailed user information based on specific claims.
-    /// </param>
-    /// <param name="scopeClaimsProvider">The provider that maps requested scopes to the corresponding set of claims.
-    /// </param>
-    /// <param name="subjectTypeConverter">The converter used to translate user identifiers into subject types as
-    /// required by different client configurations.</param>
-    public UserClaimsProvider(
-        ILogger<UserClaimsProvider> logger,
-        IUserInfoProvider userInfoProvider,
-        IScopeClaimsProvider scopeClaimsProvider,
-        ISubjectTypeConverter subjectTypeConverter)
-    {
-        _logger = logger;
-        _userInfoProvider = userInfoProvider;
-        _scopeClaimsProvider = scopeClaimsProvider;
-        _subjectTypeConverter = subjectTypeConverter;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IScopeClaimsProvider _scopeClaimsProvider;
-    private readonly IUserInfoProvider _userInfoProvider;
-    private readonly ISubjectTypeConverter _subjectTypeConverter;
-
     /// <summary>
     /// Asynchronously retrieves structured user claims based on an authentication session and specific claim parameters.
     /// This method ensures compliance with the OpenID Connect standards by validating essential claims and formatting
@@ -83,24 +67,24 @@ public class UserClaimsProvider : IUserClaimsProvider
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims,
         ClientInfo clientInfo)
     {
-        var claimNames = _scopeClaimsProvider.GetRequestedClaims(
+        var claimNames = scopeClaimsProvider.GetRequestedClaims(
             scope, requestedClaims?.Select(claim => claim.Key))
             .Distinct(StringComparer.Ordinal);
 
-        var userInfo = await _userInfoProvider.GetUserInfoAsync(authSession.Subject, claimNames);
+        var userInfo = await userInfoProvider.GetUserInfoAsync(authSession.Subject, claimNames);
         if (userInfo == null)
         {
-            _logger.LogWarning("The user claims were not found by subject value");
+            logger.LogWarning("The user claims were not found by subject value");
             return null;
         }
 
-        var subject = _subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+        var subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
         userInfo.SetProperty(JwtClaimTypes.Subject, subject);
 
         if (FindMissingClaims(userInfo, requestedClaims) is { Length: > 0 } missingClaims)
         {
-            _logger.LogWarning("The following claims are requested, but not returned from {IUserInfoProvider}: {@MissingClaims}",
-                _userInfoProvider.GetType().FullName,
+            logger.LogWarning("The following claims are requested, but not returned from {IUserInfoProvider}: {@MissingClaims}",
+                userInfoProvider.GetType().FullName,
                 missingClaims);
 
             return null;

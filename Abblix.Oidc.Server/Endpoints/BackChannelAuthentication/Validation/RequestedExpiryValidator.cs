@@ -31,20 +31,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// Validates the requested expiry time for a backchannel authentication request.
 /// Ensures that the requested expiry is within the allowed range and assigns a valid expiry time to the context.
 /// </summary>
-public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidator
+/// <param name="options">
+/// The options containing the default and maximum expiry settings for backchannel authentication.</param>
+public class RequestedExpiryValidator(IOptionsSnapshot<OidcOptions> options) : IBackChannelAuthenticationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestedExpiryValidator"/> class.
-    /// </summary>
-    /// <param name="options">
-    /// The options containing the default and maximum expiry settings for backchannel authentication.</param>
-    public RequestedExpiryValidator(IOptionsSnapshot<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptionsSnapshot<OidcOptions> _options;
-
     /// <summary>
     /// Asynchronously validates the expiry time for the backchannel authentication request.
     /// Ensures that the requested expiry is within the allowed range and assigns an appropriate expiry to the context.
@@ -67,9 +57,9 @@ public class RequestedExpiryValidator: IBackChannelAuthenticationContextValidato
     {
         if (!context.Request.RequestedExpiry.HasValue)
         {
-            context.ExpiresIn = _options.Value.BackChannelAuthentication.DefaultExpiry;
+            context.ExpiresIn = options.Value.BackChannelAuthentication.DefaultExpiry;
         }
-        else if (context.Request.RequestedExpiry.Value <= _options.Value.BackChannelAuthentication.MaximumExpiry)
+        else if (context.Request.RequestedExpiry.Value <= options.Value.BackChannelAuthentication.MaximumExpiry)
         {
             context.ExpiresIn = context.Request.RequestedExpiry.Value;
         }

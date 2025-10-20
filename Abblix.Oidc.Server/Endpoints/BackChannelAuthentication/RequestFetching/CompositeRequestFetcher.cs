@@ -31,20 +31,8 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching
 /// It iterates through each fetcher to process a backchannel authentication request, allowing for a flexible and
 /// extensible mechanism to fetch and validate requests from different sources or formats.
 /// </summary>
-public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
+public class CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] fetchers) : IBackChannelAuthenticationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CompositeRequestFetcher"/> class with an array of fetchers.
-    /// </summary>
-    /// <param name="fetchers">An array of <see cref="IBackChannelAuthenticationRequestFetcher"/> instances
-    /// that will be used to fetch and validate the backchannel authentication request.</param>
-    public CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] fetchers)
-    {
-        _fetchers = fetchers;
-    }
-
-    private readonly IBackChannelAuthenticationRequestFetcher[] _fetchers;
-
     /// <summary>
     /// Iterates through the configured fetchers to process the backchannel authentication request.
     /// Each fetcher in the array has the opportunity to handle the request. If a fetcher returns a fault,
@@ -55,7 +43,7 @@ public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
     /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/> that represents the outcome of the fetching process.</returns>
     public async Task<Result<BackChannelAuthenticationRequest, RequestError>> FetchAsync(BackChannelAuthenticationRequest request)
     {
-        foreach (var fetcher in _fetchers)
+        foreach (var fetcher in fetchers)
         {
             var result = await fetcher.FetchAsync(request);
             if (result.TryGetFailure(out var error))

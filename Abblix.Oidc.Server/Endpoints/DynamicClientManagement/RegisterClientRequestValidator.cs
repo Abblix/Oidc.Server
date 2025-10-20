@@ -32,22 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Provides validation for client registration requests to ensure they meet the system's criteria for client
 /// registrations. Utilizes an underlying context validator for comprehensive evaluation of request parameters.
 /// </summary>
-public class RegisterClientRequestValidator : IRegisterClientRequestValidator
+/// <param name="validator">An implementation of <see cref="IClientRegistrationContextValidator"/> used to assess
+/// the validity of registration requests based on predefined criteria and the system's registration policies.</param>
+public class RegisterClientRequestValidator(IClientRegistrationContextValidator validator) : IRegisterClientRequestValidator
 {
-    /// <summary>
-    /// Instantiates a new <see cref="RegisterClientRequestValidator"/> with a specific context validator for
-    /// evaluating client registration requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="IClientRegistrationContextValidator"/> used to assess
-    /// the validity of registration requests based on predefined criteria and the system's registration policies.
-    /// </param>
-    public RegisterClientRequestValidator(IClientRegistrationContextValidator validator)
-    {
-        _validator = validator;
-    }
-
-    private readonly IClientRegistrationContextValidator _validator;
-
     /// <summary>
     /// Asynchronously validates a client registration request against the system's registration policies and criteria.
     /// </summary>
@@ -67,7 +55,7 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     public async Task<Result<ValidClientRegistrationRequest, RequestError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
-        var error = await _validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(context);
         if (error != null)
         {
             return error;

@@ -34,31 +34,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// process matches the stored secret for the client. This class supports various hash algorithms for
 /// secure secret comparison and handles client secret expiration.
 /// </summary>
-public abstract class ClientSecretAuthenticator
+public abstract class ClientSecretAuthenticator(
+	ILogger<ClientSecretAuthenticator> logger,
+	IClientInfoProvider clientInfoProvider,
+	TimeProvider clock,
+	IHashService hashService)
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="ClientSecretAuthenticator"/> class.
-	/// </summary>
-	/// <param name="logger">The logger for logging information and errors.</param>
-	/// <param name="clientInfoProvider">The provider used to retrieve client information.</param>
-	/// <param name="clock">The clock instance used for time-related operations, such as checking secret expiration.</param>
-	/// <param name="hashService">The hasher used for hashing client secrets for secure comparison.</param>
-	protected ClientSecretAuthenticator(
-		ILogger<ClientSecretAuthenticator> logger,
-		IClientInfoProvider clientInfoProvider,
-		TimeProvider clock,
-		IHashService hashService)
-	{
-		_logger = logger;
-		_clientInfoProvider = clientInfoProvider;
-		_clock = clock;
-		_hashService = hashService;
-	}
-
-	private readonly ILogger _logger;
-	private readonly IClientInfoProvider _clientInfoProvider;
-	private readonly TimeProvider _clock;
-	private readonly IHashService _hashService;
 
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
@@ -77,21 +58,21 @@ public abstract class ClientSecretAuthenticator
 			return null;
 		}
 
-		var client = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (client == null)
 		{
-			_logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", clientId);
+			logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", clientId);
 			return null;
 		}
 
 		if (client.ClientSecrets?.Length == 0 || !secret.HasValue())
 		{
-			_logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", clientId);
+			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", clientId);
 			return null;
 		}
 
 		if (client.TokenEndpointAuthMethod != authenticationMethod) {
-			_logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", clientId);
+			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", clientId);
 			return null;
 		}
 
@@ -126,19 +107,19 @@ public abstract class ClientSecretAuthenticator
 
 		if (matchingSecret == null)
 		{
-			_logger.LogWarning("Client authentication failed: No matching secret found for client {ClientId}",
+			logger.LogWarning("Client authentication failed: No matching secret found for client {ClientId}",
 				client.ClientId);
 			return false; // Invalid secret
 		}
 
-		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < _clock.GetUtcNow())
+		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < clock.GetUtcNow())
 		{
-			_logger.LogWarning("Client authentication failed: Secret has expired for client {ClientId}",
+			logger.LogWarning("Client authentication failed: Secret has expired for client {ClientId}",
 				client.ClientId);
 			return false; // Secret is expired
 		}
 
-		_logger.LogInformation("Client authenticated successfully with client ID {ClientId}",
+		logger.LogInformation("Client authenticated successfully with client ID {ClientId}",
 			client.ClientId);
 		return true;
 	}
@@ -169,7 +150,7 @@ public abstract class ClientSecretAuthenticator
 		byte[]? hash = null;
 		foreach (var (clientSecret, validSecretHash) in validSecretHashes)
 		{
-			hash ??= _hashService.Sha(hashAlgorithm, secretValue);
+			hash ??= hashService.Sha(hashAlgorithm, secretValue);
 
 			if (validSecretHash.SequenceEqual(hash))
 				yield return clientSecret;

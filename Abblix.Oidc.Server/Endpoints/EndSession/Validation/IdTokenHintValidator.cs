@@ -33,19 +33,9 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// Validates the ID token hint in the context of an end-session request.
 /// This validator checks if the ID token hint provided in the request is valid and matches the expected audience (client).
 /// </summary>
-public class IdTokenHintValidator : IEndSessionContextValidator
+/// <param name="jwtValidator">The JWT validator used to validate ID tokens.</param>
+public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="IdTokenHintValidator"/> class.
-    /// </summary>
-    /// <param name="jwtValidator">The JWT validator used to validate ID tokens.</param>
-    public IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator)
-    {
-        _jwtValidator = jwtValidator;
-    }
-
-    private readonly IAuthServiceJwtValidator _jwtValidator;
-
     /// <summary>
     /// Validates the ID token hint.
     /// </summary>
@@ -57,7 +47,7 @@ public class IdTokenHintValidator : IEndSessionContextValidator
 
         if (request.IdTokenHint.HasValue())
         {
-            var result = await _jwtValidator.ValidateAsync(
+            var result = await jwtValidator.ValidateAsync(
                 request.IdTokenHint,
                 ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 

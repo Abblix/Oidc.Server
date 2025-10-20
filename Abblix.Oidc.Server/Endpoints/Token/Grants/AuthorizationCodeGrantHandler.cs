@@ -39,29 +39,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// PKCE is a security mechanism primarily used in public clients, and its enforcement helps prevent code injection
 /// attacks.
 /// </summary>
-public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
+/// <param name="parameterValidator">
+/// Service for validating request parameters, ensuring required fields are provided.</param>
+/// <param name="authorizationCodeService">
+/// Service responsible for generating, validating, and managing authorization codes.</param>
+public class AuthorizationCodeGrantHandler(
+    IParameterValidator parameterValidator,
+    IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationCodeGrantHandler"/> class.
-    /// The constructor sets up the services necessary for validating the parameters of a token request and managing
-    /// authorization codes. It centralizes these services to streamline the validation process and ensure secure
-    /// handling of authorization codes.
-    /// </summary>
-    /// <param name="parameterValidator">
-    /// Service for validating request parameters, ensuring required fields are provided.</param>
-    /// <param name="authorizationCodeService">
-    /// Service responsible for generating, validating, and managing authorization codes.</param>
-    public AuthorizationCodeGrantHandler(
-        IParameterValidator parameterValidator,
-        IAuthorizationCodeService authorizationCodeService)
-    {
-        _parameterValidator = parameterValidator;
-        _authorizationCodeService = authorizationCodeService;
-    }
-
-    private readonly IParameterValidator _parameterValidator;
-    private readonly IAuthorizationCodeService _authorizationCodeService;
-
     /// <summary>
     /// Provides the grant type this handler supports, which is the OAuth 2.0 'authorization_code' grant type.
     /// This information is useful for identifying the handler's capabilities in a broader authorization framework.
@@ -87,10 +72,10 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensures the authorization code is provided in the request.
-        _parameterValidator.Required(request.Code, nameof(request.Code));
+        parameterValidator.Required(request.Code, nameof(request.Code));
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
-        var result = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        var result = await authorizationCodeService.AuthorizeByCodeAsync(request.Code);
 
         if (result.TryGetFailure(out var error))
         {
@@ -107,20 +92,28 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
                 "Code was issued for another client");
         }
 
-        // Checks if PKCE is required but the code verifier is missing from the request.
-        if (grant.Context.CodeChallenge != null && string.IsNullOrEmpty(request.CodeVerifier))
+        if (grant.Context.CodeChallenge != null)
         {
-            return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is required");
-        }
+            // Checks if PKCE is required but the code challenge method is missing from the request.
+            if (string.IsNullOrEmpty(grant.Context.CodeChallengeMethod))
+            {
+                return new RequestError(ErrorCodes.InvalidGrant, "Code challenge method is required");
+            }
 
-        // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
-        if (grant.Context.CodeChallenge != null &&
-            !string.Equals(
-                grant.Context.CodeChallenge,
-                CalculateChallenge(grant.Context.CodeChallengeMethod!, request.CodeVerifier),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+            // Checks if PKCE is required but the code verifier is missing from the request.
+            if (string.IsNullOrEmpty(request.CodeVerifier))
+            {
+                return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is required");
+            }
+
+            // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
+            if (!string.Equals(
+                    grant.Context.CodeChallenge,
+                    CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new RequestError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+            }
         }
 
         return grant;

@@ -35,21 +35,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// allowing a sequence of validators to handle the request in a decoupled manner. Each validator in the chain
 /// processes the request and potentially passes it along to the next validator.
 /// </summary>
-public class AuthorizationRequestValidator : IAuthorizationRequestValidator
+/// <param name="validator">The first validator in the chain to handle the authorization context.</param>
+public class AuthorizationRequestValidator(IAuthorizationContextValidator validator) : IAuthorizationRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthorizationRequestValidator"/> class,
-	/// setting up a chain of responsibility with the provided authorization context validator.
-	/// This approach enables flexible and modular handling of validation logic.
-	/// </summary>
-	/// <param name="validator">The first validator in the chain to handle the authorization context.</param>
-	public AuthorizationRequestValidator(IAuthorizationContextValidator validator)
-	{
-		_validator = validator;
-	}
-
-	private readonly IAuthorizationContextValidator _validator;
-
 	/// <summary>
 	/// Asynchronously validates an <see cref="AuthorizationRequest"/> by passing it through a chain of validators.
 	/// The method creates a validation context and delegates the validation process to the initial validator in the chain,
@@ -64,7 +52,7 @@ public class AuthorizationRequestValidator : IAuthorizationRequestValidator
 	{
 		var context = new AuthorizationValidationContext(request);
 
-		var error = await _validator.ValidateAsync(context);
+		var error = await validator.ValidateAsync(context);
 		if (error != null)
 			return error;
 

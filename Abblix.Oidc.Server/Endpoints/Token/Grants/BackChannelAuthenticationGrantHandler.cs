@@ -38,29 +38,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// This handler validates the token request based on the backchannel authentication flow, ensuring
 /// that the client is authorized and that the user has been authenticated before tokens are issued.
 /// </summary>
-public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
+/// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
+/// <param name="parameterValidator">The service to validate request parameters.</param>
+/// <param name="timeProvider">Provides access to the current time.</param>
+public class BackChannelAuthenticationGrantHandler(
+    IBackChannelAuthenticationStorage storage,
+    IParameterValidator parameterValidator,
+    TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BackChannelAuthenticationGrantHandler"/> class.
-    /// The storage service is injected to manage the lifecycle and retrieval of backchannel authentication requests.
-    /// </summary>
-    /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
-    /// <param name="parameterValidator">The service to validate request parameters.</param>
-    /// <param name="timeProvider">Provides access to the current time.</param>
-    public BackChannelAuthenticationGrantHandler(
-        IBackChannelAuthenticationStorage storage,
-        IParameterValidator parameterValidator,
-        TimeProvider timeProvider)
-    {
-        _storage = storage;
-        _parameterValidator = parameterValidator;
-        _timeProvider = timeProvider;
-    }
-
-    private readonly IBackChannelAuthenticationStorage _storage;
-    private readonly IParameterValidator _parameterValidator;
-    private readonly TimeProvider _timeProvider;
-
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
     /// Authentication) grant type.
@@ -89,17 +74,17 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
     public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Check if the request contains a valid authentication request ID
-        _parameterValidator.Required(request.AuthenticationRequestId, nameof(request.AuthenticationRequestId));
+        parameterValidator.Required(request.AuthenticationRequestId, nameof(request.AuthenticationRequestId));
 
         // Try to retrieve the corresponding backchannel authentication request from storage
-        var authenticationRequest = await _storage.TryGetAsync(request.AuthenticationRequestId);
+        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
 
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         switch (authenticationRequest)
         {
             // If the user has been authenticated, remove the request and return the authorized grant
             case { Status: BackChannelAuthenticationStatus.Authenticated, AuthorizedGrant: { } authorizedGrant }:
-                await _storage.RemoveAsync(request.AuthenticationRequestId);
+                await storage.RemoveAsync(request.AuthenticationRequestId);
                 return authorizedGrant;
 
             // If the request is not found or has expired, return an error indicating token expiration
@@ -116,7 +101,7 @@ public class BackChannelAuthenticationGrantHandler : IAuthorizationGrantHandler
 
             // If the request is still pending and not yet time to poll again
             case { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: {} nextPollAt }
-                when _timeProvider.GetUtcNow() < nextPollAt:
+                when timeProvider.GetUtcNow() < nextPollAt:
 
                 return new RequestError(
                     ErrorCodes.SlowDown,

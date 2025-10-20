@@ -30,20 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// Validates the client in a backchannel authentication request, ensuring the client is registered
 /// and authorized to perform the request as part of the authentication validation process.
 /// </summary>
-public class ClientValidator : IBackChannelAuthenticationContextValidator
+/// <param name="clientAuthenticator">The service used to authenticate and retrieve client information.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackChannelAuthenticationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientValidator"/> class with the necessary
-    /// dependencies for client authentication.
-    /// </summary>
-    /// <param name="clientAuthenticator">The service used to authenticate and retrieve client information.</param>
-    public ClientValidator(IClientAuthenticator clientAuthenticator)
-    {
-        _clientAuthenticator = clientAuthenticator;
-    }
-
-    private readonly IClientAuthenticator _clientAuthenticator;
-
     /// <summary>
     /// Validates the client in the context of a backchannel authentication request.
     /// Ensures that the client is recognized and authorized to make the request.
@@ -58,7 +47,7 @@ public class ClientValidator : IBackChannelAuthenticationContextValidator
     public async Task<RequestError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
-        var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
         if (clientInfo == null)
         {
             return new RequestError(

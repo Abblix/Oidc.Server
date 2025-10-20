@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,20 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// This validator checks whether each requested scope is recognized and authorized for use, ensuring that clients
 /// only receive permissions appropriate to their needs and in compliance with server policies.
 /// </summary>
-public class ScopeValidator: SyncTokenContextValidatorBase
+/// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
+public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ScopeValidator"/> class, equipping it with a scope manager
-    /// to validate requested scopes.
-    /// </summary>
-    /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
-    public ScopeValidator(IScopeManager scopeManager)
-    {
-        _scopeManager = scopeManager;
-    }
-
-    private readonly IScopeManager _scopeManager;
-
     /// <summary>
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
     /// are recognized by the scope manager and are permissible for the requesting client.
@@ -58,7 +47,7 @@ public class ScopeValidator: SyncTokenContextValidatorBase
     /// </returns>
     protected override RequestError? Validate(TokenValidationContext context)
     {
-        if (!_scopeManager.Validate(
+        if (!scopeManager.Validate(
                 context.Request.Scope,
                 context.Resources,
                 out var scopeDefinitions,

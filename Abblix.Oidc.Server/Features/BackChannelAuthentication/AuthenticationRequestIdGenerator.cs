@@ -31,21 +31,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// Generates a unique authentication request ID using a cryptographically secure random number generator.
 /// This ID is encoded for safe use in URLs and is typically used in backchannel authentication flows.
 /// </summary>
-public class AuthenticationRequestIdGenerator : IAuthenticationRequestIdGenerator
+/// <param name="options">The configuration options for OIDC, including settings for backchannel authentication.</param>
+public class AuthenticationRequestIdGenerator(IOptions<OidcOptions> options) : IAuthenticationRequestIdGenerator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthenticationRequestIdGenerator"/> class,
-    /// using the provided OIDC options for configuring the request ID length.
-    /// </summary>
-    /// <param name="options">The configuration options for OIDC, including settings for backchannel authentication.
-    /// </param>
-    public AuthenticationRequestIdGenerator(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Generates a unique authentication request ID by creating a cryptographically secure random byte array
     /// and encoding it for safe use in URLs.
@@ -54,5 +42,5 @@ public class AuthenticationRequestIdGenerator : IAuthenticationRequestIdGenerato
     public string GenerateAuthenticationRequestId()
         => HttpServerUtility.UrlTokenEncode(
             CryptoRandom.GetRandomBytes(
-                _options.Value.BackChannelAuthentication.RequestIdLength));
+                options.Value.BackChannelAuthentication.RequestIdLength));
 }

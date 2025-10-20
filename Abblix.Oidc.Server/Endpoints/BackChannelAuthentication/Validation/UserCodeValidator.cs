@@ -32,22 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// and provider configuration. This validator ensures that if the client or provider requires the
 /// UserCode parameter for backchannel authentication, it is included in the request.
 /// </summary>
-public class UserCodeValidator : IBackChannelAuthenticationContextValidator
+/// <param name="options">
+/// The OIDC options used to configure the behavior of the backchannel authentication process.</param>
+public class UserCodeValidator(IOptions<OidcOptions> options) : IBackChannelAuthenticationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UserCodeValidator"/> class.
-    /// The constructor accepts OIDC options, allowing the validator to access the configuration
-    /// settings that determine if the UserCode parameter is required.
-    /// </summary>
-    /// <param name="options">
-    /// The OIDC options used to configure the behavior of the backchannel authentication process.</param>
-    public UserCodeValidator(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Asynchronously validates the UserCode parameter in the context of a backchannel authentication request.
     /// If the UserCode is required but not present, the method returns an error. Otherwise, it returns null.
@@ -70,11 +58,9 @@ public class UserCodeValidator : IBackChannelAuthenticationContextValidator
     /// or null otherwise.</returns>
     private RequestError? Validate(BackChannelAuthenticationValidationContext context)
     {
-        // Check if the provider and client both require the UserCode parameter.
-        var requireUserCode = _options.Value.BackChannelAuthentication.UserCodeParameterSupported &&
+        var requireUserCode = options.Value.BackChannelAuthentication.UserCodeParameterSupported &&
                               context.ClientInfo.BackChannelUserCodeParameter;
 
-        // Return an error if UserCode is required but missing from the request.
         if (requireUserCode && string.IsNullOrEmpty(context.Request.UserCode))
         {
             return new RequestError(
@@ -82,7 +68,6 @@ public class UserCodeValidator : IBackChannelAuthenticationContextValidator
                 "The UserCode parameter is missing.");
         }
 
-        // If no errors, return null (indicating a successful validation).
         return null;
     }
 }

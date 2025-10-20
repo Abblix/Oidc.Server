@@ -36,15 +36,8 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
-internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
+internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthServiceKeysProvider
 {
-	public OidcOptionsKeysProvider(IOptions<OidcOptions> options)
-	{
-		_options = options;
-	}
-
-	private readonly IOptions<OidcOptions> _options;
-
 	/// <summary>
 	/// Retrieves a collection of JSON Web Keys used for encryption, based on the configured encryption certificates.
 	/// </summary>
@@ -53,7 +46,7 @@ internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys)
 	{
 		var jsonWebKeys =
-			from jwk in _options.Value.EncryptionKeys
+			from jwk in options.Value.EncryptionKeys
 			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
@@ -67,7 +60,7 @@ internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys)
 	{
 		var jsonWebKeys =
-			from jwk in _options.Value.SigningKeys
+			from jwk in options.Value.SigningKeys
 			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();

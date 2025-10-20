@@ -32,20 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// Adapter class that implements <see cref="IAuthorizationRequestFetcher"/> to delegate the
 /// fetching and processing of request objects to an instance of <see cref="IRequestObjectFetcher"/>.
 /// </summary>
-public class RequestObjectFetchAdapter : IAuthorizationRequestFetcher
+/// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
+/// the JWT request object.</param>
+public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestObjectFetchAdapter"/> class.
-    /// </summary>
-    /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
-    /// the JWT request object.</param>
-    public RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher)
-    {
-        _requestObjectFetcher = requestObjectFetcher;
-    }
-
-    private readonly IRequestObjectFetcher _requestObjectFetcher;
-
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
     /// </summary>
@@ -56,7 +46,7 @@ public class RequestObjectFetchAdapter : IAuthorizationRequestFetcher
     /// </returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
-        var fetchResult = await _requestObjectFetcher.FetchAsync(request, request.Request);
+        var fetchResult = await requestObjectFetcher.FetchAsync(request, request.Request);
 
         if (fetchResult.TryGetSuccess(out var authorizationRequest))
             return authorizationRequest;

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -29,23 +29,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// This class allows multiple validators to be combined, each responsible for a specific validation step,
 /// and short-circuits the validation process if any step fails.
 /// </summary>
-public class TokenContextValidatorComposite : ITokenContextValidator
+/// <param name="validators">An array of validators representing the steps in the validation process.</param>
+public class TokenContextValidatorComposite(ITokenContextValidator[] validators) : ITokenContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TokenContextValidatorComposite"/> class
-    /// with the specified array of validators.
-    /// </summary>
-    /// <param name="validators">An array of validators representing the steps in the validation process.</param>
-    public TokenContextValidatorComposite(ITokenContextValidator[] validators)
-    {
-        _validators = validators;
-    }
-
-    /// <summary>
-    /// The array of validators that will be executed in sequence during the validation process.
-    /// </summary>
-    private readonly ITokenContextValidator[] _validators;
-
     /// <summary>
     /// Asynchronously validates the token request by executing each validator in the sequence.
     /// The validation process stops at the first encountered error and returns it.
@@ -59,7 +45,7 @@ public class TokenContextValidatorComposite : ITokenContextValidator
     /// </returns>
     public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
     {
-        foreach (var validator in _validators)
+        foreach (var validator in validators)
         {
             var error = await validator.ValidateAsync(context);
             if (error != null)

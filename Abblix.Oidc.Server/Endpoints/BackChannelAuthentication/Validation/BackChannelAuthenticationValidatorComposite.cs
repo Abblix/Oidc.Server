@@ -30,23 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// This class implements <see cref="IBackChannelAuthenticationContextValidator"/>
 /// and allows for the combination of multiple validators that are executed sequentially.
 /// </summary>
-public class BackChannelAuthenticationValidatorComposite : IBackChannelAuthenticationContextValidator
+/// <param name="validators">An array of validators that define the validation process.</param>
+public class BackChannelAuthenticationValidatorComposite(IBackChannelAuthenticationContextValidator[] validators) : IBackChannelAuthenticationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BackChannelAuthenticationValidatorComposite"/> class
-    /// with a set of validation steps.
-    /// </summary>
-    /// <param name="validators">An array of validators that define the validation process.</param>
-    public BackChannelAuthenticationValidatorComposite(IBackChannelAuthenticationContextValidator[] validators)
-    {
-        _validators = validators;
-    }
-
-    /// <summary>
-    /// The array of validators representing the steps in the validation process.
-    /// </summary>
-    private readonly IBackChannelAuthenticationContextValidator[] _validators;
-
     /// <summary>
     /// Asynchronously validates a <see cref="BackChannelAuthenticationValidationContext"/>.
     /// Iterates through each validation step, returning the first encountered error, if any.
@@ -60,7 +46,7 @@ public class BackChannelAuthenticationValidatorComposite : IBackChannelAuthentic
     public async Task<RequestError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
-        foreach (var validator in _validators)
+        foreach (var validator in validators)
         {
             var error = await validator.ValidateAsync(context);
             if (error != null)

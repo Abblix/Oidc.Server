@@ -35,29 +35,15 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// tasks to individual handlers. It dynamically aggregates all available grant handlers, facilitating the addition
 /// of new handlers without modifying the core authorization flow.
 /// </summary>
-public class CompositeAuthorizationGrantHandler: IAuthorizationGrantHandler
+/// <param name="grantHandlers">
+/// A collection of grant handlers, each responsible for a specific set of grant types.</param>
+public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantHandler> grantHandlers): IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CompositeAuthorizationGrantHandler"/> class.
-    /// The constructor aggregates the collection of grant handlers and organizes them by grant type for efficient
-    /// delegation. Each handler can support one or more grant types, and these are mapped to their respective handlers.
-    /// This design simplifies the extension of grant type handling, as new grant types can be added without changing
-    /// existing logic.
-    /// </summary>
-    /// <param name="grantHandlers">
-    /// A collection of grant handlers, each responsible for a specific set of grant types.</param>
-    public CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantHandler> grantHandlers)
-    {
-        // Create a dictionary where each grant type is mapped to its corresponding handler.
-        // This allows for fast lookup of handlers based on the requested grant type.
-        _grantHandlers = new Dictionary<string, IAuthorizationGrantHandler>(
-            from handler in grantHandlers
-            from grantType in handler.GrantTypesSupported
-            select new KeyValuePair<string, IAuthorizationGrantHandler>(grantType, handler),
-            StringComparer.OrdinalIgnoreCase);
-    }
-
-    private readonly Dictionary<string, IAuthorizationGrantHandler> _grantHandlers;
+    private readonly Dictionary<string, IAuthorizationGrantHandler> _grantHandlers = new(
+        from handler in grantHandlers
+        from grantType in handler.GrantTypesSupported
+        select new KeyValuePair<string, IAuthorizationGrantHandler>(grantType, handler),
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Provides a list of all the supported grant types across the registered grant handlers.

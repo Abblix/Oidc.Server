@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -35,20 +35,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// on the authorization grant. It ensures that the token request is made for an authorized grant and verifies
 /// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context
 /// </remarks>
-public class AuthorizationGrantValidator: ITokenContextValidator
+/// <param name="grantHandler">The handler responsible for authorizing the grant.</param>
+public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler): ITokenContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationGrantValidator"/> class with
-    /// the specified grant handler.
-    /// </summary>
-    /// <param name="grantHandler">The handler responsible for authorizing the grant.</param>
-    public AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler)
-    {
-        _grantHandler = grantHandler;
-    }
-
-    private readonly IAuthorizationGrantHandler _grantHandler;
-
     /// <summary>
     /// Asynchronously validates the authorization grant in the token request context. This method checks if the grant
     /// is valid and authorized for the client making the request. It also ensures that the redirect URI used in the
@@ -70,7 +59,7 @@ public class AuthorizationGrantValidator: ITokenContextValidator
                 "The grant type is not allowed for this client");
         }
 
-        var result = await _grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
+        var result = await grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
 
         if (result.TryGetFailure(out var error))
         {

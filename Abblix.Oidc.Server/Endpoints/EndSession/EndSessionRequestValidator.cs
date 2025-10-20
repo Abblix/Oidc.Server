@@ -32,25 +32,15 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <summary>
 /// Implements the logic for validating end-session requests.
 /// </summary>
+/// <param name="validator">The end-session context validator responsible for the core validation logic.</param>
 /// <remarks>
 /// This class validates end-session requests to ensure they conform to expected standards and business rules.
 /// It uses the injected <see cref="IEndSessionContextValidator"/> for performing the actual validation logic.
 /// Depending on the validation outcome, it constructs an appropriate validation result which can indicate either
 /// successful validation or a specific error condition.
 /// </remarks>
-public class EndSessionRequestValidator : IEndSessionRequestValidator
+public class EndSessionRequestValidator(IEndSessionContextValidator validator) : IEndSessionRequestValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EndSessionRequestValidator"/> class.
-    /// </summary>
-    /// <param name="validator">The end-session context validator responsible for the core validation logic.</param>
-    public EndSessionRequestValidator(IEndSessionContextValidator validator)
-    {
-        _validator = validator;
-    }
-
-    private readonly IEndSessionContextValidator _validator;
-
     /// <inheritdoc/>
     /// <summary>
     /// Validates the specified end-session request asynchronously.
@@ -64,7 +54,7 @@ public class EndSessionRequestValidator : IEndSessionRequestValidator
     {
         var context = new EndSessionValidationContext(request);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(context);
         if (error != null)
             return error;
 

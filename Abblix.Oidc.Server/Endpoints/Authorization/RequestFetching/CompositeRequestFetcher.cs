@@ -32,20 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// It iterates through each fetcher to process an authorization request, allowing for a flexible and
 /// extensible mechanism to fetch and validate authorization requests from different sources or formats.
 /// </summary>
-public class CompositeRequestFetcher : IAuthorizationRequestFetcher
+/// <param name="fetchers">An array of <see cref="IAuthorizationRequestFetcher"/> instances that will be used
+/// to fetch and validate the authorization request.</param>
+public class CompositeRequestFetcher(IAuthorizationRequestFetcher[] fetchers) : IAuthorizationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CompositeRequestFetcher"/> class with an array of fetchers.
-    /// </summary>
-    /// <param name="fetchers">An array of <see cref="IAuthorizationRequestFetcher"/> instances that will be used
-    /// to fetch and validate the authorization request.</param>
-    public CompositeRequestFetcher(IAuthorizationRequestFetcher[] fetchers)
-    {
-        _fetchers = fetchers;
-    }
-
-    private readonly IAuthorizationRequestFetcher[] _fetchers;
-
     /// <summary>
     /// Iterates through the configured fetchers to process the authorization request. Each fetcher in the array
     /// has the opportunity to handle the request. If a fetcher returns a fault, the process stops and
@@ -56,7 +46,7 @@ public class CompositeRequestFetcher : IAuthorizationRequestFetcher
     /// fault, or an unexpected type error if the result is not handled correctly.</returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
-        foreach (var fetcher in _fetchers)
+        foreach (var fetcher in fetchers)
         {
             var result = await fetcher.FetchAsync(request);
 

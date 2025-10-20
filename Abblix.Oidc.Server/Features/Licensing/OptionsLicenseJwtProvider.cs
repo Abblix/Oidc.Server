@@ -25,19 +25,8 @@ using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
 
-public class OptionsLicenseJwtProvider : ILicenseJwtProvider
+public class OptionsLicenseJwtProvider(IOptions<OidcOptions> options) : ILicenseJwtProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="OptionsLicenseJwtProvider"/> class.
-    /// </summary>
-    /// <param name="options">The OIDC options containing the license JWT.</param>
-    public OptionsLicenseJwtProvider(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Asynchronously retrieves the license JWT from the OIDC service configuration.
     /// </summary>
@@ -45,7 +34,7 @@ public class OptionsLicenseJwtProvider : ILicenseJwtProvider
     /// validating the configuration and licensing terms of the OIDC service.</returns>
     public IAsyncEnumerable<string>? GetLicenseJwtAsync()
     {
-        var licenseJwt = _options.Value.LicenseJwt;
+        var licenseJwt = options.Value.LicenseJwt;
         return licenseJwt != null ? new[] { licenseJwt }.ToAsyncEnumerable() : null;
     }
 }

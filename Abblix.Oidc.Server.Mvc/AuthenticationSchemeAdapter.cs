@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -39,25 +39,12 @@ namespace Abblix.Oidc.Server.Mvc;
 /// This adapter allows the integration of the Abblix OIDC Server with standard ASP.NET authentication mechanisms,
 /// enabling the use of existing authentication schemes to manage OIDC sessions.
 /// </summary>
-public class AuthenticationSchemeAdapter : IAuthSessionService
+public class AuthenticationSchemeAdapter(IHttpContextAccessor httpContextAccessor) : IAuthSessionService
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class,
-	/// injecting dependencies needed to access and manage HTTP contexts.
-	/// </summary>
-	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
-	/// allowing operations on the HTTP context of the current request.</param>
-	public AuthenticationSchemeAdapter(IHttpContextAccessor httpContextAccessor)
-	{
-		_httpContextAccessor = httpContextAccessor;
-	}
-
-	private readonly IHttpContextAccessor _httpContextAccessor;
-
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
 	/// </summary>
-	private HttpContext HttpContext => _httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
+	private HttpContext HttpContext => httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
 
 	/// <summary>
 	/// Asynchronously retrieves the current user's authentication session if available.

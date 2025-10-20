@@ -31,21 +31,10 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// This class intercepts the consent retrieval process to inject mandatory consent prompts based on the authorization
 /// request details.
 /// </summary>
-public class PromptConsentDecorator: IUserConsentsProvider
+/// <param name="inner">The inner <see cref="IUserConsentsProvider"/> to delegate calls to when no explicit
+/// prompting is necessary.</param>
+public class PromptConsentDecorator(IUserConsentsProvider inner) : IUserConsentsProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PromptConsentDecorator"/> class, wrapping an existing consents'
-    /// provider.
-    /// </summary>
-    /// <param name="inner">The inner-to -<see cref="IUserConsentsProvider"/> delegate calls to when no explicit
-    /// prompting is necessary.</param>
-    public PromptConsentDecorator(IUserConsentsProvider inner)
-    {
-        _inner = inner;
-    }
-
-    private readonly IUserConsentsProvider _inner;
-
     /// <summary>
     /// Retrieves user consents, injecting a mandatory prompt for consent if specified by the authorization request.
     /// </summary>
@@ -57,10 +46,7 @@ public class PromptConsentDecorator: IUserConsentsProvider
     public async Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
         => request.Model.Prompt switch
         {
-            // If the 'consent' prompt is explicitly requested, force all scopes and resources to be pending consent.
             Prompts.Consent => new UserConsents { Pending = new(request.Scope, request.Resources) },
-
-            // Otherwise, defer to the inner consents' provider.
-            _ => await _inner.GetUserConsentsAsync(request, authSession),
+            _ => await inner.GetUserConsentsAsync(request, authSession),
         };
 }

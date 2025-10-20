@@ -31,20 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// Processes revocation requests for tokens.
 /// This class is responsible for handling the logic associated with revoking tokens, such as access tokens or refresh tokens.
 /// </summary>
-public class RevocationRequestProcessor : IRevocationRequestProcessor
+/// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
+public class RevocationRequestProcessor(ITokenRegistry tokenRegistry) : IRevocationRequestProcessor
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="RevocationRequestProcessor"/> class.
-	/// Sets up the processor with a token registry which will be used for updating the status of the tokens.
-	/// </summary>
-	/// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
-	public RevocationRequestProcessor(ITokenRegistry tokenRegistry)
-	{
-		_tokenRegistry = tokenRegistry;
-	}
-
-	private readonly ITokenRegistry _tokenRegistry;
-
 	/// <summary>
 	/// Asynchronously processes a valid revocation request.
 	/// This method handles the revocation of a specified token by changing its status to 'Revoked' in the token registry.
@@ -59,7 +48,7 @@ public class RevocationRequestProcessor : IRevocationRequestProcessor
 	{
 		var payload = request.Token?.Payload;
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
-			await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
 		return new TokenRevoked();
 	}

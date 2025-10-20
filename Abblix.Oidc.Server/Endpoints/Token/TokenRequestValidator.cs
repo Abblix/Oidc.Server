@@ -34,16 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// This class plays a critical role in the OAuth 2.0 authentication and authorization process by verifying the integrity
 /// and authenticity of token requests, according to the framework defined in RFC 6749.
 /// </summary>
-public class TokenRequestValidator : ITokenRequestValidator
+/// <param name="validator">The token context validator used to validate token requests.</param>
+public class TokenRequestValidator(ITokenContextValidator validator) : ITokenRequestValidator
 {
-	public TokenRequestValidator(ITokenContextValidator validator)
-	{
-		_validator = validator;
-	}
-
-	private readonly ITokenContextValidator _validator;
-
-
 	/// <summary>
 	/// Asynchronously validates a token request against the OAuth 2.0 specifications. It checks for proper authorization
 	/// of the client, the validity of the grant type, and other request parameters. This process involves authenticating
@@ -57,10 +50,9 @@ public class TokenRequestValidator : ITokenRequestValidator
 	/// or contain error information specifying why the request was invalid.</returns>
 	public async Task<Result<ValidTokenRequest, RequestError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
 	{
-		// Context creation is a critical step in the validation process, encapsulating all necessary data.
 		var context = new TokenValidationContext(tokenRequest, clientRequest);
 
-		var error = await _validator.ValidateAsync(context);
+		var error = await validator.ValidateAsync(context);
 		if (error != null)
 			return error;
 

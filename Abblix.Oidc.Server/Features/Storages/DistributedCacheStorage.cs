@@ -29,21 +29,10 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// Provides a general-purpose distributed caching mechanism with serialization support,
 /// enabling the storage and retrieval of serialized objects.
 /// </summary>
-public sealed class DistributedCacheStorage : IEntityStorage
+/// <param name="cache">The distributed cache backend used for storing and retrieving data.</param>
+/// <param name="serializer">The serializer used for converting objects to and from binary format.</param>
+public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySerializer serializer) : IEntityStorage
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="DistributedCacheStorage"/> class.
-	/// </summary>
-	/// <param name="cache">The distributed cache backend used for storing and retrieving data.</param>
-	/// <param name="serializer">The serializer used for converting objects to and from binary format.</param>
-	public DistributedCacheStorage(IDistributedCache cache, IBinarySerializer serializer)
-	{
-		_cache = cache;
-		_serializer = serializer;
-	}
-
-	private readonly IDistributedCache _cache;
-	private readonly IBinarySerializer _serializer;
 
 	/// <summary>
 	/// Asynchronously stores an object in the distributed cache.
@@ -57,9 +46,9 @@ public sealed class DistributedCacheStorage : IEntityStorage
 	public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
 	{
 		ArgumentNullException.ThrowIfNull(key);
-		return _cache.SetAsync(
+		return cache.SetAsync(
 			key,
-			_serializer.Serialize(value),
+			serializer.Serialize(value),
 			new DistributedCacheEntryOptions
 			{
 				AbsoluteExpiration = options.AbsoluteExpiration,
@@ -83,17 +72,17 @@ public sealed class DistributedCacheStorage : IEntityStorage
 		ArgumentNullException.ThrowIfNull(key);
 		token ??= CancellationToken.None;
 
-		var result = await _cache.GetAsync(key, token.Value);
+		var result = await cache.GetAsync(key, token.Value);
 		if (result == null)
 		{
 			return default;
 		}
 
-		var deserializedResult = _serializer.Deserialize<T>(result);
+		var deserializedResult = serializer.Deserialize<T>(result);
 
 		if (removeOnRetrieval)
 		{
-			await _cache.RemoveAsync(key, token.Value);
+			await cache.RemoveAsync(key, token.Value);
 		}
 
 		return deserializedResult;
@@ -106,5 +95,5 @@ public sealed class DistributedCacheStorage : IEntityStorage
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
 	/// <returns>A task that completes when the operation finishes.of removing the object.</returns>
 	public Task RemoveAsync(string key, CancellationToken? token = null)
-		=> _cache.RemoveAsync(key, token ?? CancellationToken.None);
+		=> cache.RemoveAsync(key, token ?? CancellationToken.None);
 }

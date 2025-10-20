@@ -29,23 +29,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// This class implements <see cref="IAuthorizationContextValidator"/> and aggregates multiple
 /// validation steps into a single validation process.
 /// </summary>
-public class AuthorizationContextValidatorComposite : IAuthorizationContextValidator
+/// <param name="validators">An array of validators that define the validation process.</param>
+public class AuthorizationContextValidatorComposite(IAuthorizationContextValidator[] validators) : IAuthorizationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationContextValidatorComposite"/> class
-    /// with a set of validation steps.
-    /// </summary>
-    /// <param name="validators">An array of validators that define the validation process.</param>
-    public AuthorizationContextValidatorComposite(IAuthorizationContextValidator[] validators)
-    {
-        _validators = validators;
-    }
-
-    /// <summary>
-    /// The array of validators representing the steps in the validation process.
-    /// </summary>
-    private readonly IAuthorizationContextValidator[] _validators;
-
     /// <summary>
     /// Asynchronously validates an <see cref="AuthorizationValidationContext"/>.
     /// Iterates through each validation step, returning the first encountered error, if any.
@@ -57,7 +43,7 @@ public class AuthorizationContextValidatorComposite : IAuthorizationContextValid
     /// </returns>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
-        foreach (var validator in _validators)
+        foreach (var validator in validators)
         {
             var error = await validator.ValidateAsync(context);
             if (error != null)

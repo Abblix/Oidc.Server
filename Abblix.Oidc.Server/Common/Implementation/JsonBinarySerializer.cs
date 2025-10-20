@@ -30,16 +30,10 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// Provides functionality to serialize and deserialize objects to and from JSON binary representations.
 /// Implements the <see cref="IBinarySerializer"/> interface using the System.Text.Json library for serialization.
 /// </summary>
-public class JsonBinarySerializer : IBinarySerializer
+public class JsonBinarySerializer(Encoding? encoding = null, JsonSerializerOptions? options = null) : IBinarySerializer
 {
-    public JsonBinarySerializer(Encoding? encoding = null, JsonSerializerOptions? options = null)
-    {
-        _encoding = encoding ?? Encoding.UTF8;
-        _options = options;
-    }
-
-    private readonly Encoding _encoding;
-    private readonly JsonSerializerOptions? _options;
+    private readonly Encoding _encoding = encoding ?? Encoding.UTF8;
+    private readonly JsonSerializerOptions? _options = options;
 
     /// <summary>
     /// Serializes an object to a binary representation in JSON format.

@@ -27,20 +27,11 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// <summary>
 /// Validates a URI based on an exact match against a predefined value, disregarding the query and fragment parts.
 /// </summary>
-public sealed class ExactMatchUriValidator : IUriValidator
+public sealed class ExactMatchUriValidator(Uri validUri, bool ignoreQueryAndFragment = false) : IUriValidator
 {
-	public ExactMatchUriValidator(Uri validUri, bool ignoreQueryAndFragment = false)
-	{
-		if (!validUri.IsAbsoluteUri)
-		{
-			throw new ArgumentException($"{nameof(validUri)} must be absolute");
-		}
-		_validUri = validUri;
-		_ignoreQueryAndFragment = ignoreQueryAndFragment;
-	}
-
-	private readonly Uri _validUri;
-	private readonly bool _ignoreQueryAndFragment;
+	private readonly Uri _validUri = !validUri.IsAbsoluteUri
+		? throw new ArgumentException($"{nameof(validUri)} must be absolute")
+		: validUri;
 
 	/// <summary>
 	/// Validates the specified URI by checking for an exact match with the predefined URI.
@@ -49,7 +40,7 @@ public sealed class ExactMatchUriValidator : IUriValidator
 	/// <returns><c>true</c> if the specified URI exactly matches the predefined URI, otherwise <c>false</c>.</returns>
 	public bool IsValid(Uri uri)
 	{
-		if (_ignoreQueryAndFragment && (uri.Query.HasValue() || uri.Fragment.HasValue()))
+		if (ignoreQueryAndFragment && (uri.Query.HasValue() || uri.Fragment.HasValue()))
 		{
 			uri = new System.UriBuilder(uri) { Query = null, Fragment = null }.Uri;
 		}

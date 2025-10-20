@@ -34,21 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// as part of the authorization validation process. It is essential for ensuring that redirections
 /// only occur to pre-approved locations, enhancing security in the OAuth 2.0 flow.
 /// </summary>
-public class RedirectUriValidator : SyncAuthorizationContextValidatorBase
+/// <param name="logger">The logger to be used for logging validation process and outcomes.</param>
+public class RedirectUriValidator(ILogger<RedirectUriValidator> logger) : SyncAuthorizationContextValidatorBase
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RedirectUriValidator"/> class with a logger.
-    /// The logger is used to record validation activities and outcomes, providing insights into
-    /// the validation process and aiding in debugging and audit trails.
-    /// </summary>
-    /// <param name="logger">The logger to be used for logging validation process and outcomes.</param>
-    public RedirectUriValidator(ILogger<RedirectUriValidator> logger)
-    {
-        _logger = logger;
-    }
-
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the redirect URI specified in the authorization request against the registered redirect URIs
     /// for the client. Ensures that the redirect URI is one of the pre-approved URIs for the client making the request.
@@ -66,7 +54,7 @@ public class RedirectUriValidator : SyncAuthorizationContextValidatorBase
         var redirectUri = context.Request.RedirectUri;
         if (redirectUri == null || !uriValidator.IsValid(redirectUri))
         {
-            _logger.LogWarning("The redirect URI {RedirectUri} is invalid for client with id {ClientId}",
+            logger.LogWarning("The redirect URI {RedirectUri} is invalid for client with id {ClientId}",
                 redirectUri,
                 context.ClientInfo.ClientId);
 

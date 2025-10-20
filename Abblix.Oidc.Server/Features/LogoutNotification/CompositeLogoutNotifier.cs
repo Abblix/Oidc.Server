@@ -27,24 +27,14 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// <summary>
 /// Provides a mechanism to aggregate and execute multiple logout notification strategies for an OpenID Connect or OAuth 2.0 system.
 /// </summary>
+/// <param name="logoutNotifiers">An array of <see cref="ILogoutNotifier"/> implementations for handling logout notifications.</param>
 /// <remarks>
 /// This class allows the system to support various logout mechanisms simultaneously, such as front-channel and back-channel logout,
 /// by combining multiple <see cref="ILogoutNotifier"/> implementations. It ensures that all configured logout notifiers are invoked
 /// to notify clients about the logout event, catering to different client capabilities and configurations.
 /// </remarks>
-public class CompositeLogoutNotifier: ILogoutNotifier
+public class CompositeLogoutNotifier(ILogoutNotifier[] logoutNotifiers) : ILogoutNotifier
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CompositeLogoutNotifier"/> class.
-    /// </summary>
-    /// <param name="logoutNotifiers">An array of <see cref="ILogoutNotifier"/> implementations for handling logout notifications.</param>
-    public CompositeLogoutNotifier(ILogoutNotifier[] logoutNotifiers)
-    {
-        _logoutNotifiers = logoutNotifiers;
-    }
-
-    private readonly ILogoutNotifier[] _logoutNotifiers;
-
     /// <summary>
     /// Asynchronously notifies all configured clients about a logout event by invoking each registered logout notifier.
     /// </summary>
@@ -58,17 +48,17 @@ public class CompositeLogoutNotifier: ILogoutNotifier
     public Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
     {
         var tasks = Array.ConvertAll(
-            _logoutNotifiers,
+            logoutNotifiers,
             notifier => notifier.NotifyClientAsync(clientInfo, logoutContext));
 
         return Task.WhenAll(tasks);
     }
 
-    public bool FrontChannelLogoutSupported => _logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSupported);
+    public bool FrontChannelLogoutSupported => logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSupported);
 
-    public bool FrontChannelLogoutSessionSupported => _logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSessionSupported);
+    public bool FrontChannelLogoutSessionSupported => logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSessionSupported);
 
-    public bool BackChannelLogoutSupported => _logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSupported);
+    public bool BackChannelLogoutSupported => logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSupported);
 
-    public bool BackChannelLogoutSessionSupported => _logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSessionSupported);
+    public bool BackChannelLogoutSessionSupported => logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSessionSupported);
 }

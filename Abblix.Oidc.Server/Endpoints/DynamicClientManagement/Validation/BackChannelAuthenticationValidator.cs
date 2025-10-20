@@ -33,20 +33,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// meet the requirements of the CIBA (Client-Initiated Backchannel Authentication) protocol.
 /// Additionally, it checks for the presence of supported signing algorithms.
 /// </summary>
-public class BackChannelAuthenticationValidator: IClientRegistrationContextValidator
+/// <param name="jwtValidator">The service responsible for validating JWT signing algorithms.</param>
+public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValidator) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes the validator with the necessary components, including a JWT validator
-    /// to verify supported signing algorithms.
-    /// </summary>
-    /// <param name="jwtValidator">The service responsible for validating JWT signing algorithms.</param>
-    public BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValidator)
-    {
-        _jwtValidator = jwtValidator;
-    }
-
-    private readonly IJsonWebTokenValidator _jwtValidator;
-
     /// <summary>
     /// Asynchronously validates the client registration context, returning any errors found during validation.
     /// </summary>
@@ -65,11 +54,9 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
     {
         switch (context.Request)
         {
-            // If the backchannel token delivery mode is not set, assume CIBA is not enabled for the client
             case { BackChannelTokenDeliveryMode: null }:
                 return null;
 
-            // If delivery mode is set to "poll" but a notification endpoint is provided, return an error
             case {
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll,
                 BackChannelClientNotificationEndpoint: not null,
@@ -78,7 +65,6 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is invalid if the token delivery mode is set to poll");
 
-            // If delivery mode is set to "ping" or "push" but no notification endpoint is provided, return an error
             case {
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push,
                 BackChannelClientNotificationEndpoint: null,
@@ -87,29 +73,25 @@ public class BackChannelAuthenticationValidator: IClientRegistrationContextValid
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
-            // Valid configurations for poll, ping, and push modes
             case { BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll }:
             //case { BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push }:
                 break;
 
-            // If the token delivery mode is not supported, return an error
             default:
                 return new RequestError(
                     ErrorCodes.InvalidRequest,
                     "The specified token delivery mode is not supported");
         }
 
-        // Check if the signing algorithm specified in the request is supported
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;
         if (signingAlgorithm.HasValue() &&
-            !_jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
+            !jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
         {
             return new RequestError(
                 ErrorCodes.InvalidRequest,
                 "The specified signing algorithm is not supported");
         }
 
-        // If all validations pass, return null indicating the request is valid
         return null;
     }
 }
