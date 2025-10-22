@@ -43,13 +43,10 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
    - Test versions of commercial systems for piloting/demonstrating performance in internal non-commercial environments without generating profit.
 In the event that your product uses any types of advertising, paid subscriptions, or any type of commercial component, this software does not permit you to use it on a free basis.
 
-2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions enforced by the Software:
+2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions:
    (a) **Client Limit**: Maximum 2 (two) unique client applications may be used;
    (b) **Issuer Limit**: Maximum 1 (one) issuer may be used;
-   (c) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with these limits. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by either: (i) reducing the number of clients or issuers to compliant levels, or (ii) upgrading to a commercial license under Section 2.5 or Section 2.6;
-   (d) **Goodwill Grace Period**: The Software allows usage up to 130% of the client limit (3 clients maximum) as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace period does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations. You remain responsible for eliminating the violation promptly;
-   (e) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and logs warnings when limits are approached or exceeded. Authentication requests exceeding 130% of the client limit will be refused to ensure license compliance;
-   (f) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
+   (c) **Enforcement**: These limits are enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either: (i) reducing the number of clients or issuers to compliant levels, or (ii) upgrading to a commercial license under Section 2.5 or Section 2.6.
 
 2.4. If the laws of your country prohibit you from using the Software, you are not authorized to use it, and you agree to comply with all applicable laws and regulations concerning your use of the Software.
 
@@ -73,15 +70,12 @@ In the event that your product uses any types of advertising, paid subscriptions
 
    (d) **Purchase Agreement Controls.** The specific terms of your license (type, installation limits, duration, pricing) are governed by your purchase agreement or order confirmation. In the event of conflict between this License Agreement and your purchase agreement, the purchase agreement shall control with respect to commercial terms.
 
-   (e) **Commercial License Technical Parameters.** Commercial licenses include the following technical parameters enforced by the Software:
+   (e) **Commercial License Technical Parameters.** Commercial licenses include the following technical parameters:
       (i) **Client Limit**: The maximum number of client applications permitted, as specified in your purchase agreement;
       (ii) **Issuer Limit**: The maximum number of issuers permitted, as specified in your purchase agreement;
       (iii) **Valid Issuers**: An optional whitelist of specific issuer URLs permitted under the license;
       (iv) **License Period**: Start date (NotBefore), expiration date (ExpiresAt), and optional grace period after expiration;
-      (v) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with the limits specified in your purchase agreement. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by either: (a) reducing the number of clients or issuers to compliant levels, or (b) upgrading to a higher-tier commercial license or purchasing additional capacity;
-      (vi) **Goodwill Grace Period**: The Software allows usage up to 130% of your purchased client limit as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace period does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations. You remain responsible for eliminating the violation promptly;
-      (vii) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and logs warnings when limits are approached or exceeded. Authentication requests exceeding 130% of your client limit will be refused to ensure license compliance;
-      (viii) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
+      (v) **Enforcement**: These limits are enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either: (a) reducing the number of clients or issuers to compliant levels, or (b) upgrading to a higher-tier commercial license or purchasing additional capacity.
 
    (f) **Development Licenses for Commercial License Holders.** Holders of valid commercial production licenses are entitled to receive development licenses at no additional charge for use in non-production environments:
       (i) **Eligibility**: Available to any holder of a valid, active commercial license for production use;
@@ -96,6 +90,16 @@ In the event that your product uses any types of advertising, paid subscriptions
       (vi) **Request Process**: Development licenses may be requested through the Copyright Holder's support channels by providing: (a) proof of active commercial license, and (b) list of non-production issuer URLs or hostnames to be permitted;
       (vii) **Term**: Development licenses remain valid for the duration of the associated commercial production license. Upon expiration or termination of the production license, all associated development licenses are automatically terminated;
       (viii) **No Separate Limits**: Development license usage does not count against the client or issuer limits of the associated production license, provided the development license is used solely for non-production purposes as defined herein.
+
+2.7. **License Limit Enforcement Framework.** All licenses with client and issuer limits are subject to the following enforcement framework:
+
+   (a) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with the limits specified in your license. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by the means specified for your license type. The Software may generate warnings when limits are exceeded, but You must not rely on these warnings, their absence, or the goodwill grace limit for compliance monitoring. Your obligation to comply with license limits exists regardless of whether warnings are generated.
+
+   (b) **Goodwill Grace Limit**: The Software allows usage up to 130% of your licensed client limit as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace limit does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations or compliance monitoring. You remain responsible for eliminating the violation promptly.
+
+   (c) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and may log warnings when limits are approached or exceeded. Authentication requests exceeding 130% of your client limit will be refused to ensure license compliance.
+
+   (d) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
 
 ## 3. Activation and Duration
 3.1. When installing the Software, the period of use of the Software is indicated at the time of purchase or upon receipt of the Software free of charge under certain conditions in accordance with Section 2 of this agreement.
