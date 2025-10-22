@@ -155,8 +155,9 @@ In the event that your product uses any types of advertising, paid subscriptions
 
    (h) **License Expiration and Renewal.**
       (i) **Expiration**: License keys have a defined expiration date. Use of the Software beyond the expiration date without a valid license constitutes a violation of this Agreement;
-      (ii) **No Automatic Renewal**: License keys do not automatically renew. You must explicitly request and purchase license renewal from Abblix LLP to continue using the Software beyond the expiration date;
-      (iii) **Renewal Process**: To renew your license, contact Abblix LLP authorized personnel before the expiration date, complete the renewal purchase, and receive a new license key with an updated validity period.
+      (ii) **Grace Period After Expiration**: Your license may or may not include a grace period after expiration. If the grace period is included, it allows continued operation as a goodwill gesture while You complete the renewal process. Any time used during the grace period will be deducted from your next license term. This grace period does not constitute permission to operate without a valid license and must not be relied upon for compliance purposes;
+      (iii) **No Automatic Renewal**: License keys do not automatically renew. You must explicitly request and purchase license renewal from Abblix LLP to continue using the Software beyond the expiration date;
+      (iv) **Renewal Process**: To renew your license, contact Abblix LLP authorized personnel before the expiration date, complete the renewal purchase, and receive a new license key with an updated validity period.
 
 3.7. **Software Updates and Maintenance.**
 
