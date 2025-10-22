@@ -5,7 +5,7 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 **ATTENTION!** Please, thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you wholeheartedly and unconditionally agree to the terms set forth in this License Agreement. If any of the terms within this License Agreement are unsuitable, you have no right to use the Software and must promptly uninstall it from your system.
 
 ## 1. Definitions
-1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement.
+1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license).
 
 1.2. "System" refers to an operating system, virtual machine, or equipment, including a server, on which the Software is installed and/or used.
 
@@ -15,7 +15,11 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 
 1.5. "Software Extensions" are additional software components and software solutions provided by the Copyright Holder that extend the functionality of the Software and may require the purchase of a separate license or an extension of an existing license. Software Extensions can be provided both free of charge and paid. You can obtain more detailed information before receiving such extensions.
 
-1.6. **System Definition for Licensing Purposes.** For purposes of determining license compliance:
+1.6. "Client" or "Client Application" refers to software programs that interact with the Software (OpenID Connect server) to authenticate users and obtain tokens for accessing protected resources. Each unique client application is identified by a distinct client identifier (client_id) registered with the Software.
+
+1.7. "Issuer" refers to a unique authorization server in a specific environment that authenticates various client applications. Each Issuer, as a separate authorization entity, may span multiple servers in a cluster for load balancing and fault tolerance. Importantly, every server within a single Issuer setup shares a unified Issuer URL, ensuring a consistent and secure identification point for all applications.
+
+1.8. **System Definition for Licensing Purposes.** For purposes of determining license compliance:
    (a) A single physical server or virtual machine (VM) constitutes one System;
    (b) Containerized deployments (Docker containers, Kubernetes pods, or similar technologies) running on a single physical or virtual host are considered part of that single System and do not constitute separate Systems;
    (c) Multiple physical servers or VMs serving one public hostname for load-balancing, high availability, or failure-resistance purposes are considered one System;
@@ -31,11 +35,19 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
    - Alter the source code of any part of the Software;
    - Remove, obscure, interfere with, or circumvent any feature of the Software, including, but not limited to, copyright or other intellectual property notices, security, or access control mechanisms.
 
-2.3. You may not use the Software in commercial projects, except as provided in clause 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms. Examples of non-commercial projects include:
+2.3. You may not use the Software in commercial projects, except as provided in clause 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
    - Free educational projects;
    - Games without monetization;
    - Test versions of commercial systems for piloting/demonstrating performance in internal non-commercial environments without generating profit.
 In the event that your product uses any types of advertising, paid subscriptions, or any type of commercial component, this software does not permit you to use it on a free basis.
+
+2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions enforced by the Software:
+   (a) **Client Limit**: Maximum 2 (two) unique client applications may be used;
+   (b) **Issuer Limit**: Maximum 1 (one) issuer may be used;
+   (c) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with these limits. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by either: (i) reducing the number of clients or issuers to compliant levels, or (ii) upgrading to a commercial license under Section 2.5 or Section 2.6;
+   (d) **Goodwill Grace Period**: The Software allows usage up to 130% of the client limit (3 clients maximum) as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace period does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations. You remain responsible for eliminating the violation promptly;
+   (e) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and logs warnings when limits are approached or exceeded. Authentication requests exceeding 130% of the client limit will be refused to ensure license compliance;
+   (f) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
 
 2.4. If the laws of your country prohibit you from using the Software, you are not authorized to use it, and you agree to comply with all applicable laws and regulations concerning your use of the Software.
 
@@ -52,6 +64,16 @@ In the event that your product uses any types of advertising, paid subscriptions
        - License Comparison: [abblix.com/abblix-licenses-support-agreements](https://www.abblix.com/abblix-licenses-support-agreements)
 
    (d) **Purchase Agreement Controls.** The specific terms of your license (type, installation limits, duration, pricing) are governed by your purchase agreement or order confirmation. In the event of conflict between this License Agreement and your purchase agreement, the purchase agreement shall control with respect to commercial terms.
+
+   (e) **Commercial License Technical Parameters.** Commercial licenses include the following technical parameters enforced by the Software:
+      (i) **Client Limit**: The maximum number of client applications permitted, as specified in your purchase agreement;
+      (ii) **Issuer Limit**: The maximum number of issuers permitted, as specified in your purchase agreement;
+      (iii) **Valid Issuers**: An optional whitelist of specific issuer URLs permitted under the license;
+      (iv) **License Period**: Start date (NotBefore), expiration date (ExpiresAt), and optional grace period after expiration;
+      (v) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with the limits specified in your purchase agreement. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by either: (a) reducing the number of clients or issuers to compliant levels, or (b) upgrading to a higher-tier commercial license or purchasing additional capacity;
+      (vi) **Goodwill Grace Period**: The Software allows usage up to 130% of your purchased client limit as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace period does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations. You remain responsible for eliminating the violation promptly;
+      (vii) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and logs warnings when limits are approached or exceeded. Authentication requests exceeding 130% of your client limit will be refused to ensure license compliance;
+      (viii) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
 
 ## 3. Activation and Duration
 3.1. When installing the Software, the period of use of the Software is indicated at the time of purchase or upon receipt of the Software free of charge under certain conditions in accordance with Section 2 of this agreement.
