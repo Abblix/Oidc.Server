@@ -2,7 +2,7 @@
 
 This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership ("Copyright Holder") for the OIDC Server ("Software").
 
-**ATTENTION!** Please, thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you wholeheartedly and unconditionally agree to the terms set forth in this License Agreement. If any of the terms within this License Agreement are unsuitable, you have no right to use the Software and must promptly uninstall it from your system.
+**ATTENTION!** Please thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you agree to be bound by the terms set forth in this License Agreement. If you do not agree to these terms, you have no right to use the Software and must promptly uninstall it from your System.
 
 ## 1. Definitions
 1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license).
@@ -17,7 +17,7 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 
 1.6. "Client" or "Client Application" refers to software programs that interact with the Software (OpenID Connect server) to authenticate users and obtain tokens for accessing protected resources. Each unique client application is identified by a distinct client identifier (client_id) registered with the Software.
 
-1.7. "Issuer" refers to a unique authorization server in a specific environment that authenticates various client applications. Each Issuer, as a separate authorization entity, may span multiple servers in a cluster for load balancing and fault tolerance. Importantly, every server within a single Issuer setup shares a unified Issuer URL, ensuring a consistent and secure identification point for all applications.
+1.7. "Issuer" refers to an authorization server instance as defined in the OAuth 2.0 specification (RFC 6749) and OpenID Connect Core specification.
 
 1.8. **System Definition for Licensing Purposes.** For purposes of determining license compliance:
    (a) A single physical server or virtual machine (VM) running one instance of the Software with one public hostname constitutes one System;
@@ -31,17 +31,17 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 ## 2. License Grant
 2.1. You are granted a non-exclusive license to use the Software within the scope of the functionality described on the Copyright Holder's official website, available at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality), provided that you comply with all restrictions and conditions specified in this License Agreement. This license does not grant sublicensing or redistribution rights to third parties. To obtain sublicensing or redistribution rights, you must purchase a separate type of license.
 
-2.2. You acknowledge that the license granted under clause 2.1 does not include the right to:
-   - Distribute, sell, or rent;
-   - License, modify, reproduce, translate, adapt, reverse engineer, decompile, or disassemble any part of the Software;
-   - Alter the source code of any part of the Software;
-   - Remove, obscure, interfere with, or circumvent any feature of the Software, including, but not limited to, copyright or other intellectual property notices, security, or access control mechanisms.
+2.2. **Prohibited Actions.** You may not:
+   (a) Modify, alter, translate, adapt, or create derivative works from the Software;
+   (b) Reverse engineer, decompile, or disassemble the Software;
+   (c) Distribute, sublicense, sell, rent, or lease the Software;
+   (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls.
 
 2.3. You may not use the Software in commercial projects, except as provided in clause 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
    - Free educational projects;
    - Games without monetization;
    - Test versions of commercial systems for piloting/demonstrating performance in internal non-commercial environments without generating profit.
-In the event that your product uses any types of advertising, paid subscriptions, or any type of commercial component, this software does not permit you to use it on a free basis.
+If your product generates revenue through advertising, paid subscriptions, or any commercial means, you may not use the Software under the free non-commercial license.
 
 2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions:
    (a) **Client Limit**: Maximum 2 (two) unique client applications may be used;
@@ -52,17 +52,15 @@ In the event that your product uses any types of advertising, paid subscriptions
 
 2.5. If you wish to use the Software in commercial projects, or if your projects have a commercial component in any way, you may download and use the Software during the term upon payment of the applicable license fee, in accordance with the terms of this Agreement.
 
-2.6. **Commercial License Types.** Abblix LLP offers the following commercial license types:
+2.6. **Commercial License Types.** The Copyright Holder offers the following commercial license types:
 
    (a) **Standard License** - For use of the Software in your commercial applications and services. Installation limits and specific terms are defined at the time of purchase.
 
    (b) **Redistribution License** - Permits redistribution of the Software as part of your commercial products, subject to additional terms and conditions:
       (i) **Software Redistribution**: You may redistribute the Software as an integrated component of your commercial product to your end customers;
-      (ii) **License Key Generation**: All license keys for your end customers must be generated by Abblix LLP authorized personnel. You cannot generate license keys for your customers;
-      (iii) **Key Request Process**: You must submit license key requests to Abblix LLP on behalf of your customers, specifying the technical parameters (client limits, issuer limits, valid issuers, license period) for each customer deployment;
-      (iv) **Key Provisioning**: Abblix LLP will generate and provide the license keys to you for delivery to your end customers, or deliver keys directly to end customers upon your authorization;
-      (v) **Your Responsibilities**: You are responsible for managing your customer relationships, collecting deployment requirements, and submitting accurate license key requests to Abblix LLP;
-      (vi) **End Customer Restrictions**: Your end customers are bound by the same restrictions as other licensees: license keys cannot be self-generated, transferred, redistributed, or modified by end customers.
+      (ii) **License Key Management**: All end-customer license keys must be requested through Copyright Holder's designated channels. You must provide accurate deployment specifications but may not generate, modify, or transfer license keys. Copyright Holder will provision keys for your distribution or direct delivery to end customers;
+      (iii) **Your Responsibilities**: You are responsible for managing customer relationships, collecting deployment requirements, and ensuring accurate specifications are provided;
+      (iv) **End Customer Restrictions**: Your end customers are bound by the same restrictions as other licensees under this Agreement.
 
    (c) **Pricing and Detailed Terms.** Current pricing, installation limits, and detailed license comparisons are available at:
        - Pricing: [abblix.com/abblix-oidc-server-pricing](https://www.abblix.com/abblix-oidc-server-pricing)
@@ -85,21 +83,19 @@ In the event that your product uses any types of advertising, paid subscriptions
          - Restriction to non-routable IP addresses (e.g., 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16);
          - Restriction to development-specific issuer URLs containing identifiers such as "dev", "test", "staging", "qa", "beta", or similar;
          - Other technical indicators that prevent use in production environments accessible to external end users;
-      (iv) **Enforcement**: Development licenses are technically restricted to enforce the limitations specified in subsection (iii). Attempts to use development licenses with production issuer URLs will be blocked by the Software;
+      (iv) **Enforcement**: Development licenses are technically restricted to non-production environments. Production use is blocked by the Software;
       (v) **No Production Use**: Development licenses must not be used to provide authentication services to external end users or in any production environment. Any such use constitutes a violation of this License Agreement;
-      (vi) **Request Process**: Development licenses may be requested through the Copyright Holder's support channels by providing: (a) proof of active commercial license, and (b) list of non-production issuer URLs or hostnames to be permitted;
+      (vi) **Eligibility Verification**: Development licenses are available upon verification of active commercial license status through Copyright Holder's designated process;
       (vii) **Term**: Development licenses remain valid for the duration of the associated commercial production license. Upon expiration or termination of the production license, all associated development licenses are automatically terminated;
       (viii) **No Separate Limits**: Development license usage does not count against the client or issuer limits of the associated production license, provided the development license is used solely for non-production purposes as defined herein.
 
 2.7. **License Limit Enforcement Framework.** All licenses with client and issuer limits are subject to the following enforcement framework:
 
-   (a) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with the limits specified in your license. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by the means specified for your license type. The Software may generate warnings when limits are exceeded, but You must not rely on these warnings, their absence, or the goodwill grace limit for compliance monitoring. Your obligation to comply with license limits exists regardless of whether warnings are generated.
+   (a) **Your Responsibility**: You acknowledge and agree that You are solely responsible for monitoring Your usage and ensuring compliance with the limits specified in your license. Any usage exceeding these limits constitutes a violation of this License Agreement. You must remedy such violations as soon as possible by the means specified for your license type. The Software may generate warnings when limits are approached or exceeded, but You must not rely on these warnings or their absence for compliance monitoring. Your obligation to comply with license limits exists at all times regardless of whether warnings are generated.
 
-   (b) **Goodwill Grace Limit**: The Software allows usage up to 130% of your licensed client limit as a goodwill gesture to avoid disrupting Your operations while You take corrective action. This grace limit does not constitute permission to exceed the licensed limits and must not be relied upon for ongoing operations or compliance monitoring. You remain responsible for eliminating the violation promptly.
+   (b) **Technical Enforcement**: The Software may generate warnings when usage approaches or exceeds license limits. Technical enforcement mechanisms do not modify your contractual obligation to comply with licensed limits at all times. Any temporary operation beyond limits does not constitute authorization for such use.
 
-   (c) **Technical Enforcement**: The Software tracks client and issuer usage in real-time and may log warnings when limits are approached or exceeded. Authentication requests exceeding 130% of your client limit will be refused to ensure license compliance.
-
-   (d) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
+   (c) **Consequences of Non-Compliance**: Failure to remedy violations of these limits may result in termination of Your license under Section 3.5, in addition to any other remedies available to the Copyright Holder under this Agreement or applicable law.
 
 ## 3. Activation and Duration
 3.1. When installing the Software, the period of use of the Software is indicated at the time of purchase or upon receipt of the Software free of charge under certain conditions in accordance with Section 2 of this agreement.
@@ -110,24 +106,26 @@ In the event that your product uses any types of advertising, paid subscriptions
 
 3.4. The license period for the Software can be verified on the official website page at [oidc.abblix.com/license-check](https://oidc.abblix.com/license-check).
 
-3.5. If you violate any of the terms of this License Agreement, the Copyright Holder has the right to terminate this License Agreement for the use of the Software immediately or by notifying you 30 calendar days in advance, depending on the severity of the violation. This advance notice is intended to ensure the continuity of your processes and give you the opportunity to correct any actual or alleged misuse or abuse of the Software or any material breach of this Agreement.
+3.5. **Termination for Breach.**
+
+   (a) **Immediate Termination.** The Copyright Holder may terminate this Agreement immediately upon written notice for material breaches that cannot be reasonably cured, including but not limited to:
+      (i) Unauthorized modification, reverse engineering, or redistribution of the Software;
+      (ii) Removal or circumvention of license key protection or technical controls;
+      (iii) Forgery, unauthorized generation, or modification of license keys;
+      (iv) Violation of intellectual property rights specified in Section 10;
+      (v) Use of the Software in violation of export control laws (Section 12).
+
+   (b) **Termination with Notice.** For all other breaches, the Copyright Holder shall provide thirty (30) days' written notice (as defined in Section 11.7) specifying the breach. You shall have thirty (30) days from receipt of notice to cure the breach. If the breach is not cured within this period, the Copyright Holder may terminate this Agreement upon expiration of the cure period.
+
+   (c) **Effect of Termination.** Upon termination, You must immediately cease all use of the Software, uninstall all copies, and certify destruction in writing to the Copyright Holder within ten (10) days.
 
 3.6. **License Key Generation and Provisioning.**
 
-   (a) **Authorized Provisioning.** All license keys for the Software are generated and provided exclusively by Abblix LLP authorized personnel. License keys cannot be generated outside Abblix LLP by any person or entity. License keys cannot be self-generated, transferred, redistributed, or modified by licensees.
+   (a) **Authorized Provisioning.** All license keys for the Software are generated and provided exclusively by the Copyright Holder's authorized personnel. License keys cannot be generated outside the Copyright Holder by any person or entity. License keys cannot be self-generated, transferred, redistributed, or modified by licensees.
 
-   (b) **Key Delivery.** License keys are delivered to licensees through one or more of the following secure channels:
-      (i) Email to the contact address specified in the purchase agreement;
-      (ii) Secure download portal accessible with customer credentials;
-      (iii) Direct communication with Abblix LLP support staff;
-      (iv) Through authorized partners, where applicable.
+   (b) **Key Delivery.** License keys are delivered to licensees through secure channels designated by the Copyright Holder.
 
-   (c) **Key Contents.** Each license key is digitally signed and contains the following technical parameters:
-      (i) Client and issuer limits as specified in the license agreement;
-      (ii) Valid issuer URLs or patterns (for production and development licenses);
-      (iii) License validity period (start date, expiration date, grace period);
-      (iv) License type (non-commercial, standard commercial, redistribution, development);
-      (v) Unique license identifier for tracking and verification.
+   (c) **Key Contents.** Each license key is digitally signed and contains the license parameters necessary to enforce this Agreement.
 
    (d) **Key Security.** You are responsible for:
       (i) Maintaining the confidentiality of your license keys;
@@ -141,23 +139,18 @@ In the event that your product uses any types of advertising, paid subscriptions
       (iii) Upon detection of unauthorized use or redistribution;
       (iv) When migrating to new deployment environments.
 
-   (f) **Technical Verification.** The Software validates license keys at runtime by:
-      (i) Verifying the digital signature to ensure authenticity;
-      (ii) Checking the license validity period against the current date;
-      (iii) Enforcing client and issuer limits as specified in the key;
-      (iv) Validating that the current issuer URL matches the permitted issuers in the key;
-      (v) Logging license validation results for audit purposes.
+   (f) **Technical Verification.** The Software validates license keys through cryptographic and technical controls to enforce the terms of this Agreement.
 
    (g) **No Self-Service Generation.** You acknowledge and agree that:
-      (i) License keys cannot be generated without access to Abblix LLP's private signing keys;
+      (i) License keys cannot be generated without access to the Copyright Holder's private signing keys;
       (ii) Attempting to forge, modify, or reverse-engineer license keys is strictly prohibited and constitutes a material breach of this Agreement;
-      (iii) All license modifications require obtaining a new license key from Abblix LLP authorized personnel.
+      (iii) All license modifications require obtaining a new license key from the Copyright Holder's authorized personnel.
 
    (h) **License Expiration and Renewal.**
       (i) **Expiration**: License keys have a defined expiration date. Use of the Software beyond the expiration date without a valid license constitutes a violation of this Agreement;
-      (ii) **Grace Period After Expiration**: Your license may or may not include a grace period after expiration. If the grace period is included, it allows continued operation as a goodwill gesture while You complete the renewal process. Any time used during the grace period will be deducted from your next license term. This grace period does not constitute permission to operate without a valid license and must not be relied upon for compliance purposes;
-      (iii) **No Automatic Renewal**: License keys do not automatically renew. You must explicitly request and purchase license renewal from Abblix LLP to continue using the Software beyond the expiration date;
-      (iv) **Renewal Process**: To renew your license, contact Abblix LLP authorized personnel before the expiration date, complete the renewal purchase, and receive a new license key with an updated validity period.
+      (ii) **Grace Period After Expiration**: License keys may include a technical grace period after expiration to prevent service disruption during renewal processing. The existence and duration of any grace period is specified in your license key. If You renew during the grace period, the number of days used during the grace period will be deducted from your new license term. For example, if You use seven (7) days of a grace period before renewing for a one (1) year term, your new license will expire 358 days from renewal (not 365 days). You remain obligated to renew before expiration; any grace period does not extend your total paid license term or constitute permission to operate without a valid license;
+      (iii) **No Automatic Renewal**: License keys do not automatically renew. You must explicitly request and purchase license renewal from the Copyright Holder to continue using the Software beyond the expiration date;
+      (iv) **Renewal Process**: To renew your license, contact the Copyright Holder's authorized personnel before the expiration date, complete the renewal purchase, and receive a new license key with an updated validity period.
 
 3.7. **Software Updates and Maintenance.**
 
@@ -193,9 +186,9 @@ In the event that your product uses any types of advertising, paid subscriptions
 
 ## 4. Data Processing and Privacy
 
-4.1. **Library Architecture.** The Software is a library integrated into your applications. It does not transmit data to Abblix LLP or any third parties. All data processing occurs within your infrastructure under your control.
+4.1. **Library Architecture.** The Software is a library integrated into your applications. It does not transmit data to the Copyright Holder or any third parties. All data processing occurs within your infrastructure under your control.
 
-4.2. **License Activation Data.** Abblix LLP collects and processes license activation information (license key, activation date, email address provided during purchase) for the sole purpose of license validation and customer support. This data is retained for the license term plus seven (7) years for legal and accounting purposes, then securely deleted. For data subject rights requests (access, deletion, portability), contact info@abblix.com.
+4.2. **License Activation Data.** The Copyright Holder collects and processes license activation information (license key, activation date, email address provided during purchase) for the sole purpose of license validation and customer support. This data is retained for the license term plus seven (7) years for legal and accounting purposes, then securely deleted. For data subject rights requests (access, deletion, portability), contact info@abblix.com.
 
 4.3. **Your Compliance Responsibility.** You are solely responsible for ensuring that your use of the Software complies with applicable data protection laws, including GDPR, CCPA, and other privacy regulations in your jurisdiction.
 
@@ -207,54 +200,32 @@ In the event that your product uses any types of advertising, paid subscriptions
    (c) Cooperate with You to meet Your regulatory notification obligations under applicable data protection laws.
 
 ## 5. Software Rights
-5.1. The Software is wholly owned by the Copyright Holder and is licensed to You, not sold. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties. Except for the limited rights of use granted herein, all rights, title, and interest in the Software, including patents, copyrights, and trademarks in and to the Software, accompanying printed materials, and any copies of the Software, belong to the Licensor.
+5.1. The Software is wholly owned by the Copyright Holder and is licensed to You, not sold. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties. Except for the limited rights of use granted herein, all rights, title, and interest in the Software, including patents, copyrights, and trademarks in and to the Software, accompanying printed materials, and any copies of the Software, belong to the Copyright Holder.
 
 ## 6. Communications and Notifications
 
-6.1. **Essential Communications.** By using the Software, you agree to receive essential service-related communications from Abblix LLP, including:
+6.1. **Essential Communications.** By using the Software, you agree to receive essential service-related communications from the Copyright Holder, including:
    (a) License expiration and renewal notifications;
    (b) Critical security updates and vulnerabilities;
    (c) Important changes to this License Agreement;
    (d) License compliance and activation issues.
 
-6.2. **Promotional Communications (Optional).** You may opt-in to receive promotional materials, product updates, and marketing communications from Abblix LLP and its Partners. You can:
+6.2. **Promotional Communications (Optional).** You may opt-in to receive promotional materials, product updates, and marketing communications from the Copyright Holder and its Partners. You can:
    (a) Opt-out at any time by emailing info@abblix.com with subject "Unsubscribe";
    (b) Use the unsubscribe link provided in each promotional email;
    (c) Withdraw consent without affecting your license rights.
 
-6.3. **Privacy.** Abblix LLP will not sell, rent, or share your email address with third parties for their marketing purposes without your explicit consent.
+6.3. **Privacy.** The Copyright Holder will not sell, rent, or share your email address with third parties for their marketing purposes without your explicit consent.
 
 ## 7. Restrictions and Compliance
 
 7.1. You may not rent, lease, or lend the Software.
 
-7.2. For violation of intellectual rights to the software, the violator bears civil, administrative, or criminal liability in accordance with the law.
+7.2. Violation of intellectual property rights in the Software may result in civil, administrative, or criminal liability as provided by applicable law.
 
 7.3. You agree that the Software may be used by you only in accordance with its intended use and must not violate local laws.
 
-7.4. **OpenID Foundation Certification.** The Software is certified by the OpenID Foundation, demonstrating conformance to OpenID Connect and OAuth 2.0 specifications. This certification validates the Software's implementation of industry-standard authentication and authorization protocols. Certification details are available at the OpenID Foundation's website.
-
-7.5. **Standards Compliance.** The Software implements the following specifications:
-   (a) OpenID Connect Core 1.0
-   (b) OAuth 2.0 (RFC 6749)
-   (c) OAuth 2.0 Security Best Current Practice
-   (d) Additional specifications as documented at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality)
-
-7.6. **No Other Certifications.** Except as expressly stated in Section 7.4, the Copyright Holder does not claim or warrant any other security certifications (such as SOC 2, ISO 27001) unless separately provided in writing.
-
-7.7. **Source Code Transparency.**
-
-   (a) **Public Repository.** The Software source code is maintained in a public repository at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) to enable:
-      (i) Security audits and code reviews by potential customers;
-      (ii) Verification of OpenID Foundation certification claims;
-      (iii) Technical evaluation before purchase;
-      (iv) Transparency in security practices and implementation.
-
-   (b) **Not Open Source.** Public availability of source code does NOT constitute open-source licensing. The Software remains subject to all restrictions in this Agreement, including prohibition on modification, redistribution, and derivative works (Section 2.2).
-
-   (c) **GitHub Terms.** Your access to the GitHub repository is subject to GitHub's Terms of Service. Abblix LLP may restrict or revoke repository access at any time.
-
-7.8. **OpenID Foundation Certification.**
+7.4. **OpenID Foundation Certification.**
 
    (a) **Certification Status.** The Software has been tested and certified by the OpenID Foundation as conformant to the following profiles:
 
@@ -283,16 +254,38 @@ In the event that your product uses any types of advertising, paid subscriptions
 
    (d) **No Warranty Extension.** OpenID Foundation certification validates technical conformance to specifications but does NOT extend the warranties or liability terms in Sections 8 and 9 of this Agreement.
 
+7.5. **Standards Compliance.** The Software implements the following specifications:
+   (a) OpenID Connect Core 1.0
+   (b) OAuth 2.0 (RFC 6749)
+   (c) OAuth 2.0 Security Best Current Practice
+   (d) Additional specifications as documented at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality)
+
+7.6. **No Other Certifications.** Except as expressly stated in Section 7.4, the Copyright Holder does not claim or warrant any other security certifications (such as SOC 2, ISO 27001) unless separately provided in writing.
+
+7.7. **Source Code Transparency.**
+
+   (a) **Public Repository.** The Software source code is maintained in a public repository at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) to enable:
+      (i) Security audits and code reviews by potential customers;
+      (ii) Verification of OpenID Foundation certification claims;
+      (iii) Technical evaluation before purchase;
+      (iv) Transparency in security practices and implementation.
+
+   (b) **Not Open Source.** Public availability of source code does NOT constitute open-source licensing. The Software remains subject to all restrictions in this Agreement, including prohibition on modification, redistribution, and derivative works (Section 2.2).
+
+   (c) **GitHub Terms.** Your access to the GitHub repository is subject to GitHub's Terms of Service. The Copyright Holder may restrict or revoke repository access at any time.
+
 ## 8. Limited Warranty and Disclaimer
 
-8.1. **Limited Warranty (Commercial Licenses Only).** For commercial licenses purchased under Section 2.5 and Section 2.6, the Copyright Holder warrants that, for a period of ninety (90) days from the date of license activation ("Warranty Period"), the Software will substantially conform to the functionality described on the official website at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality), provided that:
+8.1. **Limited Warranty (Commercial Licenses Only).** For commercial licenses purchased under Section 2.5 and Section 2.6, the Copyright Holder warrants that, for a period of ninety (90) days from the earlier of (i) license activation date or (ii) license purchase date ("Warranty Period"), the Software will materially conform to the functionality described in the Documentation version corresponding to your licensed Software release, provided that:
    (a) You use the latest releases of supported versions listed at [oidc.abblix.com/versions](https://oidc.abblix.com/versions);
    (b) The Software is properly installed in accordance with documentation;
    (c) You comply with all terms of this License Agreement.
 
+For purposes of this warranty, "materially conform" means the Software performs the core functions described in the Documentation in all significant respects. Minor variations that do not constitute material non-conformity include: (i) cosmetic interface differences that do not impair functionality; (ii) performance variations under twenty percent (20%) of documented specifications under normal operating conditions; (iii) features explicitly marked as "beta", "experimental", or "preview" in the Documentation; and (iv) issues resolved in updates provided during the Warranty Period.
+
 This limited warranty does NOT apply to non-commercial licenses granted at no charge under Section 2.3 (see Section 8.8 for non-commercial license terms).
 
-8.2. **Exclusive Remedy.** Your exclusive remedy for breach of the limited warranty in Section 8.1 shall be, at the Copyright Holder's sole discretion: (i) repair or replacement of the non-conforming Software; (ii) refund of the license fee paid; or (iii) provision of workarounds or patches to achieve substantial conformity. This remedy is contingent upon You providing written notice of the non-conformity to info@abblix.com within the Warranty Period.
+8.2. **Exclusive Remedy.** Your exclusive remedy for breach of the limited warranty in Section 8.1 shall be, at the Copyright Holder's sole discretion: (i) repair or replacement of the non-conforming Software; (ii) refund of the license fee paid; or (iii) provision of workarounds or patches to achieve material conformity. This remedy is contingent upon You providing written notice of the non-conformity to info@abblix.com within the Warranty Period.
 
 8.3. **Warranty Exclusions.** The limited warranty in Section 8.1 does not apply to defects, errors, or failures resulting from:
    (a) Modification, alteration, or unauthorized use of the Software;
@@ -315,7 +308,7 @@ This limited warranty does NOT apply to non-commercial licenses granted at no ch
 
 8.7. **Consumer Rights.** Nothing in this Agreement excludes or limits any statutory rights that cannot be lawfully excluded or limited, including consumer protection rights under applicable law.
 
-8.8. **Non-Commercial License Disclaimer.** For non-commercial licenses granted at no charge under Section 2.3, the Software is provided strictly "AS IS" WITHOUT WARRANTY OF ANY KIND, express or implied. You acknowledge and agree that You use the Software entirely at Your own risk. The limited warranty in Section 8.1 does NOT apply to non-commercial licenses. The liability cap in Section 9.1 ($1,000 USD for non-commercial licenses) applies only to claims that survive this warranty disclaimer under applicable law, such as claims for gross negligence, willful misconduct, or fraud.
+8.8. **Non-Commercial License Disclaimer.** For non-commercial licenses granted at no charge under Section 2.3, the Software is provided strictly "AS IS" WITHOUT WARRANTY OF ANY KIND, express or implied. You acknowledge and agree that You use the Software entirely at Your own risk. The limited warranty in Section 8.1 does NOT apply to non-commercial licenses. Notwithstanding the foregoing, the Copyright Holder does not disclaim liability that cannot be excluded under applicable law, including liability for fraud, gross negligence, willful misconduct, or death/personal injury caused by the Copyright Holder's negligence. The liability cap in Section 9.1 ($1,000 USD) applies only to such non-excludable claims.
 
 ## 9. Limitation of Liability
 
@@ -325,17 +318,15 @@ This limited warranty does NOT apply to non-commercial licenses granted at no ch
 
 For non-commercial licenses granted at no charge, the liability cap shall be One Thousand United States Dollars ($1,000 USD).
 
-9.2. **Enforceability.** The limitations set forth in this Section 9 cannot be excluded or limited under applicable law. Some jurisdictions do not allow the limitation or exclusion of liability for incidental or consequential damages, so the above limitation may not apply to you.
+9.2. **Enforceability.** The limitations set forth in this Section 9 shall apply to the fullest extent permitted by applicable law. Some jurisdictions do not allow the limitation or exclusion of liability for incidental or consequential damages; in such jurisdictions, the above limitation may not apply to You, and the Copyright Holder's liability shall be limited to the maximum extent permitted by applicable law.
 
 ## 10. Intellectual Property Rights and Confidentiality
 
-10.1. You agree that the Software, documentation, and all other objects of copyright, systems, ideas, methods of work, and other information contained in the Software, as well as trademarks, are the intellectual property of the Copyright Holder or its Partners. This License Agreement does not grant you any rights to use intellectual property, including trademarks and service marks of the Licensor or its Partners, except for the rights granted by this License Agreement.
+10.1. You agree that the Software, documentation, and all other objects of copyright, systems, ideas, methods of work, and other information contained in the Software, as well as trademarks, are the intellectual property of the Copyright Holder or its Partners. This License Agreement does not grant you any rights to use intellectual property, including trademarks and service marks of the Copyright Holder or its Partners, except for the rights granted by this License Agreement.
 
-10.2. You agree that you will not modify or change the Software in any way. You may not remove or modify any copyright or other proprietary notices on any copy of the Software.
+10.2. **Confidentiality.** The Software is confidential and proprietary information. You agree to maintain the confidentiality of the Software and not to disclose any confidential information related to the Software to any third party without the prior written consent of the Copyright Holder.
 
-10.3. **Confidentiality.** The Software is confidential and proprietary information. You agree to maintain the confidentiality of the Software and not to disclose any confidential information related to the Software to any third party without the prior written consent of the Copyright Holder.
-
-10.4. **Confidentiality Exceptions.** The confidentiality obligations in Section 10.3 do not apply to information that:
+10.3. **Confidentiality Exceptions.** The confidentiality obligations in Section 10.2 do not apply to information that:
    (a) Was publicly available before disclosure to You;
    (b) Becomes publicly available through no fault of Yours;
    (c) Was independently developed by You without reference to the Software;
@@ -345,11 +336,21 @@ For non-commercial licenses granted at no charge, the liability cap shall be One
 
 11.1. **Governing Law and Jurisdiction.** This License Agreement is governed by the laws of the Republic of Kazakhstan. Any disputes, controversies, or claims arising out of or relating to this License Agreement, or the breach, termination, or invalidity thereof, shall be subject to the exclusive jurisdiction of the specialized inter-district economic court of Astana city, Republic of Kazakhstan.
 
-11.2. **Language of Proceedings.** Legal proceedings may be conducted in Kazakh, Russian, or English as permitted by applicable procedural rules. Each party bears responsibility for translation costs for documents it submits.
+11.2. **Language of Proceedings.** Legal proceedings shall be conducted in accordance with the procedural rules of the specialized inter-district economic court of Astana city, which may permit submissions in Kazakh, Russian, or English. Each party bears responsibility for translation costs for documents it submits. Parties may request clarification from the court regarding acceptable languages prior to filing.
 
 11.3. **Negotiation Before Litigation.** In the event of any dispute, controversy, or claim arising out of or relating to this License Agreement, or the breach, termination, or invalidity thereof, the parties shall first seek to resolve the dispute through good faith negotiations. This process should involve direct communication between the parties or their designated representatives with the aim to reach an amicable settlement. If the dispute cannot be resolved through negotiation within thirty (30) days, then either party may proceed to litigation as described in Section 11.1.
 
 11.4. **Severability.** If any provision of this License Agreement is held to be void, voidable, unenforceable, or illegal, the remaining provisions of this License Agreement will remain in full force and effect. In the event of a conflict between the terms of this Agreement and the terms of any software product license agreement concluded between you and the Partners or the Copyright Holder, the terms of such a license agreement shall prevail; in all other respects, the terms of this Agreement and such agreement shall apply.
+
+11.5. **External Document Conflicts.** In the event of a conflict between the terms of this License Agreement and information provided on external websites (including but not limited to oidc.abblix.com, GitHub repositories, or third-party documentation):
+   (a) This License Agreement shall prevail for all legal rights, obligations, warranties, and limitations of liability;
+   (b) External website content is provided for informational and technical reference purposes only;
+   (c) You acknowledge that external content may be updated without notice and does not modify the terms of this Agreement unless explicitly incorporated by reference;
+   (d) Any discrepancies should be reported to info@abblix.com for clarification.
+
+11.6. **Entire Agreement.** This Agreement, together with any purchase agreement or order confirmation referencing this Agreement, constitutes the entire agreement between You and the Copyright Holder regarding the Software and supersedes all prior or contemporaneous understandings, agreements, representations, and warranties, whether written or oral, regarding such subject matter. This Agreement may be modified only by a written amendment signed by authorized representatives of both parties. No provision of this Agreement may be waived except by a writing signed by the party against whom the waiver is sought to be enforced.
+
+11.7. **Notices.** All notices required under this Agreement must be in writing and shall be deemed given when: (a) delivered personally; (b) sent by confirmed email to the addresses specified in Section 17 (Contact Information); or (c) three (3) business days after deposit with an internationally recognized courier service with tracking capability. Either party may update its notice address by providing written notice to the other party in accordance with this section.
 
 ## 12. Export Controls
 
@@ -368,36 +369,63 @@ For non-commercial licenses granted at no charge, the liability cap shall be One
 
 12.4. **Compliance Responsibility.** You are solely responsible for compliance with all applicable export control laws and regulations in your jurisdiction and any jurisdiction where the Software is used.
 
-12.5. **Export Classification.** The Software is classified under ECCN 5D992 (encryption software utilizing standard cryptographic interfaces of widely distributed operating systems). Export from the United States is authorized under License Exception ENC pursuant to 15 CFR § 740.17(b).
+## 13. Intellectual Property Claims
 
-## 13. Indemnification
+13.1. **Cooperative Defense Support.** If You receive a third-party claim alleging that the Software, when used in accordance with this Agreement, infringes a patent, copyright, or trademark, the Copyright Holder will cooperate with Your defense by:
+   (a) Providing documentation demonstrating the Copyright Holder's ownership of intellectual property rights in the Software, including copyright registrations and patent documentation;
+   (b) Providing technical documentation and evidence regarding the Software's implementation and operation;
+   (c) Making reasonable efforts to provide expert testimony or technical consultation, if requested and commercially reasonable;
+   (d) Providing information about the Software's certification by the OpenID Foundation and compliance with industry standards.
 
-13.1. **Intellectual Property Indemnification.** Subject to the limitations in Section 13.3, the Copyright Holder will defend You against any third-party claim that the Software, when used in accordance with this Agreement, infringes a patent, copyright, or trademark registered in the United States, European Union, or United Kingdom, and will indemnify You from any damages, costs, and attorney fees finally awarded against You by a court of competent jurisdiction or agreed in settlement.
+13.2. **Notification and Cooperation.** To receive the support described in Section 13.1, You must:
+   (a) Promptly notify the Copyright Holder in writing of the claim within thirty (30) days of becoming aware;
+   (b) Provide reasonable details of the claim, including at a minimum: (i) identification of the allegedly infringing Software components; (ii) description of the alleged intellectual property rights at issue; (iii) copies of any complaint, demand letter, or cease-and-desist notice received; and (iv) any other information reasonably available to assist the Copyright Holder in understanding the claim;
+   (c) Allow the Copyright Holder to participate in discussions related to the defense, at the Copyright Holder's discretion.
 
-13.2. **Conditions.** The indemnification obligations in Section 13.1 are conditioned upon You:
-   (a) Promptly notifying the Copyright Holder in writing of the claim within thirty (30) days of becoming aware;
-   (b) Granting the Copyright Holder sole control of the defense and settlement;
-   (c) Providing reasonable cooperation in the defense at the Copyright Holder's expense.
+13.3. **No Financial Indemnification.** The Copyright Holder does not assume financial responsibility for Your legal defense costs, damages, settlements, or attorney fees related to intellectual property claims. You remain solely responsible for Your own legal defense and any resulting financial obligations. The support provided under Section 13.1 is documentary and technical in nature only.
 
-13.3. **Limitations.** The Copyright Holder has no obligation to indemnify claims arising from:
+13.4. **Exclusions.** The Copyright Holder has no obligation to provide support for claims arising from:
    (a) Modification of the Software by You or third parties not authorized by the Copyright Holder;
-   (b) Use of the Software in combination with non-Abblix products, data, or services not specified in the documentation;
+   (b) Use of the Software in combination with third-party products, data, or services not specified in the documentation;
    (c) Use of superseded or unsupported versions of the Software after being provided with updates;
    (d) Use of the Software in violation of this Agreement or applicable law;
    (e) Compliance with Your specific designs, specifications, or instructions.
 
-13.4. **Remedies.** If the Software is, or in the Copyright Holder's opinion is likely to be, subject to an infringement claim, the Copyright Holder may at its option:
+13.5. **Remedial Actions.** If the Software is, or in the Copyright Holder's opinion is likely to be, subject to a valid infringement claim, the Copyright Holder may at its sole option and expense:
    (a) Procure the right for You to continue using the Software;
    (b) Replace or modify the Software to be non-infringing while maintaining substantially equivalent functionality;
-   (c) Terminate the license and refund pro-rata license fees for the unused portion of the prepaid term.
+   (c) Terminate the license and refund pro-rata license fees for the unused portion of the prepaid term (commercial licenses only).
 
-13.5. **Exclusive Remedy.** This Section 13 states the Copyright Holder's entire liability and Your exclusive remedy for intellectual property infringement claims related to the Software.
+13.6. **Limitation of Remedies.** This Section 13 states the Copyright Holder's entire obligation and Your exclusive remedy regarding intellectual property infringement claims related to the Software. The Copyright Holder disclaims all other warranties and remedies, whether express or implied, related to intellectual property infringement.
 
-## 14. Survival
+## 14. Force Majeure
 
-14.1. **Surviving Provisions.** The following sections shall survive termination or expiration of this Agreement: Section 4 (Data Processing and Privacy), Section 5 (Software Rights), Section 9 (Limitation of Liability), Section 10 (Intellectual Property Rights and Confidentiality), Section 11 (Governing Law and Dispute Resolution), Section 13 (Indemnification - for claims arising during the term), and this Section 14 (Survival).
+14.1. **Force Majeure Events.** Neither party shall be liable for any failure or delay in performance under this Agreement due to causes beyond its reasonable control, including but not limited to war, terrorism, civil unrest, riots, strikes, labor disputes, government actions, epidemics, pandemics, natural disasters, internet service provider failures, power outages, or telecommunications failures.
 
-## 15. Contact Information
+14.2. **Notification and Resumption.** The affected party shall:
+   (a) Promptly notify the other party in writing of the force majeure event and its expected duration;
+   (b) Use commercially reasonable efforts to mitigate the effects of the force majeure event, which may include implementing backup systems, rerouting services, or providing alternative access methods where feasible and cost-effective under the circumstances;
+   (c) Resume performance as soon as reasonably practicable after the force majeure event ceases.
+
+14.3. **License Term Extension.** If a force majeure event prevents Your use of the Software for more than thirty (30) consecutive days, Your license term shall be extended by the period of non-use, provided You notify the Copyright Holder within ten (10) days after the force majeure event ends.
+
+14.4. **Termination Right.** If a force majeure event continues for more than ninety (90) days, either party may terminate this Agreement upon written notice to the other party. In such case, the Copyright Holder shall refund pro-rata license fees for the unused portion of any prepaid term.
+
+## 15. Assignment
+
+15.1. **Restrictions on Assignment.** You may not assign, transfer, delegate, or sublicense this Agreement or any rights or obligations hereunder without the prior written consent of the Copyright Holder, which consent shall not be unreasonably withheld. Any attempted assignment in violation of this section is void.
+
+15.2. **Permitted Transfers.** Notwithstanding Section 15.1, You may assign this Agreement without consent in connection with a merger, acquisition, corporate reorganization, or sale of all or substantially all of Your assets related to the business using the Software, provided that: (a) the assignee agrees in writing to be bound by all terms of this Agreement; and (b) You provide written notice to the Copyright Holder within thirty (30) days of the assignment.
+
+15.3. **Copyright Holder Assignment.** The Copyright Holder may assign this Agreement without restriction, including in connection with a merger, acquisition, corporate reorganization, or sale of assets.
+
+15.4. **Effect of Assignment.** Any permitted assignment shall not relieve the assigning party of its obligations under this Agreement unless the other party agrees in writing to release such obligations.
+
+## 16. Survival
+
+16.1. **Surviving Provisions.** The following sections shall survive termination or expiration of this Agreement: Section 4 (Data Processing and Privacy), Section 5 (Software Rights), Section 9 (Limitation of Liability), Section 10 (Intellectual Property Rights and Confidentiality), Section 11 (Governing Law and Dispute Resolution), Section 13 (Intellectual Property Claims - for claims arising during the term), Section 14 (Force Majeure), Section 15 (Assignment), and this Section 16 (Survival).
+
+## 17. Contact Information
 
 **Copyright Holder**: Abblix Limited Liability Partnership
 
