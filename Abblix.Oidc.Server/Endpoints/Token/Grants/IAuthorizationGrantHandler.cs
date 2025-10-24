@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -32,13 +33,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// context. Implementations of this interface are responsible for processing authorization requests based on
 /// the supported grant type, validating the request, and generating appropriate authorization responses.
 /// </summary>
-public interface IAuthorizationGrantHandler
+public interface IAuthorizationGrantHandler : IGrantTypeInformer
 {
-	/// <summary>
-	/// Allows the authorization server to determine which grant types are supported by this handler.
-	/// </summary>
-	IEnumerable<string> GrantTypesSupported { get; }
-
 	/// <summary>
 	/// Processes an authorization request asynchronously, validates the request against the supported grant type,
 	/// and generates a response indicating the authorization result.

@@ -25,7 +25,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -79,7 +78,7 @@ public sealed class DiscoveryController : ControllerBase
 		[FromServices] IIssuerProvider issuerProvider,
 		[FromServices] ILogoutNotifier logoutNotifier,
 		[FromServices] IClientAuthenticator clientAuthenticator,
-		[FromServices] IAuthorizationGrantHandler authorizationGrantHandler,
+		[FromServices] IEnumerable<IGrantTypeInformer> grantTypeProviders,
 		[FromServices] IScopeClaimsProvider scopeClaimsProvider,
 		[FromServices] IJsonWebTokenCreator jwtCreator,
 		[FromServices] IJsonWebTokenValidator jwtValidator,
@@ -115,7 +114,10 @@ public sealed class DiscoveryController : ControllerBase
 			ScopesSupported = scopeClaimsProvider.ScopesSupported,
 			ClaimsSupported = scopeClaimsProvider.ClaimsSupported,
 
-			GrantTypesSupported = authorizationGrantHandler.GrantTypesSupported,
+			GrantTypesSupported = grantTypeProviders
+				.SelectMany(provider => provider.GrantTypesSupported)
+				.Distinct()
+				.ToArray(),
 
 			ResponseTypesSupported = authorizationHandler.Metadata.ResponseTypesSupported,
 			ResponseModesSupported = authorizationHandler.Metadata.ResponseModesSupported,

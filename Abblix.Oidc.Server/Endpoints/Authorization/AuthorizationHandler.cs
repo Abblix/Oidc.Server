@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -60,6 +61,22 @@ public class AuthorizationHandler : IAuthorizationHandler
         RequestParameterSupported = true,
         ClaimsParameterSupported = true,
     };
+
+    /// <summary>
+    /// The grant types supported by the authorization endpoint.
+    /// Returns "implicit" if the endpoint supports implicit response types (token, id_token, or token id_token).
+    /// </summary>
+    public IEnumerable<string> GrantTypesSupported
+    {
+        get
+        {
+            var responseTypes = Metadata.ResponseTypesSupported;
+            if (responseTypes.Any(rt => rt.Contains(ResponseTypes.Token) || rt.Contains(ResponseTypes.IdToken)))
+            {
+                yield return GrantTypes.Implicit;
+            }
+        }
+    }
 
     /// <summary>
     /// Asynchronously handles an authorization request by first fetching the request if necessary,
