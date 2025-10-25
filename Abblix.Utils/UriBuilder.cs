@@ -43,10 +43,12 @@ public class UriBuilder
 
     /// <summary>
     /// Initializes a new instance of the UriBuilder class with the specified URI string.
+    /// Automatically detects and handles both absolute URIs and relative paths.
     /// </summary>
-    /// <param name="uri">A URI string to use as the base of the UriBuilder.</param>
+    /// <param name="uri">A URI string to use as the base of the UriBuilder.
+    /// Can be an absolute URI (e.g., "https://example.com/path") or a relative path (e.g., "/path").</param>
     public UriBuilder(string uri)
-        : this(new System.UriBuilder(uri))
+        : this(new Uri(uri, UriKind.RelativeOrAbsolute))
     {
     }
 
@@ -85,12 +87,8 @@ public class UriBuilder
             _builder.Query = Query.ToString();
             _builder.Fragment = Fragment.ToString();
 
-            if (_isAbsoluteUri)
-                return _builder.Uri;
-
-            var pathAndQuery = _builder.Uri.PathAndQuery;
-            var fragment = _builder.Uri.Fragment;
-            return new Uri(pathAndQuery + fragment, UriKind.Relative);
+            var uri = _builder.Uri;
+            return _isAbsoluteUri ? uri : new Uri(uri.PathAndQuery + uri.Fragment, UriKind.Relative);
         }
     }
 
