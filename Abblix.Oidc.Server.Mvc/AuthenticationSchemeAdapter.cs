@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -127,6 +127,10 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 			(principal.Identity?.AuthenticationType).NotNull(nameof(ClaimsIdentity.AuthenticationType)))
 		{
 			AuthContextClassRef = principal.FindFirstValue(JwtClaimTypes.AuthContextClassRef),
+			Email = principal.FindFirstValue(JwtClaimTypes.Email),
+			EmailVerified = bool.TryParse(principal.FindFirstValue(JwtClaimTypes.EmailVerified), out var emailVerified)
+				? emailVerified
+				: null,
 		};
 
 		var properties = authenticationResult.Properties;
@@ -135,6 +139,11 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 
 		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
+
+		// Extract additional claims (exclude standard claims)
+		var additionalClaims = ExtractAdditionalClaims(principal);
+		if (additionalClaims.Count > 0)
+			authSession = authSession with { AdditionalClaims = additionalClaims };
 
 		return authSession;
 	}
@@ -164,6 +173,27 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		if (authSession is { AuthenticationMethodReferences.Count: > 0 })
 			claims.Add(new Claim(JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences)));
 
+		// Email claim from AuthSession (preserves external provider email or challenge email)
+		if (!string.IsNullOrEmpty(authSession.Email))
+			claims.Add(new Claim(JwtClaimTypes.Email, authSession.Email));
+
+		// EmailVerified claim from AuthSession
+		if (authSession.EmailVerified.HasValue)
+			claims.Add(new Claim(JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
+
+		// Additional claims from JsonObject - serialize each property
+		if (authSession.AdditionalClaims != null)
+		{
+			foreach (var (claimType, jsonValue) in authSession.AdditionalClaims)
+			{
+				if (jsonValue == null)
+					continue;
+
+				var claimValue = SerializeJsonValue(jsonValue);
+				claims.Add(new Claim(claimType, claimValue));
+			}
+		}
+
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
 		var properties = new AuthenticationProperties();
@@ -174,8 +204,92 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	}
 
 	/// <summary>
+	/// Serializes a JsonNode to a string suitable for claim storage.
+	/// Primitives are converted to their string representation, complex types are JSON-serialized.
+	/// </summary>
+	private static string SerializeJsonValue(JsonNode jsonValue)
+	{
+		return jsonValue switch
+		{
+			JsonValue jsonValueNode => jsonValueNode.GetValue<JsonElement>() switch
+			{
+				{ ValueKind: JsonValueKind.String } element => element.GetString()!,
+				{ ValueKind: JsonValueKind.Number } element => element.ToString(),
+				{ ValueKind: JsonValueKind.True } => "true",
+				{ ValueKind: JsonValueKind.False } => "false",
+				{ ValueKind: JsonValueKind.Null } => "",
+				_ => jsonValue.ToJsonString()
+			},
+			JsonArray or JsonObject => jsonValue.ToJsonString(),
+			_ => jsonValue.ToJsonString()
+		};
+	}
+
+	/// <summary>
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
 	public Task SignOutAsync() => HttpContext.SignOutAsync(_authenticationScheme);
+
+	/// <summary>
+	/// Extracts additional claims from the principal, excluding standard OIDC claims.
+	/// Attempts to deserialize JSON values, falls back to string values.
+	/// </summary>
+	private static JsonObject ExtractAdditionalClaims(ClaimsPrincipal principal)
+	{
+		var additionalClaims = new JsonObject();
+
+		foreach (var claim in principal.Claims)
+		{
+			if (IsStandardClaim(claim.Type))
+				continue;
+
+			var jsonValue = TryParseJsonValue(claim.Value);
+			additionalClaims[claim.Type] = jsonValue;
+		}
+
+		return additionalClaims;
+	}
+
+	/// <summary>
+	/// Attempts to parse a claim value as JSON, falling back to a simple string value.
+	/// </summary>
+	private static JsonNode? TryParseJsonValue(string value)
+	{
+		if (string.IsNullOrEmpty(value))
+			return null;
+
+		// Try parsing as JSON (for arrays/objects)
+		try
+		{
+			return JsonNode.Parse(value);
+		}
+		catch (JsonException)
+		{
+			// Not JSON - try to detect type
+			if (bool.TryParse(value, out var boolValue))
+				return JsonValue.Create(boolValue);
+
+			if (long.TryParse(value, out var longValue))
+				return JsonValue.Create(longValue);
+
+			if (double.TryParse(value, out var doubleValue))
+				return JsonValue.Create(doubleValue);
+
+			// Default to string
+			return JsonValue.Create(value);
+		}
+	}
+
+	private static bool IsStandardClaim(string claimType) => claimType switch
+	{
+		JwtClaimTypes.Subject => true,
+		JwtClaimTypes.SessionId => true,
+		JwtClaimTypes.AuthenticationTime => true,
+		JwtClaimTypes.AuthContextClassRef => true,
+		JwtClaimTypes.Email => true,
+		JwtClaimTypes.EmailVerified => true,
+		JwtClaimTypes.AuthenticationMethodReferences => true,
+		_ => false
+	};
 }
