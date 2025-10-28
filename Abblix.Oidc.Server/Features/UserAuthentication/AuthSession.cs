@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
 /// <summary>
@@ -74,4 +76,42 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// enforcing authentication policies, or satisfying specific security requirements.
     /// </summary>
     public ICollection<string>? AuthenticationMethodReferences { get; init; }
+
+    /// <summary>
+    /// The email address used for authentication. When specified, this exact email is included in the authentication
+    /// cookie and ID token claims, regardless of other emails associated with the user account.
+    /// This ensures external provider emails (Google, Microsoft) or challenge emails are preserved exactly as used.
+    /// </summary>
+    public string? Email { get; init; }
+
+    /// <summary>
+    /// Indicates whether the email address has been verified. When true, the email_verified claim is set to true
+    /// in ID tokens. This is particularly useful for external providers that verify emails or when email verification
+    /// has been completed through challenge flows.
+    /// </summary>
+    public bool? EmailVerified { get; init; }
+
+    /// <summary>
+    /// Additional custom claims to include in the authentication session.
+    /// These claims will be serialized to the authentication cookie and can be included in tokens.
+    /// Supports any JSON value: strings, numbers, booleans, arrays, objects.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// AdditionalClaims = new JsonObject
+    /// {
+    ///     ["tenant_id"] = "tenant-123",                          // string
+    ///     ["roles"] = new JsonArray("admin", "user"),            // array
+    ///     ["permissions"] = new JsonArray("read", "write"),      // array
+    ///     ["is_verified"] = true,                                // boolean
+    ///     ["login_count"] = 42,                                  // number
+    ///     ["metadata"] = new JsonObject                          // nested object
+    ///     {
+    ///         ["department"] = "Engineering",
+    ///         ["manager"] = "john@example.com"
+    ///     }
+    /// }
+    /// </code>
+    /// </example>
+    public JsonObject? AdditionalClaims { get; init; }
 }
