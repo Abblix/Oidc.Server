@@ -74,7 +74,9 @@ public static class ServiceCollectionExtensions
         return services
             .AddAuthorizationRequestFetchers()
             .AddAuthorizationContextValidators()
-            .AddScoped<IAuthorizationHandler, AuthorizationHandler>()
+            .AddScoped<AuthorizationHandler>()
+            .AddAlias<IAuthorizationHandler, AuthorizationHandler>()
+            .AddAlias<IGrantTypeInformer, AuthorizationHandler>()
             .AddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>()
             .AddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
     }
@@ -220,7 +222,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
-            .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>();
+            .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
+            .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
     }
 
     /// <summary>

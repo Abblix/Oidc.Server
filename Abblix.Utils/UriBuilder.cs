@@ -29,6 +29,15 @@ namespace Abblix.Utils;
 public class UriBuilder
 {
     /// <summary>
+    /// Placeholder base URI used internally for relative URI handling.
+    /// Required because System.UriBuilder only works with absolute URIs.
+    /// This base is stripped out when returning relative URIs.
+    /// </summary>
+#pragma warning disable S1075 // URIs should not be hardcoded - This is a technical placeholder, not a configuration value
+    private const string PlaceholderBase = "http://localhost";
+#pragma warning restore S1075
+
+    /// <summary>
     /// Initializes a new instance of the UriBuilder class with the specified Uri instance.
     /// Supports both absolute and relative URIs.
     /// </summary>
@@ -36,7 +45,7 @@ public class UriBuilder
     public UriBuilder(Uri uri)
         : this(uri.IsAbsoluteUri
             ? new System.UriBuilder(uri)
-            : new System.UriBuilder("http://localhost" + uri.OriginalString))
+            : new System.UriBuilder(PlaceholderBase + uri.OriginalString))
     {
         _isAbsoluteUri = uri.IsAbsoluteUri;
     }
