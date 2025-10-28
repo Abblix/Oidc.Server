@@ -29,7 +29,7 @@ jobs:
       version: ${{ steps.set_version.outputs.version }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
       - name: Get version from project files or input
@@ -74,9 +74,9 @@ jobs:
     needs: versioning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4.1.0
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
           dotnet-version: '9.0'
       - name: Restore dependencies
@@ -88,7 +88,7 @@ jobs:
       - name: Pack
         run: dotnet pack --no-build -c Release -o nupkg -p:AssemblyVersion=${{ needs.versioning.outputs.version }}.0 -p:PackageVersion=${{ needs.versioning.outputs.version }}
       - name: Upload NuGet packages as artifacts
-        uses: actions/upload-artifact@v4.4.3
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: nuget-packages
           path: nupkg/*.nupkg
@@ -98,21 +98,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main repo
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           path: main-repo
       - name: Checkout GettingStarted repo
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           path: getting-started
       - name: Download NuGet packages
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: nuget-packages
           path: local-packages
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4.1.0
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
           dotnet-version: '9.0'
       - name: Setup local package source
@@ -143,12 +143,12 @@ jobs:
     environment: package-publishing  # This creates a manual approval gate
     steps:
       - name: Download NuGet packages
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: nuget-packages
           path: nupkg
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4.1.0
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
           dotnet-version: '9.0'
       - name: List packages to be published
@@ -165,24 +165,28 @@ jobs:
           echo "⚠️  This step requires manual approval in GitHub Actions."
           echo "🔄 Publishing will begin after approval..."
       - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "📤 Publishing to GitHub Packages..."
           for pkg in nupkg/*.nupkg; do
             echo "Publishing $(basename "$pkg") to GitHub Packages..."
             dotnet nuget push "$pkg" \
-              --api-key ${{ secrets.GITHUB_TOKEN }} \
+              --api-key "$GITHUB_TOKEN" \
               --source https://nuget.pkg.github.com/Abblix/index.json \
               --skip-duplicate \
               --no-symbols || echo "⚠️  Package $(basename "$pkg") may already exist"
           done
           echo "✅ GitHub Packages publishing completed"
       - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           echo "📤 Publishing to NuGet.org..."
           for pkg in nupkg/*.nupkg; do
             echo "Publishing $(basename "$pkg") to NuGet.org..."
             dotnet nuget push "$pkg" \
-              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --api-key "$NUGET_API_KEY" \
               --source https://api.nuget.org/v3/index.json \
               --skip-duplicate \
               --no-symbols || echo "⚠️  Package $(basename "$pkg") may already exist"
@@ -205,11 +209,11 @@ jobs:
     needs: [versioning, build-and-test, test-getting-started]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
       - name: Download NuGet packages
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: nuget-packages
           path: nupkg
@@ -251,7 +255,7 @@ jobs:
           echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)" >> CHANGELOG.md
           echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)" >> CHANGELOG.md
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
           tag_name: v${{ needs.versioning.outputs.version }}
           name: Release v${{ needs.versioning.outputs.version }}
@@ -268,7 +272,7 @@ jobs:
     if: ${{ !github.event.inputs.pre_release }}
     steps:
       - name: Checkout GettingStarted repo
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           token: ${{ secrets.GITHUB_TOKEN }}
