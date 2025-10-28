@@ -70,11 +70,7 @@ public class AuthorizationHandler : IAuthorizationHandler
     {
         get
         {
-            var responseTypes = Metadata.ResponseTypesSupported;
-            if (responseTypes.Any(rt => rt.Contains(ResponseTypes.Token) || rt.Contains(ResponseTypes.IdToken)))
-            {
-                yield return GrantTypes.Implicit;
-            }
+            yield return GrantTypes.Implicit;
         }
     }
 
