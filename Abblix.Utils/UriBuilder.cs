@@ -30,19 +30,25 @@ public class UriBuilder
 {
     /// <summary>
     /// Initializes a new instance of the UriBuilder class with the specified Uri instance.
+    /// Supports both absolute and relative URIs.
     /// </summary>
     /// <param name="uri">The Uri instance to use as the base of the UriBuilder.</param>
     public UriBuilder(Uri uri)
-        : this(new System.UriBuilder(uri))
+        : this(uri.IsAbsoluteUri
+            ? new System.UriBuilder(uri)
+            : new System.UriBuilder("http://localhost" + uri.OriginalString))
     {
+        _isAbsoluteUri = uri.IsAbsoluteUri;
     }
 
     /// <summary>
     /// Initializes a new instance of the UriBuilder class with the specified URI string.
+    /// Automatically detects and handles both absolute URIs and relative paths.
     /// </summary>
-    /// <param name="uri">A URI string to use as the base of the UriBuilder.</param>
+    /// <param name="uri">A URI string to use as the base of the UriBuilder.
+    /// Can be an absolute URI (e.g., "https://example.com/path") or a relative path (e.g., "/path").</param>
     public UriBuilder(string uri)
-        : this(new System.UriBuilder(uri))
+        : this(new Uri(uri, UriKind.RelativeOrAbsolute))
     {
     }
 
@@ -58,6 +64,7 @@ public class UriBuilder
     }
 
     private readonly System.UriBuilder _builder;
+    private readonly bool _isAbsoluteUri;
 
     /// <summary>
     /// Gets the ParametersBuilder for the query string.
@@ -71,6 +78,7 @@ public class UriBuilder
 
     /// <summary>
     /// Gets the URI constructed by the UriBuilder.
+    /// For relative URIs, returns the path, query, and fragment without scheme and host.
     /// </summary>
     public Uri Uri
     {
@@ -78,7 +86,9 @@ public class UriBuilder
         {
             _builder.Query = Query.ToString();
             _builder.Fragment = Fragment.ToString();
-            return _builder.Uri;
+
+            var uri = _builder.Uri;
+            return _isAbsoluteUri ? uri : new Uri(uri.PathAndQuery + uri.Fragment, UriKind.Relative);
         }
     }
 

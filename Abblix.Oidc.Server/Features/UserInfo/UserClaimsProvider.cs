@@ -71,7 +71,7 @@ public class UserClaimsProvider(
             scope, requestedClaims?.Select(claim => claim.Key))
             .Distinct(StringComparer.Ordinal);
 
-        var userInfo = await userInfoProvider.GetUserInfoAsync(authSession.Subject, claimNames);
+        var userInfo = await userInfoProvider.GetUserInfoAsync(authSession, claimNames);
         if (userInfo == null)
         {
             logger.LogWarning("The user claims were not found by subject value");

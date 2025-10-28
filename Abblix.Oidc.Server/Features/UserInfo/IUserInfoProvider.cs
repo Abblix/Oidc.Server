@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;
 
@@ -34,14 +35,15 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 public interface IUserInfoProvider
 {
     /// <summary>
-    /// Asynchronously retrieves a set of user claims for a specified subject identifier, including both simple and
+    /// Asynchronously retrieves a set of user claims for an authenticated session, including both simple and
     /// structured claim values as requested by the client application. This method supports the OpenID Connect
     /// specification by allowing for the selective disclosure of user information, catering to the need for complex
     /// data structures within claims.
     /// </summary>
-    /// <param name="subject">
-    /// The unique subject identifier (sub claim) of the user whose information is being requested.
-    /// This identifier must uniquely identify the user across all applications and services.
+    /// <param name="authSession">
+    /// The authentication session containing the user's subject identifier and additional authentication context.
+    /// This provides access to authentication-specific claims such as the email used during authentication,
+    /// which may differ from the user's primary email stored in the database.
     /// </param>
     /// <param name="requestedClaims">
     /// A collection of names representing the claims requested by a client application.
@@ -61,6 +63,8 @@ public interface IUserInfoProvider
     /// the principles of data minimization. Sensitive or personal information must only be shared with explicit user
     /// consent and in a secure manner. In cases where the requested user or claims are not found, returning null or an
     /// empty <see cref="JsonObject" /> helps maintain privacy and security.
+    /// Implementations should prioritize authentication session claims (such as authSession.Email) over database values
+    /// to preserve the exact authentication context, especially for external provider authentications.
     /// </remarks>
-    Task<JsonObject?> GetUserInfoAsync(string subject, IEnumerable<string> requestedClaims);
+    Task<JsonObject?> GetUserInfoAsync(AuthSession authSession, IEnumerable<string> requestedClaims);
 }
