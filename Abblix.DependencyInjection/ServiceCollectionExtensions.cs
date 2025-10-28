@@ -32,28 +32,169 @@ namespace Abblix.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers an alias for a service type to a specific implementation.
+    /// Creates an alias registration that allows resolving a service through a different interface or type.
     /// </summary>
-    /// <typeparam name="TService">The service type to be aliased.</typeparam>
-    /// <typeparam name="TImplementation">The implementation type to use for the alias.</typeparam>
+    /// <typeparam name="TService">The service type for the alias registration.</typeparam>
+    /// <typeparam name="TImplementation">The implementation service type that is already registered.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
-    /// This method creates an alias that resolves to the same instance as the original implementation.
-    /// The alias inherits the same lifetime as the original service registration.
-    /// Useful for registering the same implementation under different interface types.
+    /// <para>
+    /// This method creates an alias by cloning the source service descriptor with a new service type.
+    /// The alias preserves the lifetime of the source registration (Singleton, Scoped, or Transient).
+    /// </para>
+    /// <para>
+    /// For Singleton lifetime with factory-based registrations, ensures the same instance is returned
+    /// when resolving through either the source type or the alias. For Scoped and Transient lifetimes,
+    /// the alias resolves through the source service to maintain proper lifetime semantics.
+    /// </para>
+    /// <para>
+    /// Supports both interface-to-interface aliasing (e.g., <c>AddAlias&lt;IBase, IPrimary&gt;()</c>)
+    /// and interface-to-implementation aliasing (e.g., <c>AddAlias&lt;IService, ServiceImpl&gt;()</c>).
+    /// </para>
+    /// <para>
+    /// When multiple different source services are aliased to the same target interface,
+    /// <c>IEnumerable&lt;TService&gt;</c> resolution returns instances from all aliases.
+    /// </para>
     /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no registration is found for <typeparamref name="TImplementation"/>.
+    /// </exception>
     public static IServiceCollection AddAlias<TService, TImplementation>(this IServiceCollection services)
         where TImplementation : class, TService
         where TService : class
     {
-        var descriptor = new ServiceDescriptor(
-            typeof(TService),
-            sp => sp.GetRequiredService<TImplementation>(),
-            services.GetDescriptor<TImplementation>().Lifetime);
+        // Find the most recent registration of TImplementation
+        var source = services.LastOrDefault(s =>
+            s.ServiceType == typeof(TImplementation) ||
+            s.ImplementationType == typeof(TImplementation))
+            ?? throw new InvalidOperationException(
+                $"No registration found for {typeof(TImplementation).Name}. " +
+                $"Register it first before creating an alias.");
 
-        services.Add(descriptor);
+        // Clone the descriptor with TService as the new ServiceType
+        services.Add(source.Clone(typeof(TService)));
+
         return services;
+    }
+
+    /// <summary>
+    /// Creates a keyed alias registration that allows resolving a service through a different interface or type with a specific key.
+    /// </summary>
+    /// <typeparam name="TService">The service type for the alias registration.</typeparam>
+    /// <typeparam name="TSource">The source service type that is already registered.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
+    /// <param name="serviceKey">The service key to associate with the alias.</param>
+    /// <param name="sourceKey">The service key of the source registration. Use null for non-keyed source.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method creates a keyed alias by cloning the source service descriptor with a new service type and key.
+    /// The alias preserves the lifetime of the source registration (Singleton, Scoped, or Transient).
+    /// </para>
+    /// <para>
+    /// For factory-based registrations, the alias resolves through the source service to maintain proper lifetime semantics.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no registration is found for <typeparamref name="TSource"/> with the specified <paramref name="sourceKey"/>.
+    /// </exception>
+    public static IServiceCollection AddKeyedAlias<TService, TSource>(
+        this IServiceCollection services,
+        object? serviceKey,
+        object? sourceKey = null)
+        where TService : class
+        where TSource : class
+    {
+        // Find the most recent keyed registration of TSource
+        var source = services.LastOrDefault(s =>
+            (s.ServiceType == typeof(TSource) || s.ImplementationType == typeof(TSource)) &&
+            Equals(s.ServiceKey, sourceKey))
+            ?? throw new InvalidOperationException(
+                $"No registration found for {typeof(TSource).Name} with key '{sourceKey}'. " +
+                $"Register it first before creating an alias.");
+
+        // Clone the descriptor with TService as the new ServiceType and serviceKey
+        services.Add(source.CloneKeyed(typeof(TService), serviceKey));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Creates a copy of the service descriptor with a different service type while preserving
+    /// the implementation and lifetime. For factory-based registrations, resolves through the
+    /// source service type to maintain same-instance semantics across all aliases.
+    /// </summary>
+    /// <param name="source">The source service descriptor to clone.</param>
+    /// <param name="serviceType">The service type for the cloned descriptor.</param>
+    /// <returns>A new service descriptor with the specified service type.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the source descriptor has an invalid configuration.</exception>
+    public static ServiceDescriptor Clone(this ServiceDescriptor source, Type serviceType)
+    {
+        return source switch
+        {
+            { ImplementationType: { } type }
+                => ServiceDescriptor.Describe(serviceType, type, source.Lifetime),
+
+            { ImplementationFactory: not null }
+                => ServiceDescriptor.Describe(
+                    serviceType,
+                    sp => sp.GetRequiredService(source.ServiceType),
+                    source.Lifetime),
+
+            { ImplementationInstance: { } instance }
+                => new ServiceDescriptor(serviceType, instance),
+
+            _ => throw new InvalidOperationException(
+                $"Cannot create alias {serviceType.Name} for {source.ServiceType.Name}. " +
+                $"Invalid service descriptor configuration.")
+        };
+    }
+
+    /// <summary>
+    /// Creates a copy of the keyed service descriptor with a different service type and key while preserving
+    /// the implementation and lifetime. For factory-based registrations, resolves through the
+    /// source service type and key to maintain same-instance semantics across all aliases.
+    /// </summary>
+    /// <param name="source">The source service descriptor to clone.</param>
+    /// <param name="serviceType">The service type for the cloned descriptor.</param>
+    /// <param name="serviceKey">The service key for the cloned descriptor.</param>
+    /// <returns>A new keyed service descriptor with the specified service type and key.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the source descriptor has an invalid configuration.</exception>
+    public static ServiceDescriptor CloneKeyed(this ServiceDescriptor source, Type serviceType, object? serviceKey)
+    {
+        return source switch
+        {
+            // Check if source is keyed
+            { IsKeyedService: true, KeyedImplementationType: not null } or
+            { IsKeyedService: true, KeyedImplementationFactory: not null }
+                => ServiceDescriptor.DescribeKeyed(
+                    serviceType,
+                    serviceKey,
+                    (sp, _) => sp.GetRequiredKeyedService(source.ServiceType, source.ServiceKey),
+                    source.Lifetime),
+
+            { IsKeyedService: true, KeyedImplementationInstance: { } instance }
+                => ServiceDescriptor.KeyedSingleton(serviceType, serviceKey, instance),
+
+            // Handle non-keyed source
+            { ImplementationType: { } type }
+                => ServiceDescriptor.DescribeKeyed(serviceType, serviceKey, type, source.Lifetime),
+
+            { ImplementationFactory: not null }
+                => ServiceDescriptor.DescribeKeyed(
+                    serviceType,
+                    serviceKey,
+                    (sp, _) => sp.GetRequiredService(source.ServiceType),
+                    source.Lifetime),
+
+            { ImplementationInstance: { } instance }
+                => ServiceDescriptor.KeyedSingleton(serviceType, serviceKey, instance),
+
+            _ => throw new InvalidOperationException(
+                $"Cannot create keyed alias {serviceType.Name} for keyed {source.ServiceType.Name}. " +
+                $"Invalid service descriptor configuration.")
+        };
     }
 
     /// <summary>
@@ -108,7 +249,16 @@ public static class ServiceCollectionExtensions
             lifetime);
 
         services.RemoveAll<TInterface>();
-        services.Add(compositeDescriptor);
+
+        // Register the composite type itself so it can be aliased
+        var compositeTypeDescriptor = ServiceDescriptor.Describe(
+            typeof(TComposite),
+            compositeDescriptor.ImplementationFactory!,
+            lifetime);
+        services.Add(compositeTypeDescriptor);
+
+        // Register the interface to resolve the composite type
+        services.AddAlias<TInterface, TComposite>();
 
         return services;
     }
@@ -212,22 +362,6 @@ public static class ServiceCollectionExtensions
             default:
                 return [element];
         }
-    }
-
-    /// <summary>
-    /// Retrieves the registered <see cref="ServiceDescriptor"/> for a given interface type.
-    /// </summary>
-    /// <typeparam name="TInterface">The service interface type.</typeparam>
-    /// <param name="services">The service collection to query.</param>
-    /// <returns>The matching <see cref="ServiceDescriptor"/>.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the service is not registered in the collection.
-    /// </exception>
-    private static ServiceDescriptor GetDescriptor<TInterface>(this IServiceCollection services)
-        where TInterface : class
-    {
-        return services.SingleOrDefault(s => s.ServiceType == typeof(TInterface))
-               ?? throw new InvalidOperationException($"{typeof(TInterface).Name} is not registered");
     }
 
     /// <summary>

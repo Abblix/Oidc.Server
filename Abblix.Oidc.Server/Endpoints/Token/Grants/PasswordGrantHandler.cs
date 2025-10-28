@@ -52,7 +52,6 @@ public class PasswordGrantHandler(
         get { yield return GrantTypes.Password; }
     }
 
-
     /// <summary>
     /// Asynchronously processes the token request using the password grant type.
     /// The handler ensures the request contains the necessary parameters, validates the user's credentials,
