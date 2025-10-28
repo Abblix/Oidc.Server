@@ -38,6 +38,11 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TImplementation">The implementation type to use for the alias.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// This method creates an alias that resolves to the same instance as the original implementation.
+    /// The alias inherits the same lifetime as the original service registration.
+    /// Useful for registering the same implementation under different interface types.
+    /// </remarks>
     public static IServiceCollection AddAlias<TService, TImplementation>(this IServiceCollection services)
         where TImplementation : class, TService
         where TService : class
@@ -59,6 +64,12 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <param name="dependencies">The dependencies required by the composite service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// This method replaces multiple service registrations of the same type with a single composite registration.
+    /// The composite type must have a constructor that accepts an array of the interface type.
+    /// All existing registrations are collected and provided to the composite service.
+    /// The composite service uses the shortest lifetime among the existing registrations.
+    /// </remarks>
     public static IServiceCollection Compose<TInterface, TComposite>(
         this IServiceCollection services,
         params Dependency[] dependencies)
@@ -110,23 +121,76 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <param name="dependencies">The dependencies required by the decorator.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// The decorator pattern allows you to add behavior to existing service implementations without modifying their code.
+    /// The decorator wraps the original service and preserves its lifetime registration.
+    /// The decorator must implement the same interface as the service being decorated.
+    /// </remarks>
     public static IServiceCollection Decorate<TInterface, TDecorator>(
         this IServiceCollection services,
         params Dependency[] dependencies)
         where TInterface : class where TDecorator : class, TInterface
     {
-        var serviceDescriptor = services.GetDescriptor<TInterface>();
+        return services.DecorateKeyed<TInterface, TDecorator>(serviceKey: null, dependencies: dependencies);
+    }
 
-        var decoratorDescriptor = ServiceDescriptor.Describe(
-            typeof(TInterface),
-            serviceProvider =>
+    /// <summary>
+    /// Decorates a registered keyed service with a decorator implementation.
+    /// </summary>
+    /// <typeparam name="TInterface">The service type to be decorated.</typeparam>
+    /// <typeparam name="TDecorator">The decorator implementation type.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
+    /// <param name="serviceKey">The service key to identify the specific service registration.</param>
+    /// <param name="dependencies">The dependencies required by the decorator.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// This method allows decoration of keyed services registered using the keyed service APIs.
+    /// The decorator will wrap the existing implementation while preserving the service lifetime.
+    /// </remarks>
+    public static IServiceCollection DecorateKeyed<TInterface, TDecorator>(
+        this IServiceCollection services,
+        object? serviceKey,
+        params Dependency[] dependencies)
+        where TInterface : class where TDecorator : class, TInterface
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(dependencies);
+
+        for (var i = services.Count - 1; 0 <= i; i--)
+        {
+            if (services[i].ServiceType != typeof(TInterface) ||
+                !Equals(services[i].ServiceKey, serviceKey))
+            {
+                continue;
+            }
+
+            services[i] = services[i].Decorate<TInterface, TDecorator>(dependencies);
+            break;
+        }
+        return services;
+    }
+
+    /// <summary>
+    /// Creates a new service descriptor that wraps the original service with a decorator.
+    /// </summary>
+    /// <typeparam name="TInterface">The service type being decorated.</typeparam>
+    /// <typeparam name="TDecorator">The decorator type that implements the interface.</typeparam>
+    /// <param name="serviceDescriptor">The original service descriptor to decorate.</param>
+    /// <param name="dependencies">Additional dependencies required by the decorator.</param>
+    /// <returns>A new <see cref="ServiceDescriptor"/> with the decorated implementation.</returns>
+    private static ServiceDescriptor Decorate<TInterface, TDecorator>(
+        this ServiceDescriptor serviceDescriptor, Dependency[] dependencies)
+        where TInterface : class where TDecorator : class, TInterface
+    {
+        return ServiceDescriptor.DescribeKeyed(
+            serviceDescriptor.ServiceType,
+            serviceDescriptor.ServiceKey,
+            (serviceProvider, _) =>
             {
                 var instance = Dependency.Override((TInterface)serviceProvider.CreateService(serviceDescriptor));
                 return serviceProvider.CreateService<TDecorator>(dependencies.Append(instance));
             },
             serviceDescriptor.Lifetime);
-
-        return services.Replace(decoratorDescriptor);
     }
 
     /// <summary>
@@ -223,12 +287,16 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a transient service with custom dependencies.
+    /// Registers a transient service of the type specified in <typeparamref name="T"/> with custom dependencies.
+    /// Transient services are created each time they are requested.
     /// </summary>
     /// <typeparam name="T">The service type to register.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <param name="dependencies">The dependencies required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <remarks>
+    /// This overload is useful when the service type and implementation type are the same.
+    /// </remarks>
     public static IServiceCollection AddTransient<T>(this IServiceCollection services, params Dependency[] dependencies)
         where T : class
     {
@@ -236,7 +304,9 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a transient service with custom dependencies.
+    /// Registers a transient service with the implementation type specified in <typeparamref name="TImplementation"/>
+    /// and the service type specified in <typeparamref name="TService"/> with custom dependencies.
+    /// Transient services are created each time they are requested.
     /// </summary>
     /// <typeparam name="TService">The type of the service to add.</typeparam>
     /// <typeparam name="TImplementation">The type of the implementation to use.</typeparam>
@@ -301,8 +371,8 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a singleton service of the type specified in <typeparamref name="TService"/> with custom dependencies.
-    /// A singleton service is created the first time it is requested, and subsequent requests use the same instance.
+    /// Registers a singleton service with the implementation type specified in <typeparamref name="TImplementation"/>
+    /// and the service type specified in <typeparamref name="TService"/> with custom dependencies.
     /// </summary>
     /// <typeparam name="TService">The type of the service to add.</typeparam>
     /// <typeparam name="TImplementation">The type of the implementation to use.</typeparam>
@@ -310,7 +380,6 @@ public static class ServiceCollectionExtensions
     /// <param name="dependencies">An array of <see cref="Dependency"/> objects representing additional dependencies
     /// required by the service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
-
     public static IServiceCollection AddSingleton<TService, TImplementation>(this IServiceCollection services,
         params Dependency[] dependencies)
         where TService : class

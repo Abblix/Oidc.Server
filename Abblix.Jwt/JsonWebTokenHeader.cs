@@ -48,7 +48,6 @@ public class JsonWebTokenHeader
     /// </summary>
     public JsonObject Json { get; }
 
-
     /// <summary>
     /// Gets or sets the type of the JWT, typically "JWT" or a similar identifier.
     /// This field is optional and used to declare the media type of the JWT.

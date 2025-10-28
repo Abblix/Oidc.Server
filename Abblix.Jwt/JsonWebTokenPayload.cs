@@ -242,4 +242,31 @@ public class JsonWebTokenPayload
 		get => Json.GetProperty<string>(JwtClaimTypes.AuthContextClassRef);
 		set => Json.SetProperty(JwtClaimTypes.AuthContextClassRef, value);
 	}
+
+	/// <summary>
+	/// The email address of the subject.
+	/// </summary>
+	/// <remarks>
+	/// When the subject uses external authentication (Google, Microsoft, etc.) or authenticates via email verification,
+	/// this property contains the exact email used during authentication, ensuring the email claim in ID tokens
+	/// reflects the authentication method rather than the primary email from the user's profile.
+	/// </remarks>
+	public string? Email
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.Email);
+		set => Json.SetProperty(JwtClaimTypes.Email, value);
+	}
+
+	/// <summary>
+	/// Indicates whether the email address has been verified.
+	/// </summary>
+	/// <remarks>
+	/// For external providers that verify emails or when email verification has been completed through challenge flows,
+	/// this value is set to true. This is used in the email_verified claim in ID tokens.
+	/// </remarks>
+	public bool? EmailVerified
+	{
+		get => Json.GetProperty<bool?>(JwtClaimTypes.EmailVerified);
+		set => Json.SetProperty(JwtClaimTypes.EmailVerified, value);
+	}
 }
