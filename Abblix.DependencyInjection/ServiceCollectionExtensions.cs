@@ -35,7 +35,7 @@ public static class ServiceCollectionExtensions
     /// Creates an alias registration that allows resolving a service through a different interface or type.
     /// </summary>
     /// <typeparam name="TService">The service type for the alias registration.</typeparam>
-    /// <typeparam name="TSource">The source service type that is already registered.</typeparam>
+    /// <typeparam name="TImplementation">The implementation service type that is already registered.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
@@ -58,18 +58,18 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when no registration is found for <typeparamref name="TSource"/>.
+    /// Thrown when no registration is found for <typeparamref name="TImplementation"/>.
     /// </exception>
-    public static IServiceCollection AddAlias<TService, TSource>(this IServiceCollection services)
+    public static IServiceCollection AddAlias<TService, TImplementation>(this IServiceCollection services)
+        where TImplementation : class, TService
         where TService : class
-        where TSource : class
     {
-        // Find the most recent registration of TSource
+        // Find the most recent registration of TImplementation
         var source = services.LastOrDefault(s =>
-            s.ServiceType == typeof(TSource) ||
-            s.ImplementationType == typeof(TSource))
+            s.ServiceType == typeof(TImplementation) ||
+            s.ImplementationType == typeof(TImplementation))
             ?? throw new InvalidOperationException(
-                $"No registration found for {typeof(TSource).Name}. " +
+                $"No registration found for {typeof(TImplementation).Name}. " +
                 $"Register it first before creating an alias.");
 
         // Clone the descriptor with TService as the new ServiceType
