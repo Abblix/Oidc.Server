@@ -22,6 +22,9 @@
 
 namespace Abblix.Utils;
 
+/// <summary>
+/// Provides extension methods for working with <see cref="Result{TSuccess, TFailure}"/> types.
+/// </summary>
 public static class ResultExtensions
 {
     /// <summary>
