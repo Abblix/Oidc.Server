@@ -89,7 +89,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
-                            new Sanitized(sectorIdentifierUri));
+                            Sanitized.Value(sectorIdentifierUri));
                         return ErrorFactory.InvalidClientMetadata(
                             $"Unable to receive content of {Parameters.SectorIdentifierUri}");
                     }
@@ -110,7 +110,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                 if (missingUris.Length > 0)
                 {
                     _logger.LogWarning("The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
-                        new Sanitized(sectorIdentifierUri),
+                        Sanitized.Value(sectorIdentifierUri),
                         missingUris);
 
                     return ErrorFactory.InvalidClientMetadata(

@@ -79,7 +79,7 @@ public class ClientValidator : IAuthorizationContextValidator
         var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(clientId));
+            _logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 

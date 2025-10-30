@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -89,7 +90,7 @@ public class NoneClientAuthenticator: IClientAuthenticator
         var client = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (client == null)
         {
-            _logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", clientId);
+            _logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
             return null;
         }
 

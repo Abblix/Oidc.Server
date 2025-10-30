@@ -66,7 +66,7 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
             return null;
 
         logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-            new Sanitized(redirectUri),
+            Sanitized.Value(redirectUri),
             context.ClientInfo.ClientId);
 
         return new RequestError(

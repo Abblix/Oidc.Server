@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using static Abblix.Utils.Sanitized;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
@@ -111,7 +112,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 
 			// If the token was issued to a different client, log a warning and return an invalid token result.
 			case ValidJsonWebToken { Token.Payload.ClientId: var clientId } when clientId != clientInfo.ClientId:
-				_logger.LogWarning("The token was issued to another client {ClientId}", clientId);
+				_logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
 				return ValidRevocationRequest.InvalidToken(revocationRequest);
 
 			// If the token is valid and belongs to the authenticated client, return a valid revocation request.

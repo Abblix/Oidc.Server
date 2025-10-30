@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -61,18 +62,18 @@ public abstract class ClientSecretAuthenticator(
 		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (client == null)
 		{
-			logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", clientId);
+			logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", Value(clientId));
 			return null;
 		}
 
 		if (client.ClientSecrets?.Length == 0 || !secret.HasValue())
 		{
-			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", clientId);
+			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
 			return null;
 		}
 
 		if (client.TokenEndpointAuthMethod != authenticationMethod) {
-			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", clientId);
+			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", Value(clientId));
 			return null;
 		}
 
