@@ -46,5 +46,5 @@ public interface IRefreshTokenService
 	/// <summary>
 	/// Authenticates a user by refresh token.
 	/// </summary>
-	public Task<Result<AuthorizedGrant, RequestError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
+	public Task<Result<AuthorizedGrant, AuthError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
 }

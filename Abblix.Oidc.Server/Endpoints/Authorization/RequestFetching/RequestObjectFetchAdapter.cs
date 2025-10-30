@@ -52,7 +52,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
             return authorizationRequest;
 
         if (fetchResult.TryGetFailure(out var error))
-            return ErrorFactory.ValidationError(error.ErrorCode, error.ErrorDescription);
+            return ErrorFactory.ValidationError(error.Error, error.ErrorDescription);
 
         throw new InvalidOperationException("Unexpected result state");
     }

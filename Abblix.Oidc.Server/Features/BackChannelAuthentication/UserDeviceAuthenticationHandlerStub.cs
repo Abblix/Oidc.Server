@@ -46,7 +46,7 @@ internal class UserDeviceAuthenticationHandlerStub : IUserDeviceAuthenticationHa
     /// (e.g. client ID, login hint, scope, etc.).
     /// </param>
     /// <returns>
-    /// A <see cref="Result{AuthSession, RequestError}"/> wrapping the created authentication session information.
+    /// A <see cref="Result{AuthSession, AuthError}"/> wrapping the created authentication session information.
     /// </returns>
     /// <exception cref="NotImplementedException">
     /// Always thrown to indicate CIBA is not configured. To enable CIBA:
@@ -69,7 +69,7 @@ internal class UserDeviceAuthenticationHandlerStub : IUserDeviceAuthenticationHa
     ///   </item>
     /// </list>
     /// </exception>
-    public Task<Result<AuthSession, RequestError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request)
+    public Task<Result<AuthSession, AuthError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request)
     {
         throw new NotImplementedException(
             "CIBA (Client‐Initiated Backchannel Authentication) is not configured yet. " +

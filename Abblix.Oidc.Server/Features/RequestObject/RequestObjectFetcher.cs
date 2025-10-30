@@ -74,14 +74,14 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, RequestError}"/>
+    /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, AuthError}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
     /// <remarks>
     /// This method is used to decode and validate the JWT contained in the request. If the JWT is valid, the payload
     /// is bound to the request model. If the JWT is invalid, an error is returned and logged.
     /// </remarks>
-    public async Task<Result<T, RequestError>> FetchAsync<T>(T request, string? requestObject)
+    public async Task<Result<T, AuthError>> FetchAsync<T>(T request, string? requestObject)
         where T : class
     {
         if (!requestObject.HasValue())
@@ -98,7 +98,7 @@ public class RequestObjectFetcher : IRequestObjectFetcher
                     ? updatedRequest
                     : InvalidRequestObject("Unable to bind request object");
             },
-            onFailure: Result<T, RequestError>.Failure
+            onFailure: Result<T, AuthError>.Failure
         );
     }
 
@@ -108,14 +108,14 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// </summary>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="Result{JsonObject, RequestError}"/>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="Result{JsonObject, AuthError}"/>
     /// indicating whether the JWT is valid or contains errors.
     /// </returns>
     /// <remarks>
     /// This method uses the configured OIDC options to determine whether the JWT must be signed and validates
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
-    private async Task<Result<JsonObject, RequestError>> ValidateAsync(string requestObject)
+    private async Task<Result<JsonObject, AuthError>> ValidateAsync(string requestObject)
     {
         var options = ValidationOptions.ValidateIssuerSigningKey;
         if (_options.Value.RequireSignedRequestObject)
@@ -133,12 +133,12 @@ public class RequestObjectFetcher : IRequestObjectFetcher
         };
     }
 
-    private RequestError InvalidRequestObject(JwtValidationError error)
+    private AuthError InvalidRequestObject(JwtValidationError error)
     {
         _logger.LogWarning("The request object contains invalid token: {@Error}", error);
-        return new RequestError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
+        return new AuthError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 
-    private static RequestError InvalidRequestObject(string description)
+    private static AuthError InvalidRequestObject(string description)
         => new(ErrorCodes.InvalidRequestObject, description);
 }
