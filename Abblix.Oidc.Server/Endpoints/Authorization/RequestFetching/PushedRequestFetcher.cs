@@ -34,26 +34,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <summary>
 /// Fetches pushed authorization request objects identified by a URN (Uniform Resource Name) from a storage system.
 /// </summary>
-public class PushedRequestFetcher : IAuthorizationRequestFetcher
+/// <param name="options">
+/// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
+/// <param name="authorizationRequestStorage">
+/// The storage system used to retrieve pushed authorization request objects.</param>
+public class PushedRequestFetcher(
+    IOptionsSnapshot<OidcOptions> options,
+    IAuthorizationRequestStorage authorizationRequestStorage) : IAuthorizationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PushedRequestFetcher"/> class.
-    /// </summary>
-    /// <param name="options">
-    /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
-    /// <param name="authorizationRequestStorage">
-    /// The storage system used to retrieve pushed authorization request objects.</param>
-    public PushedRequestFetcher(
-        IOptionsSnapshot<OidcOptions> options,
-        IAuthorizationRequestStorage authorizationRequestStorage)
-    {
-        _options = options;
-        _authorizationRequestStorage = authorizationRequestStorage;
-    }
-
-    private readonly IOptionsSnapshot<OidcOptions> _options;
-    private readonly IAuthorizationRequestStorage _authorizationRequestStorage;
-
     /// <summary>
     /// Asynchronously retrieves the pushed authorization request object associated with the specified URN.
     /// </summary>
@@ -77,7 +65,7 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            var requestObject = await _authorizationRequestStorage.TryGetAsync(requestUrn, true);
+            var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, true);
             return requestObject switch
             {
                 null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
@@ -86,7 +74,7 @@ public class PushedRequestFetcher : IAuthorizationRequestFetcher
         }
 
         // If PAR is required by server configuration, return an error if no pushed authorization request is provided
-        if (_options.Value.RequirePushedAuthorizationRequests)
+        if (options.Value.RequirePushedAuthorizationRequests)
         {
             return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
         }

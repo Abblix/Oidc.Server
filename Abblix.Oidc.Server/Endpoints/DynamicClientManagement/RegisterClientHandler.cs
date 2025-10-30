@@ -32,27 +32,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// This class validates and processes incoming client registration requests, issuing client identifiers and
 /// client secrets as appropriate.
 /// </summary>
-public class RegisterClientHandler : IRegisterClientHandler
+/// <param name="validator">The validator responsible for ensuring that client registration requests meet
+/// the required criteria.</param>
+/// <param name="processor">The processor responsible for the actual registration of the client,
+/// generating client identifiers and secrets.</param>
+public class RegisterClientHandler(
+    IRegisterClientRequestValidator validator,
+    IRegisterClientRequestProcessor processor) : IRegisterClientHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RegisterClientHandler"/> class with the specified validator
-    /// and processor.
-    /// </summary>
-    /// <param name="validator">The validator responsible for ensuring that client registration requests meet
-    /// the required criteria.</param>
-    /// <param name="processor">The processor responsible for the actual registration of the client,
-    /// generating client identifiers and secrets.</param>
-    public RegisterClientHandler(
-        IRegisterClientRequestValidator validator,
-        IRegisterClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IRegisterClientRequestValidator _validator;
-    private readonly IRegisterClientRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a client registration request, validating the request and processing it to register
     /// the client.
@@ -72,7 +59,7 @@ public class RegisterClientHandler : IRegisterClientHandler
     /// </remarks>
     public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRegistrationRequest);
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(clientRegistrationRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

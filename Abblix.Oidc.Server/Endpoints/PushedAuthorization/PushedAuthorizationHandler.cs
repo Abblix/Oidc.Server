@@ -33,32 +33,17 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// Handles the processing of Pushed Authorization Requests (PAR) by validating the requests and then processing
 /// them if valid. This class acts as an intermediary between the validation and processing stages of the PAR workflow.
 /// </summary>
-public class PushedAuthorizationHandler : IPushedAuthorizationHandler
+/// <param name="fetcher">э
+/// An instance of <see cref="IAuthorizationRequestFetcher"/> used to retrieve request objects.</param>
+/// <param name="validator">An instance of <see cref="IPushedAuthorizationRequestValidator"/> used for validating
+/// pushed authorization requests.</param>
+/// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
+/// validated authorization requests.</param>
+public class PushedAuthorizationHandler(
+    IAuthorizationRequestFetcher fetcher,
+    IPushedAuthorizationRequestValidator validator,
+    IPushedAuthorizationRequestProcessor processor) : IPushedAuthorizationHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PushedAuthorizationHandler"/> class with specified validator
-    /// and processor services.
-    /// </summary>
-    /// <param name="fetcher">э
-    /// An instance of <see cref="IAuthorizationRequestFetcher"/> used to retrieve request objects.</param>
-    /// <param name="validator">An instance of <see cref="IPushedAuthorizationRequestValidator"/> used for validating
-    /// pushed authorization requests.</param>
-    /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
-    /// validated authorization requests.</param>
-    public PushedAuthorizationHandler(
-        IAuthorizationRequestFetcher fetcher,
-        IPushedAuthorizationRequestValidator validator,
-        IPushedAuthorizationRequestProcessor processor)
-    {
-        _fetcher = fetcher;
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IAuthorizationRequestFetcher _fetcher;
-    private readonly IPushedAuthorizationRequestValidator _validator;
-    private readonly IPushedAuthorizationRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a pushed authorization request by first validating it and then processing it if
     /// the validation is successful.
@@ -81,17 +66,17 @@ public class PushedAuthorizationHandler : IPushedAuthorizationHandler
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
-        var fetchResult = await _fetcher.FetchAsync(authorizationRequest);
+        var fetchResult = await fetcher.FetchAsync(authorizationRequest);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);
 
         authorizationRequest = fetchResult.GetSuccess();
 
-        var validationResult = await _validator.ValidateAsync(authorizationRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(authorizationRequest, clientRequest);
 
         return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
+            onSuccess: processor.ProcessAsync,
             onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(
                 authorizationRequest,
                 error.Error,

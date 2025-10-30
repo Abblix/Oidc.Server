@@ -39,34 +39,17 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// Provides functionality to validate and process JWT request objects, binding their payloads to a request model.
 /// This class is typically used in OpenID Connect flows where request parameters are passed as JWTs.
 /// </summary>
-public class RequestObjectFetcher : IRequestObjectFetcher
+/// <param name="logger">The logger for recording debug information and warnings.</param>
+/// <param name="jsonObjectBinder">The binder for converting JSON payloads into request objects.</param>
+/// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
+/// <param name="options">Options that define how request object validation is handled, including whether
+/// request objects must be signed.</param>
+public class RequestObjectFetcher(
+    ILogger<RequestObjectFetcher> logger,
+    IJsonObjectBinder jsonObjectBinder,
+    IServiceProvider serviceProvider,
+    IOptionsSnapshot<OidcOptions> options) : IRequestObjectFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestObjectFetcher"/> class, providing necessary services
-    /// for logging, JSON binding, and client key retrieval.
-    /// </summary>
-    /// <param name="logger">The logger for recording debug information and warnings.</param>
-    /// <param name="jsonObjectBinder">The binder for converting JSON payloads into request objects.</param>
-    /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
-    /// <param name="options">Options that define how request object validation is handled, including whether
-    /// request objects must be signed.</param>
-    public RequestObjectFetcher(
-        ILogger<RequestObjectFetcher> logger,
-        IJsonObjectBinder jsonObjectBinder,
-        IServiceProvider serviceProvider,
-        IOptionsSnapshot<OidcOptions> options)
-    {
-        _logger = logger;
-        _jsonObjectBinder = jsonObjectBinder;
-        _serviceProvider = serviceProvider;
-        _options = options;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IJsonObjectBinder _jsonObjectBinder;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IOptionsSnapshot<OidcOptions> _options;
-
     /// <summary>
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
     /// </summary>
@@ -87,18 +70,18 @@ public class RequestObjectFetcher : IRequestObjectFetcher
         if (!requestObject.HasValue())
             return request;
 
-        _logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
+        logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
 
-        var result = await ValidateAsync(requestObject);
-        return await result.MatchAsync(
-            onSuccess: async payload =>
+        var validationResult = await ValidateAsync(requestObject);
+        return await validationResult.BindAsync<T>(
+            async payload =>
             {
-                var updatedRequest = await _jsonObjectBinder.BindModelAsync(payload, request);
-                return updatedRequest != null
-                    ? updatedRequest
-                    : InvalidRequestObject("Unable to bind request object");
-            },
-            onFailure: Result<T, OidcError>.Failure
+                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, request);
+                if (updatedRequest != null)
+                    return updatedRequest;
+
+                return InvalidRequestObject("Unable to bind request object");
+            }
         );
     }
 
@@ -117,13 +100,13 @@ public class RequestObjectFetcher : IRequestObjectFetcher
     /// </remarks>
     private async Task<Result<JsonObject, OidcError>> ValidateAsync(string requestObject)
     {
-        var options = ValidationOptions.ValidateIssuerSigningKey;
-        if (_options.Value.RequireSignedRequestObject)
-            options |= ValidationOptions.RequireSignedTokens;
+        var validationOptions = ValidationOptions.ValidateIssuerSigningKey;
+        if (options.Value.RequireSignedRequestObject)
+            validationOptions |= ValidationOptions.RequireSignedTokens;
 
-        using var scope = _serviceProvider.CreateScope();
+        using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-        var (result, _) = await tokenValidator.ValidateAsync(requestObject, options);
+        var (result, _) = await tokenValidator.ValidateAsync(requestObject, validationOptions);
 
         return result switch
         {
@@ -135,7 +118,7 @@ public class RequestObjectFetcher : IRequestObjectFetcher
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {
-        _logger.LogWarning("The request object contains invalid token: {@Error}", error);
+        logger.LogWarning("The request object contains invalid token: {@Error}", error);
         return new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 

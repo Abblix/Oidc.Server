@@ -45,35 +45,16 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// The class coordinates various services like authentication storage, options configuration and user-device
 /// interaction, ensuring a seamless backchannel authentication flow.
 /// </summary>
-public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticationRequestProcessor
+/// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
+/// <param name="options">Configuration options related to backchannel authentication.</param>
+/// <param name="userDeviceAuthenticationHandler">Handler for initiating authentication on the user's device.</param>
+/// <param name="timeProvider">Time provider for managing authentication request expiration.</param>
+public class BackChannelAuthenticationRequestProcessor(
+	IBackChannelAuthenticationStorage storage,
+	IOptionsSnapshot<OidcOptions> options,
+	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
+	TimeProvider timeProvider) : IBackChannelAuthenticationRequestProcessor
 {
-	/// <summary>
-	/// Initializes the processor with the necessary services required for handling backchannel authentication requests.
-	/// This setup includes storage for persisting the authentication request state, configuration options
-	/// and a handler for initiating user-device authentication.
-	/// </summary>
-	/// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
-	/// <param name="options">Configuration options related to backchannel authentication.</param>
-	/// <param name="userDeviceAuthenticationHandler">Handler for initiating authentication on the user's device.
-	/// </param>
-	/// <param name="timeProvider"></param>
-	public BackChannelAuthenticationRequestProcessor(
-		IBackChannelAuthenticationStorage storage,
-		IOptionsSnapshot<OidcOptions> options,
-		IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
-		TimeProvider timeProvider)
-	{
-		_storage = storage;
-		_options = options;
-		_userDeviceAuthenticationHandler = userDeviceAuthenticationHandler;
-		_timeProvider = timeProvider;
-	}
-
-	private readonly IBackChannelAuthenticationStorage _storage;
-	private readonly IOptionsSnapshot<OidcOptions> _options;
-	private readonly IUserDeviceAuthenticationHandler _userDeviceAuthenticationHandler;
-	private readonly TimeProvider _timeProvider;
-
 	/// <inheritdoc />
 	/// <summary>
 	/// Orchestrates the processing of a valid backchannel authentication request.
@@ -89,7 +70,7 @@ public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticat
 	{
 		request.ClientInfo.CheckClientLicense();
 
-		var authResult = await _userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
+		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
 
 		AuthorizedGrant authorizedGrant;
 		if (authResult.TryGetSuccess(out var authSession))
@@ -116,13 +97,13 @@ public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticat
 			throw new InvalidOperationException("Unexpected result state");
 		}
 
-		var pollingInterval = _options.Value.BackChannelAuthentication.PollingInterval;
+		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
-		var authenticationRequestId = await _storage.StoreAsync(
+		var authenticationRequestId = await storage.StoreAsync(
 			new BackChannelAuthenticationRequest(authorizedGrant)
 			{
 				Status = BackChannelAuthenticationStatus.Pending,
-				NextPollAt = _timeProvider.GetUtcNow() + pollingInterval,
+				NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
 			},
 			request.ExpiresIn);
 

@@ -31,24 +31,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// This class validates the client ID specified in a client registration request by checking if it exists and is authorized.
 /// </summary>
-public class ClientIdValidator : IClientRegistrationContextValidator
+/// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
+/// <param name="logger">The logger to be used for logging purposes.</param>
+public class ClientIdValidator(
+    IClientInfoProvider clientInfoProvider,
+    ILogger<ClientIdValidator> logger) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the ClientIdValidator class with a client info provider and a logger.
-    /// </summary>
-    /// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
-    /// <param name="logger">The logger to be used for logging purposes.</param>
-    public ClientIdValidator(
-        IClientInfoProvider clientInfoProvider,
-        ILogger<ClientIdValidator> logger)
-    {
-        _clientInfoProvider = clientInfoProvider;
-        _logger = logger;
-    }
-
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the client specified in the client registration request by checking if it already exists and is registered.
     /// </summary>
@@ -59,10 +47,10 @@ public class ClientIdValidator : IClientRegistrationContextValidator
         var clientId = context.Request.ClientId;
         if (clientId.HasValue())
         {
-            var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
             if (clientInfo != null)
             {
-                _logger.LogWarning("The client with id {ClientId} is already registered", Sanitized.Value(clientId));
+                logger.LogWarning("The client with id {ClientId} is already registered", Sanitized.Value(clientId));
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
             }
         }

@@ -31,26 +31,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Manages the removal of registered clients from the authorization server, ensuring that requests for client
 /// unregistration are handled securely and in accordance with OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class RemoveClientHandler : IRemoveClientHandler
+/// <param name="validator">The service used to validate incoming client removal requests.</param>
+/// <param name="processor">The service responsible for processing validated removal requests and unregistering
+/// the client.</param>
+public class RemoveClientHandler(
+    IClientRequestValidator validator,
+    IRemoveClientRequestProcessor processor) : IRemoveClientHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RemoveClientHandler"/> class with the specified validator
-    /// and processor services.
-    /// </summary>
-    /// <param name="validator">The service used to validate incoming client removal requests.</param>
-    /// <param name="processor">The service responsible for processing validated removal requests and unregistering
-    /// the client.</param>
-    public RemoveClientHandler(
-        IClientRequestValidator validator,
-        IRemoveClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IClientRequestValidator _validator;
-    private readonly IRemoveClientRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously processes a request to remove a registered client, ensuring the request is valid and authorized
     /// before proceeding with client unregistration.
@@ -67,8 +54,8 @@ public class RemoveClientHandler : IRemoveClientHandler
     /// </remarks>
     public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRequest);
+        var validationResult = await validator.ValidateAsync(clientRequest);
 
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

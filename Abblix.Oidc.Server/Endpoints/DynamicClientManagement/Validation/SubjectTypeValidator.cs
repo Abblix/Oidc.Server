@@ -34,24 +34,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// and if so, verifies the sector identifier URI and its content. It also ensures that all redirect URIs use the HTTPS scheme.
 /// If any validation fails, it returns a AuthError.
 /// </summary>
-public class SubjectTypeValidator: IClientRegistrationContextValidator
+/// <param name="httpClientFactory">The HttpClientFactory for making HTTP requests.</param>
+/// <param name="logger">The logger for logging purposes.</param>
+public class SubjectTypeValidator(
+    IHttpClientFactory httpClientFactory,
+    ILogger<SubjectTypeValidator> logger): IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the SubjectTypeValidator class with the provided dependencies.
-    /// </summary>
-    /// <param name="httpClientFactory">The HttpClientFactory for making HTTP requests.</param>
-    /// <param name="logger">The logger for logging purposes.</param>
-    public SubjectTypeValidator(
-        IHttpClientFactory httpClientFactory,
-        ILogger<SubjectTypeValidator> logger)
-    {
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-    }
-
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the subject type in the client registration request.
     /// </summary>
@@ -83,12 +71,12 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                     try
                     {
                         // TODO move to separate class
-                        sectorIdentifierUriContent = await _httpClientFactory.CreateClient().GetFromJsonAsync<Uri[]>(
+                        sectorIdentifierUriContent = await httpClientFactory.CreateClient().GetFromJsonAsync<Uri[]>(
                             sectorIdentifierUri);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
+                        logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
                             Sanitized.Value(sectorIdentifierUri));
                         return ErrorFactory.InvalidClientMetadata(
                             $"Unable to receive content of {Parameters.SectorIdentifierUri}");
@@ -109,7 +97,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
                 var missingUris = sectorIdentifierUriContent.Except(request.RedirectUris).ToArray();
                 if (missingUris.Length > 0)
                 {
-                    _logger.LogWarning("The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
+                    logger.LogWarning("The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
                         Sanitized.Value(sectorIdentifierUri),
                         missingUris);
 

@@ -39,27 +39,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This approach is typically used in scenarios where the client application runs in an environment that
 /// cannot securely maintain a secret, such as single-page applications or native mobile apps.
 /// </remarks>
-public class NoneClientAuthenticator: IClientAuthenticator
+/// <param name="logger">The logger for logging authentication events.</param>
+/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+public class NoneClientAuthenticator(
+    ILogger<NoneClientAuthenticator> logger,
+    IClientInfoProvider clientInfoProvider): IClientAuthenticator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NoneClientAuthenticator"/> class.
-    /// </summary>
-    /// <param name="logger">The logger for logging authentication events.</param>
-    /// <param name="clientInfoProvider">The provider for retrieving client information.</param>
-    /// <remarks>
-    /// This constructor prepares the authenticator with necessary dependencies for client lookup and logging.
-    /// </remarks>
-    public NoneClientAuthenticator(
-        ILogger<NoneClientAuthenticator> logger,
-        IClientInfoProvider clientInfoProvider)
-    {
-        _logger = logger;
-        _clientInfoProvider = clientInfoProvider;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IClientInfoProvider _clientInfoProvider;
-
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
     /// For this authenticator, no client authentication is required, aligning with scenarios where
@@ -87,10 +72,10 @@ public class NoneClientAuthenticator: IClientAuthenticator
         if (!clientId.HasValue())
             return null;
 
-        var client = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (client == null)
         {
-            _logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
+            logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
             return null;
         }
 

@@ -40,31 +40,16 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// It enables dynamic request objects, allowing authorization servers to fetch additional
 /// data required for processing the authorization request.
 /// </summary>
-public class RequestUriFetcher : IAuthorizationRequestFetcher
+/// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
+/// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
+/// <param name="httpClientFactory">
+/// The factory used to create <see cref="HttpClient"/> instances for making HTTP requests to the specified URI.
+/// </param>
+public class RequestUriFetcher(
+    ILogger<RequestUriFetcher> logger,
+    IClientInfoProvider clientInfoProvider,
+    IHttpClientFactory httpClientFactory) : IAuthorizationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestUriFetcher"/> class.
-    /// This constructor sets up the necessary services for fetching the request objects over HTTP.
-    /// </summary>
-    /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
-    /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
-    /// <param name="httpClientFactory">
-    /// The factory used to create <see cref="HttpClient"/> instances for making HTTP requests to the specified URI.
-    /// </param>
-    public RequestUriFetcher(
-        ILogger<RequestUriFetcher> logger,
-        IClientInfoProvider clientInfoProvider,
-        IHttpClientFactory httpClientFactory)
-    {
-        _logger = logger;
-        _clientInfoProvider = clientInfoProvider;
-        _httpClientFactory = httpClientFactory;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly IHttpClientFactory _httpClientFactory;
-
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
     /// This method retrieves the request object if the request URI is valid and contains an absolute URL.
@@ -105,10 +90,10 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
                 ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            _logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
+            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
             return ErrorFactory.ValidationError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
@@ -121,7 +106,7 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
         }
 
         // If the request contains a valid absolute URI, proceed to fetch the request object
-        var client = _httpClientFactory.CreateClient();
+        var client = httpClientFactory.CreateClient();
         string requestObject;
         try
         {
@@ -129,7 +114,7 @@ public class RequestUriFetcher : IAuthorizationRequestFetcher
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Unable to get the request object from {RequestUri}", requestUri);
+            logger.LogWarning(ex, "Unable to get the request object from {RequestUri}", requestUri);
             return ErrorFactory.InvalidRequestUri(
                 $"Unable to get the request object from {Parameters.RequestUri}");
         }

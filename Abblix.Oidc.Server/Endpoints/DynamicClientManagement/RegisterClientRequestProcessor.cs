@@ -40,49 +40,24 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
+/// <param name="clientIdGenerator">Responsible for generating unique client IDs.</param>
+/// <param name="clientSecretGenerator">Responsible for generating secure client secrets.</param>
+/// <param name="hashService">Provides hashing services for client secrets.</param>
+/// <param name="clientInfoManager">Manages storage and retrieval of client information.</param>
+/// <param name="clock">Provides time-related functionality, crucial for token issuance and expiration.</param>
+/// <param name="options">Configuration options for client registration, including secret length and expiration.</param>
+/// <param name="serviceJwtFormatter">Formats JWTs for service use, including registration access tokens.</param>
+/// <param name="issuerProvider">Provides issuer information, necessary for token issuance.</param>
+public class RegisterClientRequestProcessor(
+    IClientIdGenerator clientIdGenerator,
+    IClientSecretGenerator clientSecretGenerator,
+    IHashService hashService,
+    IClientInfoManager clientInfoManager,
+    TimeProvider clock,
+    NewClientOptions options,
+    IAuthServiceJwtFormatter serviceJwtFormatter,
+    IIssuerProvider issuerProvider) : IRegisterClientRequestProcessor
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RegisterClientRequestProcessor"/> with dependencies
-    /// required for client registration.
-    /// </summary>
-    /// <param name="clientIdGenerator">Responsible for generating unique client IDs.</param>
-    /// <param name="clientSecretGenerator">Responsible for generating secure client secrets.</param>
-    /// <param name="hashService">Provides hashing services for client secrets.</param>
-    /// <param name="clientInfoManager">Manages storage and retrieval of client information.</param>
-    /// <param name="clock">Provides time-related functionality, crucial for token issuance and expiration.</param>
-    /// <param name="options">Configuration options for client registration, including secret length and expiration.</param>
-    /// <param name="serviceJwtFormatter">Formats JWTs for service use, including registration access tokens.</param>
-    /// <param name="issuerProvider">Provides issuer information, necessary for token issuance.</param>
-    public RegisterClientRequestProcessor(
-        IClientIdGenerator clientIdGenerator,
-        IClientSecretGenerator clientSecretGenerator,
-        IHashService hashService,
-        IClientInfoManager clientInfoManager,
-        TimeProvider clock,
-        NewClientOptions options,
-        IAuthServiceJwtFormatter serviceJwtFormatter,
-        IIssuerProvider issuerProvider)
-    {
-        _clientIdGenerator = clientIdGenerator;
-        _clientSecretGenerator = clientSecretGenerator;
-        _hashService = hashService;
-        _clientInfoManager = clientInfoManager;
-        _clock = clock;
-        _options = options;
-        _serviceJwtFormatter = serviceJwtFormatter;
-        _issuerProvider = issuerProvider;
-    }
-
-    private readonly IClientIdGenerator _clientIdGenerator;
-    private readonly IClientInfoManager _clientInfoManager;
-    private readonly IClientSecretGenerator _clientSecretGenerator;
-    private readonly IHashService _hashService;
-    private readonly TimeProvider _clock;
-    private readonly IIssuerProvider _issuerProvider;
-    private readonly NewClientOptions _options;
-    private readonly IAuthServiceJwtFormatter _serviceJwtFormatter;
-
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
@@ -101,12 +76,12 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     {
         var model = request.Model;
 
-        var issuedAt = _clock.GetUtcNow();
-        var clientId = model.ClientId.HasValue() ? model.ClientId : _clientIdGenerator.GenerateClientId();
+        var issuedAt = clock.GetUtcNow();
+        var clientId = model.ClientId.HasValue() ? model.ClientId : clientIdGenerator.GenerateClientId();
         var (clientSecret, expiresAt) = GenerateClientSecret(model.TokenEndpointAuthMethod, issuedAt);
 
         var clientInfo = ToClientInfo(model, clientId, clientSecret, expiresAt, request.SectorIdentifier);
-        await _clientInfoManager.AddClientAsync(clientInfo);
+        await clientInfoManager.AddClientAsync(clientInfo);
 
         var response = new ClientRegistrationSuccessResponse(clientId, issuedAt)
         {
@@ -125,8 +100,8 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         {
             case ClientAuthenticationMethods.ClientSecretBasic:
             case ClientAuthenticationMethods.ClientSecretPost:
-                var clientSecret = _clientSecretGenerator.GenerateClientSecret(_options.ClientSecret.Length);
-                var expiresAt = issuedAt + _options.ClientSecret.ExpiresAfter;
+                var clientSecret = clientSecretGenerator.GenerateClientSecret(options.ClientSecret.Length);
+                var expiresAt = issuedAt + options.ClientSecret.ExpiresAfter;
                 return (clientSecret, expiresAt);
 
             default:
@@ -187,7 +162,10 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
             [
                 new ClientSecret
                 {
-                    Sha512Hash = _hashService.Sha(HashAlgorithm.Sha512, clientSecret),
+                    Value = clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt
+                        ? clientSecret
+                        : null,
+                    Sha512Hash = hashService.Sha(HashAlgorithm.Sha512, clientSecret),
                     ExpiresAt = expiresAt,
                 }
             ];
@@ -240,12 +218,12 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 NotBefore = issuedAt,
                 //ExpiresAt = issuedAt + ..., //TODO think about the expiration of this token
 
-                Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
+                Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
                 Audiences = [clientId],
                 Subject = clientId,
             },
         };
 
-        return _serviceJwtFormatter.FormatAsync(token);
+        return serviceJwtFormatter.FormatAsync(token);
     }
 }

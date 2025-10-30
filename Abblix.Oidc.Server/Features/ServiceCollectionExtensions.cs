@@ -71,7 +71,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IClientAuthenticator, NoneClientAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretPostAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
-            //.AddSingleton<IClientRequestAuthenticator, ClientSecretJwtAuthenticator>() //TODO support and uncomment
+            .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
             .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
             .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }

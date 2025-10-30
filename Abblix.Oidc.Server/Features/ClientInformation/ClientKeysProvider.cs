@@ -30,24 +30,12 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// Facilitates the retrieval of JSON Web Keys (JWKs) for cryptographic operations, including encryption and signing.
 /// This provider supports fetching keys from a client's JSON Web Key Set (JWKS) URL or directly from the client configuration.
 /// </summary>
-public class ClientKeysProvider : IClientKeysProvider
+/// <param name="logger">Logger for capturing any operational logs.</param>
+/// <param name="httpClientFactory">Factory for creating instances of <see cref="HttpClient"/> used to fetch JWKS from remote URLs.</param>
+public class ClientKeysProvider(
+    ILogger<ClientKeysProvider> logger,
+    IHttpClientFactory httpClientFactory) : IClientKeysProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientKeysProvider"/> class.
-    /// </summary>
-    /// <param name="logger">Logger for capturing any operational logs.</param>
-    /// <param name="httpClientFactory">Factory for creating instances of <see cref="HttpClient"/> used to fetch JWKS from remote URLs.</param>
-    public ClientKeysProvider(
-        ILogger<ClientKeysProvider> logger,
-        IHttpClientFactory httpClientFactory)
-    {
-        _logger = logger;
-        _httpClientFactory = httpClientFactory;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IHttpClientFactory _httpClientFactory;
-
     /// <summary>
     /// Retrieves the encryption keys associated with a specific client.
     /// </summary>
@@ -94,11 +82,11 @@ public class ClientKeysProvider : IClientKeysProvider
         JsonWebKeySet? jwks = null;
         try
         {
-            jwks = await _httpClientFactory.CreateClient().GetFromJsonAsync<JsonWebKeySet>(jwksUri);
+            jwks = await httpClientFactory.CreateClient().GetFromJsonAsync<JsonWebKeySet>(jwksUri);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Unable to get JWKS from specified URI: {JwksUri}", jwksUri);
+            logger.LogWarning(ex, "Unable to get JWKS from specified URI: {JwksUri}", jwksUri);
         }
 
         if (jwks == null)

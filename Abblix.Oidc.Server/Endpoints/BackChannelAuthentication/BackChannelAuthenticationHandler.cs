@@ -32,31 +32,16 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// Handles the backchannel authentication process for a CIBA (Client-Initiated Backchannel Authentication) request.
 /// This handler coordinates the fetching, validation, and processing of the authentication request.
 /// </summary>
-public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandler
+/// <param name="fetcher">The service responsible for fetching and validating the initial authentication request.
+/// </param>
+/// <param name="validator">The service responsible for validating the fetched authentication request.</param>
+/// <param name="processor">The service responsible for processing the validated authentication request and
+/// generating the response.</param>
+public class BackChannelAuthenticationHandler(
+    IBackChannelAuthenticationRequestFetcher fetcher,
+    IBackChannelAuthenticationRequestValidator validator,
+    IBackChannelAuthenticationRequestProcessor processor) : IBackChannelAuthenticationHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BackChannelAuthenticationHandler"/> class, with dependencies for
-    /// fetching, validating, and processing backchannel authentication requests.
-    /// </summary>
-    /// <param name="fetcher">The service responsible for fetching and validating the initial authentication request.
-    /// </param>
-    /// <param name="validator">The service responsible for validating the fetched authentication request.</param>
-    /// <param name="processor">The service responsible for processing the validated authentication request and
-    /// generating the response.</param>
-    public BackChannelAuthenticationHandler(
-        IBackChannelAuthenticationRequestFetcher fetcher,
-        IBackChannelAuthenticationRequestValidator validator,
-        IBackChannelAuthenticationRequestProcessor processor)
-    {
-        _fetcher = fetcher;
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IBackChannelAuthenticationRequestFetcher _fetcher;
-    private readonly IBackChannelAuthenticationRequestValidator _validator;
-    private readonly IBackChannelAuthenticationRequestProcessor _processor;
-
     /// <summary>
     /// Handles the entire backchannel authentication process by first fetching the request, then validating it,
     /// and finally processing it to generate an appropriate response.
@@ -69,7 +54,7 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
-        var fetchResult = await _fetcher.FetchAsync(request);
+        var fetchResult = await fetcher.FetchAsync(request);
         if (fetchResult.TryGetSuccess(out var fetchedRequest))
         {
             request = fetchedRequest;
@@ -79,7 +64,7 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
             return new OidcError(error.Error, error.ErrorDescription);
         }
 
-        var validationResult = await _validator.ValidateAsync(request, clientRequest);
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(request, clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

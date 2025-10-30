@@ -42,28 +42,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// Validates user information requests by verifying the access token and ensuring the request conforms to expected standards.
 /// Implements the <see cref="IUserInfoRequestValidator"/> interface.
 /// </summary>
-public class UserInfoRequestValidator : IUserInfoRequestValidator
+/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
+/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
+/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+public class UserInfoRequestValidator(
+	IAuthServiceJwtValidator jwtValidator,
+	IAccessTokenService accessTokenService,
+	IClientInfoProvider clientInfoProvider) : IUserInfoRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="UserInfoRequestValidator"/> class.
-	/// </summary>
-	/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
-	/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
-	/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
-	public UserInfoRequestValidator(
-		IAuthServiceJwtValidator jwtValidator,
-		IAccessTokenService accessTokenService,
-		IClientInfoProvider clientInfoProvider)
-	{
-		_jwtValidator = jwtValidator;
-		_accessTokenService = accessTokenService;
-		_clientInfoProvider = clientInfoProvider;
-	}
-
-	private readonly IAuthServiceJwtValidator _jwtValidator;
-	private readonly IAccessTokenService _accessTokenService;
-	private readonly IClientInfoProvider _clientInfoProvider;
-
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
 	/// the provided access token and request parameters.
@@ -116,7 +102,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 			jwtAccessToken = userInfoRequest.AccessToken;
 		}
 
-		var result = await _jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
+		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
 		AuthSession? authSession;
 		AuthorizationContext? authContext;
@@ -129,7 +115,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 					$"Invalid token type: {tokenType}");
 
 			case ValidJsonWebToken { Token: var token }:
-				(authSession, authContext) = await _accessTokenService.AuthenticateByAccessTokenAsync(token);
+				(authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
 				break;
 
 			case JwtValidationError error:
@@ -139,7 +125,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 				throw new UnexpectedTypeException(nameof(result), result.GetType());
 		}
 
-		var clientInfo = await _clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
+		var clientInfo = await clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
 		if (clientInfo == null)
 		{
 			return new OidcError(

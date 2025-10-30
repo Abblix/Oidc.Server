@@ -37,7 +37,7 @@ public class StaticLicenseJwtProvider(string licenseJwt) : ILicenseJwtProvider
     /// Asynchronously returns the predefined license JWT string.
     /// </summary>
     /// <returns>A task that returns the license JWT string.</returns>
-    public IAsyncEnumerable<string>? GetLicenseJwtAsync()
+    public IAsyncEnumerable<string> GetLicenseJwtAsync()
     {
         return new[] { licenseJwt }.ToAsyncEnumerable();
     }

@@ -32,26 +32,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles requests for reading client configurations from the authorization server.
 /// Validates and processes requests to retrieve information about registered clients.
 /// </summary>
-public class ReadClientHandler : IReadClientHandler
+/// <param name="validator">The service used to validate client information requests.</param>
+/// <param name="processor">The service responsible for processing valid client information requests and retrieving
+/// client data.</param>
+public class ReadClientHandler(
+    IClientRequestValidator validator,
+    IReadClientRequestProcessor processor) : IReadClientHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReadClientHandler"/> class with specified validator and processor
-    /// services.
-    /// </summary>
-    /// <param name="validator">The service used to validate client information requests.</param>
-    /// <param name="processor">The service responsible for processing valid client information requests and retrieving
-    /// client data.</param>
-    public ReadClientHandler(
-        IClientRequestValidator validator,
-        IReadClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IClientRequestValidator _validator;
-    private readonly IReadClientRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a request to read client information, validating the request and processing it to return
     /// the requested client data.
@@ -69,8 +56,8 @@ public class ReadClientHandler : IReadClientHandler
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(Model.ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRequest);
+        var validationResult = await validator.ValidateAsync(clientRequest);
 
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

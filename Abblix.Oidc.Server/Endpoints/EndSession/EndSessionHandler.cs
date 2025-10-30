@@ -26,22 +26,13 @@ using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
-public class EndSessionHandler : IEndSessionHandler
+public class EndSessionHandler(
+    IEndSessionRequestValidator validator,
+    IEndSessionRequestProcessor processor) : IEndSessionHandler
 {
-    public EndSessionHandler(
-        IEndSessionRequestValidator validator,
-        IEndSessionRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IEndSessionRequestValidator _validator;
-    private readonly IEndSessionRequestProcessor _processor;
-
     public async Task<Result<EndSessionSuccess, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
-        var validationResult = await _validator.ValidateAsync(endSessionRequest);
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(endSessionRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

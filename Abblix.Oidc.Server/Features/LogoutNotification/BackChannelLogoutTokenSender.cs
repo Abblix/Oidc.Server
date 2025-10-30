@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -32,30 +31,13 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// Implements the functionality to send logout tokens to clients via back-channel communication,
 /// adhering to the OpenID Connect back-channel logout specification.
 /// </summary>
-public class BackChannelLogoutTokenSender : ILogoutTokenSender
+/// <param name="logger">The logger to use for logging information about the logout token sending process.</param>
+/// <param name="backChannelHttpClient">The HTTP client used for sending the logout tokens to clients over the
+/// back channel.</param>
+public class BackChannelLogoutTokenSender(
+    ILogger<BackChannelLogoutTokenSender> logger,
+    HttpClient backChannelHttpClient) : ILogoutTokenSender
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BackChannelLogoutTokenSender"/> class with the specified logger,
-    /// JWT formatter, and HTTP client.
-    /// </summary>
-    /// <param name="logger">The logger to use for logging information about the logout token sending process.</param>
-    /// <param name="jwtFormatter">The formatter responsible for creating JWTs to be sent as logout tokens.</param>
-    /// <param name="backChannelHttpClient">The HTTP client used for sending the logout tokens to clients over the
-    /// back channel.</param>
-    public BackChannelLogoutTokenSender(
-        ILogger<BackChannelLogoutTokenSender> logger,
-        IClientJwtFormatter jwtFormatter,
-        HttpClient backChannelHttpClient)
-    {
-        _logger = logger;
-        _jwtFormatter = jwtFormatter;
-        _backChannelHttpClient = backChannelHttpClient;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IClientJwtFormatter _jwtFormatter;
-    private readonly HttpClient _backChannelHttpClient;
-
     /// <summary>
     /// Asynchronously sends a logout token directly to a client over the back channel.
     /// </summary>
@@ -77,15 +59,15 @@ public class BackChannelLogoutTokenSender : ILogoutTokenSender
         };
 
         using var content = new FormUrlEncodedContent(parameters);
-        using var response = await _backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
+        using var response = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
 
-        _logger.LogDebug("The request with {@Parameters} was sent to {Uri}, the status code {StatusCode} was received",
+        logger.LogDebug("The request with {@Parameters} was sent to {Uri}, the status code {StatusCode} was received",
             parameters, logoutOptions.Uri, response.StatusCode);
 
         response.EnsureSuccessStatusCode();
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to send logout token to {Uri}. Status code: {StatusCode}",
+            logger.LogError("Failed to send logout token to {Uri}. Status code: {StatusCode}",
                 logoutOptions.Uri, response.StatusCode);
         }
     }

@@ -29,19 +29,10 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// Manages the storage and retrieval of client information for OpenID Connect (OIDC) flows.
 /// This class provides methods to access client configurations stored in <see cref="OidcOptions"/>.
 /// </summary>
-internal class ClientInfoStorage : IClientInfoProvider, IClientInfoManager
+/// <param name="options">The OIDC options containing client configurations.</param>
+internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoProvider, IClientInfoManager
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientInfoStorage"/> class, loading client configurations
-    /// from the provided <see cref="OidcOptions"/>.
-    /// </summary>
-    /// <param name="options">The OIDC options containing client configurations.</param>
-    public ClientInfoStorage(IOptions<OidcOptions> options)
-    {
-        _clients = options.Value.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private readonly Dictionary<string, ClientInfo> _clients;
+    private readonly Dictionary<string, ClientInfo> _clients = options.Value.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

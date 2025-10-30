@@ -35,33 +35,16 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// handling various types of token requests such as authorization code and refresh token.
 /// Generates the appropriate token responses including access tokens, refresh tokens, and ID tokens.
 /// </summary>
-public class TokenRequestProcessor : ITokenRequestProcessor
+/// <param name="accessTokenService">Service for creating and managing access tokens.</param>
+/// <param name="refreshTokenService">Service for creating and managing refresh tokens.</param>
+/// <param name="identityTokenService">Service for creating and managing ID tokens in OpenID Connect flows.</param>
+/// <param name="tokenContextEvaluator">Service for building the authorization context from a token request.</param>
+public class TokenRequestProcessor(
+	IAccessTokenService accessTokenService,
+	IRefreshTokenService refreshTokenService,
+	IIdentityTokenService identityTokenService,
+	ITokenAuthorizationContextEvaluator tokenContextEvaluator) : ITokenRequestProcessor
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="TokenRequestProcessor"/> class, equipped with services
-	/// for token generation and management.
-	/// </summary>
-	/// <param name="accessTokenService">Service for creating and managing access tokens.</param>
-	/// <param name="refreshTokenService">Service for creating and managing refresh tokens.</param>
-	/// <param name="identityTokenService">Service for creating and managing ID tokens in OpenID Connect flows.</param>
-	/// <param name="tokenContextEvaluator">Service for building the authorization context from a token request.</param>
-	public TokenRequestProcessor(
-		IAccessTokenService accessTokenService,
-		IRefreshTokenService refreshTokenService,
-		IIdentityTokenService identityTokenService,
-		ITokenAuthorizationContextEvaluator tokenContextEvaluator)
-	{
-		_accessTokenService = accessTokenService;
-		_refreshTokenService = refreshTokenService;
-		_identityTokenService = identityTokenService;
-		_tokenContextEvaluator = tokenContextEvaluator;
-	}
-
-	private readonly IAccessTokenService _accessTokenService;
-	private readonly IRefreshTokenService _refreshTokenService;
-	private readonly IIdentityTokenService _identityTokenService;
-	private readonly ITokenAuthorizationContextEvaluator _tokenContextEvaluator;
-
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
 	/// the request's scope and grant type. It generates an access token for every request and, depending on the scope,
@@ -82,9 +65,9 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 		var clientInfo = request.ClientInfo;
 		clientInfo.CheckClientLicense();
 
-		var authContext = _tokenContextEvaluator.EvaluateAuthorizationContext(request);
+		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		var accessToken = await _accessTokenService.CreateAccessTokenAsync(
+		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
 			clientInfo);
@@ -97,7 +80,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 
 		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{
-			response.RefreshToken = await _refreshTokenService.CreateRefreshTokenAsync(
+			response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				request.AuthorizedGrant.Context,
 				clientInfo,
@@ -106,7 +89,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 
 		if (authContext.Scope.HasFlag(Scopes.OpenId))
 		{
-			response.IdToken = await _identityTokenService.CreateIdentityTokenAsync(
+			response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				authContext,
 				clientInfo,

@@ -33,19 +33,12 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// Validates the user's identity in a backchannel authentication request, ensuring that valid identity hints
 /// (e.g., login hints, tokens) are provided and correctly processed.
 /// </summary>
-public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
+/// <param name="idTokenValidator">Validator for ID tokens issued by the authorization server.</param>
+/// <param name="clientJwtValidator">Validator for JWTs issued by clients.</param>
+public class UserIdentityValidator(
+    IAuthServiceJwtValidator idTokenValidator,
+    IClientJwtValidator clientJwtValidator): IBackChannelAuthenticationContextValidator
 {
-    public UserIdentityValidator(
-        IAuthServiceJwtValidator idTokenValidator,
-        IClientJwtValidator clientJwtValidator)
-    {
-        _idTokenValidator = idTokenValidator;
-        _clientJwtValidator = clientJwtValidator;
-    }
-
-    private readonly IAuthServiceJwtValidator _idTokenValidator;
-    private readonly IClientJwtValidator _clientJwtValidator;
-
     /// <summary>
     /// Validates the user's identity based on the provided identity hints, such as login hint, login hint token,
     /// or ID token hint. It ensures that only one identity hint is present and attempts to process the hint
@@ -90,7 +83,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
         // Validate the LoginHintToken if it is provided and the client is configured to parse it as a JWT
         if (request.LoginHintToken.HasValue() && context.ClientInfo.ParseLoginHintTokenAsJwt)
         {
-            var (loginHintTokenResult, clientInfo) = await _clientJwtValidator.ValidateAsync(request.LoginHintToken);
+            var (loginHintTokenResult, clientInfo) = await clientJwtValidator.ValidateAsync(request.LoginHintToken);
             switch (loginHintTokenResult, clientInfo)
             {
                 // The token was issued for another client
@@ -149,7 +142,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
-        var result = await _idTokenValidator.ValidateAsync(
+        var result = await idTokenValidator.ValidateAsync(
             idTokenHint,
             ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 

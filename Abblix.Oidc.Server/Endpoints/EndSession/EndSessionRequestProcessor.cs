@@ -41,36 +41,18 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// This class is responsible for handling end-session requests. It facilitates user logout, client notifications,
 /// and ensures compliance with the relevant OAuth 2.0 and OpenID Connect standards.
 /// </remarks>
-public class EndSessionRequestProcessor : IEndSessionRequestProcessor
+/// <param name="logger">The logger.</param>
+/// <param name="authSessionService">The authentication service.</param>
+/// <param name="issuerProvider">The issuer provider.</param>
+/// <param name="clientInfoProvider">The client info provider.</param>
+/// <param name="logoutNotifier">The logout notifier.</param>
+public class EndSessionRequestProcessor(
+	ILogger<EndSessionRequestProcessor> logger,
+	IAuthSessionService authSessionService,
+	IIssuerProvider issuerProvider,
+	IClientInfoProvider clientInfoProvider,
+	ILogoutNotifier logoutNotifier) : IEndSessionRequestProcessor
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="EndSessionRequestProcessor"/> class.
-	/// </summary>
-	/// <param name="logger">The logger.</param>
-	/// <param name="authSessionService">The authentication service.</param>
-	/// <param name="issuerProvider">The issuer provider.</param>
-	/// <param name="clientInfoProvider">The client info provider.</param>
-	/// <param name="logoutNotifier">The logout notifier.</param>
-	public EndSessionRequestProcessor(
-		ILogger<EndSessionRequestProcessor> logger,
-		IAuthSessionService authSessionService,
-		IIssuerProvider issuerProvider,
-		IClientInfoProvider clientInfoProvider,
-		ILogoutNotifier logoutNotifier)
-	{
-		_logger = logger;
-		_authSessionService = authSessionService;
-		_issuerProvider = issuerProvider;
-		_clientInfoProvider = clientInfoProvider;
-		_logoutNotifier = logoutNotifier;
-	}
-
-	private readonly ILogger _logger;
-	private readonly IAuthSessionService _authSessionService;
-	private readonly IClientInfoProvider _clientInfoProvider;
-	private readonly IIssuerProvider _issuerProvider;
-	private readonly ILogoutNotifier _logoutNotifier;
-
 	/// <summary>
 	/// Processes the end-session request and returns the corresponding response.
 	/// </summary>
@@ -90,7 +72,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 			};
 		}
 
-		var authSession = await _authSessionService.AuthenticateAsync();
+		var authSession = await authSessionService.AuthenticateAsync();
 		if (authSession == null)
 		{
 			return new EndSessionSuccess(postLogoutRedirectUri, Array.Empty<Uri>());
@@ -105,19 +87,19 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 				$"The claim {JwtClaimTypes.Subject} must contain the unique identifier of the user logged in");
 		}
 
-		await _authSessionService.SignOutAsync();
-		_logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
+		await authSessionService.SignOutAsync();
+		logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
 
-		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()));
+		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));
 
 		var tasks = new List<Task>();
 		foreach (var clientId in authSession.AffectedClientIds)
 		{
-			var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+			var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 			if (clientInfo == null)
 				continue;
 
-			var task = _logoutNotifier.NotifyClientAsync(clientInfo, context);
+			var task = logoutNotifier.NotifyClientAsync(clientInfo, context);
 			if (task.Status == TaskStatus.Running)
 				tasks.Add(task);
 		}

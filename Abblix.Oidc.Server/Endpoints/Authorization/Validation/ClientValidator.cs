@@ -37,26 +37,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// as part of the authorization validation process. It plays a crucial role in ensuring that
 /// only valid and authorized clients can initiate authorization requests.
 /// </summary>
-public class ClientValidator : IAuthorizationContextValidator
+/// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
+/// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
+public class ClientValidator(
+    IClientInfoProvider clientInfoProvider,
+    ILogger<ClientValidator> logger) : IAuthorizationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientValidator"/> class with dependencies for client information
-    /// retrieval and logging. The client info provider is used to obtain detailed information about clients,
-    /// while the logger records validation activities.
-    /// </summary>
-    /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
-    /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
-    public ClientValidator(
-        IClientInfoProvider clientInfoProvider,
-        ILogger<ClientValidator> logger)
-    {
-        _clientInfoProvider = clientInfoProvider;
-        _logger = logger;
-    }
-
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
     /// Ensures the client is recognized and authorized to make the request.
@@ -76,10 +62,10 @@ public class ClientValidator : IAuthorizationContextValidator
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await _clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            _logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
+            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 

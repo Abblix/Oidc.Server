@@ -31,29 +31,16 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// Manages the handling of token revocation requests in accordance with OAuth 2.0 specifications, ensuring that such
 /// requests are properly validated and processed to revoke tokens as intended.
 /// </summary>
-public class RevocationHandler : IRevocationHandler
+/// <param name="validator">
+/// An implementation of <see cref="IRevocationRequestValidator"/> responsible for validating the revocation request
+/// against the OAuth 2.0 specifications.</param>
+/// <param name="processor">
+/// An implementation of <see cref="IRevocationRequestProcessor"/> responsible for processing validated revocation
+/// requests to effectively revoke tokens.</param>
+public class RevocationHandler(
+    IRevocationRequestValidator validator,
+    IRevocationRequestProcessor processor) : IRevocationHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RevocationHandler"/> class with the necessary validator and
-    /// processor for revocation requests.
-    /// </summary>
-    /// <param name="validator">
-    /// An implementation of <see cref="IRevocationRequestValidator"/> responsible for validating the revocation request
-    /// against the OAuth 2.0 specifications.</param>
-    /// <param name="processor">
-    /// An implementation of <see cref="IRevocationRequestProcessor"/> responsible for processing validated revocation
-    /// requests to effectively revoke tokens.</param>
-    public RevocationHandler(
-        IRevocationRequestValidator validator,
-        IRevocationRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IRevocationRequestValidator _validator;
-    private readonly IRevocationRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a token revocation request by validating it and then processing it if the
     /// validation succeeds.
@@ -76,7 +63,7 @@ public class RevocationHandler : IRevocationHandler
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(revocationRequest, clientRequest);
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(revocationRequest, clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

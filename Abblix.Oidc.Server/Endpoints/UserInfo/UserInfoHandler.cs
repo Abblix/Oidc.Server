@@ -31,27 +31,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// Handles user information requests in an OpenID Connect compliant manner. It ensures that requests for user info
 /// are correctly validated and processed, returning the requested user information if the request is authorized.
 /// </summary>
-public class UserInfoHandler : IUserInfoHandler
+/// <param name="validator">An implementation of <see cref="IUserInfoRequestValidator"/> responsible for validating
+/// user info requests against OpenID Connect specifications.</param>
+/// <param name="processor">An implementation of <see cref="IUserInfoRequestProcessor"/> responsible for processing
+/// validated requests and retrieving user information.</param>
+public class UserInfoHandler(
+    IUserInfoRequestValidator validator,
+    IUserInfoRequestProcessor processor) : IUserInfoHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UserInfoHandler"/> class, setting up the necessary validator
-    /// and processor for handling user info requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="IUserInfoRequestValidator"/> responsible for validating
-    /// user info requests against OpenID Connect specifications.</param>
-    /// <param name="processor">An implementation of <see cref="IUserInfoRequestProcessor"/> responsible for processing
-    /// validated requests and retrieving user information.</param>
-    public UserInfoHandler(
-        IUserInfoRequestValidator validator,
-        IUserInfoRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IUserInfoRequestValidator _validator;
-    private readonly IUserInfoRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously processes a user info request by first validating it and then, if validation is successful,
     /// retrieving the requested user information.
@@ -73,8 +60,8 @@ public class UserInfoHandler : IUserInfoHandler
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(userInfoRequest, clientRequest);
 
-        return await validationResult.BindAsync(_processor.ProcessAsync);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

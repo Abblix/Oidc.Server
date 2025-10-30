@@ -37,23 +37,19 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// The service runs as part of the application's background services, ensuring the license is loaded before
 /// the application starts accepting incoming requests.
 /// </remarks>
-internal class LicenseLoadingService
-    : IHostedService
+/// <param name="loggerFactory">Logger factory for initializing the license logger.</param>
+/// <param name="licenseJwtProvider">The provider used to retrieve the license JWT.</param>
+internal class LicenseLoadingService(
+    ILoggerFactory loggerFactory,
+    ILicenseJwtProvider licenseJwtProvider) : IHostedService
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LicenseLoadingService"/> with the specified license JWT provider.
-    /// </summary>
-    /// <param name="loggerFactory"></param>
-    /// <param name="licenseJwtProvider">The provider used to retrieve the license JWT.</param>
-    public LicenseLoadingService(
-        ILoggerFactory loggerFactory,
-        ILicenseJwtProvider licenseJwtProvider)
-    {
-        LicenseLogger.Instance.Init(loggerFactory);
-        _licenseJwtProvider = licenseJwtProvider;
-    }
+    private readonly ILicenseJwtProvider _licenseJwtProvider = Init(loggerFactory, licenseJwtProvider);
 
-    private readonly ILicenseJwtProvider _licenseJwtProvider;
+    private static ILicenseJwtProvider Init(ILoggerFactory factory, ILicenseJwtProvider provider)
+    {
+        LicenseLogger.Instance.Init(factory);
+        return provider;
+    }
 
     /// <summary>
     /// Starts the service by loading the license JWT.
