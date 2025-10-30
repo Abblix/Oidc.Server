@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
@@ -40,8 +42,9 @@ public interface IUserInfoHandler
     /// <param name="clientRequest">Additional client-specific request information that may be necessary for processing
     /// the request in certain contexts.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="UserInfoResponse"/>, which contains the user information
-    /// if the request is authorized and valid, or an error response indicating why the request could not be fulfilled.
+    /// A <see cref="Task"/> that resolves to a <see cref="Result{UserInfoFoundResponse, AuthError}"/>,
+    /// which contains the user information if the request is authorized and valid,
+    /// or an error response indicating why the request could not be fulfilled.
     /// </returns>
     /// <remarks>
     /// This method plays a crucial role in the OAuth 2.0 and OIDC ecosystems by enabling secure access to user
@@ -49,7 +52,7 @@ public interface IUserInfoHandler
     /// in the UserInfo request is validated and that any returned information is consistent with the scopes
     /// granted during the authorization process.
     /// </remarks>
-    Task<UserInfoResponse> HandleAsync(
+    Task<Result<UserInfoFoundResponse, AuthError>> HandleAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest);
 }

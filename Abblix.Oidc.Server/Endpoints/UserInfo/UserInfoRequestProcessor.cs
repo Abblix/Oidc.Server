@@ -20,12 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.UserInfo;
-using UserInfoResponse = Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces.UserInfoResponse;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
@@ -45,9 +46,9 @@ internal class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserCla
 	/// authorization context and client information necessary to determine the scope and specifics of
 	/// the requested claims.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
-	/// which upon completion will yield a <see cref="UserInfoResponse"/> encapsulating either the user's claims
+	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/> encapsulating either the user's claims
 	/// or an error response.</returns>
-	public async Task<UserInfoResponse> ProcessAsync(ValidUserInfoRequest request)
+	public async Task<Result<UserInfoFoundResponse, AuthError>> ProcessAsync(ValidUserInfoRequest request)
 	{
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
 			request.AuthSession,
@@ -56,7 +57,7 @@ internal class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserCla
 			request.ClientInfo);
 
 		if (userInfo == null)
-			return new UserInfoErrorResponse(ErrorCodes.InvalidGrant, "The user claims aren't found");
+			return new AuthError(ErrorCodes.InvalidGrant, "The user claims aren't found");
 
 		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);

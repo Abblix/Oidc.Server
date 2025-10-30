@@ -34,7 +34,6 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
-using UserInfoResponse = Abblix.Oidc.Server.Mvc.Model.UserInfoResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 
@@ -134,7 +133,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpGetOrPost(Path.UserInfo)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    public async Task<ActionResult<UserInfoResponse>> UserInfoAsync(
+    public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,

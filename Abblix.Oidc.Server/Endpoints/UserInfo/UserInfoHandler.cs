@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
@@ -67,15 +69,12 @@ public class UserInfoHandler : IUserInfoHandler
     /// user information, in line with OpenID Connect protocols. It leverages the validator to ensure requests meet
     /// OIDC standards and the processor to fetch and return the relevant user information securely.
     /// </remarks>
-    public async Task<UserInfoResponse> HandleAsync(
+    public async Task<Result<UserInfoFoundResponse, AuthError>> HandleAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(userInfoRequest, clientRequest);
 
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => new UserInfoErrorResponse(error.ErrorCode, error.ErrorDescription)
-        );
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

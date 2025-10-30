@@ -71,8 +71,8 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 	/// <param name="userInfoRequest">The user info request to validate.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
-	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, RequestError}"/>.</returns>
-	public async Task<Result<ValidUserInfoRequest, RequestError>> ValidateAsync(
+	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, AuthError}"/>.</returns>
+	public async Task<Result<ValidUserInfoRequest, AuthError>> ValidateAsync(
 		UserInfoRequest userInfoRequest,
 		ClientRequest clientRequest)
 	{
@@ -82,14 +82,14 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		{
 			if (authorizationHeader.Scheme != TokenTypes.Bearer)
 			{
-				return new RequestError(
+				return new AuthError(
 					ErrorCodes.InvalidGrant,
 					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 			}
 
 			if (userInfoRequest.AccessToken != null)
 			{
-				return new RequestError(
+				return new AuthError(
 					ErrorCodes.InvalidGrant,
 					$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 					$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
@@ -97,7 +97,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 
 			if (authorizationHeader.Parameter == null)
 			{
-				return new RequestError(
+				return new AuthError(
 					ErrorCodes.InvalidGrant,
 					$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 			}
@@ -106,7 +106,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		}
 		else if (userInfoRequest.AccessToken == null)
 		{
-			return new RequestError(
+			return new AuthError(
 				ErrorCodes.InvalidGrant,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
@@ -124,7 +124,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		switch (result)
 		{
 			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.AccessToken:
-				return new RequestError(
+				return new AuthError(
 					ErrorCodes.InvalidGrant,
 					$"Invalid token type: {tokenType}");
 
@@ -133,7 +133,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 				break;
 
 			case JwtValidationError error:
-				return new RequestError(ErrorCodes.InvalidGrant, error.ErrorDescription);
+				return new AuthError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 
 			default:
 				throw new UnexpectedTypeException(nameof(result), result.GetType());
@@ -142,7 +142,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		var clientInfo = await _clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
 		if (clientInfo == null)
 		{
-			return new RequestError(
+			return new AuthError(
 				ErrorCodes.InvalidGrant,
 				$"The client '{authContext.ClientId}' is not found");
 		}
