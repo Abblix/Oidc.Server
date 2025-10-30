@@ -50,81 +50,139 @@ public class SubjectTypeValidator(
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        if (request.SubjectType == SubjectTypes.Pairwise)
+        if (request.SubjectType != SubjectTypes.Pairwise)
+            return null;
+
+        var sectorIdentifierUri = request.SectorIdentifierUri;
+        if (sectorIdentifierUri != null)
+            return await Validate(context, sectorIdentifierUri);
+
+        return Validate(context);
+    }
+
+    /// <summary>
+    /// Validates pairwise subject type when sector identifier URI is provided.
+    /// </summary>
+    private async Task<OidcError?> Validate(
+        ClientRegistrationValidationContext context,
+        Uri sectorIdentifierUri)
+    {
+        var validationError = ValidateSectorIdentifierUriFormat(sectorIdentifierUri);
+        if (validationError != null)
+            return validationError;
+
+        var contentResult = await FetchSectorIdentifierContent(sectorIdentifierUri);
+        if (contentResult.TryGetFailure(out var contentError))
+            return contentError;
+
+        var error = ValidateSectorIdentifierContent(
+            sectorIdentifierUri,
+            contentResult.GetSuccess(),
+            context.Request.RedirectUris);
+
+        if (error != null)
+            return error;
+
+        context.SectorIdentifier = sectorIdentifierUri.Host;
+        return null;
+    }
+
+    /// <summary>
+    /// Validates that sector identifier URI has correct format (absolute URI with HTTPS scheme).
+    /// </summary>
+    private static OidcError? ValidateSectorIdentifierUriFormat(Uri sectorIdentifierUri)
+    {
+        if (!sectorIdentifierUri.IsAbsoluteUri)
         {
-            var sectorIdentifierUri = request.SectorIdentifierUri;
-            if (sectorIdentifierUri != null)
-            {
-                if (!sectorIdentifierUri.IsAbsoluteUri)
-                {
-                    return ErrorFactory.InvalidClientMetadata(
-                        $"{Parameters.SectorIdentifierUri} must be absolute URI");
-                }
-                if (sectorIdentifierUri.Scheme != Uri.UriSchemeHttps)
-                {
-                    return ErrorFactory.InvalidClientMetadata(
-                        $"{Parameters.SectorIdentifierUri} must have {Uri.UriSchemeHttps} scheme");
-                }
-
-                Uri[]? sectorIdentifierUriContent;
-                {
-                    try
-                    {
-                        // TODO move to separate class
-                        sectorIdentifierUriContent = await httpClientFactory.CreateClient().GetFromJsonAsync<Uri[]>(
-                            sectorIdentifierUri);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
-                            Sanitized.Value(sectorIdentifierUri));
-                        return ErrorFactory.InvalidClientMetadata(
-                            $"Unable to receive content of {Parameters.SectorIdentifierUri}");
-                    }
-                }
-
-                if (sectorIdentifierUriContent is not { Length: > 0 })
-                {
-                    return ErrorFactory.InvalidClientMetadata(
-                        $"The content of {Parameters.SectorIdentifierUri} is empty");
-                }
-
-                if (sectorIdentifierUriContent.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
-                {
-                    return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
-                }
-
-                var missingUris = sectorIdentifierUriContent.Except(request.RedirectUris).ToArray();
-                if (missingUris.Length > 0)
-                {
-                    logger.LogWarning("The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
-                        Sanitized.Value(sectorIdentifierUri),
-                        missingUris);
-
-                    return ErrorFactory.InvalidClientMetadata(
-                        $"The content received from the {Parameters.SectorIdentifierUri} contains one or more URIs that are not in the registered list of redirect URIs");
-                }
-
-                context.SectorIdentifier = sectorIdentifierUri.Host;
-            }
-            else
-            {
-                if (request.RedirectUris.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
-                {
-                    return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
-                }
-
-                var hosts = request.RedirectUris.Select(uri => uri.Host).Distinct().ToArray();
-                if (hosts.Length > 1)
-                {
-                    return ErrorFactory.InvalidRedirectUri("The client specified pairwise subject type, but provides several redirect URIs with different hosts");
-                }
-
-                var sectorIdentifier = hosts[0];
-                context.SectorIdentifier = sectorIdentifier;
-            }
+            return ErrorFactory.InvalidClientMetadata(
+                $"{Parameters.SectorIdentifierUri} must be absolute URI");
         }
 
+        if (sectorIdentifierUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"{Parameters.SectorIdentifierUri} must have {Uri.UriSchemeHttps} scheme");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Fetches and validates the content from sector identifier URI.
+    /// </summary>
+    private async Task<Result<Uri[], OidcError>> FetchSectorIdentifierContent(Uri sectorIdentifierUri)
+    {
+        Uri[]? content;
+        try
+        {
+            // TODO move to separate class
+            content = await httpClientFactory.CreateClient().GetFromJsonAsync<Uri[]>(sectorIdentifierUri);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
+                Sanitized.Value(sectorIdentifierUri));
+            return ErrorFactory.InvalidClientMetadata(
+                $"Unable to receive content of {Parameters.SectorIdentifierUri}");
+        }
+
+        if (content is not { Length: > 0 })
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"The content of {Parameters.SectorIdentifierUri} is empty");
+        }
+
+        return content;
+    }
+
+    /// <summary>
+    /// Validates the content fetched from sector identifier URI.
+    /// </summary>
+    private OidcError? ValidateSectorIdentifierContent(
+        Uri sectorIdentifierUri,
+        Uri[] sectorIdentifierContent,
+        IEnumerable<Uri> redirectUris)
+    {
+        if (sectorIdentifierContent.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
+        }
+
+        var missingUris = sectorIdentifierContent.Except(redirectUris).ToArray();
+        if (missingUris.Length > 0)
+        {
+            logger.LogWarning(
+                "The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
+                Sanitized.Value(sectorIdentifierUri),
+                missingUris);
+
+            return ErrorFactory.InvalidClientMetadata(
+                $"The content received from the {Parameters.SectorIdentifierUri} contains one or more URIs that are not in the registered list of redirect URIs");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Validates pairwise subject type when no sector identifier URI is provided.
+    /// </summary>
+    private static OidcError? Validate(ClientRegistrationValidationContext context)
+    {
+        var redirectUris = context.Request.RedirectUris;
+
+        if (redirectUris.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
+        }
+
+        var hosts = redirectUris.Select(uri => uri.Host).Distinct().ToArray();
+        if (hosts.Length > 1)
+        {
+            return ErrorFactory.InvalidRedirectUri(
+                "The client specified pairwise subject type, but provides several redirect URIs with different hosts");
+        }
+
+        context.SectorIdentifier = hosts[0];
         return null;
     }
 }
