@@ -45,16 +45,16 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// </summary>
     /// <param name="context">The validation context containing the token request and client information.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if the authorization grant is invalid,
+    /// A <see cref="AuthError"/> if the authorization grant is invalid,
     /// including an error code and description;
     /// otherwise, null indicating that the grant is valid and the context has been updated.
     /// </returns>
-    public async Task<RequestError?> ValidateAsync(TokenValidationContext context)
+    public async Task<AuthError?> ValidateAsync(TokenValidationContext context)
     {
         // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.AllowedGrantTypes.Contains(context.Request.GrantType))
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.UnauthorizedClient,
                 "The grant type is not allowed for this client");
         }
@@ -72,7 +72,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
         // to prevent redirection attacks
         if (grant.Context.RedirectUri != context.Request.RedirectUri)
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.InvalidGrant,
                 "The redirect Uri value does not match to the value used before");
         }

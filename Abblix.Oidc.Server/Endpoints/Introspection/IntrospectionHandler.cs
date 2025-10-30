@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -68,7 +69,7 @@ public class IntrospectionHandler : IIntrospectionHandler
     /// authentication systems by allowing resource servers and other entities to verify the validity
     /// and attributes of tokens.
     /// </remarks>
-    public async Task<Result<IntrospectionSuccess, IntrospectionError>> HandleAsync(
+    public async Task<Result<IntrospectionSuccess, AuthError>> HandleAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest)
     {
@@ -76,7 +77,7 @@ public class IntrospectionHandler : IIntrospectionHandler
 
         return await validationResult.MatchAsync(
             onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<IntrospectionSuccess, IntrospectionError>>(
-                new IntrospectionError(error.ErrorCode, error.ErrorDescription)));
+            onFailure: error => Task.FromResult<Result<IntrospectionSuccess, AuthError>>(
+                new AuthError(error.Error, error.ErrorDescription)));
     }
 }

@@ -45,10 +45,10 @@ public class TokenRequestValidator(ITokenContextValidator validator) : ITokenReq
 	/// </summary>
 	/// <param name="tokenRequest">The token request containing all necessary parameters for validation.</param>
 	/// <param name="clientRequest">Client request information necessary for client authentication.</param>
-	/// <returns>A <see cref="Task"/> that resolves to a <see cref="Result{ValidTokenRequest, RequestError}"/>,
+	/// <returns>A <see cref="Task"/> that resolves to a <see cref="Result{ValidTokenRequest, AuthError}"/>,
 	/// indicating the outcome of the validation process. This result can either denote a successful validation
 	/// or contain error information specifying why the request was invalid.</returns>
-	public async Task<Result<ValidTokenRequest, RequestError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
+	public async Task<Result<ValidTokenRequest, AuthError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
 	{
 		var context = new TokenValidationContext(tokenRequest, clientRequest);
 

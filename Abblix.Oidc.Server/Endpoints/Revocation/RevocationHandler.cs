@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -62,9 +63,8 @@ public class RevocationHandler : IRevocationHandler
     /// <param name="clientRequest">
     /// Additional client request information that may be necessary for validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="RevocationResponse"/>, indicating the outcome of
-    /// the request handling. This can either be a successful revocation or an error response if
-    /// the request does not pass validation.
+    /// A <see cref="Task"/> that resolves to a <see cref="Result{TSuccess, TFailure}"/> containing either
+    /// <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
     /// </returns>
     /// <remarks>
     /// This method plays a critical role in maintaining the security and integrity of the OAuth 2.0 ecosystem
@@ -72,7 +72,7 @@ public class RevocationHandler : IRevocationHandler
     /// their invalidation. It ensures that revocation requests are thoroughly vetted before any action is taken,
     /// preventing unauthorized or malicious attempts to revoke tokens.
     /// </remarks>
-    public async Task<Result<TokenRevoked, RevocationError>> HandleAsync(
+    public async Task<Result<TokenRevoked, AuthError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {
@@ -80,7 +80,6 @@ public class RevocationHandler : IRevocationHandler
 
         return await validationResult.MatchAsync(
             onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<TokenRevoked, RevocationError>>(
-                new RevocationError(error.ErrorCode, error.ErrorDescription)));
+            onFailure: error => Task.FromResult<Result<TokenRevoked, AuthError>>(error));
     }
 }

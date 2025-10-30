@@ -20,12 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Utils;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
@@ -71,7 +72,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
     /// <returns>
     /// A task that returns a <see cref="TokenResponse"/>.
     /// </returns>
-    public async Task<Result<TokenIssued, TokenError>> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, AuthError>> ProcessAsync(ValidTokenRequest request)
     {
         if (request is not {
                 Model: { GrantType: GrantTypes.AuthorizationCode, Code: {} code },
@@ -91,7 +92,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
                 await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
-            return new TokenError(
+            return new AuthError(
                 ErrorCodes.InvalidGrant,
                 "The authorization code was already used");
         }

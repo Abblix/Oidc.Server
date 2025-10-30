@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -45,7 +46,7 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     /// <returns>
     /// A task that returns the formatted action result.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, RevocationError> response)
+    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, AuthError> response)
     {
         return Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new OkResult(),

@@ -64,7 +64,7 @@ public class PasswordGrantHandler(
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
-    public Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public Task<Result<AuthorizedGrant, AuthError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensure that the request contains the required username and password parameters.
         parameterValidator.Required(request.UserName, nameof(request.UserName));

@@ -39,10 +39,10 @@ public class ResourceValidator(IResourceManager resourceManager): SyncTokenConte
     /// </summary>
     /// <param name="context">The context of the token validation including the request and client information.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if the validation fails, indicating the nature of the error and providing
+    /// A <see cref="AuthError"/> if the validation fails, indicating the nature of the error and providing
     /// an error message; otherwise, null if the resource validation passes successfully.
     /// </returns>
-    protected override RequestError? Validate(TokenValidationContext context)
+    protected override AuthError? Validate(TokenValidationContext context)
     {
         var request = context.Request;
 
@@ -56,7 +56,7 @@ public class ResourceValidator(IResourceManager resourceManager): SyncTokenConte
                     out var resources,
                     out var errorDescription))
             {
-                return new RequestError(ErrorCodes.InvalidTarget, errorDescription);
+                return new AuthError(ErrorCodes.InvalidTarget, errorDescription);
             }
 
             context.Resources = resources;

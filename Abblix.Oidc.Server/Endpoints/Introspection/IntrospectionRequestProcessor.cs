@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Utils;
 
@@ -43,7 +44,7 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionResponse"/>.
 	/// The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public Task<Result<IntrospectionSuccess, IntrospectionError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, IntrospectionError>>(Process(request));
+	public Task<Result<IntrospectionSuccess, AuthError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, AuthError>>(Process(request));
 
 	private static IntrospectionSuccess Process(ValidIntrospectionRequest request)
 	{

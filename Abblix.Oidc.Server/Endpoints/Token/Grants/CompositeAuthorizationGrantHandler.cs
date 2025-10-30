@@ -66,13 +66,13 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
     /// <returns>A task that resolves to the result of the authorization process.
     /// If successful, it contains the granted authorization;
     /// otherwise, it contains an error explaining why the authorization failed.</returns>
-    public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, AuthError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Check if there is a handler for the requested grant type.
         // If no handler exists, return an error indicating that the grant type is unsupported.
         if (!_grantHandlers.TryGetValue(request.GrantType, out var grantHandler))
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.UnsupportedGrantType,
                 "The grant type is not supported");
         }

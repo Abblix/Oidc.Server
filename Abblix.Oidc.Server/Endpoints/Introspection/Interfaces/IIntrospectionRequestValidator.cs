@@ -38,8 +38,8 @@ public interface IIntrospectionRequestValidator
 	/// </summary>
 	/// <param name="introspectionRequest">The IntrospectionRequest to be validated.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
-	/// <returns>An Result<ValidIntrospectionRequest, RequestError> indicating the result of the validation.</returns>
-	Task<Result<ValidIntrospectionRequest, RequestError>> ValidateAsync(
+	/// <returns>An Result<ValidIntrospectionRequest, AuthError> indicating the result of the validation.</returns>
+	Task<Result<ValidIntrospectionRequest, AuthError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest);
 }

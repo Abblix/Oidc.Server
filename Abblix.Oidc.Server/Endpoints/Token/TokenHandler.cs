@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -56,15 +57,11 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// It employs rigorous validation to prevent unauthorized access and to maintain the integrity of the token
     /// lifecycle management process.
     /// </remarks>
-    public async Task<Result<TokenIssued, TokenError>> HandleAsync(
+    public async Task<Result<TokenIssued, AuthError>> HandleAsync(
         TokenRequest tokenRequest,
         ClientRequest clientRequest)
     {
         var validationResult = await validator.ValidateAsync(tokenRequest, clientRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<TokenIssued, TokenError>>(
-                new TokenError(error.ErrorCode, error.ErrorDescription)));
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

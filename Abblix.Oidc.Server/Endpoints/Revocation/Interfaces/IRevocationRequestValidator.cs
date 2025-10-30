@@ -42,7 +42,7 @@ public interface IRevocationRequestValidator
 	/// <param name="revocationRequest">The revocation request to be validated.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A task representing the asynchronous operation with the validation result.</returns>
-	Task<Result<ValidRevocationRequest, RequestError>> ValidateAsync(
+	Task<Result<ValidRevocationRequest, AuthError>> ValidateAsync(
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest);
 }

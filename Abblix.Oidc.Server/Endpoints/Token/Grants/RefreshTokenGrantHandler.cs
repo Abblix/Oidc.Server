@@ -72,7 +72,7 @@ public class RefreshTokenGrantHandler(
 	/// A task representing the outcome of the authorization process, either returning a successful grant with a new
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
-	public async Task<Result<AuthorizedGrant, RequestError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+	public async Task<Result<AuthorizedGrant, AuthError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 	{
 		// Validate that the refresh token parameter is present in the request, throwing an error if missing.
 		parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
@@ -84,7 +84,7 @@ public class RefreshTokenGrantHandler(
 		{
 			// If the token type is invalid, return an error indicating the issue.
 			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.RefreshToken:
-				return new RequestError(
+				return new AuthError(
 					ErrorCodes.InvalidGrant,
 					$"Invalid token type: {tokenType}");
 
@@ -103,7 +103,7 @@ public class RefreshTokenGrantHandler(
 				if (grant.Context.ClientId != clientInfo.ClientId)
 				{
 					// If the client information in the token doesn't match the request, return an error.
-					return new RequestError(
+					return new AuthError(
 						ErrorCodes.InvalidGrant,
 						"The specified grant belongs to another client");
 				}
@@ -113,7 +113,7 @@ public class RefreshTokenGrantHandler(
 
 			// If there was a validation error, return it as an invalid grant result.
 			case JwtValidationError error:
-				return new RequestError(ErrorCodes.InvalidGrant, error.ErrorDescription);
+				return new AuthError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 
 			// If an unexpected result type is encountered, throw an exception.
 			default:

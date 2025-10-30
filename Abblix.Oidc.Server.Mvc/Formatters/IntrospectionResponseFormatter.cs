@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
@@ -47,7 +48,7 @@ public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
     /// This method is used to format introspection responses.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, IntrospectionError> response)
+    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, AuthError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: FormatSuccess,

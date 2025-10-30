@@ -80,10 +80,10 @@ public class AuthorizationCodeGrantHandlerTests
 
 		// assert
 		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.ErrorCode);
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
-	private async Task<Result<AuthorizedGrant, RequestError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	private async Task<Result<AuthorizedGrant, AuthError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
 	{
 		// arrange
 		var clientInfo = new ClientInfo("client1");

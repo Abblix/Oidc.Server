@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -41,10 +42,10 @@ public class RevocationRequestProcessor(ITokenRegistry tokenRegistry) : IRevocat
 	/// </summary>
 	/// <param name="request">The revocation request to be processed. Contains information about the token to be revoked.</param>
 	/// <returns>
-	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a <see cref="RevocationResponse"/>.
-	/// The response signifies the outcome of the revocation process.
+	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a <see cref="Result{TSuccess, TFailure}"/>
+	/// containing either <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
 	/// </returns>
-	public async Task<Result<TokenRevoked, RevocationError>> ProcessAsync(ValidRevocationRequest request)
+	public async Task<Result<TokenRevoked, AuthError>> ProcessAsync(ValidRevocationRequest request)
 	{
 		var payload = request.Token?.Payload;
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })

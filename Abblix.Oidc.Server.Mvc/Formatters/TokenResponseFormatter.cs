@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -44,7 +45,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
     /// </returns>
     public Task<ActionResult<TokenResponse>> FormatResponseAsync(
         TokenRequest request,
-        Result<TokenIssued, TokenError> response)
+        Result<TokenIssued, AuthError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: success =>

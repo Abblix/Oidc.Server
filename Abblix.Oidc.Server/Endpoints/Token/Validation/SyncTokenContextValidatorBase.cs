@@ -38,11 +38,11 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="RequestError"/> containing error details
+    /// A <see cref="Task"/> that resolves to a <see cref="AuthError"/> containing error details
     /// if the validation fails;
     /// otherwise, resolves to null indicating that the validation was successful.
     /// </returns>
-    public Task<RequestError?> ValidateAsync(TokenValidationContext context)
+    public Task<AuthError?> ValidateAsync(TokenValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -52,8 +52,8 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> containing error details if the validation fails;
+    /// A <see cref="AuthError"/> containing error details if the validation fails;
     /// otherwise, returns null indicating that the validation was successful.
     /// </returns>
-    protected abstract RequestError? Validate(TokenValidationContext context);
+    protected abstract AuthError? Validate(TokenValidationContext context);
 }

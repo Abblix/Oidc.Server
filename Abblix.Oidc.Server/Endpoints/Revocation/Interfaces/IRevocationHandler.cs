@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -39,9 +40,8 @@ public interface IRevocationHandler
     /// <param name="clientRequest">Additional information about the client making the revocation request,
     /// necessary for context-specific validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="RevocationResponse"/>, indicating the outcome of
-    /// the revocation process. This could be a successful acknowledgment of the revocation or an error response
-    /// if the request fails validation or processing.
+    /// A <see cref="Task"/> that resolves to a <see cref="Result{TSuccess, TFailure}"/> containing either
+    /// <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
     /// </returns>
     /// <remarks>
     /// This method is crucial for maintaining the security and integrity of the authorization server by allowing
@@ -49,7 +49,7 @@ public interface IRevocationHandler
     /// Implementations must ensure that revocation requests are authenticated and authorized before proceeding
     /// with token revocation, adhering to the OAuth 2.0 Token Revocation specification (RFC 7009).
     /// </remarks>
-    Task<Result<TokenRevoked, RevocationError>> HandleAsync(
+    Task<Result<TokenRevoked, AuthError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest);
 }
