@@ -44,7 +44,7 @@ public interface IBackChannelAuthenticationHandler
     /// <returns>
     /// A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.
     /// </returns>
-    Task<Result<BackChannelAuthenticationSuccess, AuthError>> HandleAsync(
+    Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest);
 }

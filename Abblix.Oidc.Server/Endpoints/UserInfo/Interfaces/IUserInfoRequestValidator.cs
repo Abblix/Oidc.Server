@@ -40,5 +40,5 @@ public interface IUserInfoRequestValidator
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, AuthError}"/>.</returns>
-	Task<Result<ValidUserInfoRequest, AuthError>> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest);
+	Task<Result<ValidUserInfoRequest, OidcError>> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest);
 }

@@ -89,7 +89,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 	/// the authenticated client, protecting against cross-client token revocation. In case of validation failure,
 	/// it logs a warning with the specific cause.
 	/// </remarks>
-	public async Task<Result<ValidRevocationRequest, AuthError>> ValidateAsync(
+	public async Task<Result<ValidRevocationRequest, OidcError>> ValidateAsync(
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest)
 	{
@@ -97,7 +97,7 @@ public class RevocationRequestValidator : IRevocationRequestValidator
 		var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			return new AuthError(
+			return new OidcError(
 				ErrorCodes.InvalidClient,
 				"The client is not authorized");
 		}

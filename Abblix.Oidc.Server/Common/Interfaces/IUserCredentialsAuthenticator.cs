@@ -39,5 +39,5 @@ public interface IUserCredentialsAuthenticator
 	/// <param name="password">The password provided by the user.</param>
 	/// <param name="context">The authorization context associated with the request.</param>
 	/// <returns>A task that represents the asynchronous validation operation and returns the grant authorization result.</returns>
-	Task<Result<AuthorizedGrant, AuthError>> ValidateAsync(string userName, string password, AuthorizationContext context);
+	Task<Result<AuthorizedGrant, OidcError>> ValidateAsync(string userName, string password, AuthorizationContext context);
 }

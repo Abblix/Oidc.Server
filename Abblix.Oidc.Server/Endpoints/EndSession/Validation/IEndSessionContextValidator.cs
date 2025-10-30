@@ -37,5 +37,5 @@ public interface IEndSessionContextValidator
 	/// A task that represents the asynchronous validation operation.
 	/// Returns an AuthError if validation fails, or null if successful.
 	/// </returns>
-	Task<AuthError?> ValidateAsync(EndSessionValidationContext context);
+	Task<OidcError?> ValidateAsync(EndSessionValidationContext context);
 }

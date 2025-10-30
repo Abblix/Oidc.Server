@@ -69,7 +69,7 @@ public class AuthorizationCodeGrantHandler(
     /// Information about the client, used to verify that the request is valid for this client.</param>
     /// <returns>A task that represents the asynchronous authorization operation.
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
-    public async Task<Result<AuthorizedGrant, AuthError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensures the authorization code is provided in the request.
         parameterValidator.Required(request.Code, nameof(request.Code));
@@ -87,7 +87,7 @@ public class AuthorizationCodeGrantHandler(
         // Verifies that the authorization code was issued for the requesting client.
         if (grant.Context.ClientId != clientInfo.ClientId)
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "Code was issued for another client");
         }
@@ -97,13 +97,13 @@ public class AuthorizationCodeGrantHandler(
             // Checks if PKCE is required but the code challenge method is missing from the request.
             if (string.IsNullOrEmpty(grant.Context.CodeChallengeMethod))
             {
-                return new AuthError(ErrorCodes.InvalidGrant, "Code challenge method is required");
+                return new OidcError(ErrorCodes.InvalidGrant, "Code challenge method is required");
             }
 
             // Checks if PKCE is required but the code verifier is missing from the request.
             if (string.IsNullOrEmpty(request.CodeVerifier))
             {
-                return new AuthError(ErrorCodes.InvalidGrant, "Code verifier is required");
+                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is required");
             }
 
             // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
@@ -112,7 +112,7 @@ public class AuthorizationCodeGrantHandler(
                     CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),
                     StringComparison.OrdinalIgnoreCase))
             {
-                return new AuthError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
             }
         }
 

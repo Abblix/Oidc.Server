@@ -55,7 +55,7 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
-        Result<BackChannelAuthenticationSuccess, AuthError> response)
+        Result<BackChannelAuthenticationSuccess, OidcError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: success => new OkObjectResult(success) as ActionResult,

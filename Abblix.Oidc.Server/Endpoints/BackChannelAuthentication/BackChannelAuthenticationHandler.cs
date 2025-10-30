@@ -65,7 +65,7 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
     /// <param name="clientRequest">The client request information associated with the authentication request.</param>
     /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/> that indicates the outcome of the process.
     /// </returns>
-    public async Task<Result<BackChannelAuthenticationSuccess, AuthError>> HandleAsync(
+    public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
@@ -76,7 +76,7 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
         }
         else if (fetchResult.TryGetFailure(out var error))
         {
-            return new AuthError(error.Error, error.ErrorDescription);
+            return new OidcError(error.Error, error.ErrorDescription);
         }
 
         var validationResult = await _validator.ValidateAsync(request, clientRequest);

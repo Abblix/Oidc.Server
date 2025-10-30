@@ -57,7 +57,7 @@ public interface IAuthorizationCodeService
     /// <param name="authorizationCode">The authorization code to be validated and processed for granting access.</param>
     /// <returns>A task that asynchronously returns a <see cref="Result<AuthorizedGrant, AuthError>"/> representing the outcome
     /// of the authorization process, including any access tokens or refresh tokens issued as part of the grant.</returns>
-    Task<Result<AuthorizedGrant, AuthError>> AuthorizeByCodeAsync(string authorizationCode);
+    Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode);
 
     /// <summary>
     /// Asynchronously removes an authorization code from the system. This method is typically called once

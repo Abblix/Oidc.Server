@@ -36,5 +36,5 @@ public interface IReadClientRequestProcessor
     /// </summary>
     /// <param name="request">The valid client request to process.</param>
     /// <returns>A task representing the processing result.</returns>
-    Task<Result<ReadClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
 }

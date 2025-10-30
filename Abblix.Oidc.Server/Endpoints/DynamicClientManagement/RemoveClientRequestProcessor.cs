@@ -50,7 +50,7 @@ public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) 
     /// ensuring that the client exists and the initiator of the request has the authority to perform
     /// the removal operation.
     /// </remarks>
-    public async Task<Result<RemoveClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request)
+    public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
         await clientInfoManager.RemoveClientAsync(request.ClientInfo.ClientId);
         return new RemoveClientSuccessfulResponse();

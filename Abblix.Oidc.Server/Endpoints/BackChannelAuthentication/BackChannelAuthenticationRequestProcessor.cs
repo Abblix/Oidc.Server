@@ -85,7 +85,7 @@ public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticat
 	/// </param>
 	/// <returns>A task that represents the result of processing the backchannel authentication request, returning
 	/// a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.</returns>
-	public async Task<Result<BackChannelAuthenticationSuccess, AuthError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
+	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
 	{
 		request.ClientInfo.CheckClientLicense();
 
@@ -108,7 +108,7 @@ public class BackChannelAuthenticationRequestProcessor : IBackChannelAuthenticat
 			{
 				ErrorCodes.UnauthorizedClient => new BackChannelAuthenticationUnauthorized(ErrorCodes.AccessDenied, error.ErrorDescription),
 				ErrorCodes.AccessDenied => new BackChannelAuthenticationForbidden(ErrorCodes.AccessDenied, error.ErrorDescription),
-				_ => new AuthError(error.Error, error.ErrorDescription)
+				_ => new OidcError(error.Error, error.ErrorDescription)
 			};
 		}
 		else

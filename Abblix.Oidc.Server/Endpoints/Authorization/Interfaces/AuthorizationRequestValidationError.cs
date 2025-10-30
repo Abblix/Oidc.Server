@@ -31,4 +31,4 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// the client on where to direct the user for further actions if necessary.
 /// </summary>
 public record AuthorizationRequestValidationError(string Error, string ErrorDescription, Uri? RedirectUri, string ResponseMode)
-    : AuthError(Error, ErrorDescription);
+    : OidcError(Error, ErrorDescription);

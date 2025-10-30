@@ -97,7 +97,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     /// The method also handles the storage of client information, facilitating future authentication and
     /// authorization processes.
     /// </remarks>
-    public async Task<Result<ClientRegistrationSuccessResponse, AuthError>> ProcessAsync(ValidClientRegistrationRequest request)
+    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request)
     {
         var model = request.Model;
 

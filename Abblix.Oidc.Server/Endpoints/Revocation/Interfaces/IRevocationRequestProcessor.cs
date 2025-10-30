@@ -43,7 +43,7 @@ public interface IRevocationRequestProcessor
 	/// <param name="request">The valid revocation request to be processed. It contains the token that needs to be revoked along with any relevant information.</param>
 	/// <returns>
 	/// A task representing the asynchronous operation, which upon completion will return a <see cref="Result{TSuccess, TFailure}"/>
-	/// containing either <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
+	/// containing either <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
 	/// </returns>
-	Task<Result<TokenRevoked, AuthError>> ProcessAsync(ValidRevocationRequest request);
+	Task<Result<TokenRevoked, OidcError>> ProcessAsync(ValidRevocationRequest request);
 }

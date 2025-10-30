@@ -39,5 +39,5 @@ public interface IReadClientResponseFormatter
     /// <param name="request">The client information request.</param>
     /// <param name="response">The response containing client information to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response);
 }

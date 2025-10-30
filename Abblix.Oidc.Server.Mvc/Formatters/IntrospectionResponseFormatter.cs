@@ -48,7 +48,7 @@ public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
     /// This method is used to format introspection responses.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, AuthError> response)
+    public Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: FormatSuccess,

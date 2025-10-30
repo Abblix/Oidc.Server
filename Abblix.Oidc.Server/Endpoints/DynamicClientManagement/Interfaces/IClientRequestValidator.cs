@@ -36,5 +36,5 @@ public interface IClientRequestValidator
     /// </summary>
     /// <param name="request">The client request to validate.</param>
     /// <returns>A task representing the validation result.</returns>
-    Task<Result<ValidClientRequest, AuthError>> ValidateAsync(ClientRequest request);
+    Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request);
 }

@@ -48,5 +48,5 @@ public interface IRemoveClientRequestProcessor
     /// of clients that are no longer active or authorized. Implementations should ensure that the removal process
     /// adheres to the system's security policies and the specifications of the OAuth 2.0 and OpenID Connect protocols.
     /// </remarks>
-    Task<Result<RemoveClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request);
+    Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
 }

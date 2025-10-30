@@ -44,7 +44,7 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionResponse"/>.
 	/// The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public Task<Result<IntrospectionSuccess, AuthError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, AuthError>>(Process(request));
+	public Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, OidcError>>(Process(request));
 
 	private static IntrospectionSuccess Process(ValidIntrospectionRequest request)
 	{

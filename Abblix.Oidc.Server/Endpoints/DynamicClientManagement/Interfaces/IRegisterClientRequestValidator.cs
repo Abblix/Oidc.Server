@@ -36,5 +36,5 @@ public interface IRegisterClientRequestValidator
     /// </summary>
     /// <param name="request">The client registration request to validate.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the validation result.</returns>
-    Task<Result<ValidClientRegistrationRequest, AuthError>> ValidateAsync(ClientRegistrationRequest request);
+    Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request);
 }

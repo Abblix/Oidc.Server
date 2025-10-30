@@ -76,7 +76,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 	/// </summary>
 	/// <param name="request">The valid end-session request to be processed.</param>
 	/// <returns>A task representing the asynchronous operation, which upon completion will yield the <see cref="EndSessionResponse"/>.</returns>
-	public async Task<Result<EndSessionSuccess, AuthError>> ProcessAsync(ValidEndSessionRequest request)
+	public async Task<Result<EndSessionSuccess, OidcError>> ProcessAsync(ValidEndSessionRequest request)
 	{
 		var postLogoutRedirectUri = request.Model.PostLogoutRedirectUri;
 		if (postLogoutRedirectUri != null && request.Model.State != null)

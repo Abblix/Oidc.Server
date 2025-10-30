@@ -43,7 +43,7 @@ public class EndSessionResponseFormatter : IEndSessionResponseFormatter
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, AuthError> response)
+    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
         => Task.FromResult(response.Match(
             onSuccess: FormatSuccessResponse,
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));

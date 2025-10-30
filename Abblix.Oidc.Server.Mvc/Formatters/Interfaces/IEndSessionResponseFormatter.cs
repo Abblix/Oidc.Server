@@ -40,5 +40,5 @@ public interface IEndSessionResponseFormatter
     /// <param name="response">The end-session response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation,
     /// with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response);
 }

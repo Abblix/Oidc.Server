@@ -33,4 +33,4 @@ namespace Abblix.Oidc.Server.Model;
 /// <param name="ErrorDescription">
 /// A human-readable description of the error, providing more details about the failure.</param>
 public record BackChannelAuthenticationForbidden(string Error, string ErrorDescription)
-    : AuthError(Error, ErrorDescription);
+    : OidcError(Error, ErrorDescription);

@@ -52,7 +52,7 @@ public interface IUserInfoHandler
     /// in the UserInfo request is validated and that any returned information is consistent with the scopes
     /// granted during the authorization process.
     /// </remarks>
-    Task<Result<UserInfoFoundResponse, AuthError>> HandleAsync(
+    Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest);
 }

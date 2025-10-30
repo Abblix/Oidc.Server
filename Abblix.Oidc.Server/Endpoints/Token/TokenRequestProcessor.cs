@@ -77,7 +77,7 @@ public class TokenRequestProcessor : ITokenRequestProcessor
 	/// the user, crucial for OpenID Connect authentication flows. This method ensures secure and compliant token
 	/// generation.
 	/// </remarks>
-	public async Task<Result<TokenIssued, AuthError>> ProcessAsync(ValidTokenRequest request)
+	public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
 	{
 		var clientInfo = request.ClientInfo;
 		clientInfo.CheckClientLicense();

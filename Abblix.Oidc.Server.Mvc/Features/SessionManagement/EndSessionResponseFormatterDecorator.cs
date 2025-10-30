@@ -61,7 +61,7 @@ public class EndSessionResponseFormatterDecorator: IEndSessionResponseFormatter
     /// A <see cref="Task{TResult}"/> representing the asynchronous operation. The task result contains
     /// the formatted ActionResult, with additional session management actions if enabled.
     /// </returns>
-    public async Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, AuthError> response)
+    public async Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
     {
         var result = await _inner.FormatResponseAsync(request, response);
 

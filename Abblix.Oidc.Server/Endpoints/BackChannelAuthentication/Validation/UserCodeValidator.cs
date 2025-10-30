@@ -45,7 +45,7 @@ public class UserCodeValidator(IOptions<OidcOptions> options) : IBackChannelAuth
     /// <returns>
     /// A task that returns an error if validation fails,
     /// or null if successful.</returns>
-    public Task<AuthError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -54,16 +54,16 @@ public class UserCodeValidator(IOptions<OidcOptions> options) : IBackChannelAuth
     /// </summary>
     /// <param name="context">The validation context containing the backchannel authentication request details.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> if the UserCode is missing when required,
+    /// A <see cref="OidcError"/> if the UserCode is missing when required,
     /// or null otherwise.</returns>
-    private AuthError? Validate(BackChannelAuthenticationValidationContext context)
+    private OidcError? Validate(BackChannelAuthenticationValidationContext context)
     {
         var requireUserCode = options.Value.BackChannelAuthentication.UserCodeParameterSupported &&
                               context.ClientInfo.BackChannelUserCodeParameter;
 
         if (requireUserCode && string.IsNullOrEmpty(context.Request.UserCode))
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.MissingUserCode,
                 "The UserCode parameter is missing.");
         }

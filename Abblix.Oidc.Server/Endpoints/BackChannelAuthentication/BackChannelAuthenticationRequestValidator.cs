@@ -51,7 +51,7 @@ public class BackChannelAuthenticationRequestValidator(IBackChannelAuthenticatio
 	/// A task that returns a <see cref="Result{ValidBackChannelAuthenticationRequest, AuthError}"/>,
 	/// which can be either a valid request or an error, depending on the outcome of the validation.
 	/// </returns>
-	public async Task<Result<ValidBackChannelAuthenticationRequest, AuthError>> ValidateAsync(
+	public async Task<Result<ValidBackChannelAuthenticationRequest, OidcError>> ValidateAsync(
 		BackChannelAuthenticationRequest request,
 		ClientRequest clientRequest)
 	{

@@ -47,7 +47,7 @@ public class ReadClientResponseFormatter : IReadClientResponseFormatter
     /// This method is used to format the response for reading a client.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, AuthError> response)
+    public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: success => (ActionResult)new OkObjectResult(success),

@@ -50,10 +50,10 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> if any validation fails,
+    /// A <see cref="OidcError"/> if any validation fails,
     /// or null if the request is valid.
     /// </returns>
-    protected override AuthError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

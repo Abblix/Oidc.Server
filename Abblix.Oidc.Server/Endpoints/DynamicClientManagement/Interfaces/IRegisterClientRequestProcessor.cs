@@ -35,5 +35,5 @@ public interface IRegisterClientRequestProcessor
     /// </summary>
     /// <param name="request">The client registration request to process.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the client registration response.</returns>
-    Task<Result<ClientRegistrationSuccessResponse, AuthError>> ProcessAsync(ValidClientRegistrationRequest request);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request);
 }

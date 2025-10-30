@@ -41,7 +41,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
     /// </summary>
     /// <param name="context">The context containing the client registration request.</param>
     /// <returns>A task that represents the result of the validation, either an error or null if valid.</returns>
-    public Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -50,7 +50,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
     /// </summary>
     /// <param name="context">The context containing the client registration request.</param>
     /// <returns>A validation error if the request is invalid, or null if the request is valid.</returns>
-    private AuthError? Validate(ClientRegistrationValidationContext context)
+    private OidcError? Validate(ClientRegistrationValidationContext context)
     {
         switch (context.Request)
         {
@@ -61,7 +61,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll,
                 BackChannelClientNotificationEndpoint: not null,
             }:
-                return new AuthError(
+                return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is invalid if the token delivery mode is set to poll");
 
@@ -69,7 +69,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push,
                 BackChannelClientNotificationEndpoint: null,
             }:
-                return new AuthError(
+                return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
@@ -78,7 +78,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 break;
 
             default:
-                return new AuthError(
+                return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "The specified token delivery mode is not supported");
         }
@@ -87,7 +87,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         if (signingAlgorithm.HasValue() &&
             !jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.InvalidRequest,
                 "The specified signing algorithm is not supported");
         }

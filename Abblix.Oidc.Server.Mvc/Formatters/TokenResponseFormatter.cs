@@ -45,7 +45,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
     /// </returns>
     public Task<ActionResult<TokenResponse>> FormatResponseAsync(
         TokenRequest request,
-        Result<TokenIssued, AuthError> response)
+        Result<TokenIssued, OidcError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: success =>

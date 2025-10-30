@@ -43,7 +43,7 @@ public interface IBackChannelAuthenticationRequestValidator
 	/// </param>
 	/// <returns>A task that returns the result of the validation process as a <see cref="Result{ValidBackChannelAuthenticationRequest, AuthError}"/>.
 	/// </returns>
-	Task<Result<ValidBackChannelAuthenticationRequest, AuthError>> ValidateAsync(
+	Task<Result<ValidBackChannelAuthenticationRequest, OidcError>> ValidateAsync(
 		BackChannelAuthenticationRequest request,
 		ClientRequest clientRequest);
 }

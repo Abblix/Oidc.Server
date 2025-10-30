@@ -59,7 +59,7 @@ public class ClientValidator : IEndSessionContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client information.</param>
     /// <returns>An error if the validation fails, or null if the request is valid.</returns>
-    public async Task<AuthError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
             return null;
@@ -68,7 +68,7 @@ public class ClientValidator : IEndSessionContextValidator
         if (clientInfo == null)
         {
             _logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(context.ClientId));
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");
         }

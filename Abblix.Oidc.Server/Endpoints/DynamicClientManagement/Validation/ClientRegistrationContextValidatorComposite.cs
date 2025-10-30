@@ -36,7 +36,7 @@ public class ClientRegistrationContextValidatorComposite(IClientRegistrationCont
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
     /// <returns>A AuthError if any validation step fails, or null if the request is valid.</returns>
-    public async Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         foreach (var validationStep in validationSteps)
         {

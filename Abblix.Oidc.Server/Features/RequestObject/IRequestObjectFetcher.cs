@@ -47,6 +47,6 @@ public interface IRequestObjectFetcher
     /// the payload is bound to the request model.
     /// If the JWT is invalid or not present, an appropriate error result is returned.
     /// </remarks>
-    Task<Result<T, AuthError>> FetchAsync<T>(T request, string? requestObject)
+    Task<Result<T, OidcError>> FetchAsync<T>(T request, string? requestObject)
         where T : class;
 }

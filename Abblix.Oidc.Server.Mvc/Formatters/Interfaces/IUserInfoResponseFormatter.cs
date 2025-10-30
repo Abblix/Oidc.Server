@@ -40,5 +40,5 @@ public interface IUserInfoResponseFormatter
     /// <param name="request">The UserInfo request.</param>
     /// <param name="response">The UserInfo response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(UserInfoRequest request, Result<UserInfoFoundResponse, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(UserInfoRequest request, Result<UserInfoFoundResponse, OidcError> response);
 }

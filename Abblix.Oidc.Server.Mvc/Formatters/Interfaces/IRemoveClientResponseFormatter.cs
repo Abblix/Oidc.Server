@@ -39,5 +39,5 @@ public interface IRemoveClientResponseFormatter
     /// <param name="request">The original request to remove the client.</param>
     /// <param name="response">The response indicating the result of the removal operation.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation. The task result contains the formatted <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response);
 }

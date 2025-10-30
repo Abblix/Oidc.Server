@@ -45,5 +45,5 @@ public interface IUserDeviceAuthenticationHandler
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation to initiate the authentication process.
     /// </returns>
-    Task<Result<AuthSession, AuthError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request);
+    Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request);
 }

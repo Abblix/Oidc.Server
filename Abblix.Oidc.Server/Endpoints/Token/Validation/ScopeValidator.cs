@@ -41,11 +41,11 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// <param name="context">The context containing the token request information,
     /// including the scopes to be validated.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> if any of the requested scopes are invalid or not permitted,
+    /// A <see cref="OidcError"/> if any of the requested scopes are invalid or not permitted,
     /// including an error code and a message describing the issue;
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
-    protected override AuthError? Validate(TokenValidationContext context)
+    protected override OidcError? Validate(TokenValidationContext context)
     {
         if (!scopeManager.Validate(
                 context.Request.Scope,
@@ -53,7 +53,7 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
                 out var scopeDefinitions,
                 out var errorDescription))
         {
-            return new AuthError(ErrorCodes.InvalidScope, errorDescription);
+            return new OidcError(ErrorCodes.InvalidScope, errorDescription);
         }
 
         context.Scope = scopeDefinitions;

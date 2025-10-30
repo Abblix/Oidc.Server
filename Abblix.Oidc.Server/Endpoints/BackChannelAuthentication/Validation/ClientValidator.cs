@@ -41,22 +41,22 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
     /// The validation context containing the backchannel authentication request and client information.
     /// </param>
     /// <returns>
-    /// A <see cref="AuthError"/> if the client is not valid,
+    /// A <see cref="OidcError"/> if the client is not valid,
     /// or null if the client is authorized.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(
+    public async Task<OidcError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
         if (clientInfo == null)
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
         if (!clientInfo.AllowedGrantTypes.Contains(GrantTypes.Ciba))
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
         }
 

@@ -45,5 +45,5 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// </summary>
 public interface ITokenRequestValidator
 {
-	Task<Result<ValidTokenRequest, AuthError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
+	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
 }

@@ -43,10 +43,10 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
     /// A task that represents the asynchronous validation operation.
     /// Returns an AuthError if validation fails, or null if successful.
     /// </returns>
-    public Task<AuthError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private AuthError? Validate(EndSessionValidationContext context)
+    private OidcError? Validate(EndSessionValidationContext context)
     {
         var request = context.Request;
 
@@ -56,7 +56,7 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
 
         if (context.ClientInfo == null)
         {
-             return new AuthError(
+             return new OidcError(
                  ErrorCodes.UnauthorizedClient,
                  $"Unable to determine a client from {Parameters.ClientId} or {Parameters.IdTokenHint}, but it is necessary to validate {Parameters.PostLogoutRedirectUri} value");
         }
@@ -69,7 +69,7 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
             Sanitized.Value(redirectUri),
             context.ClientInfo.ClientId);
 
-        return new AuthError(
+        return new OidcError(
             ErrorCodes.InvalidRequest,
             "The post-logout redirect URI is not valid for specified client");
     }

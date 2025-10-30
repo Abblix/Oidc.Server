@@ -40,5 +40,5 @@ public interface IClientRegistrationContextValidator
 	/// A task that represents the asynchronous validation operation. The task result is a
 	/// AuthError if validation fails, or null if the request is valid.
 	/// </returns>
-	Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context);
+	Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context);
 }

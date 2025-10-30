@@ -40,5 +40,5 @@ public interface IRegisterClientResponseFormatter
     /// <param name="response">The client registration response to format.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.
     /// The task result contains the formatted <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, OidcError> response);
 }

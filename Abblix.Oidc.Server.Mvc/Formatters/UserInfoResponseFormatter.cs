@@ -67,7 +67,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     /// </returns>
     public async Task<ActionResult> FormatResponseAsync(
         UserInfoRequest request,
-        Result<UserInfoFoundResponse, AuthError> response)
+        Result<UserInfoFoundResponse, OidcError> response)
     {
         return await response.MatchAsync(
             onSuccess: FormatSuccessAsync,

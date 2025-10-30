@@ -40,10 +40,10 @@ public class TokenContextValidatorComposite(ITokenContextValidator[] validators)
     /// <param name="context">The context containing the token request and related information
     /// that needs to be validated.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> containing error details if any validation step fails;
+    /// A <see cref="OidcError"/> containing error details if any validation step fails;
     /// otherwise, returns null indicating that all validation steps were successful.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(TokenValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
     {
         foreach (var validator in validators)
         {

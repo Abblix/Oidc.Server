@@ -69,7 +69,7 @@ internal class UserDeviceAuthenticationHandlerStub : IUserDeviceAuthenticationHa
     ///   </item>
     /// </list>
     /// </exception>
-    public Task<Result<AuthSession, AuthError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request)
+    public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request)
     {
         throw new NotImplementedException(
             "CIBA (Client‐Initiated Backchannel Authentication) is not configured yet. " +

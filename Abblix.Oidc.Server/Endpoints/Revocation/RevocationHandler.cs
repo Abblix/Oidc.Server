@@ -64,7 +64,7 @@ public class RevocationHandler : IRevocationHandler
     /// Additional client request information that may be necessary for validation.</param>
     /// <returns>
     /// A <see cref="Task"/> that resolves to a <see cref="Result{TSuccess, TFailure}"/> containing either
-    /// <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
+    /// <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
     /// </returns>
     /// <remarks>
     /// This method plays a critical role in maintaining the security and integrity of the OAuth 2.0 ecosystem
@@ -72,7 +72,7 @@ public class RevocationHandler : IRevocationHandler
     /// their invalidation. It ensures that revocation requests are thoroughly vetted before any action is taken,
     /// preventing unauthorized or malicious attempts to revoke tokens.
     /// </remarks>
-    public async Task<Result<TokenRevoked, AuthError>> HandleAsync(
+    public async Task<Result<TokenRevoked, OidcError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {

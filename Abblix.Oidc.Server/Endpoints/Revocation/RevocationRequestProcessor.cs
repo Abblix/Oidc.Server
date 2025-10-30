@@ -43,9 +43,9 @@ public class RevocationRequestProcessor(ITokenRegistry tokenRegistry) : IRevocat
 	/// <param name="request">The revocation request to be processed. Contains information about the token to be revoked.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a <see cref="Result{TSuccess, TFailure}"/>
-	/// containing either <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
+	/// containing either <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
 	/// </returns>
-	public async Task<Result<TokenRevoked, AuthError>> ProcessAsync(ValidRevocationRequest request)
+	public async Task<Result<TokenRevoked, OidcError>> ProcessAsync(ValidRevocationRequest request)
 	{
 		var payload = request.Token?.Payload;
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })

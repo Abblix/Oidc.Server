@@ -45,5 +45,5 @@ public interface IRemoveClientHandler
     /// and OpenID Connect framework. It ensures that only authorized and validated requests result in the removal of
     /// a client, adhering to the standards and practices of dynamic client management.
     /// </remarks>
-    Task<Result<RemoveClientSuccessfulResponse, AuthError>> HandleAsync(ClientRequest clientRequest);
+    Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
 }

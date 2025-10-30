@@ -83,7 +83,7 @@ public class AuthorizationCodeGrantHandlerTests
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
-	private async Task<Result<AuthorizedGrant, AuthError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
 	{
 		// arrange
 		var clientInfo = new ClientInfo("client1");

@@ -41,5 +41,5 @@ public interface ITokenResponseFormatter
     /// <param name="response">The token response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult{TValue}"/> containing a <see cref="TokenResponse"/>.</returns>
     Task<ActionResult<TokenResponse>> FormatResponseAsync(TokenRequest request,
-        Result<TokenIssued, AuthError> response);
+        Result<TokenIssued, OidcError> response);
 }

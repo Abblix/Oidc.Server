@@ -36,5 +36,5 @@ public interface IUserInfoRequestProcessor
 	/// <param name="request">The valid user info request to process.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/>.</returns>
-	Task<Result<UserInfoFoundResponse, AuthError>> ProcessAsync(ValidUserInfoRequest request);
+	Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(ValidUserInfoRequest request);
 }

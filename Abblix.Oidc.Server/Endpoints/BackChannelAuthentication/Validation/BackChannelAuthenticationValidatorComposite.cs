@@ -40,10 +40,10 @@ public class BackChannelAuthenticationValidatorComposite(IBackChannelAuthenticat
     /// <param name="context">The backchannel authentication validation context to be validated.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation.
-    /// The task result contains a <see cref="AuthError"/>
+    /// The task result contains a <see cref="OidcError"/>
     /// if a validation error is found, or null if validation succeeds.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(
+    public async Task<OidcError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
         foreach (var validator in validators)

@@ -43,7 +43,7 @@ public class RegisterClientRequestValidator(IClientRegistrationContextValidator 
     /// registration.</param>
     /// <returns>
     /// A task that returns a <see cref="Result{ValidClientRegistrationRequest, AuthError}"/>,
-    /// containing either a <see cref="ValidClientRegistrationRequest"/> on success or a <see cref="AuthError"/>
+    /// containing either a <see cref="ValidClientRegistrationRequest"/> on success or a <see cref="OidcError"/>
     /// detailing any validation issues.
     /// </returns>
     /// <remarks>
@@ -52,7 +52,7 @@ public class RegisterClientRequestValidator(IClientRegistrationContextValidator 
     /// conditions are considered valid, thus maintaining the integrity and security of the client registration process.
     /// </remarks>
 
-    public async Task<Result<ValidClientRegistrationRequest, AuthError>> ValidateAsync(ClientRegistrationRequest request)
+    public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
         var error = await validator.ValidateAsync(context);

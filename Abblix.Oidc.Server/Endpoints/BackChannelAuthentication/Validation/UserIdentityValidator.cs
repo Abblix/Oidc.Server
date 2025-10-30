@@ -53,10 +53,10 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
     /// </summary>
     /// <param name="context">Contains the backchannel authentication request and client information.</param>
     /// <returns>
-    /// Returns a <see cref="AuthError"/> if the identity validation fails,
+    /// Returns a <see cref="OidcError"/> if the identity validation fails,
     /// or null if the identity is successfully validated.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(
+    public async Task<OidcError?> ValidateAsync(
         BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
@@ -77,12 +77,12 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
 
             case 0:
                 // No identity hint is present; return an error indicating the user's identity is unknown
-                return new AuthError(
+                return new OidcError(
                     ErrorCodes.InvalidRequest, "The user's identity is unknown.");
 
             default:
                 // Multiple identity hints provided; return an error indicating ambiguity
-                return new AuthError(
+                return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "User identity is not determined due to conflicting hints.");
         }
@@ -97,7 +97,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
                 case (ValidJsonWebToken, { ClientId: var clientId})
                     when clientId != context.ClientInfo.ClientId:
 
-                    return new AuthError(
+                    return new OidcError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken issued by another client.");
 
@@ -111,7 +111,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
 
                 // If JWT validation fails, return an error
                 case (JwtValidationError, _):
-                    return new AuthError(
+                    return new OidcError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken validation failed.");
 
@@ -127,7 +127,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
             var idTokenResult = await ValidateIdTokenHint(context, request.IdTokenHint);
             if (idTokenResult.TryGetFailure(out var error))
             {
-                return new AuthError(error.Error, error.ErrorDescription);
+                return new OidcError(error.Error, error.ErrorDescription);
             }
 
             context.IdToken = idTokenResult.GetSuccess();
@@ -145,7 +145,7 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
     /// An <see cref="Result{JsonWebToken, AuthError}"/> representing the validation result,
     /// which can either be a successful token or an error.
     /// </returns>
-    private async Task<Result<JsonWebToken, AuthError>> ValidateIdTokenHint(
+    private async Task<Result<JsonWebToken, OidcError>> ValidateIdTokenHint(
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
@@ -157,12 +157,12 @@ public class UserIdentityValidator: IBackChannelAuthenticationContextValidator
         {
             ValidJsonWebToken { Token.Payload.Audiences: var audiences }
                 when !audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal)
-                => new AuthError(
+                => new OidcError(
                     ErrorCodes.InvalidRequest,
                     "The id token hint contains token issued for the client other than specified"),
 
             JwtValidationError
-                => new AuthError(
+                => new OidcError(
                     ErrorCodes.InvalidRequest,
                     "The id token hint contains invalid token"),
 

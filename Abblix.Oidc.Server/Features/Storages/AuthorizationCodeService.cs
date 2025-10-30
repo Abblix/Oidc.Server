@@ -67,12 +67,12 @@ public class AuthorizationCodeService(
 	/// <param name="authorizationCode">The authorization code to validate and process.</param>
 	/// <returns>A task that resolves to a <see cref="Result<AuthorizedGrant, AuthError>"/>, which indicates the outcome of
 	/// the authorization attempt and contains any tokens issued.</returns>
-	public async Task<Result<AuthorizedGrant, AuthError>> AuthorizeByCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode)
 	{
 		var result = await storage.GetAsync<AuthorizedGrant>(ToKeyString(authorizationCode), false);
 		if (result == null)
 		{
-			return new AuthError(ErrorCodes.InvalidGrant, "Authorization code is invalid");
+			return new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid");
 		}
 
 		return result;

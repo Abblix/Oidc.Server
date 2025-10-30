@@ -59,7 +59,7 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
     /// <returns>
     /// A AuthError if any validation fails, or null if the request is valid.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         if (request.SubjectType == SubjectTypes.Pairwise)

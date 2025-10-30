@@ -39,5 +39,5 @@ public interface IBackChannelAuthenticationRequestFetcher
     /// <param name="request">The backchannel authentication request to be fetched and validated.</param>
     /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/>
     /// indicating whether the fetch was successful or if it resulted in an error.</returns>
-    Task<Result<BackChannelAuthenticationRequest, AuthError>> FetchAsync(BackChannelAuthenticationRequest request);
+    Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request);
 }

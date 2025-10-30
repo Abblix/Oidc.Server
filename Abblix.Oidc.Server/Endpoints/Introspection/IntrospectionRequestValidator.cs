@@ -74,14 +74,14 @@ public class IntrospectionRequestValidator : IIntrospectionRequestValidator
 	/// A task representing the asynchronous validation operation. The task result contains the
 	/// <see cref="Result<ValidIntrospectionRequest, AuthError>"/> which indicates whether the request is valid or contains errors.
 	/// </returns>
-	public async Task<Result<ValidIntrospectionRequest, AuthError>> ValidateAsync(
+	public async Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
 		var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			return new AuthError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
 		var result = await _jwtValidator.ValidateAsync(introspectionRequest.Token);

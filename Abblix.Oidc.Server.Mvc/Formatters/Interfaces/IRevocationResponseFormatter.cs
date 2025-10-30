@@ -39,5 +39,5 @@ public interface IRevocationResponseFormatter
     /// <param name="request">The revocation request.</param>
     /// <param name="response">The revocation response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, AuthError> response);
+    Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response);
 }

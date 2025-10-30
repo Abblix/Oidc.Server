@@ -41,7 +41,7 @@ public class CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] 
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/> that represents the outcome of the fetching process.</returns>
-    public async Task<Result<BackChannelAuthenticationRequest, AuthError>> FetchAsync(BackChannelAuthenticationRequest request)
+    public async Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
     {
         foreach (var fetcher in fetchers)
         {

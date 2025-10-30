@@ -42,5 +42,5 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// </returns>
     Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
-        Result<BackChannelAuthenticationSuccess, AuthError> response);
+        Result<BackChannelAuthenticationSuccess, OidcError> response);
 }

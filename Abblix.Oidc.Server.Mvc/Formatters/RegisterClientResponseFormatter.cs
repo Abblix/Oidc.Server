@@ -66,7 +66,7 @@ public class RegisterClientResponseFormatter : IRegisterClientResponseFormatter
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(
         ClientRegistrationRequest request,
-        Result<ClientRegistrationSuccessResponse, AuthError> response)
+        Result<ClientRegistrationSuccessResponse, OidcError> response)
     {
         return Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),

@@ -65,7 +65,7 @@ public class RemoveClientHandler : IRemoveClientHandler
     /// the client from the system. This approach ensures that client removal is managed securely and aligns with
     /// best practices in client management within OAuth 2.0 and OpenID Connect frameworks.
     /// </remarks>
-    public async Task<Result<RemoveClientSuccessfulResponse, AuthError>> HandleAsync(ClientRequest clientRequest)
+    public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(clientRequest);
 

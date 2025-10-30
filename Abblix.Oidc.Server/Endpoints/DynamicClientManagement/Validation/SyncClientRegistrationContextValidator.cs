@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 public abstract class SyncClientRegistrationContextValidator : IClientRegistrationContextValidator
 {
-    public Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -40,5 +40,5 @@ public abstract class SyncClientRegistrationContextValidator : IClientRegistrati
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
     /// <returns>A AuthError if validation fails, or null if the context is valid.</returns>
-    protected abstract AuthError? Validate(ClientRegistrationValidationContext context);
+    protected abstract OidcError? Validate(ClientRegistrationValidationContext context);
 }

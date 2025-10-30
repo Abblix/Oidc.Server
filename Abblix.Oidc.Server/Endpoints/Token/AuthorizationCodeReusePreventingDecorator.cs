@@ -72,7 +72,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
     /// <returns>
     /// A task that returns a <see cref="TokenResponse"/>.
     /// </returns>
-    public async Task<Result<TokenIssued, AuthError>> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
     {
         if (request is not {
                 Model: { GrantType: GrantTypes.AuthorizationCode, Code: {} code },
@@ -92,7 +92,7 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
                 await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.InvalidGrant,
                 "The authorization code was already used");
         }

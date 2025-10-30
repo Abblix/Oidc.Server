@@ -36,7 +36,7 @@ public class EndSessionContextValidatorComposite(IEndSessionContextValidator[] v
     /// <param name="context">The end-session validation context.</param>
     /// <returns>A task representing the asynchronous operation.
     /// The result is a validation error if any validation step fails; otherwise, null.</returns>
-    public async Task<AuthError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         foreach (var validationStep in validationSteps)
         {

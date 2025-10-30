@@ -57,7 +57,7 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// It employs rigorous validation to prevent unauthorized access and to maintain the integrity of the token
     /// lifecycle management process.
     /// </remarks>
-    public async Task<Result<TokenIssued, AuthError>> HandleAsync(
+    public async Task<Result<TokenIssued, OidcError>> HandleAsync(
         TokenRequest tokenRequest,
         ClientRequest clientRequest)
     {

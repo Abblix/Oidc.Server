@@ -46,5 +46,5 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// to generate the authorization response.</param>
 	/// <returns>A task that returns a <see cref="Result{AuthorizedGrant, AuthError}"/> with the authorization outcome,
 	/// including any tokens or error messages.</returns>
-	Task<Result<AuthorizedGrant, AuthError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
+	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
 }

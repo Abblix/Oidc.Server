@@ -48,7 +48,7 @@ internal class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserCla
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/> encapsulating either the user's claims
 	/// or an error response.</returns>
-	public async Task<Result<UserInfoFoundResponse, AuthError>> ProcessAsync(ValidUserInfoRequest request)
+	public async Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(ValidUserInfoRequest request)
 	{
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
 			request.AuthSession,
@@ -57,7 +57,7 @@ internal class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserCla
 			request.ClientInfo);
 
 		if (userInfo == null)
-			return new AuthError(ErrorCodes.InvalidGrant, "The user claims aren't found");
+			return new OidcError(ErrorCodes.InvalidGrant, "The user claims aren't found");
 
 		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);

@@ -40,10 +40,10 @@ public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthent
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> if the authentication method is not valid or supported,
+    /// A <see cref="OidcError"/> if the authentication method is not valid or supported,
     /// or null if the request is valid.
     /// </returns>
-    protected override AuthError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
@@ -51,7 +51,7 @@ public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthent
             !clientAuthenticator.ClientAuthenticationMethodsSupported.Contains(
                 request.TokenEndpointAuthMethod, StringComparer.Ordinal))
         {
-            return new AuthError(
+            return new OidcError(
                 ErrorCodes.InvalidRequest,
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }

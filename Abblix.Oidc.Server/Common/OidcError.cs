@@ -27,4 +27,4 @@ namespace Abblix.Oidc.Server.Common;
 /// </summary>
 /// <param name="Error">The error code indicating the nature of the error.</param>
 /// <param name="ErrorDescription">A human-readable description of the error.</param>
-public record AuthError(string Error, string ErrorDescription);
+public record OidcError(string Error, string ErrorDescription);

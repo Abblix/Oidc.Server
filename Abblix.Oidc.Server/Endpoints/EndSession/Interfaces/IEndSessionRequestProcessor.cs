@@ -35,5 +35,5 @@ public interface IEndSessionRequestProcessor
 	/// </summary>
 	/// <param name="request">The valid end-session request.</param>
 	/// <returns>A task representing the asynchronous operation, returning the end-session response.</returns>
-	Task<Result<EndSessionSuccess, AuthError>> ProcessAsync(ValidEndSessionRequest request);
+	Task<Result<EndSessionSuccess, OidcError>> ProcessAsync(ValidEndSessionRequest request);
 }

@@ -45,5 +45,5 @@ public interface ITokenRequestProcessor
 	/// <param name="request">The validated token request from the client.</param>
 	/// <returns>A task that resolves to a <see cref="TokenResponse"/>, encapsulating the tokens to be issued to
 	/// the client.</returns>
-	Task<Result<TokenIssued, AuthError>> ProcessAsync(ValidTokenRequest request);
+	Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request);
 }

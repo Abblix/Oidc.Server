@@ -46,7 +46,7 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     /// <returns>
     /// A task that returns the formatted action result.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, AuthError> response)
+    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response)
     {
         return Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new OkResult(),

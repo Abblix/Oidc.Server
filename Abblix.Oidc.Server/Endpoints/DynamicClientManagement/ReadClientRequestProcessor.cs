@@ -51,12 +51,12 @@ public class ReadClientRequestProcessor : IReadClientRequestProcessor
     /// of registered clients, facilitating transparency and ease of management. Note that sensitive information,
     /// like client secrets, are not directly retrievable to maintain security.
     /// </remarks>
-    public Task<Result<ReadClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request)
+    public Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
         var client = request.ClientInfo;
 
         //TODO add missing properties
-        return Task.FromResult<Result<ReadClientSuccessfulResponse, AuthError>>(
+        return Task.FromResult<Result<ReadClientSuccessfulResponse, OidcError>>(
             new ReadClientSuccessfulResponse
             {
                 ClientId = client.ClientId,

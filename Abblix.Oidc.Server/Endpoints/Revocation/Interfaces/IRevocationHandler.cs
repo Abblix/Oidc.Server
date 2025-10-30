@@ -41,7 +41,7 @@ public interface IRevocationHandler
     /// necessary for context-specific validation.</param>
     /// <returns>
     /// A <see cref="Task"/> that resolves to a <see cref="Result{TSuccess, TFailure}"/> containing either
-    /// <see cref="TokenRevoked"/> on success or <see cref="AuthError"/> on failure.
+    /// <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
     /// </returns>
     /// <remarks>
     /// This method is crucial for maintaining the security and integrity of the authorization server by allowing
@@ -49,7 +49,7 @@ public interface IRevocationHandler
     /// Implementations must ensure that revocation requests are authenticated and authorized before proceeding
     /// with token revocation, adhering to the OAuth 2.0 Token Revocation specification (RFC 7009).
     /// </remarks>
-    Task<Result<TokenRevoked, AuthError>> HandleAsync(
+    Task<Result<TokenRevoked, OidcError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest);
 }

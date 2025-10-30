@@ -70,7 +70,7 @@ public class RegisterClientHandler : IRegisterClientHandler
     /// with the authorization server without direct administrative intervention. It supports the OpenID Connect
     /// Dynamic Client Registration specification, ensuring compliance and interoperability.
     /// </remarks>
-    public async Task<Result<ClientRegistrationSuccessResponse, AuthError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
+    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
         var validationResult = await _validator.ValidateAsync(clientRegistrationRequest);
         return await validationResult.BindAsync(_processor.ProcessAsync);

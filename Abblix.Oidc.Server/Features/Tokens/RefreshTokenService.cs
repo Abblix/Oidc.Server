@@ -144,12 +144,12 @@ public class RefreshTokenService : IRefreshTokenService
 	/// <param name="refreshToken">The refresh token to be validated and authorized.</param>
 	/// <returns>A task that, upon successful validation, results in an <see cref="AuthorizedGrant"/>
 	/// encapsulating the reconstituted authentication session and authorization context.</returns>
-	public Task<Result<AuthorizedGrant, AuthError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
 	{
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 		var result = new RefreshTokenAuthorizedGrant(authSession, authContext, refreshToken);
 
-		return Task.FromResult<Result<AuthorizedGrant, AuthError>>(result);
+		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(result);
 	}
 }

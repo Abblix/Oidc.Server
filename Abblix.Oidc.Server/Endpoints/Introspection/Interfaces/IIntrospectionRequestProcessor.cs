@@ -35,5 +35,5 @@ public interface IIntrospectionRequestProcessor
 	/// </summary>
 	/// <param name="request">The ValidIntrospectionRequest containing the token to be inspected.</param>
 	/// <returns>An IntrospectionResponse containing metadata about the token.</returns>
-	Task<Result<IntrospectionSuccess, AuthError>> ProcessAsync(ValidIntrospectionRequest request);
+	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request);
 }

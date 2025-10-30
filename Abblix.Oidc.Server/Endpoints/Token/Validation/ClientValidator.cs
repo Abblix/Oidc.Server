@@ -44,16 +44,16 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator): ITokenCo
     /// </summary>
     /// <param name="context">The validation context containing the token request and client information.</param>
     /// <returns>
-    /// A <see cref="AuthError"/> if the client cannot be authenticated,
+    /// A <see cref="OidcError"/> if the client cannot be authenticated,
     /// otherwise null indicating successful validation.
     /// </returns>
-    public async Task<AuthError?> ValidateAsync(TokenValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
     {
         var clientRequest = context.ClientRequest;
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
         if (clientInfo == null)
         {
-            return new AuthError(ErrorCodes.InvalidClient, "The client is not authorized");
+            return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }
 
         context.ClientInfo = clientInfo;

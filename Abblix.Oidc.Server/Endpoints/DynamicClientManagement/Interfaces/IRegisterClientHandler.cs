@@ -46,5 +46,5 @@ public interface IRegisterClientHandler
     /// It ensures that all registered clients adhere to the protocol's requirements and the authorization server's
     /// policies.
     /// </remarks>
-    Task<Result<ClientRegistrationSuccessResponse, AuthError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
 }

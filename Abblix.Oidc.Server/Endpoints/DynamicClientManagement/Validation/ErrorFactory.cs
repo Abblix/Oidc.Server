@@ -36,7 +36,7 @@ public static class ErrorFactory
     /// </summary>
     /// <param name="description">The description of the error.</param>
     /// <returns>An error instance with the error code and description.</returns>
-    public static AuthError InvalidRedirectUri(string description)
+    public static OidcError InvalidRedirectUri(string description)
         => new(ErrorCodes.InvalidRedirectUri, description);
 
     /// <summary>
@@ -44,6 +44,6 @@ public static class ErrorFactory
     /// </summary>
     /// <param name="description">The description of the error.</param>
     /// <returns>An error instance with the error code and description.</returns>
-    public static AuthError InvalidClientMetadata(string description)
+    public static OidcError InvalidClientMetadata(string description)
         => new(ErrorCodes.InvalidClientMetadata, description);
 }

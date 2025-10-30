@@ -69,7 +69,7 @@ public class IntrospectionHandler : IIntrospectionHandler
     /// authentication systems by allowing resource servers and other entities to verify the validity
     /// and attributes of tokens.
     /// </remarks>
-    public async Task<Result<IntrospectionSuccess, AuthError>> HandleAsync(
+    public async Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest)
     {

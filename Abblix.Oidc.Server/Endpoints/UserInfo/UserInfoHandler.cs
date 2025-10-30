@@ -69,7 +69,7 @@ public class UserInfoHandler : IUserInfoHandler
     /// user information, in line with OpenID Connect protocols. It leverages the validator to ensure requests meet
     /// OIDC standards and the processor to fetch and return the relevant user information securely.
     /// </remarks>
-    public async Task<Result<UserInfoFoundResponse, AuthError>> HandleAsync(
+    public async Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest)
     {

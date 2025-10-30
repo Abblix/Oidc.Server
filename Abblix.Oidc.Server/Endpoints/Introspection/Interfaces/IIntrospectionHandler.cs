@@ -52,7 +52,7 @@ public interface IIntrospectionHandler
     /// This helps prevent unauthorized access and ensures that tokens are used in accordance with their
     /// intended scopes and lifetimes.
     /// </remarks>
-    Task<Result<IntrospectionSuccess, AuthError>> HandleAsync(
+    Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest);
 }

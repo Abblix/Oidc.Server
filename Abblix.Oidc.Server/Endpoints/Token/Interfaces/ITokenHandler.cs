@@ -50,5 +50,5 @@ public interface ITokenHandler
     /// authorization server. They must ensure that only valid and authorized requests lead to the issuance of tokens,
     /// thereby maintaining the integrity and security of the authentication and authorization process.
     /// </remarks>
-    Task<Result<TokenIssued, AuthError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
+    Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
 }
