@@ -26,6 +26,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
     <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
     <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
