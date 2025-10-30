@@ -338,14 +338,6 @@ public abstract record Result<TSuccess, TFailure>
             => func(Value);
 
         /// <inheritdoc />
-        public override async Task<Result<TNext, TFailure>> BindAsync<TNext>(Func<TSuccess, Task<Result<TNext, TFailure>>> func)
-            => await func(Value);
-
-        /// <inheritdoc />
-        public override Result<TSuccess, TFailure> Ensure(Func<TSuccess, bool> predicate, TFailure failure)
-            => predicate(Value) ? this : Failure(failure);
-
-        /// <inheritdoc />
         public override Result<TSuccess, TFailure> Bind(Action<TSuccess> action)
         {
             action(Value);
@@ -353,11 +345,19 @@ public abstract record Result<TSuccess, TFailure>
         }
 
         /// <inheritdoc />
+        public override async Task<Result<TNext, TFailure>> BindAsync<TNext>(Func<TSuccess, Task<Result<TNext, TFailure>>> func)
+            => await func(Value);
+
+        /// <inheritdoc />
         public override async Task<Result<TSuccess, TFailure>> BindAsync(Func<TSuccess, Task> action)
         {
             await action(Value);
             return this;
         }
+
+        /// <inheritdoc />
+        public override Result<TSuccess, TFailure> Ensure(Func<TSuccess, bool> predicate, TFailure failure)
+            => predicate(Value) ? this : Failure(failure);
 
         /// <inheritdoc />
         public override void Deconstruct(out TSuccess? success, out TFailure? failure)
@@ -488,19 +488,19 @@ public abstract record Result<TSuccess, TFailure>
             => Value;
 
         /// <inheritdoc />
+        public override Result<TSuccess, TFailure> Bind(Action<TSuccess> action) => this;
+
+        /// <inheritdoc />
         public override Task<Result<TNext, TFailure>> BindAsync<TNext>(Func<TSuccess, Task<Result<TNext, TFailure>>> func)
             => Task.FromResult<Result<TNext, TFailure>>(Value);
 
         /// <inheritdoc />
-        public override Result<TSuccess, TFailure> Ensure(Func<TSuccess, bool> predicate, TFailure failure)
-            => this;
-
-        /// <inheritdoc />
-        public override Result<TSuccess, TFailure> Bind(Action<TSuccess> action) => this;
-
-        /// <inheritdoc />
         public override Task<Result<TSuccess, TFailure>> BindAsync(Func<TSuccess, Task> action)
             => Task.FromResult<Result<TSuccess, TFailure>>(this);
+
+        /// <inheritdoc />
+        public override Result<TSuccess, TFailure> Ensure(Func<TSuccess, bool> predicate, TFailure failure)
+            => this;
 
         /// <inheritdoc />
         public override void Deconstruct(out TSuccess? success, out TFailure? failure)
