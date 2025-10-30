@@ -32,7 +32,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="options">The OIDC options containing client configurations.</param>
 internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoProvider, IClientInfoManager
 {
-    private readonly Dictionary<string, ClientInfo> _clients = options.Value.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ClientInfo> _clients = options.Value.Clients.ToDictionary(
+        client => client.ClientId,
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

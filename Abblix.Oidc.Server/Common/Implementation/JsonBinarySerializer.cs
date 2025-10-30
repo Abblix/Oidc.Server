@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 public class JsonBinarySerializer(Encoding? encoding = null, JsonSerializerOptions? options = null) : IBinarySerializer
 {
     private readonly Encoding _encoding = encoding ?? Encoding.UTF8;
-    private readonly JsonSerializerOptions? _options = options;
 
     /// <summary>
     /// Serializes an object to a binary representation in JSON format.
@@ -43,7 +42,7 @@ public class JsonBinarySerializer(Encoding? encoding = null, JsonSerializerOptio
     /// <returns>A byte array representing the serialized object in JSON format.</returns>
     public byte[] Serialize<T>(T obj)
     {
-        var json = JsonSerializer.Serialize(obj, _options);
+        var json = JsonSerializer.Serialize(obj, options);
         return _encoding.GetBytes(json);
     }
 
@@ -56,6 +55,6 @@ public class JsonBinarySerializer(Encoding? encoding = null, JsonSerializerOptio
     public T? Deserialize<T>(byte[] bytes)
     {
         var json = _encoding.GetString(bytes);
-        return JsonSerializer.Deserialize<T>(json, _options);
+        return JsonSerializer.Deserialize<T>(json, options);
     }
 }
