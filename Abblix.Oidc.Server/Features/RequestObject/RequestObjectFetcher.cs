@@ -95,8 +95,8 @@ public class RequestObjectFetcher : IRequestObjectFetcher
             {
                 var updatedRequest = await _jsonObjectBinder.BindModelAsync(payload, request);
                 return updatedRequest != null
-                    ? Result<T, RequestError>.Success(updatedRequest)
-                    : InvalidRequestObject<T>("Unable to bind request object");
+                    ? updatedRequest
+                    : InvalidRequestObject("Unable to bind request object");
             },
             onFailure: Result<T, RequestError>.Failure
         );
@@ -139,6 +139,6 @@ public class RequestObjectFetcher : IRequestObjectFetcher
         return new RequestError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 
-    private static RequestError InvalidRequestObject<T>(string description)
+    private static RequestError InvalidRequestObject(string description)
         => new(ErrorCodes.InvalidRequestObject, description);
 }

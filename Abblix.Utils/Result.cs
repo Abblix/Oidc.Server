@@ -193,6 +193,13 @@ public abstract record Result<TSuccess, TFailure>
             await action(Value);
             return this;
         }
+
+        /// <inheritdoc />
+        public override void Deconstruct(out TSuccess? success, out TFailure? failure)
+        {
+            success = Value;
+            failure = default;
+        }
     }
 
     /// <summary>
@@ -322,6 +329,13 @@ public abstract record Result<TSuccess, TFailure>
 
         public override Task<Result<TSuccess, TFailure>> BindAsync(Func<TSuccess, Task> action)
             => Task.FromResult<Result<TSuccess, TFailure>>(this);
+
+        /// <inheritdoc />
+        public override void Deconstruct(out TSuccess? success, out TFailure? failure)
+        {
+            success = default;
+            failure = Value;
+        }
     }
 
     /// <summary>
@@ -415,11 +429,7 @@ public abstract record Result<TSuccess, TFailure>
     /// </summary>
     /// <param name="success">The success value if available; otherwise, <c>null</c>.</param>
     /// <param name="failure">The failure value if available; otherwise, <c>null</c>.</param>
-    public void Deconstruct(out TSuccess? success, out TFailure? failure)
-    {
-        success = this is SuccessResult { Value: var s } ? s : default;
-        failure = this is FailureResult { Value: var f } ? f : default;
-    }
+    public abstract void Deconstruct(out TSuccess? success, out TFailure? failure);
 
     public abstract Result<TNext, TFailure> Bind<TNext>(Func<TSuccess, Result<TNext, TFailure>> func);
 
