@@ -22,16 +22,11 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using static Abblix.Oidc.Server.Model.ClientRequest.Parameters;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -45,7 +40,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     ITokenRegistry tokenRegistry,
-    IServiceProvider serviceProvider) : IClientAuthenticator
+    IServiceProvider serviceProvider) : JwtAssertionAuthenticatorBase(logger, tokenRegistry)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -53,97 +48,22 @@ public class PrivateKeyJwtAuthenticator(
     /// allowing clients to assert their identity through the use of asymmetric key cryptography.
     /// It is designed for environments where the client can securely hold a private key.
     /// </summary>
-    public IEnumerable<string> ClientAuthenticationMethodsSupported
+    public override IEnumerable<string> ClientAuthenticationMethodsSupported
     {
         get { yield return ClientAuthenticationMethods.PrivateKeyJwt; }
     }
 
     /// <summary>
-    /// Attempts to authenticate a client using the Private Key JWT method by validating the JWT provided in
-    /// the client request.
+    /// Validates the JWT assertion using the client's public keys from JWKS.
     /// </summary>
-    /// <param name="request">The client request containing the JWT to authenticate.</param>
-    /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    /// <param name="jwt">The JWT assertion to validate.</param>
+    /// <returns>
+    /// A tuple containing the validation result and the associated client information if validation is successful.
+    /// </returns>
+    protected override async Task<(JwtValidationResult result, ClientInfo? clientInfo)> ValidateJwtAsync(string jwt)
     {
-        if (request.ClientAssertionType is null)
-        {
-            return null;
-        }
-
-        if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
-        {
-            logger.LogWarning(
-                $"{ClientAssertionType} is not '{ClientAssertionTypes.JwtBearer}'");
-            return null;
-        }
-
-        if (!request.ClientAssertion.HasValue())
-        {
-            logger.LogWarning(
-                $"{ClientAssertionType} is '{ClientAssertionTypes.JwtBearer}', but {ClientAssertion} is empty");
-            return null;
-        }
-
-        JwtValidationResult? result;
-        ClientInfo? clientInfo;
-        using (var scope = serviceProvider.CreateScope())
-        {
-            var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-            (result, clientInfo) = await tokenValidator.ValidateAsync(request.ClientAssertion);
-        }
-
-        JsonWebToken token;
-        switch (result, clientInfo)
-        {
-            case (ValidJsonWebToken validToken, { TokenEndpointAuthMethod: ClientAuthenticationMethods.PrivateKeyJwt }):
-                token = validToken.Token;
-                break;
-
-            case (ValidJsonWebToken, clientInfo: not null):
-                logger.LogWarning(
-                    "The authentication method is not allowed for the client {@ClientId}",
-                    clientInfo.ClientId);
-                return null;
-
-            case (ValidJsonWebToken, clientInfo: null):
-                logger.LogWarning("Something went wrong, token cannot be validated without client specified");
-                return null;
-
-            case (JwtValidationError error, _):
-                logger.LogWarning("Invalid PrivateKeyJwt: {@Error}", error);
-                return null;
-
-            default:
-                throw new UnexpectedTypeException(nameof(result), result.GetType());
-        }
-
-        string? subject;
-        try
-        {
-            subject = token.Payload.Subject;
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogWarning(ex, "Invalid PrivateKeyJwt");
-            return null;
-        }
-
-        var issuer = token.Payload.Issuer;
-        if (issuer == null || subject == null || issuer != subject)
-        {
-            logger.LogWarning(
-                "Invalid PrivateKeyJwt: iss is \'{Issuer}\', but sub is {Subject}",
-                issuer, subject);
-
-            return null;
-        }
-
-        if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt } })
-        {
-            await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
-        }
-
-        return clientInfo;
+        using var scope = serviceProvider.CreateScope();
+        var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
+        return await tokenValidator.ValidateAsync(jwt);
     }
 }
