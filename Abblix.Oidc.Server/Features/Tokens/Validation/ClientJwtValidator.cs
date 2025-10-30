@@ -149,7 +149,7 @@ public class ClientJwtValidator: IClientJwtValidator
                     $"Trying to validate issuer {issuer}, but already has info about client {clientId}");
 
             // Case where client information is not yet known; attempt to find the client by issuer.
-            case null:
+            default:
                 ClientInfo = await _clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
 
                 // If the client is found but does not use the expected authentication method, validation fails.
