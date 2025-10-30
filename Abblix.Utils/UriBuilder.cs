@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Microsoft.AspNetCore.Http;
+
 namespace Abblix.Utils;
 
 /// <summary>
@@ -74,6 +76,15 @@ public class UriBuilder
 
     private readonly System.UriBuilder _builder;
     private readonly bool _isAbsoluteUri;
+
+    /// <summary>
+    /// Gets or sets the path part of the URI.
+    /// </summary>
+    public PathString Path
+    {
+        get => new PathString(_builder.Path);
+        set => _builder.Path = value.Value;
+    }
 
     /// <summary>
     /// Gets the ParametersBuilder for the query string.
