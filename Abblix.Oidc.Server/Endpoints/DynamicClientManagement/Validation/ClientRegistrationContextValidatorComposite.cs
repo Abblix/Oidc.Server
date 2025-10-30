@@ -35,8 +35,8 @@ public class ClientRegistrationContextValidatorComposite(IClientRegistrationCont
     /// Validates the client registration request by executing each validation step in the specified order.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A RequestError if any validation step fails, or null if the request is valid.</returns>
-    public async Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
+    /// <returns>A AuthError if any validation step fails, or null if the request is valid.</returns>
+    public async Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         foreach (var validationStep in validationSteps)
         {

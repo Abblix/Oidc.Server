@@ -38,7 +38,7 @@ public interface IClientRegistrationContextValidator
 	/// <param name="context">The context containing client registration data to validate.</param>
 	/// <returns>
 	/// A task that represents the asynchronous validation operation. The task result is a
-	/// RequestError if validation fails, or null if the request is valid.
+	/// AuthError if validation fails, or null if the request is valid.
 	/// </returns>
-	Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context);
+	Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context);
 }

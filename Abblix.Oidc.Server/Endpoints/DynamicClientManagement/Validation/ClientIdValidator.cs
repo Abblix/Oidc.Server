@@ -53,8 +53,8 @@ public class ClientIdValidator : IClientRegistrationContextValidator
     /// Validates the client specified in the client registration request by checking if it already exists and is registered.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A RequestError if the validation fails, or null if the request is valid.</returns>
-    public async Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
+    /// <returns>A AuthError if the validation fails, or null if the request is valid.</returns>
+    public async Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
         if (clientId.HasValue())

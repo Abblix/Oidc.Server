@@ -36,9 +36,9 @@ public class InitiateLoginUriValidator: SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A RequestError if the validation fails, or null if the request is valid.
+    /// A AuthError if the validation fails, or null if the request is valid.
     /// </returns>
-    protected override RequestError? Validate(ClientRegistrationValidationContext context)
+    protected override AuthError? Validate(ClientRegistrationValidationContext context)
     {
         var model = context.Request;
         if (model.InitiateLoginUri != null)

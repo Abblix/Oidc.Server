@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -32,7 +33,6 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using ClientRegistrationResponse = Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces.ClientRegistrationResponse;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -88,7 +88,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     /// </summary>
     /// <param name="request">The client registration request containing the necessary details for registering
     /// a new client.</param>
-    /// <returns>A task that results in a <see cref="ClientRegistrationResponse"/>, which includes the client ID,
+    /// <returns>A task that results in a Result containing the client ID,
     /// client secret and registration access token, along with other registration details.</returns>
     /// <remarks>
     /// This method orchestrates the client registration process, starting from generating a unique client ID
@@ -97,7 +97,7 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     /// The method also handles the storage of client information, facilitating future authentication and
     /// authorization processes.
     /// </remarks>
-    public async Task<ClientRegistrationResponse> ProcessAsync(ValidClientRegistrationRequest request)
+    public async Task<Result<ClientRegistrationSuccessResponse, AuthError>> ProcessAsync(ValidClientRegistrationRequest request)
     {
         var model = request.Model;
 

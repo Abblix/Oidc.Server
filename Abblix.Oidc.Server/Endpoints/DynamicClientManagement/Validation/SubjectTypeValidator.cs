@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// This class validates the subject type in a client registration request. It checks if the subject type is pairwise,
 /// and if so, verifies the sector identifier URI and its content. It also ensures that all redirect URIs use the HTTPS scheme.
-/// If any validation fails, it returns a RequestError.
+/// If any validation fails, it returns a AuthError.
 /// </summary>
 public class SubjectTypeValidator: IClientRegistrationContextValidator
 {
@@ -57,9 +57,9 @@ public class SubjectTypeValidator: IClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A RequestError if any validation fails, or null if the request is valid.
+    /// A AuthError if any validation fails, or null if the request is valid.
     /// </returns>
-    public async Task<RequestError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<AuthError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         if (request.SubjectType == SubjectTypes.Pairwise)

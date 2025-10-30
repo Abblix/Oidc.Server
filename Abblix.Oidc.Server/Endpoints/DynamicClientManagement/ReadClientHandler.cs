@@ -20,8 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -64,13 +67,10 @@ public class ReadClientHandler : IReadClientHandler
     /// configurations. It ensures that only valid requests are processed, safeguarding against unauthorized access
     /// to client information.
     /// </remarks>
-    public async Task<ReadClientResponse> HandleAsync(Model.ClientRequest clientRequest)
+    public async Task<Result<ReadClientSuccessfulResponse, AuthError>> HandleAsync(Model.ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(clientRequest);
 
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<ReadClientResponse>(
-                new ReadClientErrorResponse(error.ErrorCode, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

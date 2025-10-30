@@ -25,4 +25,4 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <summary>
 /// Represents a successful response for removing a client in client management.
 /// </summary>
-public record RemoveClientSuccessfulResponse : RemoveClientResponse;
+public record RemoveClientSuccessfulResponse;

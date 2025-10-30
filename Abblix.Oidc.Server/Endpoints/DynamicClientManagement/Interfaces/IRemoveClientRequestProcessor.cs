@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -38,12 +41,12 @@ public interface IRemoveClientRequestProcessor
     /// </summary>
     /// <param name="request">A <see cref="ValidClientRequest"/> that has been validated and contains the necessary
     /// information to identify and remove the specified client.</param>
-    /// <returns>A <see cref="Task"/> that upon completion yields a <see cref="RemoveClientResponse"/>,
+    /// <returns>A <see cref="Task"/> that upon completion yields a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>,
     /// indicating the outcome of the removal operation.</returns>
     /// <remarks>
     /// This method is central to maintaining the integrity of the client registry by allowing for the removal
     /// of clients that are no longer active or authorized. Implementations should ensure that the removal process
     /// adheres to the system's security policies and the specifications of the OAuth 2.0 and OpenID Connect protocols.
     /// </remarks>
-    Task<RemoveClientResponse> ProcessAsync(ValidClientRequest request);
+    Task<Result<RemoveClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request);
 }

@@ -53,18 +53,18 @@ public class ClientRequestValidator : IClientRequestValidator
     /// </summary>
     /// <param name="request">The client request to validate.</param>
     /// <returns>A task that returns the validation result.</returns>
-    public async Task<Result<ValidClientRequest, RequestError>> ValidateAsync(ClientRequest request)
+    public async Task<Result<ValidClientRequest, AuthError>> ValidateAsync(ClientRequest request)
     {
         var headerErrorDescription = await _registrationAccessTokenValidator.ValidateAsync(
             request.AuthorizationHeader,
             request.ClientId.NotNull(nameof(request.ClientId)));
 
         if (headerErrorDescription != null)
-            return new RequestError(ErrorCodes.InvalidGrant, headerErrorDescription);
+            return new AuthError(ErrorCodes.InvalidGrant, headerErrorDescription);
 
         var clientInfo = await _clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
         if (clientInfo == null)
-            return new RequestError(ErrorCodes.InvalidClient, "Client does not exist on this server");
+            return new AuthError(ErrorCodes.InvalidClient, "Client does not exist on this server");
 
         return new ValidClientRequest(request, clientInfo);
     }

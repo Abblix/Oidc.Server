@@ -20,10 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
-using ClientRegistrationResponse =
-    Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces.ClientRegistrationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 
@@ -39,5 +40,5 @@ public interface IRegisterClientResponseFormatter
     /// <param name="response">The client registration response to format.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.
     /// The task result contains the formatted <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(ClientRegistrationRequest request, ClientRegistrationResponse response);
+    Task<ActionResult> FormatResponseAsync(ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, AuthError> response);
 }

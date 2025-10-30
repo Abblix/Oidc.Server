@@ -28,7 +28,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <param name="ClientId">A string representing the unique identifier assigned to the registered client.</param>
 /// <param name="ClientIdIssuedAt">An optional DateTimeOffset indicating the time at which the client identifier was issued.</param>
 public record ClientRegistrationSuccessResponse(string ClientId, DateTimeOffset? ClientIdIssuedAt)
-    : ClientRegistrationResponse
 {
     /// <summary>
     /// The client secret assigned to the registered client.

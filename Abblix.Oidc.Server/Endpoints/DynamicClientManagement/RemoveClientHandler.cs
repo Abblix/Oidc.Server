@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -56,24 +57,18 @@ public class RemoveClientHandler : IRemoveClientHandler
     /// </summary>
     /// <param name="clientRequest">The client request containing necessary information for identifying and removing
     /// the specified client.</param>
-    /// <returns>A task that results in a <see cref="RemoveClientResponse"/>, which encapsulates the outcome of
+    /// <returns>A task that results in a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>, which encapsulates the outcome of
     /// the removal process, including success or error information.</returns>
-    /// <exception cref="UnexpectedTypeException">
-    /// Thrown if the result of the validation process is of an unexpected type, indicating a potential issue
-    /// in the request handling pipeline.</exception>
     /// <remarks>
     /// This method follows a two-step process: first, validating the removal request to ensure it meets all
     /// required criteria and is authorized; second, if validation succeeds, processing the request to unregister
     /// the client from the system. This approach ensures that client removal is managed securely and aligns with
     /// best practices in client management within OAuth 2.0 and OpenID Connect frameworks.
     /// </remarks>
-    public async Task<RemoveClientResponse> HandleAsync(ClientRequest clientRequest)
+    public async Task<Result<RemoveClientSuccessfulResponse, AuthError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(clientRequest);
 
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<RemoveClientResponse>(
-                new RemoveClientErrorResponse(error.ErrorCode, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

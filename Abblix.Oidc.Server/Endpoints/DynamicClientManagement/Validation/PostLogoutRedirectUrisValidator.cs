@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// This class validates Post Logout Redirect URIs in a client registration request. It checks if the URIs are absolute,
 /// do not contain fragments, and comply with security requirements based on the application type.
-/// If any validation fails, it returns a RequestError.
+/// If any validation fails, it returns a AuthError.
 /// </summary>
 public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextValidator
 {
@@ -40,9 +40,9 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A RequestError if any validation fails, or null if the request is valid.
+    /// A AuthError if any validation fails, or null if the request is valid.
     /// </returns>
-    protected override RequestError? Validate(ClientRegistrationValidationContext context)
+    protected override AuthError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

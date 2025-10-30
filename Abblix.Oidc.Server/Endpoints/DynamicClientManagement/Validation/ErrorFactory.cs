@@ -26,7 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// A static factory class for creating instances of `RequestError`.
+/// A static factory class for creating instances of `AuthError`.
 /// It provides methods to generate validation errors with specific error codes and descriptions.
 /// </summary>
 public static class ErrorFactory
@@ -36,7 +36,7 @@ public static class ErrorFactory
     /// </summary>
     /// <param name="description">The description of the error.</param>
     /// <returns>An error instance with the error code and description.</returns>
-    public static RequestError InvalidRedirectUri(string description)
+    public static AuthError InvalidRedirectUri(string description)
         => new(ErrorCodes.InvalidRedirectUri, description);
 
     /// <summary>
@@ -44,6 +44,6 @@ public static class ErrorFactory
     /// </summary>
     /// <param name="description">The description of the error.</param>
     /// <returns>An error instance with the error code and description.</returns>
-    public static RequestError InvalidClientMetadata(string description)
+    public static AuthError InvalidClientMetadata(string description)
         => new(ErrorCodes.InvalidClientMetadata, description);
 }

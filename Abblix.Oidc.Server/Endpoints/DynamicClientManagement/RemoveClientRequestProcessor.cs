@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -40,7 +42,7 @@ public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) 
     /// </summary>
     /// <param name="request">An instance of <see cref="ValidClientRequest"/> containing the details of
     /// the client to be removed, including its unique identifier.</param>
-    /// <returns>A task that, upon completion, yields a <see cref="RemoveClientResponse"/> indicating the successful
+    /// <returns>A task that, upon completion, yields a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/> indicating the successful
     /// removal of the client.</returns>
     /// <remarks>
     /// This method calls upon the <see cref="IClientInfoManager"/> to remove the specified client.
@@ -48,7 +50,7 @@ public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) 
     /// ensuring that the client exists and the initiator of the request has the authority to perform
     /// the removal operation.
     /// </remarks>
-    public async Task<RemoveClientResponse> ProcessAsync(ValidClientRequest request)
+    public async Task<Result<RemoveClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request)
     {
         await clientInfoManager.RemoveClientAsync(request.ClientInfo.ClientId);
         return new RemoveClientSuccessfulResponse();

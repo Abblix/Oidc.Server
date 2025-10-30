@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -32,5 +35,5 @@ public interface IRegisterClientRequestProcessor
     /// </summary>
     /// <param name="request">The client registration request to process.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the client registration response.</returns>
-    Task<ClientRegistrationResponse> ProcessAsync(ValidClientRegistrationRequest request);
+    Task<Result<ClientRegistrationSuccessResponse, AuthError>> ProcessAsync(ValidClientRegistrationRequest request);
 }

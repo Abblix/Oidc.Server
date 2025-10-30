@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -57,7 +59,7 @@ public class RegisterClientHandler : IRegisterClientHandler
     /// </summary>
     /// <param name="clientRegistrationRequest">The client registration request containing the necessary information
     /// for registering a new client.</param>
-    /// <returns>A task that results in a <see cref="ClientRegistrationResponse"/>, encapsulating the outcome of
+    /// <returns>A task that results in a Result containing the outcome of
     /// the registration process.
     /// This could be a successful response with client details or an error response indicating the reasons for failure.
     /// </returns>
@@ -68,14 +70,9 @@ public class RegisterClientHandler : IRegisterClientHandler
     /// with the authorization server without direct administrative intervention. It supports the OpenID Connect
     /// Dynamic Client Registration specification, ensuring compliance and interoperability.
     /// </remarks>
-
-    public async Task<ClientRegistrationResponse> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
+    public async Task<Result<ClientRegistrationSuccessResponse, AuthError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
         var validationResult = await _validator.ValidateAsync(clientRegistrationRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<ClientRegistrationResponse>(
-                new ClientRegistrationErrorResponse(error.ErrorCode, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

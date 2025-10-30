@@ -39,9 +39,9 @@ public class GrantTypeValidator : SyncClientRegistrationContextValidator
     /// </summary>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
-    /// A RequestError if grant types are missing, or null if the request is valid.
+    /// A AuthError if grant types are missing, or null if the request is valid.
     /// </returns>
-    protected override RequestError? Validate(ClientRegistrationValidationContext context)
+    protected override AuthError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         var requiredGrantTypes = new HashSet<string>();

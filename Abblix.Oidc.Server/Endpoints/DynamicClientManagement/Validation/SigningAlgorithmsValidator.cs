@@ -42,10 +42,10 @@ public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : S
     /// </summary>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if any signing algorithm is not supported;
+    /// A <see cref="AuthError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override RequestError? Validate(ClientRegistrationValidationContext context)
+    protected override AuthError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return Validate(request.RequestObjectSigningAlg, Parameters.RequestObjectSigningAlg)
@@ -62,13 +62,13 @@ public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : S
     /// <param name="description">
     /// A description used in the error message to identify which signing algorithm is invalid.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if the algorithm is not supported; otherwise, null.
+    /// A <see cref="AuthError"/> if the algorithm is not supported; otherwise, null.
     /// </returns>
-    private RequestError? Validate(string? alg, string description)
+    private AuthError? Validate(string? alg, string description)
     {
         if (alg is not null && !jwtValidator.SigningAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.InvalidRequest,
                 $"The signing algorithm for {description} is not supported");
         }

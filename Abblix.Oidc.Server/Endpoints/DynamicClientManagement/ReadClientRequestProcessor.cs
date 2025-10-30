@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -49,12 +51,12 @@ public class ReadClientRequestProcessor : IReadClientRequestProcessor
     /// of registered clients, facilitating transparency and ease of management. Note that sensitive information,
     /// like client secrets, are not directly retrievable to maintain security.
     /// </remarks>
-    public Task<ReadClientResponse> ProcessAsync(ValidClientRequest request)
+    public Task<Result<ReadClientSuccessfulResponse, AuthError>> ProcessAsync(ValidClientRequest request)
     {
         var client = request.ClientInfo;
 
         //TODO add missing properties
-        return Task.FromResult<ReadClientResponse>(
+        return Task.FromResult<Result<ReadClientSuccessfulResponse, AuthError>>(
             new ReadClientSuccessfulResponse
             {
                 ClientId = client.ClientId,

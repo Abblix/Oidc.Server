@@ -41,10 +41,10 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
     /// </summary>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if any signing algorithm is not supported;
+    /// A <see cref="AuthError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override RequestError? Validate(ClientRegistrationValidationContext context)
+    protected override AuthError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return Validate( request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg) ??
@@ -59,13 +59,13 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
     /// <param name="description">
     /// A description used in the error message to identify which signing algorithm is invalid.</param>
     /// <returns>
-    /// A <see cref="RequestError"/> if the algorithm is not supported; otherwise, null.
+    /// A <see cref="AuthError"/> if the algorithm is not supported; otherwise, null.
     /// </returns>
-    private RequestError? Validate(string? alg, string description)
+    private AuthError? Validate(string? alg, string description)
     {
         if (alg is not null && !jwtCreator.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.InvalidRequest,
                 $"The signing algorithm for {description} is not supported");
         }

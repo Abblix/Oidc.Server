@@ -20,6 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -41,5 +45,5 @@ public interface IReadClientHandler
     /// configuration details. If the request is invalid or if the client cannot be found, an appropriate error
     /// response is generated.
     /// </remarks>
-    Task<ReadClientResponse> HandleAsync(Model.ClientRequest clientRequest);
+    Task<Result<ReadClientSuccessfulResponse, AuthError>> HandleAsync(Model.ClientRequest clientRequest);
 }
