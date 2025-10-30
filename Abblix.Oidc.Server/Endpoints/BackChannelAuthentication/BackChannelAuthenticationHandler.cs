@@ -80,10 +80,6 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
         }
 
         var validationResult = await _validator.ValidateAsync(request, clientRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<BackChannelAuthenticationSuccess, AuthError>>(
-                new AuthError(error.Error, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

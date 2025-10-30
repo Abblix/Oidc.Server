@@ -77,9 +77,6 @@ public class RevocationHandler : IRevocationHandler
         ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(revocationRequest, clientRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<TokenRevoked, AuthError>>(error));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

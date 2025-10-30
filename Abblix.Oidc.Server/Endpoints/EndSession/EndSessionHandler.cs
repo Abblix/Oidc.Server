@@ -42,10 +42,6 @@ public class EndSessionHandler : IEndSessionHandler
     public async Task<Result<EndSessionSuccess, AuthError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
         var validationResult = await _validator.ValidateAsync(endSessionRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<EndSessionSuccess, AuthError>>(
-                new AuthError(error.Error, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }

@@ -74,10 +74,6 @@ public class IntrospectionHandler : IIntrospectionHandler
         ClientRequest clientRequest)
     {
         var validationResult = await _validator.ValidateAsync(introspectionRequest, clientRequest);
-
-        return await validationResult.MatchAsync(
-            onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<IntrospectionSuccess, AuthError>>(
-                new AuthError(error.Error, error.ErrorDescription)));
+        return await validationResult.BindAsync(_processor.ProcessAsync);
     }
 }
