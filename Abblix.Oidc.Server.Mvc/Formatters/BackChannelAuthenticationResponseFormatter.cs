@@ -58,18 +58,23 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
     {
         return Task.FromResult(response.Match(
             onSuccess: success => new OkObjectResult(success) as ActionResult,
-            onFailure: error => error switch
+            onFailure: error =>
             {
-                BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }
-                    => new UnauthorizedObjectResult(new ErrorResponse(err, description)),
+                ArgumentNullException.ThrowIfNull(error);
 
-                BackChannelAuthenticationForbidden { Error: var err, ErrorDescription: var description }
-                    => new ObjectResult(new ErrorResponse(err, description)) { StatusCode = StatusCodes.Status403Forbidden },
+                return error switch
+                {
+                    BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }
+                        => new UnauthorizedObjectResult(new ErrorResponse(err, description)),
 
-                { Error: var err, ErrorDescription: var description }
-                    => new BadRequestObjectResult(new ErrorResponse(err, description)),
+                    BackChannelAuthenticationForbidden { Error: var err, ErrorDescription: var description }
+                        => new ObjectResult(new ErrorResponse(err, description)) { StatusCode = StatusCodes.Status403Forbidden },
 
-                _ => throw new UnexpectedTypeException(nameof(error), error.GetType()),
+                    { Error: var err, ErrorDescription: var description }
+                        => new BadRequestObjectResult(new ErrorResponse(err, description)),
+
+                    _ => throw new UnexpectedTypeException(nameof(error), error.GetType()),
+                };
             }));
     }
 }
