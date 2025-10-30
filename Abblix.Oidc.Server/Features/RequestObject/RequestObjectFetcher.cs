@@ -70,7 +70,7 @@ public class RequestObjectFetcher(
         if (!requestObject.HasValue())
             return request;
 
-        logger.LogDebug("JWT request object was: {RequestObject}", requestObject);
+        logger.LogDebug("JWT request object was: {RequestObject}", Sanitized.Value(requestObject));
 
         var validationResult = await ValidateAsync(requestObject);
         return await validationResult.BindAsync<T>(
