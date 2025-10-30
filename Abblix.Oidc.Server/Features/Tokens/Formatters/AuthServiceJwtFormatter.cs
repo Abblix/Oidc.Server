@@ -33,25 +33,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// It leverages signing and optional encryption to generate JWTs that authenticate and authorize internal service
 /// operations.
 /// </summary>
-public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
+/// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
+/// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
+/// encrypting JWTs.</param>
+public class AuthServiceJwtFormatter(
+	IJsonWebTokenCreator jwtCreator,
+	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthServiceJwtFormatter"/> class.
-	/// </summary>
-	/// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
-	/// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
-	/// encrypting JWTs.</param>
-	public AuthServiceJwtFormatter(
-		IJsonWebTokenCreator jwtCreator,
-		IAuthServiceKeysProvider serviceKeysProvider)
-	{
-		_jwtCreator = jwtCreator;
-		_serviceKeysProvider = serviceKeysProvider;
-	}
-
-	private readonly IJsonWebTokenCreator _jwtCreator;
-	private readonly IAuthServiceKeysProvider _serviceKeysProvider;
-
 	/// <summary>
 	/// Formats and signs a JWT for use by the authentication service, applying the appropriate cryptographic operations
 	/// based on the JWT specified requirements and the available cryptographic keys.
@@ -68,14 +56,14 @@ public class AuthServiceJwtFormatter : IAuthServiceJwtFormatter
 	public async Task<string> FormatAsync(JsonWebToken token)
 	{
 		// Select the appropriate signing key based on the JWT specified algorithm
-		var signingCredentials = await _serviceKeysProvider.GetSigningKeys(true)
+		var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
 			.FirstByAlgorithmAsync(token.Header.Algorithm);
 
 		// Optionally, select an encryption key if available
-		var encryptingCredentials = await _serviceKeysProvider.GetEncryptionKeys()
+		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
 			.FirstOrDefaultAsync();
 
 		// Issue the JWT with the selected signing and encryption credentials
-		return await _jwtCreator.IssueAsync(token, signingCredentials, encryptingCredentials);
+		return await jwtCreator.IssueAsync(token, signingCredentials, encryptingCredentials);
 	}
 }

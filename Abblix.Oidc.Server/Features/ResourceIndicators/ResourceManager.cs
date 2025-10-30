@@ -30,26 +30,18 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// <summary>
 /// Manages resource definitions, ensuring they are registered and retrievable based on their URIs.
 /// </summary>
-public class ResourceManager : IResourceManager
+/// <param name="options">The OIDC options containing resource definitions to be registered.</param>
+public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ResourceManager"/> class,
-    /// registering resources defined in the OIDC options.
-    /// </summary>
-    /// <param name="options">The OIDC options containing resource definitions to be registered.</param>
-    public ResourceManager(IOptions<OidcOptions> options)
+    private readonly Dictionary<Uri, ResourceDefinition> _resources = InitializeResources(options);
+
+    private static Dictionary<Uri, ResourceDefinition> InitializeResources(IOptions<OidcOptions> options)
     {
+        var resources = new Dictionary<Uri, ResourceDefinition>();
         if (options.Value.Resources != null)
-            Array.ForEach(options.Value.Resources, AddResource);
+            Array.ForEach(options.Value.Resources, resource => resources.Add(resource.Resource, resource));
+        return resources;
     }
-
-    private readonly Dictionary<Uri, ResourceDefinition> _resources = new();
-
-    /// <summary>
-    /// Adds a resource definition to the internal collection.
-    /// </summary>
-    /// <param name="resource">The resource definition to be added.</param>
-    private void AddResource(ResourceDefinition resource) => _resources.Add(resource.Resource, resource);
 
     /// <summary>
     /// Attempts to retrieve the resource definition associated with the specified URI.

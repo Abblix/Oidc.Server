@@ -41,36 +41,19 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// OpenID Connect specifications. It integrates additional security by incorporating claims for token integrity
 /// verification.
 /// </summary>
-internal class IdentityTokenService : IIdentityTokenService
+/// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
+/// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
+/// token.</param>
+/// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
+/// the security requirements for transmission.</param>
+/// <param name="userClaimsProvider">Retrieves user-specific claims to be embedded in the identity token,
+/// based on the authentication session and client's requested scopes and claims.</param>
+internal class IdentityTokenService(
+	IIssuerProvider issuerProvider,
+	TimeProvider clock,
+	IClientJwtFormatter jwtFormatter,
+	IUserClaimsProvider userClaimsProvider) : IIdentityTokenService
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="IdentityTokenService"/> class, setting up the necessary components
-	/// for identity token creation.
-	/// </summary>
-	/// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
-	/// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
-	/// token.</param>
-	/// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
-	/// the security requirements for transmission.</param>
-	/// <param name="userClaimsProvider">Retrieves user-specific claims to be embedded in the identity token,
-	/// based on the authentication session and client's requested scopes and claims.</param>
-	public IdentityTokenService(
-		IIssuerProvider issuerProvider,
-		TimeProvider clock,
-		IClientJwtFormatter jwtFormatter,
-		IUserClaimsProvider userClaimsProvider)
-	{
-		_issuerProvider = issuerProvider;
-		_clock = clock;
-		_jwtFormatter = jwtFormatter;
-		_userClaimsProvider = userClaimsProvider;
-	}
-
-	private readonly IIssuerProvider _issuerProvider;
-	private readonly TimeProvider _clock;
-	private readonly IClientJwtFormatter _jwtFormatter;
-	private readonly IUserClaimsProvider _userClaimsProvider;
-
 	/// <summary>
 	/// Generates an identity token encapsulating the user's authenticated session, optionally embedding claims based on
 	/// the provided authorization code and access token. This method crafts a token that includes standard claims,
@@ -110,7 +93,7 @@ internal class IdentityTokenService : IIdentityTokenService
 			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address]).ToArray();
 		}
 
-		var userInfo = await _userClaimsProvider.GetUserClaimsAsync(
+		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
 			authSession,
 			scope,
 			authContext.RequestedClaims?.IdToken,
@@ -119,7 +102,7 @@ internal class IdentityTokenService : IIdentityTokenService
 		if (userInfo == null)
 			return null;
 
-		var issuedAt = _clock.GetUtcNow();
+		var issuedAt = clock.GetUtcNow();
 
 		var identityToken = new JsonWebToken
 		{
@@ -132,7 +115,7 @@ internal class IdentityTokenService : IIdentityTokenService
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
-				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
@@ -146,7 +129,7 @@ internal class IdentityTokenService : IIdentityTokenService
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
 
-		return new EncodedJsonWebToken(identityToken, await _jwtFormatter.FormatAsync(identityToken, clientInfo));
+		return new EncodedJsonWebToken(identityToken, await jwtFormatter.FormatAsync(identityToken, clientInfo));
 	}
 
 	private static void AppendAdditionalClaims(

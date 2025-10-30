@@ -37,37 +37,20 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// authorization details and the authentication of requests using these tokens. Utilizes issuer information,
 /// current time, unique token identifiers, and JWT formatting to generate secure and compliant access tokens.
 /// </summary>
-internal class AccessTokenService : IAccessTokenService
+/// <param name="issuerProvider">The provider responsible for determining the issuer (iss) claim in the token,
+/// which identifies the authorization server that issued the token.</param>
+/// <param name="clock">The service used to obtain the current time, ensuring accurate token expiration and
+/// issuance timestamps.</param>
+/// <param name="tokenIdGenerator">The service responsible for generating unique identifiers (jti) for each token,
+/// enhancing security by enabling token revocation and tracking capabilities.</param>
+/// <param name="serviceJwtFormatter">The formatter used for encoding the JSON Web Token (JWT), ensuring it meets
+/// the standards required for secure transmission and validation.</param>
+internal class AccessTokenService(
+	IIssuerProvider issuerProvider,
+	TimeProvider clock,
+	ITokenIdGenerator tokenIdGenerator,
+	IAuthServiceJwtFormatter serviceJwtFormatter) : IAccessTokenService
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AccessTokenService"/>, responsible for generating and validating
-	/// access tokens.
-	/// </summary>
-	/// <param name="issuerProvider">The provider responsible for determining the issuer (iss) claim in the token,
-	/// which identifies the authorization server that issued the token.</param>
-	/// <param name="clock">The service used to obtain the current time, ensuring accurate token expiration and
-	/// issuance timestamps.</param>
-	/// <param name="tokenIdGenerator">The service responsible for generating unique identifiers (jti) for each token,
-	/// enhancing security by enabling token revocation and tracking capabilities.</param>
-	/// <param name="serviceJwtFormatter">The formatter used for encoding the JSON Web Token (JWT), ensuring it meets
-	/// the standards required for secure transmission and validation.</param>
-	public AccessTokenService(
-		IIssuerProvider issuerProvider,
-		TimeProvider clock,
-		ITokenIdGenerator tokenIdGenerator,
-		IAuthServiceJwtFormatter serviceJwtFormatter)
-	{
-		_issuerProvider = issuerProvider;
-		_clock = clock;
-		_tokenIdGenerator = tokenIdGenerator;
-		_serviceJwtFormatter = serviceJwtFormatter;
-	}
-
-	private readonly IIssuerProvider _issuerProvider;
-	private readonly TimeProvider _clock;
-	private readonly ITokenIdGenerator _tokenIdGenerator;
-	private readonly IAuthServiceJwtFormatter _serviceJwtFormatter;
-
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
 	/// of the user, along with client-specific settings. This token is crafted using standard JWT practices,
@@ -91,7 +74,7 @@ internal class AccessTokenService : IAccessTokenService
 		AuthorizationContext authContext,
 		ClientInfo clientInfo)
 	{
-		var issuedAt = _clock.GetUtcNow();
+		var issuedAt = clock.GetUtcNow();
 
 		var accessToken = new JsonWebToken
 		{
@@ -102,18 +85,18 @@ internal class AccessTokenService : IAccessTokenService
 			},
 			Payload =
 			{
-				JwtId = _tokenIdGenerator.GenerateTokenId(),
+				JwtId = tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 			},
 		};
 
 		authSession.ApplyTo(accessToken.Payload);
 		authContext.ApplyTo(accessToken.Payload);
 
-		return new EncodedJsonWebToken(accessToken, await _serviceJwtFormatter.FormatAsync(accessToken));
+		return new EncodedJsonWebToken(accessToken, await serviceJwtFormatter.FormatAsync(accessToken));
 	}
 
 	/// <summary>
