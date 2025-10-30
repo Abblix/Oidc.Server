@@ -83,10 +83,6 @@ public class UriResolver : IUriResolver
     public Uri Content(string path)
     {
         var actionContext = _actionContextAccessor.ActionContext.NotNull(nameof(_actionContextAccessor.ActionContext));
-
-        var appUrl = actionContext.HttpContext.Request.GetAppUrl();
-        return path.StartsWith("~/")
-            ? new Uri(appUrl + path[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), path);
+        return actionContext.HttpContext.Request.ToAbsoluteUri(path);
     }
 }
