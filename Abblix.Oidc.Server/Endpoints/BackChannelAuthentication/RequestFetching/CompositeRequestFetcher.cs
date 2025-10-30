@@ -40,8 +40,8 @@ public class CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] 
     /// If all fetchers succeed, the method returns the final successful result.
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
-    /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/> that represents the outcome of the fetching process.</returns>
-    public async Task<Result<BackChannelAuthenticationRequest, RequestError>> FetchAsync(BackChannelAuthenticationRequest request)
+    /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/> that represents the outcome of the fetching process.</returns>
+    public async Task<Result<BackChannelAuthenticationRequest, AuthError>> FetchAsync(BackChannelAuthenticationRequest request)
     {
         foreach (var fetcher in fetchers)
         {

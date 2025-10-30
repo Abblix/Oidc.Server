@@ -47,10 +47,10 @@ public class ResourceValidator(IResourceManager resourceManager) : IBackChannelA
     /// An <see cref="AuthorizationRequestValidationError"/> containing error details if validation fails,
     /// or null if the validation is successful, indicating that all requested resources are recognized and permissible.
     /// </returns>
-    public Task<RequestError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<AuthError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private RequestError? Validate(BackChannelAuthenticationValidationContext context)
+    private AuthError? Validate(BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
 
@@ -62,7 +62,7 @@ public class ResourceValidator(IResourceManager resourceManager) : IBackChannelA
                     out var resources,
                     out var errorDescription))
             {
-                return new RequestError(ErrorCodes.InvalidTarget, errorDescription);
+                return new AuthError(ErrorCodes.InvalidTarget, errorDescription);
             }
 
             context.Resources = resources;

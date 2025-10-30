@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -75,7 +76,7 @@ public class EndSessionRequestProcessor : IEndSessionRequestProcessor
 	/// </summary>
 	/// <param name="request">The valid end-session request to be processed.</param>
 	/// <returns>A task representing the asynchronous operation, which upon completion will yield the <see cref="EndSessionResponse"/>.</returns>
-	public async Task<Result<EndSessionSuccess, EndSessionError>> ProcessAsync(ValidEndSessionRequest request)
+	public async Task<Result<EndSessionSuccess, AuthError>> ProcessAsync(ValidEndSessionRequest request)
 	{
 		var postLogoutRedirectUri = request.Model.PostLogoutRedirectUri;
 		if (postLogoutRedirectUri != null && request.Model.State != null)

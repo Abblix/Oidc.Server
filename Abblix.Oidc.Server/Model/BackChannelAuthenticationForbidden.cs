@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
@@ -31,4 +33,4 @@ namespace Abblix.Oidc.Server.Model;
 /// <param name="ErrorDescription">
 /// A human-readable description of the error, providing more details about the failure.</param>
 public record BackChannelAuthenticationForbidden(string Error, string ErrorDescription)
-    : BackChannelAuthenticationError(Error, ErrorDescription);
+    : AuthError(Error, ErrorDescription);

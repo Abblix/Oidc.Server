@@ -35,7 +35,7 @@ public interface IEndSessionContextValidator
 	/// <param name="context">The end-session validation context.</param>
 	/// <returns>
 	/// A task that represents the asynchronous validation operation.
-	/// Returns an RequestError if validation fails, or null if successful.
+	/// Returns an AuthError if validation fails, or null if successful.
 	/// </returns>
-	Task<RequestError?> ValidateAsync(EndSessionValidationContext context);
+	Task<AuthError?> ValidateAsync(EndSessionValidationContext context);
 }

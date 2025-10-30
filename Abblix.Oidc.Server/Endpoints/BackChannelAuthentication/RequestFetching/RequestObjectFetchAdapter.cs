@@ -41,9 +41,9 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>
     /// A task that returns a BackChannelAuthenticationRequest or error.
-    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest, RequestError}"/>
+    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/>
     /// that either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
-    public Task<Result<BackChannelAuthenticationRequest, RequestError>> FetchAsync(BackChannelAuthenticationRequest request)
+    public Task<Result<BackChannelAuthenticationRequest, AuthError>> FetchAsync(BackChannelAuthenticationRequest request)
         => requestObjectFetcher.FetchAsync(request, request.Request);
 }

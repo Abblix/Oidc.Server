@@ -43,10 +43,10 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// </summary>
 	/// <param name="context">The validation context that includes details about the request and the client.</param>
 	/// <returns>
-	/// A <see cref="RequestError"/> if the scope validation fails,
+	/// A <see cref="AuthError"/> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-	public Task<RequestError?> ValidateAsync(
+	public Task<AuthError?> ValidateAsync(
 		BackChannelAuthenticationValidationContext context)
 	{
 		return Task.FromResult(Validate(context));
@@ -60,15 +60,15 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// <param name="context">
 	/// Contains the authorization request and the client information necessary for validation.</param>
 	/// <returns>
-	/// A <see cref="RequestError"/> if the requested scopes are not valid or not allowed,
+	/// A <see cref="AuthError"/> if the requested scopes are not valid or not allowed,
 	/// or null if the validation passes.
 	/// </returns>
-	private RequestError? Validate(BackChannelAuthenticationValidationContext context)
+	private AuthError? Validate(BackChannelAuthenticationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
 		    context.ClientInfo.OfflineAccessAllowed != true)
 		{
-			return new RequestError(
+			return new AuthError(
 				ErrorCodes.InvalidScope,
 				"This client is not allowed to request for offline access");
 		}
@@ -79,7 +79,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 			    out var scopeDefinitions,
 			    out var errorDescription))
 		{
-			return new RequestError(
+			return new AuthError(
 				ErrorCodes.InvalidScope, errorDescription);
 		}
 

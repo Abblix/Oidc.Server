@@ -43,7 +43,7 @@ public class RequestedExpiryValidator(IOptionsSnapshot<OidcOptions> options) : I
     /// The validation context containing the backchannel authentication request and its parameters.</param>
     /// <returns>A task representing the asynchronous operation, returning an error if validation fails,
     /// or null if validation succeeds.</returns>
-    public Task<RequestError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<AuthError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -53,7 +53,7 @@ public class RequestedExpiryValidator(IOptionsSnapshot<OidcOptions> options) : I
     /// The validation context containing the backchannel authentication request and its parameters.</param>
     /// <returns>
     /// An error if the requested expiry exceeds the allowed maximum, or null if validation is successful.</returns>
-    private RequestError? Validate(BackChannelAuthenticationValidationContext context)
+    private AuthError? Validate(BackChannelAuthenticationValidationContext context)
     {
         if (!context.Request.RequestedExpiry.HasValue)
         {
@@ -65,7 +65,7 @@ public class RequestedExpiryValidator(IOptionsSnapshot<OidcOptions> options) : I
         }
         else
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.InvalidRequest,
                 "Requested expiry is too long");
         }

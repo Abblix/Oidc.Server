@@ -37,16 +37,16 @@ public class ConfirmationValidator:  IEndSessionContextValidator
     /// <param name="context">The end-session validation context.</param>
     /// <returns>A task representing the asynchronous operation.
     /// The result is a validation error if confirmation is missing; otherwise, null.</returns>
-    public Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<AuthError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private static RequestError? Validate(EndSessionValidationContext context)
+    private static AuthError? Validate(EndSessionValidationContext context)
     {
         var request = context.Request;
 
         if (request.Confirmed != true && !request.IdTokenHint.HasValue())
         {
-            return new RequestError(
+            return new AuthError(
                 ErrorCodes.ConfirmationRequired,
                 "The request requires to be confirmed by user");
         }

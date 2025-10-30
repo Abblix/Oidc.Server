@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -41,5 +42,5 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// </returns>
     Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
-        Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError> response);
+        Result<BackChannelAuthenticationSuccess, AuthError> response);
 }

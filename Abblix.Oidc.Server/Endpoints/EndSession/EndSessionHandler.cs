@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Utils;
 
@@ -38,13 +39,13 @@ public class EndSessionHandler : IEndSessionHandler
     private readonly IEndSessionRequestValidator _validator;
     private readonly IEndSessionRequestProcessor _processor;
 
-    public async Task<Result<EndSessionSuccess, EndSessionError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
+    public async Task<Result<EndSessionSuccess, AuthError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
         var validationResult = await _validator.ValidateAsync(endSessionRequest);
 
         return await validationResult.MatchAsync(
             onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<EndSessionSuccess, EndSessionError>>(
-                new EndSessionError(error.ErrorCode, error.ErrorDescription)));
+            onFailure: error => Task.FromResult<Result<EndSessionSuccess, AuthError>>(
+                new AuthError(error.Error, error.ErrorDescription)));
     }
 }

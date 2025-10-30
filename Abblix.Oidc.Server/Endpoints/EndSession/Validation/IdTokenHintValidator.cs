@@ -41,7 +41,7 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
     /// </summary>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>An error if validation fails, null if successful.</returns>
-    public async Task<RequestError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<AuthError?> ValidateAsync(EndSessionValidationContext context)
     {
         var request = context.Request;
 
@@ -62,14 +62,14 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
                         }
                         catch (Exception)
                         {
-                            return new RequestError(
+                            return new AuthError(
                                 ErrorCodes.InvalidRequest,
                                 "The audience in the id token hint is missing or have multiple values.");
                         }
                     }
                     else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
                     {
-                        return new RequestError(
+                        return new AuthError(
                             ErrorCodes.InvalidRequest,
                             "The id token hint contains token issued for the client other than specified");
                     }
@@ -78,7 +78,7 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
                     break;
 
                 case JwtValidationError:
-                    return new RequestError(ErrorCodes.InvalidRequest,
+                    return new AuthError(ErrorCodes.InvalidRequest,
                         "The id token hint contains invalid token");
 
                 default:

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Model;
@@ -62,9 +63,9 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
     /// </summary>
     /// <param name="request">The initial backchannel authentication request to be processed.</param>
     /// <param name="clientRequest">The client request information associated with the authentication request.</param>
-    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, BackChannelAuthenticationError}"/> that indicates the outcome of the process.
+    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/> that indicates the outcome of the process.
     /// </returns>
-    public async Task<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>> HandleAsync(
+    public async Task<Result<BackChannelAuthenticationSuccess, AuthError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
@@ -75,14 +76,14 @@ public class BackChannelAuthenticationHandler : IBackChannelAuthenticationHandle
         }
         else if (fetchResult.TryGetFailure(out var error))
         {
-            return new BackChannelAuthenticationError(error.ErrorCode, error.ErrorDescription);
+            return new AuthError(error.Error, error.ErrorDescription);
         }
 
         var validationResult = await _validator.ValidateAsync(request, clientRequest);
 
         return await validationResult.MatchAsync(
             onSuccess: _processor.ProcessAsync,
-            onFailure: error => Task.FromResult<Result<BackChannelAuthenticationSuccess, BackChannelAuthenticationError>>(
-                new BackChannelAuthenticationError(error.ErrorCode, error.ErrorDescription)));
+            onFailure: error => Task.FromResult<Result<BackChannelAuthenticationSuccess, AuthError>>(
+                new AuthError(error.Error, error.ErrorDescription)));
     }
 }

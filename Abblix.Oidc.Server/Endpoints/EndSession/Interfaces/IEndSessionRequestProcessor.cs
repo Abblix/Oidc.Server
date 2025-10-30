@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -34,5 +35,5 @@ public interface IEndSessionRequestProcessor
 	/// </summary>
 	/// <param name="request">The valid end-session request.</param>
 	/// <returns>A task representing the asynchronous operation, returning the end-session response.</returns>
-	Task<Result<EndSessionSuccess, EndSessionError>> ProcessAsync(ValidEndSessionRequest request);
+	Task<Result<EndSessionSuccess, AuthError>> ProcessAsync(ValidEndSessionRequest request);
 }

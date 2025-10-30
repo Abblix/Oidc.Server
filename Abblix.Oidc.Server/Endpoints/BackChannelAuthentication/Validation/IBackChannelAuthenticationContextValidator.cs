@@ -40,7 +40,7 @@ public interface IBackChannelAuthenticationContextValidator
     /// <param name="context">The context of the backchannel authentication request that needs to be validated.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation. The task result contains
-    /// a <see cref="RequestError"/> if validation fails, or null if the context is valid.
+    /// a <see cref="AuthError"/> if validation fails, or null if the context is valid.
     /// </returns>
-    Task<RequestError?> ValidateAsync(BackChannelAuthenticationValidationContext context);
+    Task<AuthError?> ValidateAsync(BackChannelAuthenticationValidationContext context);
 }

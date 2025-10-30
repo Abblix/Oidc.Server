@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -42,7 +43,7 @@ public class EndSessionResponseFormatter : IEndSessionResponseFormatter
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, EndSessionError> response)
+    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, AuthError> response)
         => Task.FromResult(response.Match(
             onSuccess: FormatSuccessResponse,
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));

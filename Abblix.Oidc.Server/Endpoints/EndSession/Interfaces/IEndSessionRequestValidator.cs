@@ -38,5 +38,5 @@ public interface IEndSessionRequestValidator
 	/// </summary>
 	/// <param name="request">The end-session request to validate.</param>
 	/// <returns>A task representing the asynchronous operation, returning the validation result.</returns>
-	Task<Result<ValidEndSessionRequest, RequestError>> ValidateAsync(EndSessionRequest request);
+	Task<Result<ValidEndSessionRequest, AuthError>> ValidateAsync(EndSessionRequest request);
 }
