@@ -61,7 +61,7 @@ public class SecureHttpFetcher(
             return ErrorFactory.InvalidClientMetadata("Unable to fetch content");
         }
 
-        if (content == null)
+        if (ReferenceEquals(content, null))
         {
             return ErrorFactory.InvalidClientMetadata("Content is empty or null");
         }

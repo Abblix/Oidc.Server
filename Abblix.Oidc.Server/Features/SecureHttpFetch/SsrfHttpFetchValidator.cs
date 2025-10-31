@@ -93,17 +93,15 @@ public class SsrfHttpFetchValidator(
         {
             var hostEntry = await Dns.GetHostEntryAsync(hostname);
 
-            foreach (var address in hostEntry.AddressList)
+            var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
+            if (privateAddress != null)
             {
-                if (IsPrivateOrReservedAddress(address))
-                {
-                    logger.LogWarning(
-                        "URI {Uri} resolves to private/internal address {Address}",
-                        Sanitized.Value(uri),
-                        Sanitized.Value(address));
+                logger.LogWarning(
+                    "URI {Uri} resolves to private/internal address {Address}",
+                    Sanitized.Value(uri),
+                    Sanitized.Value(privateAddress));
 
-                    return ErrorFactory.InvalidClientMetadata("URI must not point to private or internal networks");
-                }
+                return ErrorFactory.InvalidClientMetadata("URI must not point to private or internal networks");
             }
         }
         catch (Exception ex)

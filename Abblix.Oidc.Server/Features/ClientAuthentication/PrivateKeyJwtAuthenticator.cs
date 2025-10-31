@@ -125,7 +125,7 @@ public class PrivateKeyJwtAuthenticator(
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogWarning("Invalid PrivateKeyJwt: {Message}", ex.Message);
+            logger.LogWarning(ex, "Invalid PrivateKeyJwt");
             return null;
         }
 
