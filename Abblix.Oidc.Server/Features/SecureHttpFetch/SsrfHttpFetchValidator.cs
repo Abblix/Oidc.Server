@@ -38,27 +38,15 @@ public class SsrfHttpFetchValidator(
     ILogger<SsrfHttpFetchValidator> logger) : ISecureHttpFetcher
 {
     /// <summary>
-    /// Fetches JSON content with SSRF validation before making the request.
+    /// Fetches content with SSRF validation before making the request.
     /// </summary>
-    public async Task<Result<T, OidcError>> FetchJsonAsync<T>(Uri uri)
+    public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
     {
         var validationError = await ValidateSsrf(uri);
         if (validationError != null)
             return validationError;
 
-        return await inner.FetchJsonAsync<T>(uri);
-    }
-
-    /// <summary>
-    /// Fetches string content with SSRF validation before making the request.
-    /// </summary>
-    public async Task<Result<string, OidcError>> FetchStringAsync(Uri uri)
-    {
-        var validationError = await ValidateSsrf(uri);
-        if (validationError != null)
-            return validationError;
-
-        return await inner.FetchStringAsync(uri);
+        return await inner.FetchAsync<T>(uri);
     }
 
     /// <summary>

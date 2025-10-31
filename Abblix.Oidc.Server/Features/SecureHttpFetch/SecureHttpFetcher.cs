@@ -38,14 +38,15 @@ public class SecureHttpFetcher(
     ILogger<SecureHttpFetcher> logger) : ISecureHttpFetcher
 {
     /// <summary>
-    /// Fetches JSON content from a URI with SSRF protection and deserializes it.
+    /// Fetches content from a URI with SSRF protection.
+    /// Automatically handles JSON deserialization or raw string content based on the response Content-Type.
     /// </summary>
     /// <typeparam name="T">The type to deserialize the response to.</typeparam>
     /// <param name="uri">The URI to fetch content from.</param>
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError.
     /// </returns>
-    public async Task<Result<T, OidcError>> FetchJsonAsync<T>(Uri uri)
+    public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
     {
         T? content;
         try
@@ -53,7 +54,20 @@ public class SecureHttpFetcher(
             // SSRF protection: SsrfHttpFetchValidator decorator validates hostnames, performs DNS resolution,
             // and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast).
             // Additional protection: deploy behind firewall for defense-in-depth.
-            content = await httpClient.GetFromJsonAsync<T>(uri); // NOSONAR S5144
+
+            using var response = await httpClient.GetAsync(uri); // NOSONAR S5144
+            response.EnsureSuccessStatusCode();
+
+            if (typeof(T) == typeof(string))
+            {
+                // For string type, return raw content (e.g., JWT)
+                content = (T)(object)await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                // For other types, deserialize as JSON
+                content = await response.Content.ReadFromJsonAsync<T>();
+            }
         }
         catch (Exception ex)
         {
@@ -64,37 +78,6 @@ public class SecureHttpFetcher(
         if (ReferenceEquals(content, null))
         {
             return ErrorFactory.InvalidClientMetadata("Content is empty or null");
-        }
-
-        return content;
-    }
-
-    /// <summary>
-    /// Fetches string content from a URI with SSRF protection.
-    /// </summary>
-    /// <param name="uri">The URI to fetch content from.</param>
-    /// <returns>
-    /// A Result containing either the string content or an OidcError.
-    /// </returns>
-    public async Task<Result<string, OidcError>> FetchStringAsync(Uri uri)
-    {
-        string? content;
-        try
-        {
-            // SSRF protection: SsrfHttpFetchValidator decorator validates hostnames, performs DNS resolution,
-            // and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast).
-            // Additional protection: deploy behind firewall for defense-in-depth.
-            content = await httpClient.GetStringAsync(uri); // NOSONAR S5144
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Unable to fetch content from {Uri}", Sanitized.Value(uri));
-            return ErrorFactory.InvalidClientMetadata("Unable to fetch content");
-        }
-
-        if (string.IsNullOrEmpty(content))
-        {
-            return ErrorFactory.InvalidClientMetadata("Content is empty");
         }
 
         return content;

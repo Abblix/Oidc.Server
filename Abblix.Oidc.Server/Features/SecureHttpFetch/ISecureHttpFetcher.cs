@@ -31,21 +31,14 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 public interface ISecureHttpFetcher
 {
     /// <summary>
-    /// Fetches content from a URI with SSRF protection, then deserializes it to the specified type.
+    /// Fetches content from a URI with SSRF protection.
+    /// For JSON content, deserializes to the specified type.
+    /// For raw content like JWT strings, use string as the type parameter.
     /// </summary>
-    /// <typeparam name="T">The type to deserialize the response to.</typeparam>
+    /// <typeparam name="T">The type to deserialize the response to. Use string for raw text content.</typeparam>
     /// <param name="uri">The URI to fetch content from.</param>
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError if the fetch operation fails.
     /// </returns>
-    Task<Result<T, OidcError>> FetchJsonAsync<T>(Uri uri);
-
-    /// <summary>
-    /// Fetches string content from a URI with SSRF protection.
-    /// </summary>
-    /// <param name="uri">The URI to fetch content from.</param>
-    /// <returns>
-    /// A Result containing either the string content or an OidcError if the fetch operation fails.
-    /// </returns>
-    Task<Result<string, OidcError>> FetchStringAsync(Uri uri);
+    Task<Result<T, OidcError>> FetchAsync<T>(Uri uri);
 }

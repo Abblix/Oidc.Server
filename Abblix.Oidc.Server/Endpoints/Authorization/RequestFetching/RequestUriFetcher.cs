@@ -107,7 +107,7 @@ public class RequestUriFetcher(
         }
 
         // SSRF validation is handled by the ISecureHttpFetcher decorator
-        var contentResult = await secureHttpFetcher.FetchStringAsync(requestUri);
+        var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
         if (contentResult.TryGetFailure(out var contentError))
         {
