@@ -26,10 +26,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -40,21 +38,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-/// <param name="clientIdGenerator">Responsible for generating unique client IDs.</param>
-/// <param name="clientSecretGenerator">Responsible for generating secure client secrets.</param>
-/// <param name="hashService">Provides hashing services for client secrets.</param>
-/// <param name="clientInfoManager">Manages storage and retrieval of client information.</param>
-/// <param name="clock">Provides time-related functionality, crucial for token issuance and expiration.</param>
-/// <param name="options">Configuration options for client registration, including secret length and expiration.</param>
-/// <param name="serviceJwtFormatter">Formats JWTs for service use, including registration access tokens.</param>
-/// <param name="issuerProvider">Provides issuer information, necessary for token issuance.</param>
 public class RegisterClientRequestProcessor(
-    IClientIdGenerator clientIdGenerator,
-    IClientSecretGenerator clientSecretGenerator,
-    IHashService hashService,
+    IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    NewClientOptions options,
     IAuthServiceJwtFormatter serviceJwtFormatter,
     IIssuerProvider issuerProvider) : IRegisterClientRequestProcessor
 {
@@ -77,48 +64,32 @@ public class RegisterClientRequestProcessor(
         var model = request.Model;
 
         var issuedAt = clock.GetUtcNow();
-        var clientId = model.ClientId.HasValue() ? model.ClientId : clientIdGenerator.GenerateClientId();
-        var (clientSecret, expiresAt) = GenerateClientSecret(model.TokenEndpointAuthMethod, issuedAt);
+        var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
+        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
 
-        var clientInfo = ToClientInfo(model, clientId, clientSecret, expiresAt, request.SectorIdentifier);
         await clientInfoManager.AddClientAsync(clientInfo);
 
-        var response = new ClientRegistrationSuccessResponse(clientId, issuedAt)
+        var registrationAccessToken = await IssueRegistrationAccessTokenAsync(credentials.ClientId, issuedAt);
+
+        var response = new ClientRegistrationSuccessResponse(credentials.ClientId, issuedAt)
         {
-            ClientSecret = clientSecret,
-            ClientSecretExpiresAt = expiresAt,
-            RegistrationAccessToken = await IssueRegistrationAccessTokenAsync(clientId, issuedAt),
+            ClientSecret = credentials.ClientSecret,
+            ClientSecretExpiresAt = credentials.ExpiresAt,
+            RegistrationAccessToken = registrationAccessToken,
         };
+
         return response;
     }
 
-    private (string? clientSecret, DateTimeOffset? expiresAt) GenerateClientSecret(
-        string tokenEndpointAuthMethod,
-        DateTimeOffset issuedAt)
-    {
-        switch (tokenEndpointAuthMethod)
-        {
-            case ClientAuthenticationMethods.ClientSecretBasic:
-            case ClientAuthenticationMethods.ClientSecretPost:
-                var clientSecret = clientSecretGenerator.GenerateClientSecret(options.ClientSecret.Length);
-                var expiresAt = issuedAt + options.ClientSecret.ExpiresAfter;
-                return (clientSecret, expiresAt);
-
-            default:
-                // It is unnecessary for Clients selecting a token_endpoint_auth_method of private_key_jwt
-                // unless symmetric encryption will be used
-                return (clientSecret: null, expiresAt: null);
-        }
-    }
-
-    private ClientInfo ToClientInfo(
+    /// <summary>
+    /// Converts the registration request and credentials into a ClientInfo entity for storage.
+    /// </summary>
+    private static ClientInfo ToClientInfo(
         ClientRegistrationRequest model,
-        string clientId,
-        string? clientSecret,
-        DateTimeOffset? expiresAt,
+        ClientCredentials credentials,
         string? sectorIdentifier)
     {
-        var clientInfo = new ClientInfo(clientId)
+        var clientInfo = new ClientInfo(credentials.ClientId)
         {
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
@@ -156,17 +127,17 @@ public class RegisterClientRequestProcessor(
             TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
         };
 
-        if (clientSecret.HasValue())
+        if (credentials.ClientSecret.HasValue())
         {
             clientInfo.ClientSecrets =
             [
                 new ClientSecret
                 {
                     Value = clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt
-                        ? clientSecret
+                        ? credentials.ClientSecret
                         : null,
-                    Sha512Hash = hashService.Sha(HashAlgorithm.Sha512, clientSecret),
-                    ExpiresAt = expiresAt,
+                    Sha512Hash = credentials.Sha512Hash,
+                    ExpiresAt = credentials.ExpiresAt,
                 }
             ];
         }
@@ -203,6 +174,9 @@ public class RegisterClientRequestProcessor(
         return clientInfo;
     }
 
+    /// <summary>
+    /// Issues a registration access token for managing the registered client.
+    /// </summary>
     private Task<string> IssueRegistrationAccessTokenAsync(string clientId, DateTimeOffset issuedAt)
     {
         var token = new JsonWebToken
