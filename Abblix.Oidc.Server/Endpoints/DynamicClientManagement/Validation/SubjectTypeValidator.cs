@@ -71,7 +71,7 @@ public class SubjectTypeValidator(
         if (validationError != null)
             return validationError;
 
-        // SSRF validation is handled by the ISecureHttpFetcher decorator
+        // SSRF protection is handled by the SsrfValidatingHttpFetcher decorator
         var contentResult = await secureHttpFetcher.FetchJsonAsync<Uri[]>(sectorIdentifierUri);
 
         if (contentResult.TryGetFailure(out var contentError))

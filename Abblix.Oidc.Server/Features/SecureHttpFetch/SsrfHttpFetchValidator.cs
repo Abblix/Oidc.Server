@@ -33,9 +33,9 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// </summary>
 /// <param name="inner">The inner HTTP fetcher to delegate to after validation.</param>
 /// <param name="logger">The logger for recording validation warnings.</param>
-public class SsrfValidatingHttpFetcher(
+public class SsrfHttpFetchValidator(
     ISecureHttpFetcher inner,
-    ILogger<SsrfValidatingHttpFetcher> logger) : ISecureHttpFetcher
+    ILogger<SsrfHttpFetchValidator> logger) : ISecureHttpFetcher
 {
     /// <summary>
     /// Fetches JSON content with SSRF validation before making the request.

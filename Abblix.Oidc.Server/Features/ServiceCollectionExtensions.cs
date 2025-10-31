@@ -431,7 +431,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// The registered services include:
     /// - A typed HTTP client (<see cref="SecureHttpFetcher"/>) for making secure HTTP requests
-    /// - An SSRF validation decorator (<see cref="SsrfValidatingHttpFetcher"/>) that validates URIs before making requests
+    /// - An SSRF validation decorator (<see cref="SsrfHttpFetchValidator"/>) that validates URIs before making requests
     ///
     /// The SSRF protection includes:
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
@@ -449,6 +449,6 @@ public static class ServiceCollectionExtensions
         return services
             .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>()
             .Services
-            .Decorate<ISecureHttpFetcher, SsrfValidatingHttpFetcher>();
+            .Decorate<ISecureHttpFetcher, SsrfHttpFetchValidator>();
     }
 }
