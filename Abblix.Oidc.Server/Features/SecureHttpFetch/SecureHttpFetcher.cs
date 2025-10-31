@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
@@ -46,16 +45,15 @@ public class SecureHttpFetcher(
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError.
     /// </returns>
-    [SuppressMessage("Security", "S5144:Server-side requests should not be vulnerable to forging attacks",
-        Justification = "SSRF protection provided by SsrfHttpFetchValidator decorator: validates hostnames, " +
-                        "performs DNS resolution, blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x), " +
-                        "loopback, link-local, and multicast addresses. Deploy behind firewall for defense-in-depth.")]
     public async Task<Result<T, OidcError>> FetchJsonAsync<T>(Uri uri)
     {
         T? content;
         try
         {
-            content = await httpClient.GetFromJsonAsync<T>(uri);
+            // SSRF protection: SsrfHttpFetchValidator decorator validates hostnames, performs DNS resolution,
+            // and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast).
+            // Additional protection: deploy behind firewall for defense-in-depth.
+            content = await httpClient.GetFromJsonAsync<T>(uri); // NOSONAR S5144
         }
         catch (Exception ex)
         {
@@ -78,16 +76,15 @@ public class SecureHttpFetcher(
     /// <returns>
     /// A Result containing either the string content or an OidcError.
     /// </returns>
-    [SuppressMessage("Security", "S5144:Server-side requests should not be vulnerable to forging attacks",
-        Justification = "SSRF protection provided by SsrfHttpFetchValidator decorator: validates hostnames, " +
-                        "performs DNS resolution, blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x), " +
-                        "loopback, link-local, and multicast addresses. Deploy behind firewall for defense-in-depth.")]
     public async Task<Result<string, OidcError>> FetchStringAsync(Uri uri)
     {
         string? content;
         try
         {
-            content = await httpClient.GetStringAsync(uri);
+            // SSRF protection: SsrfHttpFetchValidator decorator validates hostnames, performs DNS resolution,
+            // and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast).
+            // Additional protection: deploy behind firewall for defense-in-depth.
+            content = await httpClient.GetStringAsync(uri); // NOSONAR S5144
         }
         catch (Exception ex)
         {
