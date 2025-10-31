@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
@@ -45,20 +46,16 @@ public class SecureHttpFetcher(
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError.
     /// </returns>
+    [SuppressMessage("Security", "S5144:Server-side requests should not be vulnerable to forging attacks",
+        Justification = "SSRF protection provided by SsrfHttpFetchValidator decorator: validates hostnames, " +
+                        "performs DNS resolution, blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x), " +
+                        "loopback, link-local, and multicast addresses. Deploy behind firewall for defense-in-depth.")]
     public async Task<Result<T, OidcError>> FetchJsonAsync<T>(Uri uri)
     {
         T? content;
         try
         {
-            // SonarQube S5144: Constructing URL from user-controlled data
-            // SAFE: This class is decorated with SsrfHttpFetchValidator which provides multi-layered protection:
-            // - Validates and blocks internal hostnames (localhost, internal, corp, home, lan, etc.)
-            // - Performs DNS resolution and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x)
-            // - Blocks loopback (127.x, ::1), link-local (169.254.x, fe80::/10), and multicast addresses
-            // - Additional recommendation: deploy behind firewall for defense-in-depth
-#pragma warning disable S5144
             content = await httpClient.GetFromJsonAsync<T>(uri);
-#pragma warning restore S5144
         }
         catch (Exception ex)
         {
@@ -81,20 +78,16 @@ public class SecureHttpFetcher(
     /// <returns>
     /// A Result containing either the string content or an OidcError.
     /// </returns>
+    [SuppressMessage("Security", "S5144:Server-side requests should not be vulnerable to forging attacks",
+        Justification = "SSRF protection provided by SsrfHttpFetchValidator decorator: validates hostnames, " +
+                        "performs DNS resolution, blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x), " +
+                        "loopback, link-local, and multicast addresses. Deploy behind firewall for defense-in-depth.")]
     public async Task<Result<string, OidcError>> FetchStringAsync(Uri uri)
     {
         string? content;
         try
         {
-            // SonarQube S5144: Constructing URL from user-controlled data
-            // SAFE: This class is decorated with SsrfHttpFetchValidator which provides multi-layered protection:
-            // - Validates and blocks internal hostnames (localhost, internal, corp, home, lan, etc.)
-            // - Performs DNS resolution and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x)
-            // - Blocks loopback (127.x, ::1), link-local (169.254.x, fe80::/10), and multicast addresses
-            // - Additional recommendation: deploy behind firewall for defense-in-depth
-#pragma warning disable S5144
             content = await httpClient.GetStringAsync(uri);
-#pragma warning restore S5144
         }
         catch (Exception ex)
         {
