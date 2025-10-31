@@ -50,7 +50,15 @@ public class SecureHttpFetcher(
         T? content;
         try
         {
+            // SonarQube S5144: Constructing URL from user-controlled data
+            // SAFE: This class is decorated with SsrfHttpFetchValidator which provides multi-layered protection:
+            // - Validates and blocks internal hostnames (localhost, internal, corp, home, lan, etc.)
+            // - Performs DNS resolution and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x)
+            // - Blocks loopback (127.x, ::1), link-local (169.254.x, fe80::/10), and multicast addresses
+            // - Additional recommendation: deploy behind firewall for defense-in-depth
+#pragma warning disable S5144
             content = await httpClient.GetFromJsonAsync<T>(uri);
+#pragma warning restore S5144
         }
         catch (Exception ex)
         {
@@ -78,7 +86,15 @@ public class SecureHttpFetcher(
         string? content;
         try
         {
+            // SonarQube S5144: Constructing URL from user-controlled data
+            // SAFE: This class is decorated with SsrfHttpFetchValidator which provides multi-layered protection:
+            // - Validates and blocks internal hostnames (localhost, internal, corp, home, lan, etc.)
+            // - Performs DNS resolution and blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x)
+            // - Blocks loopback (127.x, ::1), link-local (169.254.x, fe80::/10), and multicast addresses
+            // - Additional recommendation: deploy behind firewall for defense-in-depth
+#pragma warning disable S5144
             content = await httpClient.GetStringAsync(uri);
+#pragma warning restore S5144
         }
         catch (Exception ex)
         {
