@@ -165,19 +165,19 @@ public abstract record Result<TSuccess, TFailure>
     public abstract bool TryGetFailure(out TFailure value);
 
     /// <summary>
-    /// Deconstructs the result into separate success and failure values.
-    /// </summary>
-    /// <param name="success">The success value if available; otherwise, <c>null</c>.</param>
-    /// <param name="failure">The failure value if available; otherwise, <c>null</c>.</param>
-    public abstract void Deconstruct(out TSuccess? success, out TFailure? failure);
-
-    /// <summary>
     /// Binds the result to a function that returns a new result, allowing chaining of operations.
     /// </summary>
     /// <typeparam name="TNext">The type of the success value in the returned result.</typeparam>
     /// <param name="func">The function to apply to the success value.</param>
     /// <returns>The result of applying the function if successful; otherwise, the original failure.</returns>
     public abstract Result<TNext, TFailure> Bind<TNext>(Func<TSuccess, Result<TNext, TFailure>> func);
+
+    /// <summary>
+    /// Executes the specified action if the result is successful, and returns the original result.
+    /// </summary>
+    /// <param name="action">The action to execute if the result is successful.</param>
+    /// <returns>The original result after executing the action if successful; otherwise, the failure result.</returns>
+    public abstract Result<TSuccess, TFailure> Bind(Action<TSuccess> action);
 
     /// <summary>
     /// Asynchronously binds the result to a function that returns a new result, allowing chaining of operations.
@@ -188,6 +188,13 @@ public abstract record Result<TSuccess, TFailure>
     public abstract Task<Result<TNext, TFailure>> BindAsync<TNext>(Func<TSuccess, Task<Result<TNext, TFailure>>> func);
 
     /// <summary>
+    /// Asynchronously executes the specified action if the result is successful, and returns the original result.
+    /// </summary>
+    /// <param name="action">The asynchronous action to execute if the result is successful.</param>
+    /// <returns>A task representing the operation, with the original result.</returns>
+    public abstract Task<Result<TSuccess, TFailure>> BindAsync(Func<TSuccess, Task> action);
+
+    /// <summary>
     /// Ensures that the success value satisfies the specified predicate; otherwise, returns a failure result.
     /// </summary>
     /// <param name="predicate">The predicate to evaluate the success value.</param>
@@ -196,18 +203,11 @@ public abstract record Result<TSuccess, TFailure>
     public abstract Result<TSuccess, TFailure> Ensure(Func<TSuccess, bool> predicate, TFailure failure);
 
     /// <summary>
-    /// Executes the specified action if the result is successful, and returns the original result.
+    /// Deconstructs the result into separate success and failure values.
     /// </summary>
-    /// <param name="action">The action to execute if the result is successful.</param>
-    /// <returns>The original result after executing the action if successful; otherwise, the failure result.</returns>
-    public abstract Result<TSuccess, TFailure> Bind(Action<TSuccess> action);
-
-    /// <summary>
-    /// Asynchronously executes the specified action if the result is successful, and returns the original result.
-    /// </summary>
-    /// <param name="action">The asynchronous action to execute if the result is successful.</param>
-    /// <returns>A task representing the operation, with the original result.</returns>
-    public abstract Task<Result<TSuccess, TFailure>> BindAsync(Func<TSuccess, Task> action);
+    /// <param name="success">The success value if available; otherwise, <c>null</c>.</param>
+    /// <param name="failure">The failure value if available; otherwise, <c>null</c>.</param>
+    public abstract void Deconstruct(out TSuccess? success, out TFailure? failure);
 
     /// <summary>
     /// Converts the result explicitly to the success value.
