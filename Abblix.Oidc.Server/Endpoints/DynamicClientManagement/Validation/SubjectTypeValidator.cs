@@ -21,8 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
@@ -34,10 +34,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// and if so, verifies the sector identifier URI and its content. It also ensures that all redirect URIs use the HTTPS scheme.
 /// If any validation fails, it returns a AuthError.
 /// </summary>
-/// <param name="httpClientFactory">The HttpClientFactory for making HTTP requests.</param>
+/// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs.</param>
 /// <param name="logger">The logger for logging purposes.</param>
 public class SubjectTypeValidator(
-    IHttpClientFactory httpClientFactory,
+    ISecureHttpFetcher secureHttpFetcher,
     ILogger<SubjectTypeValidator> logger): IClientRegistrationContextValidator
 {
     /// <summary>
@@ -71,7 +71,9 @@ public class SubjectTypeValidator(
         if (validationError != null)
             return validationError;
 
-        var contentResult = await FetchSectorIdentifierContent(sectorIdentifierUri);
+        // SSRF validation is handled by the ISecureHttpFetcher decorator
+        var contentResult = await secureHttpFetcher.FetchJsonAsync<Uri[]>(sectorIdentifierUri);
+
         if (contentResult.TryGetFailure(out var contentError))
             return contentError;
 
@@ -105,34 +107,6 @@ public class SubjectTypeValidator(
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Fetches and validates the content from sector identifier URI.
-    /// </summary>
-    private async Task<Result<Uri[], OidcError>> FetchSectorIdentifierContent(Uri sectorIdentifierUri)
-    {
-        Uri[]? content;
-        try
-        {
-            // TODO move to separate class
-            content = await httpClientFactory.CreateClient().GetFromJsonAsync<Uri[]>(sectorIdentifierUri);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Unable to receive content of {SectorIdentifierUri}",
-                Sanitized.Value(sectorIdentifierUri));
-            return ErrorFactory.InvalidClientMetadata(
-                $"Unable to receive content of {Parameters.SectorIdentifierUri}");
-        }
-
-        if (content is not { Length: > 0 })
-        {
-            return ErrorFactory.InvalidClientMetadata(
-                $"The content of {Parameters.SectorIdentifierUri} is empty");
-        }
-
-        return content;
     }
 
     /// <summary>

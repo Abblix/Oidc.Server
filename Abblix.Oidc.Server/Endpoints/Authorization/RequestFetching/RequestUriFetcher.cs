@@ -20,16 +20,19 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
+using AuthorizationErrorFactory = Abblix.Oidc.Server.Endpoints.Authorization.Validation.ErrorFactory;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -42,13 +45,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
 /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
-/// <param name="httpClientFactory">
-/// The factory used to create <see cref="HttpClient"/> instances for making HTTP requests to the specified URI.
-/// </param>
+/// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
 public class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
     IClientInfoProvider clientInfoProvider,
-    IHttpClientFactory httpClientFactory) : IAuthorizationRequestFetcher
+    ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
@@ -68,7 +69,7 @@ public class RequestUriFetcher(
     {
         if (request is { Request: not null, RequestUri: not null })
         {
-            return ErrorFactory.InvalidRequest(
+            return AuthorizationErrorFactory.InvalidRequest(
                 $"Only one of the parameters {Parameters.Request} and {Parameters.RequestUri} can be used");
         }
 
@@ -79,14 +80,14 @@ public class RequestUriFetcher(
 
         if (requestUri.Scheme != Uri.UriSchemeHttps)
         {
-            return ErrorFactory.ValidationError(
+            return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.InvalidRequestUri, "The request URI must be an https URI");
         }
 
         var clientId = request.ClientId;
         if (clientId is null)
         {
-            return ErrorFactory.ValidationError(
+            return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
@@ -94,30 +95,26 @@ public class RequestUriFetcher(
         if (clientInfo == null)
         {
             logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
-            return ErrorFactory.ValidationError(
+            return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
         var requestUriValidator = UriValidatorFactory.Create(true, clientInfo.RequestUris);
         if (!requestUriValidator.IsValid(requestUri))
         {
-            return ErrorFactory.ValidationError(
+            return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.InvalidRequestUri, "The request URI is not allowed for the client");
         }
 
-        // If the request contains a valid absolute URI, proceed to fetch the request object
-        var client = httpClientFactory.CreateClient();
-        string requestObject;
-        try
+        // SSRF validation is handled by the ISecureHttpFetcher decorator
+        var contentResult = await secureHttpFetcher.FetchStringAsync(requestUri);
+
+        if (contentResult.TryGetFailure(out var contentError))
         {
-            requestObject = await client.GetStringAsync(requestUri);
+            return AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription);
         }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Unable to get the request object from {RequestUri}", requestUri);
-            return ErrorFactory.InvalidRequestUri(
-                $"Unable to get the request object from {Parameters.RequestUri}");
-        }
+
+        var requestObject = contentResult.GetSuccess();
 
         // Return the updated request with the fetched request object and nullify the redirect URI
         return request with { RedirectUri = null, Request = requestObject };
