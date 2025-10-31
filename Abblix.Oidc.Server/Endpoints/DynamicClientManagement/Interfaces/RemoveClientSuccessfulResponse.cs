@@ -25,4 +25,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <summary>
 /// Represents a successful response for removing a client in client management.
 /// </summary>
-public record RemoveClientSuccessfulResponse;
+/// <param name="ClientId">The unique identifier of the client that was removed.</param>
+/// <param name="RemovedAt">The timestamp when the client was removed from the system.</param>
+public record RemoveClientSuccessfulResponse(
+    string ClientId,
+    DateTimeOffset RemovedAt);

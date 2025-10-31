@@ -33,7 +33,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="clientInfoManager">An instance of <see cref="IClientInfoManager"/> used to interact with and
 /// manage client information, facilitating the removal of clients based on their identifiers.</param>
-public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) : IRemoveClientRequestProcessor
+/// <param name="clock">Provides the current time for timestamping the removal operation.</param>
+public class RemoveClientRequestProcessor(
+    IClientInfoManager clientInfoManager,
+    TimeProvider clock) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Asynchronously executes the process of removing a client based on the provided request.
@@ -52,7 +55,11 @@ public class RemoveClientRequestProcessor(IClientInfoManager clientInfoManager) 
     /// </remarks>
     public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
-        await clientInfoManager.RemoveClientAsync(request.ClientInfo.ClientId);
-        return new RemoveClientSuccessfulResponse();
+        var clientId = request.ClientInfo.ClientId;
+        await clientInfoManager.RemoveClientAsync(clientId);
+
+        return new RemoveClientSuccessfulResponse(
+            ClientId: clientId,
+            RemovedAt: clock.GetUtcNow());
     }
 }

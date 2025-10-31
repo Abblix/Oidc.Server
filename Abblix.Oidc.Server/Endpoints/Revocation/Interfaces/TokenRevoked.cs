@@ -25,4 +25,10 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 /// <summary>
 /// Represents a response indicating that the token has been successfully revoked.
 /// </summary>
-public record TokenRevoked;
+/// <param name="TokenId">The unique identifier (jti) of the revoked token, if available.</param>
+/// <param name="TokenTypeHint">The type hint of the token that was revoked (e.g., access_token, refresh_token).</param>
+/// <param name="RevokedAt">The timestamp when the token was revoked.</param>
+public record TokenRevoked(
+    string? TokenId,
+    string? TokenTypeHint,
+    DateTimeOffset RevokedAt);

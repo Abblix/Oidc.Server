@@ -33,7 +33,10 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// This class is responsible for handling the logic associated with revoking tokens, such as access tokens or refresh tokens.
 /// </summary>
 /// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
-public class RevocationRequestProcessor(ITokenRegistry tokenRegistry) : IRevocationRequestProcessor
+/// <param name="clock">Provides the current time for timestamping the revocation operation.</param>
+public class RevocationRequestProcessor(
+	ITokenRegistry tokenRegistry,
+	TimeProvider clock) : IRevocationRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid revocation request.
@@ -51,6 +54,9 @@ public class RevocationRequestProcessor(ITokenRegistry tokenRegistry) : IRevocat
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
 			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
-		return new TokenRevoked();
+		return new TokenRevoked(
+			TokenId: payload?.JwtId,
+			TokenTypeHint: request.Model.TokenTypeHint,
+			RevokedAt: clock.GetUtcNow());
 	}
 }
