@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-//
+// 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-//
+// 
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-//
+// 
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-//
+// 
 // For full licensing terms, please visit:
-//
+// 
 // https://oidc.abblix.com/license
-//
+// 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -91,32 +91,6 @@ public class EndpointResolver : IEndpointResolver
             return null;
 
         var httpContext = _httpContextAccessor.HttpContext;
-        return MakeAbsoluteUri(httpContext.NotNull(nameof(httpContext)).Request, actionUri);
-    }
-
-    /// <summary>
-    /// Converts a relative route template into an absolute URI using the base URL from the given
-    /// <see cref="HttpRequest"/>.
-    /// </summary>
-    /// <param name="httpRequest">The HTTP request used to determine the application's base URL.</param>
-    /// <param name="template">
-    /// The route template to resolve. If it starts with <c>"~/"</c>, it is treated as application-relative.
-    /// Otherwise, it is resolved as a relative path from the root.
-    /// </param>
-    /// <returns>
-    /// A fully qualified <see cref="Uri"/> representing the resolved absolute URL,
-    /// or <c>null</c> if the input template is invalid.
-    /// </returns>
-    /// <remarks>
-    /// This method uses <c>~/</c> as an indicator of application-relative paths (e.g., <c>~/dashboard</c>),
-    /// and resolves them accordingly.
-    /// </remarks>
-    private static Uri MakeAbsoluteUri(HttpRequest httpRequest, string template)
-    {
-        var appUrl = httpRequest.GetAppUrl();
-
-        return template.StartsWith("~/")
-            ? new Uri(appUrl + template[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), template);
+        return httpContext.NotNull(nameof(httpContext)).Request.ToAbsoluteUri(actionUri);
     }
 }

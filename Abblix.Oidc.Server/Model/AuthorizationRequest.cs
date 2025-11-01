@@ -40,7 +40,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
-	public string[] Scope { get; init; } = Array.Empty<string>();
+	public string[] Scope { get; init; } = [];
 
 	/// <summary>
 	/// The detailed request for specific claims (user attributes) to be included in the ID token or

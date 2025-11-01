@@ -43,7 +43,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Scope)]
 	[ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-	public string[] Scope { get; init; } = Array.Empty<string>();
+	public string[] Scope { get; init; } = [];
 
 	/// <summary>
 	/// Specifies the information about the user that the application seeks to access,

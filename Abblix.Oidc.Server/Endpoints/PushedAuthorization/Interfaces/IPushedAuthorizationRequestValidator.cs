@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 
@@ -41,7 +42,7 @@ public interface IPushedAuthorizationRequestValidator
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
     /// <returns>A task that upon completion provides a validation result, indicating either success and validity
     /// of the request or the presence of errors.</returns>
-    Task<AuthorizationRequestValidationResult> ValidateAsync(
+    Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest);
 }

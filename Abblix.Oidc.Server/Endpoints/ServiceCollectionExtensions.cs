@@ -317,6 +317,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>()
             .AddTransient(newClientOptionsFactory)
 
+            .AddScoped<IClientCredentialFactory, ClientCredentialFactory>()
+
             .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
             .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
             .AddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>()

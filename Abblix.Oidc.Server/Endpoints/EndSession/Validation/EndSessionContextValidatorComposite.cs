@@ -20,35 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
 /// Represents a composite validator for end-session requests.
 /// </summary>
-public class EndSessionContextValidatorComposite : IEndSessionContextValidator
+/// <param name="validationSteps">The array of end-session context validators to execute.</param>
+public class EndSessionContextValidatorComposite(IEndSessionContextValidator[] validationSteps) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of this class with an array of validation steps.
-    /// </summary>
-    /// <param name="validationSteps">The array of end-session context validators to execute.</param>
-    public EndSessionContextValidatorComposite(IEndSessionContextValidator[] validationSteps)
-    {
-        _validationSteps = validationSteps;
-    }
-
-    private readonly IEndSessionContextValidator[] _validationSteps;
-
     /// <summary>
     /// Validates the end-session request using a composite of multiple validators.
     /// </summary>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>A task representing the asynchronous operation.
     /// The result is a validation error if any validation step fails; otherwise, null.</returns>
-    public async Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
-        foreach (var validationStep in _validationSteps)
+        foreach (var validationStep in validationSteps)
         {
             var error = await validationStep.ValidateAsync(context);
             if (error != null)

@@ -34,7 +34,7 @@ public static class EnumerableExtensions
 	/// <param name="value">The sequence to return or an empty sequence if this is null.</param>
 	/// <returns>The original sequence or an empty sequence.</returns>
 	public static IEnumerable<T> OrEmpty<T>(this IEnumerable<T>? value)
-		=> value ?? Enumerable.Empty<T>();
+		=> value ?? [];
 
 	/// <summary>
 	/// Traverses a hierarchy upwards, starting from a specific item and moving to its parent, grandparent, etc.,

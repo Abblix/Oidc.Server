@@ -31,21 +31,8 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// The session IDs are generated using a cryptographically strong random number generator and are encoded
 /// to be safely included in HTTP URLs, avoiding characters that might cause issues in URLs.
 /// </summary>
-public class SessionIdGenerator : ISessionIdGenerator
+public class SessionIdGenerator(IOptions<OidcOptions> options) : ISessionIdGenerator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="SessionIdGenerator"/> class with configuration options
-	/// for session ID generation, such as the length of the session ID.
-	/// </summary>
-	/// <param name="options">The configuration options for OIDC, providing settings such as the session ID length.
-	/// </param>
-	public SessionIdGenerator(IOptions<OidcOptions> options)
-	{
-		_options = options;
-	}
-
-	private readonly IOptions<OidcOptions> _options;
-
 	/// <summary>
 	/// Generates a new session identifier. The method employs a cryptographically strong random number generator
 	/// to produce a sequence of bytes, which are then URL-encoded to ensure they can be safely used within HTTP URLs.
@@ -55,5 +42,5 @@ public class SessionIdGenerator : ISessionIdGenerator
 	/// <returns>A string representing a URL-safe, cryptographically strong random session identifier. The identifier
 	/// is encoded in a way that makes it suitable for use in HTTP URLs, cookies, or any other URL-based contexts.</returns>
 	public string GenerateSessionId()
-		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(_options.Value.SessionIdLength));
+		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.SessionIdLength));
 }

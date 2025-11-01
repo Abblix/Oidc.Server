@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
@@ -17,13 +17,17 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>v1.6.0: Significant performance improvements to Base32 encoding operations, enhancing overall system throughput. Full backward compatibility maintained. Visit https://github.com/Abblix/Oidc.Server/releases for detailed changelog.</PackageReleaseNotes>
+    <PackageReleaseNotes>v2.0.0: BREAKING CHANGE - Migrated to Result&lt;TSuccess, TFailure&gt; pattern. Dropped .NET 6 and .NET 7 support (now targets .NET 8 and .NET 9 only). All response types renamed to remove 'Response' suffix. See https://github.com/Abblix/Oidc.Server/releases for full changelog.</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.6.0.0</AssemblyVersion>
-    <FileVersion>1.6.0.0</FileVersion>
-    <PackageVersion>1.6.0</PackageVersion>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <PackageVersion>2.0.0</PackageVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />

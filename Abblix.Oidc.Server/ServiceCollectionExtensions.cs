@@ -113,7 +113,8 @@ public static class ServiceCollectionExtensions
 			.AddStorages()
 			.AddUserInfo()
 			.AddRequestObject()
-			.AddBackChannelAuthentication();
+			.AddBackChannelAuthentication()
+			.AddSecureHttpFetch();
 	}
 
 	/// <summary>

@@ -34,21 +34,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the validation of registration access tokens, ensuring they adhere to JWT standards and
 /// are authorized for use by specific clients.
 /// </summary>
-public class RegistrationAccessTokenValidator : IRegistrationAccessTokenValidator
+/// <param name="jwtValidator">An implementation of <see cref="IAuthServiceJwtValidator"/> responsible for the
+/// JWT validation logic.</param>
+public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator) : IRegistrationAccessTokenValidator
 {
-    /// <summary>
-    /// Constructs a new instance of the <see cref="RegistrationAccessTokenValidator"/>, equipped with a JWT validation
-    /// service for verifying the integrity and authorization of registration access tokens.
-    /// </summary>
-    /// <param name="jwtValidator">An implementation of <see cref="IAuthServiceJwtValidator"/> responsible for the
-    /// JWT validation logic.</param>
-    public RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
-    {
-        _jwtValidator = jwtValidator;
-    }
-
-    private readonly IAuthServiceJwtValidator _jwtValidator;
-
     /// <summary>
     /// Asynchronously validates a registration access token, verifying its format, type, and authorization for
     /// the intended client.
@@ -72,7 +61,7 @@ public class RegistrationAccessTokenValidator : IRegistrationAccessTokenValidato
         if (header.Scheme != TokenTypes.Bearer)
             return $"The scheme name '{header.Scheme}' is not supported";
 
-        var result = await _jwtValidator.ValidateAsync(
+        var result = await jwtValidator.ValidateAsync(
             header.Parameter,
             ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 

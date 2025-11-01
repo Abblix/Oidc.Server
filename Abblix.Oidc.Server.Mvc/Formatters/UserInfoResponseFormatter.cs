@@ -21,14 +21,14 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
-using UserInfoResponse = Abblix.Oidc.Server.Mvc.Model.UserInfoResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -63,50 +63,40 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
     /// <param name="request">The user information request.</param>
     /// <param name="response">The response from the user information endpoint.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted user information response.
+    /// A task that returns the formatted user information response.
     /// </returns>
-    public async Task<ActionResult<UserInfoResponse>> FormatResponseAsync(
+    public async Task<ActionResult> FormatResponseAsync(
         UserInfoRequest request,
-        Endpoints.UserInfo.Interfaces.UserInfoResponse response)
+        Result<UserInfoFoundResponse, OidcError> response)
     {
-        switch (response)
+        return await response.MatchAsync(
+            onSuccess: FormatSuccessAsync,
+            onFailure: error => Task.FromResult<ActionResult>(
+                new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+    }
+
+    private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)
+    {
+        if (found.ClientInfo.UserInfoSignedResponseAlgorithm == SigningAlgorithms.None)
         {
-            case UserInfoFoundResponse {
-                ClientInfo.UserInfoSignedResponseAlgorithm: SigningAlgorithms.None,
-                User: var user,
-            }:
-                
-                return new JsonResult(user);
-
-            case UserInfoFoundResponse
-                {
-                    ClientInfo: var clientInfo,
-                    User: var user,
-                    Issuer: var issuer,
-                }:
-
-                var token = new JsonWebToken
-                {
-                    Header = { Algorithm = clientInfo.UserInfoSignedResponseAlgorithm },
-                    Payload = new JsonWebTokenPayload(user)
-                    {
-                        Issuer = issuer,
-                        IssuedAt = _clock.GetUtcNow(),
-                        Audiences = new[] { clientInfo.ClientId },
-                    }
-                };
-
-                return new ContentResult
-                {
-                    ContentType = MediaTypes.Jwt,
-                    Content = await _clientJwtFormatter.FormatAsync(token, clientInfo),
-                };
-
-            case UserInfoErrorResponse error:
-                return new BadRequestObjectResult(error);
-
-            default:
-                throw new UnexpectedTypeException(nameof(response), response.GetType());
+            return new JsonResult(found.User);
         }
+
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = found.ClientInfo.UserInfoSignedResponseAlgorithm },
+            Payload = new JsonWebTokenPayload(found.User)
+            {
+                Issuer = found.Issuer,
+                IssuedAt = _clock.GetUtcNow(),
+                Audiences = [found.ClientInfo.ClientId],
+            }
+        };
+
+        return new ContentResult
+        {
+            ContentType = MediaTypes.Jwt,
+            Content = await _clientJwtFormatter.FormatAsync(token, found.ClientInfo),
+        };
     }
 }

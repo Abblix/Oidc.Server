@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 /// </remarks>
 public class HttpGetOrPostAttribute : HttpMethodAttribute
 {
-	private static readonly IEnumerable<string> SupportedMethods = new[] { Get, Post };
+	private static readonly IEnumerable<string> SupportedMethods = [Get, Post];
 
 	/// <summary>
 	/// Initializes a new instance of the <see cref="HttpGetOrPostAttribute"/> class without specifying a route template.

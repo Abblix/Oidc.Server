@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,10 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Represents a validation error response for introspection requests, including error code and description.
+/// Represents an error that occurred during OAuth 2.0/OpenID Connect request processing.
 /// </summary>
-public record IntrospectionRequestValidationError(string Error, string ErrorDescription)
-	: IntrospectionRequestValidationResult;
+/// <param name="Error">The error code indicating the nature of the error.</param>
+/// <param name="ErrorDescription">A human-readable description of the error.</param>
+public record OidcError(string Error, string ErrorDescription);

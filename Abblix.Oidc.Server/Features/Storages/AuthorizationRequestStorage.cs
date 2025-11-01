@@ -32,26 +32,13 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// their retrieval using unique request URIs, supporting scenarios such as the OAuth 2.0 Pushed Authorization Requests
 /// (PAR).
 /// </summary>
-public class AuthorizationRequestStorage : IAuthorizationRequestStorage
+/// <param name="authorizationRequestUriGenerator">The generator used to create unique URIs for each authorization
+/// request.</param>
+/// <param name="storage">The persistent storage mechanism where authorization requests are stored.</param>
+public class AuthorizationRequestStorage(
+   IAuthorizationRequestUriGenerator authorizationRequestUriGenerator,
+   IEntityStorage storage) : IAuthorizationRequestStorage
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationRequestStorage"/> class,
-    /// setting up necessary dependencies for storing and retrieving authorization requests.
-    /// </summary>
-    /// <param name="authorizationRequestUriGenerator">The generator used to create unique URIs for each authorization
-    /// request.</param>
-    /// <param name="storage">The persistent storage mechanism where authorization requests are stored.</param>
-    public AuthorizationRequestStorage(
-       IAuthorizationRequestUriGenerator authorizationRequestUriGenerator,
-       IEntityStorage storage)
-    {
-        _authorizationRequestUriGenerator = authorizationRequestUriGenerator;
-        _storage = storage;
-    }
-
-    private readonly IAuthorizationRequestUriGenerator _authorizationRequestUriGenerator;
-    private readonly IEntityStorage _storage;
-
     /// <summary>
     /// Stores an authorization request in the distributed cache with a generated URI and a specified expiration time.
     /// </summary>
@@ -64,9 +51,9 @@ public class AuthorizationRequestStorage : IAuthorizationRequestStorage
     /// accessing the request via its URI.</returns>
     public async Task<PushedAuthorizationResponse> StoreAsync(AuthorizationRequest request, TimeSpan expiresIn)
     {
-        var requestUri = _authorizationRequestUriGenerator.GenerateRequestUri();
+        var requestUri = authorizationRequestUriGenerator.GenerateRequestUri();
 
-        await _storage.SetAsync(
+        await storage.SetAsync(
             ToKeyString(requestUri),
             request,
             new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
@@ -85,7 +72,7 @@ public class AuthorizationRequestStorage : IAuthorizationRequestStorage
     /// <returns>A task that resolves to the retrieved <see cref="AuthorizationRequest"/> if found; otherwise, null.
     /// If the request is not found, it may have expired or been removed from the cache previously.</returns>
     public Task<AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove)
-        => _storage.GetAsync<AuthorizationRequest>(ToKeyString(requestUri), shouldRemove);
+        => storage.GetAsync<AuthorizationRequest>(ToKeyString(requestUri), shouldRemove);
 
     private static string ToKeyString(Uri requestUri) => requestUri.OriginalString;
 }

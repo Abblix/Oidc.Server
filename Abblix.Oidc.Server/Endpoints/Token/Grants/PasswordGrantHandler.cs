@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -36,27 +37,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// The password grant type allows clients to directly exchange a user's credentials (username and password)
 /// for an access token, typically for trusted clients.
 /// </summary>
-public class PasswordGrantHandler : IAuthorizationGrantHandler
+/// <param name="parameterValidator">A service for validating required request parameters.</param>
+/// <param name="userCredentialsAuthenticator">A service for authenticating the user's credentials.</param>
+public class PasswordGrantHandler(
+    IParameterValidator parameterValidator,
+    IUserCredentialsAuthenticator userCredentialsAuthenticator) : IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PasswordGrantHandler"/> class.
-    /// The constructor sets up the required services for validating user credentials and parameters.
-    /// The parameter validator ensures the required parameters for this grant type are present,
-    /// while the user credentials authenticator is responsible for verifying the username and password.
-    /// </summary>
-    /// <param name="parameterValidator">A service for validating required request parameters.</param>
-    /// <param name="userCredentialsAuthenticator">A service for authenticating the user's credentials.</param>
-    public PasswordGrantHandler(
-        IParameterValidator parameterValidator,
-        IUserCredentialsAuthenticator userCredentialsAuthenticator)
-    {
-        _parameterValidator = parameterValidator;
-        _userCredentialsAuthenticator = userCredentialsAuthenticator;
-    }
-
-    private readonly IParameterValidator _parameterValidator;
-    private readonly IUserCredentialsAuthenticator _userCredentialsAuthenticator;
-
     /// <summary>
     /// Specifies the grant type that this handler supports, which is the "password" grant type.
     /// This ensures that this handler is only invoked when processing requests with the password grant type.
@@ -78,12 +64,12 @@ public class PasswordGrantHandler : IAuthorizationGrantHandler
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
-    public Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensure that the request contains the required username and password parameters.
-        _parameterValidator.Required(request.UserName, nameof(request.UserName));
-        _parameterValidator.Required(request.Password, nameof(request.Password));
-        
+        parameterValidator.Required(request.UserName, nameof(request.UserName));
+        parameterValidator.Required(request.Password, nameof(request.Password));
+
         // Extract relevant details from the request and prepare the authorization context.
         var userName = request.UserName;
         var password = request.Password;
@@ -91,6 +77,6 @@ public class PasswordGrantHandler : IAuthorizationGrantHandler
         var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
 
         // Delegate the actual user credential validation and authentication to the custom authenticator.
-        return _userCredentialsAuthenticator.ValidateAsync(userName, password, context);
+        return userCredentialsAuthenticator.ValidateAsync(userName, password, context);
     }
 }

@@ -39,4 +39,10 @@ public static class JsonWebKeyTypes
 	/// This type is used for keys that employ RSA cryptography algorithms.
 	/// </summary>
 	public const string Rsa = "RSA";
+
+	/// <summary>
+	/// Represents an Octet Sequence (symmetric) cryptographic key.
+	/// This type is used for symmetric keys such as those used in HMAC algorithms.
+	/// </summary>
+	public const string Octet = "oct";
 }

@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
@@ -45,13 +47,10 @@ public class ReadClientResponseFormatter : IReadClientResponseFormatter
     /// This method is used to format the response for reading a client.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(ClientRequest request, ReadClientResponse response)
+    public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response)
     {
-        return Task.FromResult<ActionResult>(response switch
-        {
-            ReadClientSuccessfulResponse success => new OkObjectResult(success),
-            ReadClientErrorResponse error => new NotFoundObjectResult(error),
-            _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
-        });
+        return Task.FromResult(response.Match(
+            onSuccess: success => (ActionResult)new OkObjectResult(success),
+            onFailure: error => new NotFoundObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 }

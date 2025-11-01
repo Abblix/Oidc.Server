@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -42,11 +41,4 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 public record ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession, ConsentDefinition RequiredUserConsents)
     : AuthorizationResponse(Model)
 {
-    [Obsolete("Use constructor with RequiredUserConsents parameter instead")]
-    public ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession)
-        : this(Model, AuthSession, new ConsentDefinition(
-            Array.Empty<ScopeDefinition>(),
-            Array.Empty<ResourceDefinition>()))
-    {
-    }
 }

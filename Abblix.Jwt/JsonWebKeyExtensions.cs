@@ -45,13 +45,23 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
-	/// Converts a JsonWebKey to an RsaSecurityKey used in RSA cryptographic operations.
+	/// Converts a JsonWebKey to a SecurityKey used in cryptographic operations.
+	/// Supports RSA, Elliptic Curve, and symmetric (oct) keys.
 	/// </summary>
 	/// <param name="jsonWebKey">The JsonWebKey to convert.</param>
-	/// <returns>RsaSecurityKey based on the provided JsonWebKey.</returns>
-	public static RsaSecurityKey ToSecurityKey(this JsonWebKey jsonWebKey)
+	/// <returns>SecurityKey based on the provided JsonWebKey.</returns>
+	/// <exception cref="InvalidOperationException">Thrown when the key type is not supported.</exception>
+	public static SecurityKey ToSecurityKey(this JsonWebKey jsonWebKey)
 	{
-		return new RsaSecurityKey(jsonWebKey.ToRsa()) { KeyId = jsonWebKey.KeyId };
+		return jsonWebKey.KeyType switch
+		{
+			JsonWebKeyTypes.Rsa => new RsaSecurityKey(jsonWebKey.ToRsa()) { KeyId = jsonWebKey.KeyId },
+
+			JsonWebKeyTypes.Octet when jsonWebKey.SymmetricKey is not null
+				=> new SymmetricSecurityKey(jsonWebKey.SymmetricKey) { KeyId = jsonWebKey.KeyId },
+
+			_ => throw new InvalidOperationException($"Unsupported key type: {jsonWebKey.KeyType}"),
+		};
 	}
 
 	/// <summary>
@@ -171,7 +181,7 @@ public static class JsonWebKeyExtensions
 	/// <returns>The updated JsonWebKey with applied certificate properties.</returns>
 	public static JsonWebKey Apply(this JsonWebKey jwk, X509Certificate2 certificate)
 	{
-		jwk.Certificates = new[] { certificate.RawData };
+		jwk.Certificates = [certificate.RawData];
 		jwk.Thumbprint = certificate.GetCertHash();
 		return jwk;
 	}

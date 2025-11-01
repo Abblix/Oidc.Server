@@ -21,18 +21,16 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using ClientRegistrationResponse = Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces.ClientRegistrationResponse;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -40,55 +38,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
+public class RegisterClientRequestProcessor(
+    IClientCredentialFactory credentialFactory,
+    IClientInfoManager clientInfoManager,
+    TimeProvider clock,
+    IAuthServiceJwtFormatter serviceJwtFormatter,
+    IIssuerProvider issuerProvider) : IRegisterClientRequestProcessor
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RegisterClientRequestProcessor"/> with dependencies
-    /// required for client registration.
-    /// </summary>
-    /// <param name="clientIdGenerator">Responsible for generating unique client IDs.</param>
-    /// <param name="clientSecretGenerator">Responsible for generating secure client secrets.</param>
-    /// <param name="hashService">Provides hashing services for client secrets.</param>
-    /// <param name="clientInfoManager">Manages storage and retrieval of client information.</param>
-    /// <param name="clock">Provides time-related functionality, crucial for token issuance and expiration.</param>
-    /// <param name="options">Configuration options for client registration, including secret length and expiration.</param>
-    /// <param name="serviceJwtFormatter">Formats JWTs for service use, including registration access tokens.</param>
-    /// <param name="issuerProvider">Provides issuer information, necessary for token issuance.</param>
-    public RegisterClientRequestProcessor(
-        IClientIdGenerator clientIdGenerator,
-        IClientSecretGenerator clientSecretGenerator,
-        IHashService hashService,
-        IClientInfoManager clientInfoManager,
-        TimeProvider clock,
-        NewClientOptions options,
-        IAuthServiceJwtFormatter serviceJwtFormatter,
-        IIssuerProvider issuerProvider)
-    {
-        _clientIdGenerator = clientIdGenerator;
-        _clientSecretGenerator = clientSecretGenerator;
-        _hashService = hashService;
-        _clientInfoManager = clientInfoManager;
-        _clock = clock;
-        _options = options;
-        _serviceJwtFormatter = serviceJwtFormatter;
-        _issuerProvider = issuerProvider;
-    }
-
-    private readonly IClientIdGenerator _clientIdGenerator;
-    private readonly IClientInfoManager _clientInfoManager;
-    private readonly IClientSecretGenerator _clientSecretGenerator;
-    private readonly IHashService _hashService;
-    private readonly TimeProvider _clock;
-    private readonly IIssuerProvider _issuerProvider;
-    private readonly NewClientOptions _options;
-    private readonly IAuthServiceJwtFormatter _serviceJwtFormatter;
-
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
     /// <param name="request">The client registration request containing the necessary details for registering
     /// a new client.</param>
-    /// <returns>A task that results in a <see cref="ClientRegistrationResponse"/>, which includes the client ID,
+    /// <returns>A task that results in a Result containing the client ID,
     /// client secret and registration access token, along with other registration details.</returns>
     /// <remarks>
     /// This method orchestrates the client registration process, starting from generating a unique client ID
@@ -97,53 +59,37 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
     /// The method also handles the storage of client information, facilitating future authentication and
     /// authorization processes.
     /// </remarks>
-    public async Task<ClientRegistrationResponse> ProcessAsync(ValidClientRegistrationRequest request)
+    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request)
     {
         var model = request.Model;
 
-        var issuedAt = _clock.GetUtcNow();
-        var clientId = model.ClientId.HasValue() ? model.ClientId : _clientIdGenerator.GenerateClientId();
-        var (clientSecret, expiresAt) = GenerateClientSecret(model.TokenEndpointAuthMethod, issuedAt);
+        var issuedAt = clock.GetUtcNow();
+        var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
+        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
 
-        var clientInfo = ToClientInfo(model, clientId, clientSecret, expiresAt, request.SectorIdentifier);
-        await _clientInfoManager.AddClientAsync(clientInfo);
+        await clientInfoManager.AddClientAsync(clientInfo);
 
-        var response = new ClientRegistrationSuccessResponse(clientId, issuedAt)
+        var registrationAccessToken = await IssueRegistrationAccessTokenAsync(credentials.ClientId, issuedAt);
+
+        var response = new ClientRegistrationSuccessResponse(credentials.ClientId, issuedAt)
         {
-            ClientSecret = clientSecret,
-            ClientSecretExpiresAt = expiresAt,
-            RegistrationAccessToken = await IssueRegistrationAccessTokenAsync(clientId, issuedAt),
+            ClientSecret = credentials.ClientSecret,
+            ClientSecretExpiresAt = credentials.ExpiresAt,
+            RegistrationAccessToken = registrationAccessToken,
         };
+
         return response;
     }
 
-    private (string? clientSecret, DateTimeOffset? expiresAt) GenerateClientSecret(
-        string tokenEndpointAuthMethod,
-        DateTimeOffset issuedAt)
-    {
-        switch (tokenEndpointAuthMethod)
-        {
-            case ClientAuthenticationMethods.ClientSecretBasic:
-            case ClientAuthenticationMethods.ClientSecretPost:
-                var clientSecret = _clientSecretGenerator.GenerateClientSecret(_options.ClientSecret.Length);
-                var expiresAt = issuedAt + _options.ClientSecret.ExpiresAfter;
-                return (clientSecret, expiresAt);
-
-            default:
-                // It is unnecessary for Clients selecting a token_endpoint_auth_method of private_key_jwt
-                // unless symmetric encryption will be used
-                return (clientSecret: null, expiresAt: null);
-        }
-    }
-
-    private ClientInfo ToClientInfo(
+    /// <summary>
+    /// Converts the registration request and credentials into a ClientInfo entity for storage.
+    /// </summary>
+    private static ClientInfo ToClientInfo(
         ClientRegistrationRequest model,
-        string clientId,
-        string? clientSecret,
-        DateTimeOffset? expiresAt,
+        ClientCredentials credentials,
         string? sectorIdentifier)
     {
-        var clientInfo = new ClientInfo(clientId)
+        var clientInfo = new ClientInfo(credentials.ClientId)
         {
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
@@ -181,16 +127,19 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
             TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
         };
 
-        if (clientSecret.HasValue())
+        if (credentials.ClientSecret.HasValue())
         {
-            clientInfo.ClientSecrets = new[]
-            {
+            clientInfo.ClientSecrets =
+            [
                 new ClientSecret
                 {
-                    Sha512Hash = _hashService.Sha(HashAlgorithm.Sha512, clientSecret),
-                    ExpiresAt = expiresAt,
+                    Value = clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt
+                        ? credentials.ClientSecret
+                        : null,
+                    Sha512Hash = credentials.Sha512Hash,
+                    ExpiresAt = credentials.ExpiresAt,
                 }
-            };
+            ];
         }
 
         if (model.RequestUris != null)
@@ -225,6 +174,9 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
         return clientInfo;
     }
 
+    /// <summary>
+    /// Issues a registration access token for managing the registered client.
+    /// </summary>
     private Task<string> IssueRegistrationAccessTokenAsync(string clientId, DateTimeOffset issuedAt)
     {
         var token = new JsonWebToken
@@ -240,12 +192,12 @@ public class RegisterClientRequestProcessor : IRegisterClientRequestProcessor
                 NotBefore = issuedAt,
                 //ExpiresAt = issuedAt + ..., //TODO think about the expiration of this token
 
-                Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
-                Audiences = new[] { clientId },
+                Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+                Audiences = [clientId],
                 Subject = clientId,
             },
         };
 
-        return _serviceJwtFormatter.FormatAsync(token);
+        return serviceJwtFormatter.FormatAsync(token);
     }
 }

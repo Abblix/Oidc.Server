@@ -26,7 +26,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -40,6 +39,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -72,7 +72,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IClientAuthenticator, NoneClientAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretPostAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
-            //.AddSingleton<IClientRequestAuthenticator, ClientSecretJwtAuthenticator>() //TODO support and uncomment
+            .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
             .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
             .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
@@ -421,5 +421,34 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
         services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
         return services;
+    }
+
+    /// <summary>
+    /// Registers secure HTTP fetching services with SSRF (Server-Side Request Forgery) protection.
+    /// This method configures the HTTP client for fetching external content (such as sector identifier URIs
+    /// and request URIs) and decorates it with validation to prevent SSRF attacks.
+    /// </summary>
+    /// <remarks>
+    /// The registered services include:
+    /// - A typed HTTP client (<see cref="SecureHttpFetcher"/>) for making secure HTTP requests
+    /// - An SSRF validation decorator (<see cref="SsrfHttpFetchValidator"/>) that validates URIs before making requests
+    ///
+    /// The SSRF protection includes:
+    /// - Blocking requests to internal hostnames (localhost, internal, etc.)
+    /// - Blocking requests to internal TLDs (.local, .internal, etc.)
+    /// - DNS resolution and blocking of private/reserved IP address ranges
+    ///
+    /// Note: There is a potential DNS rebinding TOCTOU (Time-Of-Check-Time-Of-Use) vulnerability
+    /// where DNS could resolve to a different IP between validation and the actual HTTP request.
+    /// For additional protection, deploy behind a firewall or implement a custom HttpMessageHandler.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddSecureHttpFetch(this IServiceCollection services)
+    {
+        return services
+            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>()
+            .Services
+            .Decorate<ISecureHttpFetcher, SsrfHttpFetchValidator>();
     }
 }

@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
@@ -32,5 +35,5 @@ public interface IIntrospectionRequestProcessor
 	/// </summary>
 	/// <param name="request">The ValidIntrospectionRequest containing the token to be inspected.</param>
 	/// <returns>An IntrospectionResponse containing metadata about the token.</returns>
-	Task<IntrospectionResponse> ProcessAsync(ValidIntrospectionRequest request);
+	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request);
 }

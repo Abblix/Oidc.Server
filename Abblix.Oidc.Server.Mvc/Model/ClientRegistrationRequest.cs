@@ -48,7 +48,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] RedirectUris { get; set; } = [];
 
     /// <summary>
     /// JSON array containing a list of the OAuth 2.0 response_type values.
@@ -59,7 +59,7 @@ public record ClientRegistrationRequest
         Common.Constants.ResponseTypes.Token,
         Common.Constants.ResponseTypes.IdToken)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = { new[] { Common.Constants.ResponseTypes.Code } };
+    public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
 
     /// <summary>
     /// Array of response type strings indicating the type of responses the client wishes to receive.
@@ -70,7 +70,7 @@ public record ClientRegistrationRequest
         Common.Constants.GrantTypes.Implicit,
         Common.Constants.GrantTypes.RefreshToken,
         Common.Constants.GrantTypes.Ciba)]
-    public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
+    public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Specifies the type of the client application, such as 'web' or 'native'.
@@ -323,7 +323,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
-    public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] PostLogoutRedirectUris { get; set; } = [];
 
     /// <summary>
     /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered

@@ -43,46 +43,46 @@ public record AuthorizationEndpointMetadata
     /// <summary>
     /// The response types the authorization server supports.
     /// </summary>
-    public List<string> ResponseTypesSupported { get; init; } = new()
-    {
+    public List<string> ResponseTypesSupported { get; init; } =
+    [
         ResponseTypes.Code,
         ResponseTypes.Token,
         ResponseTypes.IdToken,
         string.Join(' ', ResponseTypes.Code, ResponseTypes.Token),
         string.Join(' ', ResponseTypes.Code, ResponseTypes.IdToken),
         string.Join(' ', ResponseTypes.Token, ResponseTypes.IdToken),
-        string.Join(' ', ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken),
-    };
+        string.Join(' ', ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)
+    ];
 
     /// <summary>
     /// The response modes the authorization server supports for returning parameters from the authorization endpoint.
     /// </summary>
-    public List<string> ResponseModesSupported { get; init; } = new()
-    {
+    public List<string> ResponseModesSupported { get; init; } =
+    [
         ResponseModes.Query,
         ResponseModes.Fragment,
-        ResponseModes.FormPost,
-    };
+        ResponseModes.FormPost
+    ];
 
     /// <summary>
     /// The prompt values the authorization server supports for interaction with the end-user.
     /// </summary>
-    public List<string> PromptValuesSupported { get; init; } = new()
-    {
+    public List<string> PromptValuesSupported { get; init; } =
+    [
         Prompts.SelectAccount,
         Prompts.Consent,
         Prompts.None,
         Prompts.Login,
-        Prompts.Create,
-    };
+        Prompts.Create
+    ];
 
     /// <summary>
     /// The code challenge methods supported for PKCE (Proof Key for Code Exchange).
     /// </summary>
-    public List<string> CodeChallengeMethodsSupported { get; init; } = new()
-    {
+    public List<string> CodeChallengeMethodsSupported { get; init; } =
+    [
         CodeChallengeMethods.S512,
         CodeChallengeMethods.S256,
-        CodeChallengeMethods.Plain,
-    };
+        CodeChallengeMethods.Plain
+    ];
 }

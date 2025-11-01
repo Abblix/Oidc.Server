@@ -32,20 +32,8 @@ namespace Abblix.Oidc.Server.Endpoints.CheckSession;
 /// of an end-user with the OpenID Provider. It's an integral part of maintaining session integrity and security,
 /// allowing the application to respond to changes in the user's authentication status in a timely and efficient manner.
 /// </summary>
-internal class CheckSessionHandler : ICheckSessionHandler
+internal class CheckSessionHandler(ISessionManagementService sessionManagementService) : ICheckSessionHandler
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="CheckSessionHandler"/> class.
-	/// Sets up the necessary session management service to handle OpenID Connect session checks.
-	/// </summary>
-	/// <param name="sessionManagementService">The service responsible for managing and verifying session states.</param>
-	public CheckSessionHandler(ISessionManagementService sessionManagementService)
-	{
-		_sessionManagementService = sessionManagementService;
-	}
-
-	private readonly ISessionManagementService _sessionManagementService;
-
 	/// <inheritdoc />
 	/// <summary>
 	/// Processes a check session request asynchronously, leveraging the session management service
@@ -56,5 +44,5 @@ internal class CheckSessionHandler : ICheckSessionHandler
 	/// A <see cref="Task"/> that, when completed, yields a <see cref="CheckSessionResponse"/>
 	/// indicating the current state of the user's session.
 	/// </returns>
-	public Task<CheckSessionResponse> HandleAsync() => _sessionManagementService.GetCheckSessionResponseAsync();
+	public Task<CheckSessionResponse> HandleAsync() => sessionManagementService.GetCheckSessionResponseAsync();
 }
