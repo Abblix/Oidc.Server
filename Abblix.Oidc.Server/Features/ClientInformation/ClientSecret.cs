@@ -67,6 +67,17 @@ public record ClientSecret
 	public byte[]? Sha512Hash { get; init; }
 
 	/// <summary>
+	/// The plain-text value of the client secret. This property is required for authentication methods
+	/// that need the raw secret value, such as client_secret_jwt (which uses HMAC signatures).
+	/// </summary>
+	/// <remarks>
+	/// While storing plain-text secrets poses security risks, some authentication methods like
+	/// client_secret_jwt require access to the original value to create HMAC signatures for validation.
+	/// This value should be stored securely and access should be restricted.
+	/// </remarks>
+	public string? Value { get; init; }
+
+	/// <summary>
 	/// The expiration date and time for the client secret. Secrets past this date are considered
 	/// invalid and cannot be used for authentication.
 	/// </summary>

@@ -172,6 +172,15 @@ public record JsonWebKey
     public byte[]? FirstCrtCoefficient { get; set; }
 
     /// <summary>
+    /// Symmetric Key Value (k). Used for oct (Octet Sequence) keys, which are symmetric keys
+    /// used in algorithms like HMAC-SHA256, HMAC-SHA384, and HMAC-SHA512.
+    /// </summary>
+    [JsonPropertyName("k")]
+    [JsonPropertyOrder(17)]
+    [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
+    public byte[]? SymmetricKey { get; set; }
+
+    /// <summary>
     /// Prepares a sanitized version of the JWK that excludes private key information unless explicitly included,
     /// suitable for public sharing while preserving the integrity of sensitive data.
     /// </summary>
@@ -183,7 +192,7 @@ public record JsonWebKey
     {
         return includePrivateKeys switch
         {
-            true when PrivateKey is { Length: > 0} => this,
+            true when PrivateKey is { Length: > 0} || SymmetricKey is { Length: > 0 } => this,
             true => throw new InvalidOperationException($"There is no private key for kid={KeyId}"),
             false => this with
             {
@@ -193,6 +202,7 @@ public record JsonWebKey
                 FirstFactorCrtExponent = null,
                 SecondPrimeFactor = null,
                 SecondFactorCrtExponent = null,
+                SymmetricKey = null,
             }
         };
     }
