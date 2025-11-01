@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
@@ -32,6 +35,6 @@ public interface IUserInfoRequestProcessor
 	/// </summary>
 	/// <param name="request">The valid user info request to process.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
-	/// which upon completion will yield a <see cref="UserInfoResponse"/>.</returns>
-	Task<UserInfoResponse> ProcessAsync(ValidUserInfoRequest request);
+	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/>.</returns>
+	Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(ValidUserInfoRequest request);
 }

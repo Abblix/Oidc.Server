@@ -56,7 +56,7 @@ public static class AuthorizationContextExtensions
         payload.Nonce = context.Nonce;
         payload.Audiences = context.Resources is { Length: > 0 }
             ? Array.ConvertAll(context.Resources, res => res.OriginalString)
-            : new[] { context.ClientId };
+            : [context.ClientId];
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(context.RequestedClaims, JsonSerializerOptions);
     }
 

@@ -39,29 +39,14 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// Authenticates clients using the Private Key JWT method, verifying the client's identity through a signed JWT
 /// that the client provides. This method is suitable for clients that can securely store and use private keys.
 /// </summary>
-public class PrivateKeyJwtAuthenticator : IClientAuthenticator
+/// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
+/// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
+/// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
+public class PrivateKeyJwtAuthenticator(
+    ILogger<PrivateKeyJwtAuthenticator> logger,
+    ITokenRegistry tokenRegistry,
+    IServiceProvider serviceProvider) : IClientAuthenticator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PrivateKeyJwtAuthenticator"/> class.
-    /// </summary>
-    /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
-    /// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.
-    /// </param>
-    /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
-    public PrivateKeyJwtAuthenticator(
-        ILogger<PrivateKeyJwtAuthenticator> logger,
-        ITokenRegistry tokenRegistry,
-        IServiceProvider serviceProvider)
-    {
-        _logger = logger;
-        _tokenRegistry = tokenRegistry;
-        _serviceProvider = serviceProvider;
-    }
-
-    private readonly ILogger _logger;
-    private readonly ITokenRegistry _tokenRegistry;
-    private readonly IServiceProvider _serviceProvider;
-
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
     /// This method uses private keys and JSON Web Tokens (JWT) for client authentication,
@@ -88,21 +73,21 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
 
         if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 $"{ClientAssertionType} is not '{ClientAssertionTypes.JwtBearer}'");
             return null;
         }
 
         if (!request.ClientAssertion.HasValue())
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 $"{ClientAssertionType} is '{ClientAssertionTypes.JwtBearer}', but {ClientAssertion} is empty");
             return null;
         }
 
         JwtValidationResult? result;
         ClientInfo? clientInfo;
-        using (var scope = _serviceProvider.CreateScope())
+        using (var scope = serviceProvider.CreateScope())
         {
             var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
             (result, clientInfo) = await tokenValidator.ValidateAsync(request.ClientAssertion);
@@ -116,17 +101,17 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
                 break;
 
             case (ValidJsonWebToken, clientInfo: not null):
-                _logger.LogWarning(
+                logger.LogWarning(
                     "The authentication method is not allowed for the client {@ClientId}",
                     clientInfo.ClientId);
                 return null;
 
             case (ValidJsonWebToken, clientInfo: null):
-                _logger.LogWarning("Something went wrong, token cannot be validated without client specified");
+                logger.LogWarning("Something went wrong, token cannot be validated without client specified");
                 return null;
 
             case (JwtValidationError error, _):
-                _logger.LogWarning("Invalid PrivateKeyJwt: {@Error}", error);
+                logger.LogWarning("Invalid PrivateKeyJwt: {@Error}", error);
                 return null;
 
             default:
@@ -140,14 +125,14 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning("Invalid PrivateKeyJwt: {Message}", ex.Message);
+            logger.LogWarning(ex, "Invalid PrivateKeyJwt");
             return null;
         }
 
         var issuer = token.Payload.Issuer;
         if (issuer == null || subject == null || issuer != subject)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Invalid PrivateKeyJwt: iss is \'{Issuer}\', but sub is {Subject}",
                 issuer, subject);
 
@@ -156,7 +141,7 @@ public class PrivateKeyJwtAuthenticator : IClientAuthenticator
 
         if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt } })
         {
-            await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
+            await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
         }
 
         return clientInfo;

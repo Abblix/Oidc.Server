@@ -35,7 +35,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <param name="Context">The context of the authorization process, providing specific details such as the client ID,
 /// requested scopes, and any other relevant authorization parameters.</param>
 public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Context)
-    : GrantAuthorizationResult
 {
     /// <summary>
     /// An array of tokens that have been issued as part of this grant. This may include access tokens, refresh tokens

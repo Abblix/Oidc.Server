@@ -56,7 +56,8 @@ public record AuthorizationError(
 	/// <param name="request">The request that resulted in the error.</param>
 	/// <param name="error">The validation error that provides details about what caused the request to fail.</param>
 	public AuthorizationError(AuthorizationRequest request, AuthorizationRequestValidationError error)
-		: this(request,
+		: this(
+			request,
 			error.Error,
 			error.ErrorDescription,
 			error.ResponseMode,

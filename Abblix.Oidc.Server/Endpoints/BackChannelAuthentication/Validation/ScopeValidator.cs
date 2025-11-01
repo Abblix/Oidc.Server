@@ -20,27 +20,21 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
 /// Validates the scopes in OAuth 2.0 authorization requests for backchannel authentication.
-/// This validator ensures that the requested scopes are allowed based on the client’s configuration
+/// This validator ensures that the requested scopes are allowed based on the client's configuration
 /// and the type of OAuth flow being used. It checks for scope compatibility and prevents unauthorized
 /// or excessive scope requests, reinforcing the security policies and minimizing scope-related vulnerabilities.
 /// </summary>
-public class ScopeValidator : IBackChannelAuthenticationContextValidator
+/// <param name="scopeManager">The scope manager used to validate scopes.</param>
+public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthenticationContextValidator
 {
-	public ScopeValidator(IScopeManager scopeManager)
-	{
-		_scopeManager = scopeManager;
-	}
-
-	private readonly IScopeManager _scopeManager;
-
 	/// <summary>
 	/// Validates the scopes in the context of the backchannel authentication request, checking if
 	/// they align with the client's permissions and the OAuth flow. This method prevents the client
@@ -49,10 +43,10 @@ public class ScopeValidator : IBackChannelAuthenticationContextValidator
 	/// </summary>
 	/// <param name="context">The validation context that includes details about the request and the client.</param>
 	/// <returns>
-	/// A <see cref="BackChannelAuthenticationValidationError"/> if the scope validation fails,
+	/// A <see cref="OidcError"/> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-	public Task<BackChannelAuthenticationValidationError?> ValidateAsync(
+	public Task<OidcError?> ValidateAsync(
 		BackChannelAuthenticationValidationContext context)
 	{
 		return Task.FromResult(Validate(context));
@@ -61,31 +55,31 @@ public class ScopeValidator : IBackChannelAuthenticationContextValidator
 	/// <summary>
 	/// Performs the actual scope validation, ensuring the requested scopes are permitted for the client.
 	/// It checks for issues like unauthorized offline access requests and verifies the compatibility of
-	/// the requested scopes with the client’s registered permissions and the resources requested.
+	/// the requested scopes with the client's registered permissions and the resources requested.
 	/// </summary>
 	/// <param name="context">
 	/// Contains the authorization request and the client information necessary for validation.</param>
 	/// <returns>
-	/// A <see cref="BackChannelAuthenticationValidationError"/> if the requested scopes are not valid or not allowed,
+	/// A <see cref="OidcError"/> if the requested scopes are not valid or not allowed,
 	/// or null if the validation passes.
 	/// </returns>
-	private BackChannelAuthenticationValidationError? Validate(BackChannelAuthenticationValidationContext context)
+	private OidcError? Validate(BackChannelAuthenticationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
 		    context.ClientInfo.OfflineAccessAllowed != true)
 		{
-			return new BackChannelAuthenticationValidationError(
+			return new OidcError(
 				ErrorCodes.InvalidScope,
 				"This client is not allowed to request for offline access");
 		}
 
-		if (!_scopeManager.Validate(
+		if (!scopeManager.Validate(
 			    context.Request.Scope,
 			    context.Resources,
 			    out var scopeDefinitions,
 			    out var errorDescription))
 		{
-			return new BackChannelAuthenticationValidationError(
+			return new OidcError(
 				ErrorCodes.InvalidScope, errorDescription);
 		}
 

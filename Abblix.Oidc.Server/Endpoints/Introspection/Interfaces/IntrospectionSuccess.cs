@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// top-level members of this JSON object. Response names intended for use across domains must be registered
 /// in the "OAuth Token Introspection Response" registry as defined in Section 3.1.
 /// </remarks>
-public record IntrospectionSuccessResponse(bool Active, JsonObject? Claims) : IntrospectionResponse
+public record IntrospectionSuccess(bool Active, JsonObject? Claims)
 {
     /// <summary>
     /// Gets or sets whether the token is active.

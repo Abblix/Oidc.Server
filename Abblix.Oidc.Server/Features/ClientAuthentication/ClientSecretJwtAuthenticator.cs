@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -34,36 +34,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// Authenticates client requests using the client_secret_jwt authentication method.
 /// This method is used in scenarios where the client signs a JWT with its secret as a means of authentication.
 /// </summary>
-public class ClientSecretJwtAuthenticator : IClientAuthenticator
+public class ClientSecretJwtAuthenticator(
+    ILogger<ClientSecretJwtAuthenticator> logger,
+    IJsonWebTokenValidator tokenValidator,
+    IClientInfoProvider clientInfoProvider,
+    IRequestInfoProvider requestInfoProvider,
+    IHashService hashService) : IClientAuthenticator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientSecretJwtAuthenticator"/> class.
-    /// </summary>
-    /// <param name="logger">Logger for logging authentication process information and warnings.</param>
-    /// <param name="tokenValidator">Validator for JSON Web Tokens (JWT) used in client assertions.</param>
-    /// <param name="clientInfoProvider">Provider for retrieving client information, essential for validating client identity.</param>
-    /// <param name="requestInfoProvider">Provider for retrieving information about the current request, used in validating JWT claims like audience.</param>
-    /// <param name="hashService">Service for hashing client secrets to compare with JWT signature.</param>
-    public ClientSecretJwtAuthenticator(
-        ILogger<ClientSecretJwtAuthenticator> logger,
-        IJsonWebTokenValidator tokenValidator,
-        IClientInfoProvider clientInfoProvider,
-        IRequestInfoProvider requestInfoProvider,
-        IHashService hashService)
-    {
-        _logger = logger;
-        _tokenValidator = tokenValidator;
-        _clientInfoProvider = clientInfoProvider;
-        _requestInfoProvider = requestInfoProvider;
-        _hashService = hashService;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IJsonWebTokenValidator _tokenValidator;
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly IRequestInfoProvider _requestInfoProvider;
-    private readonly IHashService _hashService;
-
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
     /// This indicates that the authenticator handles client authentication using JSON Web Tokens (JWT) for

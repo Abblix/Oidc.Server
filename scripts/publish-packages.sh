@@ -22,18 +22,18 @@ echo -e "${BLUE}📦 Abblix OIDC Server - Package Publishing Script${NC}"
 echo "================================================="
 
 # Check if packages directory exists
-if [ ! -d "$PACKAGES_DIR" ]; then
-    echo -e "${RED}❌ Error: Packages directory '$PACKAGES_DIR' not found${NC}"
-    echo "Usage: $0 [packages-directory]"
-    echo "Example: $0 nupkg"
+if [[ ! -d "$PACKAGES_DIR" ]]; then
+    echo -e "${RED}❌ Error: Packages directory '$PACKAGES_DIR' not found${NC}" >&2
+    echo "Usage: $0 [packages-directory]" >&2
+    echo "Example: $0 nupkg" >&2
     exit 1
 fi
 
 # Find .nupkg files
 PACKAGES=($(find "$PACKAGES_DIR" -name "*.nupkg" -type f))
 
-if [ ${#PACKAGES[@]} -eq 0 ]; then
-    echo -e "${RED}❌ Error: No .nupkg files found in '$PACKAGES_DIR'${NC}"
+if [[ ${#PACKAGES[@]} -eq 0 ]]; then
+    echo -e "${RED}❌ Error: No .nupkg files found in '$PACKAGES_DIR'${NC}" >&2
     exit 1
 fi
 
@@ -52,9 +52,9 @@ read -p "Continue with GitHub Packages publishing? (y/N): " -n 1 -r
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    if [ -z "$GITHUB_TOKEN" ]; then
-        echo -e "${RED}❌ Error: GITHUB_TOKEN environment variable not set${NC}"
-        echo "Please set GITHUB_TOKEN with packages:write permission"
+    if [[ -z "$GITHUB_TOKEN" ]]; then
+        echo -e "${RED}❌ Error: GITHUB_TOKEN environment variable not set${NC}" >&2
+        echo "Please set GITHUB_TOKEN with packages:write permission" >&2
         exit 1
     fi
     
@@ -87,9 +87,9 @@ read -p "Continue with NuGet.org publishing? (y/N): " -n 1 -r
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    if [ -z "$NUGET_API_KEY" ]; then
-        echo -e "${RED}❌ Error: NUGET_API_KEY environment variable not set${NC}"
-        echo "Please set NUGET_API_KEY with your NuGet.org API key"
+    if [[ -z "$NUGET_API_KEY" ]]; then
+        echo -e "${RED}❌ Error: NUGET_API_KEY environment variable not set${NC}" >&2
+        echo "Please set NUGET_API_KEY with your NuGet.org API key" >&2
         exit 1
     fi
     

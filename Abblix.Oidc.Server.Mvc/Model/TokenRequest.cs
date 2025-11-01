@@ -84,7 +84,7 @@ public record TokenRequest
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.Scope)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-    public string[] Scope { get; set; } = Array.Empty<string>();
+    public string[] Scope { get; set; } = [];
 
     /// <summary>
     /// The username of the resource owner, used in the password grant type.

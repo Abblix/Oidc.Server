@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -28,27 +28,17 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// This class represents a composite validator for client registration requests.
 /// It aggregates multiple validation steps and executes them sequentially.
 /// </summary>
-public class ClientRegistrationContextValidatorComposite : IClientRegistrationContextValidator
+/// <param name="validationSteps">The array of validation steps to be executed.</param>
+public class ClientRegistrationContextValidatorComposite(IClientRegistrationContextValidator[] validationSteps) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the class with an array of validation steps.
-    /// </summary>
-    /// <param name="validationSteps">The array of validation steps to be executed.</param>
-    public ClientRegistrationContextValidatorComposite(IClientRegistrationContextValidator[] validationSteps)
-    {
-        _validationSteps = validationSteps;
-    }
-
-    private readonly IClientRegistrationContextValidator[] _validationSteps;
-
     /// <summary>
     /// Validates the client registration request by executing each validation step in the specified order.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A ClientRegistrationValidationError if any validation step fails, or null if the request is valid.</returns>
-    public async Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context)
+    /// <returns>A AuthError if any validation step fails, or null if the request is valid.</returns>
+    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
-        foreach (var validationStep in _validationSteps)
+        foreach (var validationStep in validationSteps)
         {
             var error = await validationStep.ValidateAsync(context);
             if (error != null)

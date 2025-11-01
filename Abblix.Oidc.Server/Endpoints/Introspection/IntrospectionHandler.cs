@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
 
@@ -30,27 +31,14 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// Manages the processing of token introspection requests according to OAuth 2.0 specifications, facilitating
 /// the validation and introspection of tokens to determine their current state and metadata.
 /// </summary>
-public class IntrospectionHandler : IIntrospectionHandler
+/// <param name="validator">An implementation of <see cref="IIntrospectionRequestValidator"/> tasked with
+/// validating introspection requests against OAuth 2.0 standards.</param>
+/// <param name="processor">An implementation of <see cref="IIntrospectionRequestProcessor"/> responsible
+/// for processing validated introspection requests and retrieving token information.</param>
+public class IntrospectionHandler(
+    IIntrospectionRequestValidator validator,
+    IIntrospectionRequestProcessor processor) : IIntrospectionHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="IntrospectionHandler"/> class, equipping it with the necessary
-    /// components to validate and process introspection requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="IIntrospectionRequestValidator"/> tasked with
-    /// validating introspection requests against OAuth 2.0 standards.</param>
-    /// <param name="processor">An implementation of <see cref="IIntrospectionRequestProcessor"/> responsible
-    /// for processing validated introspection requests and retrieving token information.</param>
-    public IntrospectionHandler(
-        IIntrospectionRequestValidator validator,
-        IIntrospectionRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IIntrospectionRequestValidator _validator;
-    private readonly IIntrospectionRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles an introspection request by validating the request and, if valid, processing it to
     /// return the state and metadata of the specified token.
@@ -68,20 +56,11 @@ public class IntrospectionHandler : IIntrospectionHandler
     /// authentication systems by allowing resource servers and other entities to verify the validity
     /// and attributes of tokens.
     /// </remarks>
-    public async Task<IntrospectionResponse> HandleAsync(
+    public async Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(introspectionRequest, clientRequest);
-
-        return validationResult switch
-        {
-            ValidIntrospectionRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            IntrospectionRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new IntrospectionErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
+        var validationResult = await validator.ValidateAsync(introspectionRequest, clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

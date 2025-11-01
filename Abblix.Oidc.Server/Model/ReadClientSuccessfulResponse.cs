@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents the response for a successful client read request,
 /// detailing the configuration and metadata of an OAuth or OpenID Connect client.
 /// </summary>
-public record ReadClientSuccessfulResponse : ReadClientResponse
+public record ReadClientSuccessfulResponse
 {
     /// <summary>
     /// The unique identifier of the client as registered with the authorization server.

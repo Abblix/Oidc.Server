@@ -31,27 +31,15 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// Generates unique request URIs for authorization requests based on configured options.
 /// This implementation uses cryptographic randomness to ensure that each URI is unique and secure.
 /// </summary>
-public class AuthorizationRequestUriGenerator : IAuthorizationRequestUriGenerator
+public class AuthorizationRequestUriGenerator(IOptions<OidcOptions> options) : IAuthorizationRequestUriGenerator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationRequestUriGenerator"/> class.
-    /// </summary>
-    /// <param name="options">The options to configure the behavior of the URI generation,
-    /// including the length of the URI.</param>
-    public AuthorizationRequestUriGenerator(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Generates a unique request URI by appending a securely generated random string to a predefined URN prefix.
     /// </summary>
     /// <returns>A new unique URI for an authorization request.</returns>
     public Uri GenerateRequestUri()
     {
-        var randomBytes = CryptoRandom.GetRandomBytes(_options.Value.RequestUriLength);
+        var randomBytes = CryptoRandom.GetRandomBytes(options.Value.RequestUriLength);
         return new(RequestUrn.Prefix + HttpServerUtility.UrlTokenEncode(randomBytes));
     }
 }

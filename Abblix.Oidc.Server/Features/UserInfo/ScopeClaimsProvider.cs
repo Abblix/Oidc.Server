@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -30,15 +30,9 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// and claims. This class manages the association between scopes and the specific claims they include,
 /// facilitating the retrieval of appropriate claims for given scopes during the authorization process.
 /// </summary>
-public class ScopeClaimsProvider : IScopeClaimsProvider
+/// <param name="scopeManager">The scope manager used to look up scope definitions.</param>
+public class ScopeClaimsProvider(IScopeManager scopeManager) : IScopeClaimsProvider
 {
-    public ScopeClaimsProvider(IScopeManager scopeManager)
-    {
-        _scopeManager = scopeManager;
-    }
-
-    private readonly IScopeManager _scopeManager;
-
     /// <summary>
     /// Retrieves the specific claims associated with the requested scopes and any additional requested claims.
     /// </summary>
@@ -51,9 +45,9 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
         IEnumerable<string>? requestedClaims)
     {
         var claimNames = scopes
-            .SelectMany(scope => _scopeManager.TryGet(scope, out var scopeDefinition)
+            .SelectMany(scope => scopeManager.TryGet(scope, out var scopeDefinition)
                 ? scopeDefinition.ClaimTypes
-                : Array.Empty<string>())
+                : [])
             .Prepend(JwtClaimTypes.Subject);
 
         if (requestedClaims != null)
@@ -68,11 +62,11 @@ public class ScopeClaimsProvider : IScopeClaimsProvider
     /// A collection of all the scopes supported by this provider.
     /// </summary>
     public IEnumerable<string> ScopesSupported
-        => _scopeManager.Select(def => def.Scope);
+        => scopeManager.Select(def => def.Scope);
 
     /// <summary>
     /// A collection of all the claims that can be provided by this provider.
     /// </summary>
     public IEnumerable<string> ClaimsSupported
-        => _scopeManager.SelectMany(def => def.ClaimTypes).Distinct(StringComparer.Ordinal);
+        => scopeManager.SelectMany(def => def.ClaimTypes).Distinct(StringComparer.Ordinal);
 }

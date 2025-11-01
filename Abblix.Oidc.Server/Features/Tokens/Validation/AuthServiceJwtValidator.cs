@@ -32,33 +32,18 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// Validates JSON Web Tokens (JWTs) issued by the authentication service, ensuring they are authentic and compliant
 /// with the expected issuer, audience, and cryptographic signatures.
 /// </summary>
-public class AuthServiceJwtValidator : IAuthServiceJwtValidator
+/// <param name="validator">The service used to perform the core JWT validation.</param>
+/// <param name="clientInfoProvider">The provider used to retrieve information about clients during
+/// audience validation.</param>
+/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT.</param>
+/// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
+/// decrypting tokens.</param>
+public class AuthServiceJwtValidator(
+	IJsonWebTokenValidator validator,
+	IClientInfoProvider clientInfoProvider,
+	IIssuerProvider issuerProvider,
+	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthServiceJwtValidator"/> class.
-	/// </summary>
-	/// <param name="validator">The service used to perform the core JWT validation.</param>
-	/// <param name="clientInfoProvider">The provider used to retrieve information about clients during
-	/// audience validation.</param>
-	/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT.</param>
-	/// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
-	/// decrypting tokens.</param>
-	public AuthServiceJwtValidator(
-		IJsonWebTokenValidator validator,
-		IClientInfoProvider clientInfoProvider,
-		IIssuerProvider issuerProvider,
-		IAuthServiceKeysProvider serviceKeysProvider)
-	{
-		_validator = validator;
-		_clientInfoProvider = clientInfoProvider;
-		_issuerProvider = issuerProvider;
-		_serviceKeysProvider = serviceKeysProvider;
-	}
-
-	private readonly IJsonWebTokenValidator _validator;
-	private readonly IClientInfoProvider _clientInfoProvider;
-	private readonly IIssuerProvider _issuerProvider;
-	private readonly IAuthServiceKeysProvider _serviceKeysProvider;
 
 	/// <summary>
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
@@ -71,15 +56,15 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 	/// </returns>
 	public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
 	{
-		return _validator.ValidateAsync(
+		return validator.ValidateAsync(
 			jwt,
 			new ValidationParameters
 			{
 				Options = options,
 				ValidateIssuer = ValidateIssuerAsync,
 				ValidateAudience = ValidateAudienceAsync,
-				ResolveIssuerSigningKeys = _ => _serviceKeysProvider.GetSigningKeys(),
-				ResolveTokenDecryptionKeys = _ => _serviceKeysProvider.GetEncryptionKeys(true),
+				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),
+				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
 			});
 	}
 
@@ -90,7 +75,7 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
 	private Task<bool> ValidateIssuerAsync(string issuer)
 	{
-		var result = issuer == _issuerProvider.GetIssuer();
+		var result = issuer == issuerProvider.GetIssuer();
 		if (result)
 		{
 			LicenseChecker.CheckIssuer(issuer);
@@ -108,7 +93,7 @@ public class AuthServiceJwtValidator : IAuthServiceJwtValidator
 	{
 		foreach (var audience in audiences)
 		{
-			var clientInfo = await _clientInfoProvider.TryFindClientAsync(audience).WithLicenseCheck();
+			var clientInfo = await clientInfoProvider.TryFindClientAsync(audience).WithLicenseCheck();
 			if (clientInfo != null)
 				return true;
 		}

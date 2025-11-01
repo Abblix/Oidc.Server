@@ -58,7 +58,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	}
 
 	private readonly IHttpContextAccessor _httpContextAccessor;
-	
+
 	/// <summary>
 	/// The authentication scheme to use for all authentication operations (SignIn, SignOut, Authenticate).
 	/// This ensures consistent behavior when multiple authentication schemes are registered.
@@ -92,7 +92,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// converting the authentication results into an <see cref="AuthSession"/>.
 	/// </summary>
 	/// <returns>
-	/// A task that represents the asynchronous operation. The task result contains the <see cref="AuthSession"/>
+	/// A task that returns the <see cref="AuthSession"/>
 	/// of the authenticated user or null if the authentication fails.
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()

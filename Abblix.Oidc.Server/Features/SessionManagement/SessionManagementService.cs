@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -39,32 +39,19 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// This service is responsible for managing browser sessions by utilizing cookies and providing mechanisms
 /// to check and maintain the session state between the client and the server.
 /// </summary>
-public class SessionManagementService : ISessionManagementService
+/// <param name="options">The options for configuring the OpenID Connect session management service.</param>
+/// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
+/// the current request is over HTTPS and the request's base path.</param>
+public class SessionManagementService(
+    IOptionsSnapshot<OidcOptions> options,
+    IRequestInfoProvider requestInfoProvider) : ISessionManagementService
 {
     private const string CookieNamePlaceHolder = "\"{{cookieName}}\"";
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SessionManagementService"/> class with the specified
-    /// OpenID Connect options and request information provider.
-    /// </summary>
-    /// <param name="options">The options for configuring the OpenID Connect session management service.</param>
-    /// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
-    /// the current request is over HTTPS and the request's base path.</param>
-    public SessionManagementService(
-        IOptionsSnapshot<OidcOptions> options,
-        IRequestInfoProvider requestInfoProvider)
-    {
-        _options = options;
-        _requestInfoProvider = requestInfoProvider;
-    }
-
-    private readonly IOptionsSnapshot<OidcOptions> _options;
-    private readonly IRequestInfoProvider _requestInfoProvider;
-
-    /// <summary>
     /// Indicates whether session management functionality is enabled based on the configured endpoints.
     /// </summary>
-    public bool Enabled => _options.Value.EnabledEndpoints.HasFlag(OidcEndpoints.CheckSession);
+    public bool Enabled => options.Value.EnabledEndpoints.HasFlag(OidcEndpoints.CheckSession);
 
     /// <summary>
     /// Retrieves a cookie configured for session management. This cookie can be used to track the session state
@@ -74,17 +61,17 @@ public class SessionManagementService : ISessionManagementService
     /// domain, path, and security attributes.</returns>
     public Cookie GetSessionCookie()
     {
-        var options = _options.Value.CheckSessionCookie;
+        var cookieOptions = options.Value.CheckSessionCookie;
         return new Cookie(
-            options.Name,
+            cookieOptions.Name,
             new CookieOptions
             {
                 HttpOnly = false,
                 IsEssential = true,
-                Secure = _requestInfoProvider.IsHttps,
-                Path = _requestInfoProvider.PathBase,
-                Domain = options.Domain,
-                SameSite = options.SameSite,
+                Secure = requestInfoProvider.IsHttps,
+                Path = requestInfoProvider.PathBase,
+                Domain = cookieOptions.Domain,
+                SameSite = cookieOptions.SameSite,
             });
     }
 
@@ -108,7 +95,7 @@ public class SessionManagementService : ISessionManagementService
     /// Asynchronously generates the response content for the check session endpoint. This method retrieves an HTML template
     /// that includes JavaScript code for the client to check the session state.
     /// </summary>
-    /// <returns>A task that represents the asynchronous operation, resulting in a <see cref="CheckSessionResponse"/>
+    /// <returns>A task that returns a <see cref="CheckSessionResponse"/>
     /// containing the HTML content for the check session iframe and the name of the session management cookie.</returns>
     public async Task<CheckSessionResponse> GetCheckSessionResponseAsync()
     {
@@ -120,7 +107,7 @@ public class SessionManagementService : ISessionManagementService
         using (var reader = new StreamReader(stream, Encoding.UTF8))
             htmlTemplate = await reader.ReadToEndAsync();
 
-        var cookieName = _options.Value.CheckSessionCookie.Name;
+        var cookieName = options.Value.CheckSessionCookie.Name;
         var htmlContent = htmlTemplate.Replace(
             CookieNamePlaceHolder,
             JavaScriptStringEncode(cookieName, true));

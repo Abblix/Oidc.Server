@@ -23,6 +23,17 @@
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Represents the response for ending a user's session.
+/// Represents a successful response for ending a user's session.
 /// </summary>
-public abstract record EndSessionResponse;
+public record EndSessionSuccess(Uri? PostLogoutRedirectUri, IList<Uri> FrontChannelLogoutRequestUris)
+{
+	/// <summary>
+	/// Gets or sets the URI to which the user should be redirected after successfully logging out (optional).
+	/// </summary>
+	public Uri? PostLogoutRedirectUri { get; init; } = PostLogoutRedirectUri;
+
+	/// <summary>
+	/// Gets a list of front-channel logout request URIs to be initiated after logging out.
+	/// </summary>
+	public IList<Uri> FrontChannelLogoutRequestUris { get; init; } = FrontChannelLogoutRequestUris;
+}

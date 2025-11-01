@@ -20,11 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
@@ -59,7 +61,7 @@ public class EndSessionResponseFormatterDecorator: IEndSessionResponseFormatter
     /// A <see cref="Task{TResult}"/> representing the asynchronous operation. The task result contains
     /// the formatted ActionResult, with additional session management actions if enabled.
     /// </returns>
-    public async Task<ActionResult> FormatResponseAsync(EndSessionRequest request, EndSessionResponse response)
+    public async Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
     {
         var result = await _inner.FormatResponseAsync(request, response);
 

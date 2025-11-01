@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
@@ -29,7 +30,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using ClientRegistrationResponse = Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces.ClientRegistrationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -66,42 +66,33 @@ public class RegisterClientResponseFormatter : IRegisterClientResponseFormatter
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(
         ClientRegistrationRequest request,
-        ClientRegistrationResponse response)
+        Result<ClientRegistrationSuccessResponse, OidcError> response)
     {
-        return Task.FromResult(FormatResponse(request, response));
+        return Task.FromResult(response.Match(
+            onSuccess: success => FormatSuccess(request, success),
+            onFailure: error => (ActionResult)new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 
-    private ActionResult FormatResponse(ClientRegistrationRequest request, ClientRegistrationResponse response)
+    private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
     {
-        switch (response)
+        var modelResponse = new Abblix.Oidc.Server.Model.ClientRegistrationResponse
         {
-            case ClientRegistrationSuccessResponse success:
+            ClientId = success.ClientId,
+            ClientIdIssuedAt = success.ClientIdIssuedAt,
 
-                var modelResponse = new Abblix.Oidc.Server.Model.ClientRegistrationResponse
-                {
-                    ClientId = success.ClientId,
-                    ClientIdIssuedAt = success.ClientIdIssuedAt,
+            ClientSecret = success.ClientSecret,
+            ClientSecretExpiresAt = success.ClientSecretExpiresAt ?? DateTimeOffset.UnixEpoch,
 
-                    ClientSecret = success.ClientSecret,
-                    ClientSecretExpiresAt = success.ClientSecretExpiresAt ?? DateTimeOffset.UnixEpoch,
+            RegistrationAccessToken = success.RegistrationAccessToken,
 
-                    RegistrationAccessToken = success.RegistrationAccessToken,
+            RegistrationClientUri = success.RegistrationAccessToken.HasValue()
+                ? GetClientReadUrl(success.ClientId)
+                : null,
 
-                    RegistrationClientUri = success.RegistrationAccessToken.HasValue()
-                        ? GetClientReadUrl(success.ClientId)
-                        : null,
+            InitiateLoginUri = request.InitiateLoginUri
+        };
 
-                    InitiateLoginUri = request.InitiateLoginUri
-                };
-
-                return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
-
-            case ClientRegistrationErrorResponse error:
-                return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));
-
-            default:
-                throw new UnexpectedTypeException(nameof(response), response.GetType());
-        }
+        return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
     }
 
     private Uri GetClientReadUrl(string clientId) => _uriResolver.Action(

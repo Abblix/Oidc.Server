@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -53,9 +55,9 @@ public interface IAuthorizationCodeService
     /// matches a previously issued code and has not expired or been used.
     /// </summary>
     /// <param name="authorizationCode">The authorization code to be validated and processed for granting access.</param>
-    /// <returns>A task that asynchronously returns a <see cref="GrantAuthorizationResult"/> representing the outcome
+    /// <returns>A task that asynchronously returns a <see cref="Result<AuthorizedGrant, AuthError>"/> representing the outcome
     /// of the authorization process, including any access tokens or refresh tokens issued as part of the grant.</returns>
-    Task<GrantAuthorizationResult> AuthorizeByCodeAsync(string authorizationCode);
+    Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode);
 
     /// <summary>
     /// Asynchronously removes an authorization code from the system. This method is typically called once

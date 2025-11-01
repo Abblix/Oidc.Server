@@ -28,10 +28,23 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// Client secrets are critical for the security of client applications, especially those that
 /// authenticate in a server-side context. This record stores hashed versions of the secret
-/// to enhance security by avoiding the storage of plain-text secrets.
+/// to enhance security by avoiding the storage of plain-text secrets. For client_secret_jwt
+/// authentication method, the raw value must also be stored to validate HMAC-signed JWTs.
 /// </remarks>
 public record ClientSecret
 {
+	/// <summary>
+	/// The raw value of the client secret. This property is required for client_secret_jwt
+	/// authentication method where HMAC signature validation needs the original secret.
+	/// </summary>
+	/// <remarks>
+	/// Storing the raw secret value reduces security compared to storing only hashes.
+	/// Use this only when client_secret_jwt authentication method is required.
+	/// For other authentication methods (client_secret_post, client_secret_basic),
+	/// only the hashed values are needed.
+	/// </remarks>
+	public string? Value { get; init; }
+
 	/// <summary>
 	/// The SHA-256 hash of the client secret. This property is used to securely store
 	/// and verify the secret without needing to store the plain text value.

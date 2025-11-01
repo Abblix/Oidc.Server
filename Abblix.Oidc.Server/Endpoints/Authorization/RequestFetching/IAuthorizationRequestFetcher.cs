@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -38,7 +40,7 @@ public interface IAuthorizationRequestFetcher
     /// The initial authorization request, which may contain a reference to a request object or inline request parameters.
     /// </param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the processed authorization request
+    /// A task that returns the processed authorization request
     /// details, encapsulated within a <see cref="FetchResult"/>.</returns>
     /// <remarks>
     /// This method is responsible for handling the specifics of fetching and interpreting the authorization request,
@@ -46,5 +48,5 @@ public interface IAuthorizationRequestFetcher
     /// or validating the request object provided inline via the 'request' parameter. It ensures the request adheres
     /// to the expected format and validation requirements before further processing.
     /// </remarks>
-    Task<FetchResult> FetchAsync(AuthorizationRequest request);
+    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request);
 }

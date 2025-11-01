@@ -171,7 +171,7 @@ public static class JsonWebKeyExtensions
 	/// <returns>The updated JsonWebKey with applied certificate properties.</returns>
 	public static JsonWebKey Apply(this JsonWebKey jwk, X509Certificate2 certificate)
 	{
-		jwk.Certificates = new[] { certificate.RawData };
+		jwk.Certificates = [certificate.RawData];
 		jwk.Thumbprint = certificate.GetCertHash();
 		return jwk;
 	}

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -41,28 +42,18 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// user re-authentication. This service handles the creation and validation of refresh tokens, supporting seamless
 /// and secure user experiences by allowing access tokens to be renewed based on long-lived refresh tokens.
 /// </summary>
-public class RefreshTokenService : IRefreshTokenService
+/// <param name="issuerProvider">Provider for the issuer claim in tokens.</param>
+/// <param name="clock">Time provider for token timestamps.</param>
+/// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
+/// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
+/// <param name="tokenRegistry">Registry for tracking token status.</param>
+public class RefreshTokenService(
+	IIssuerProvider issuerProvider,
+	TimeProvider clock,
+	ITokenIdGenerator tokenIdGenerator,
+	IAuthServiceJwtFormatter jwtFormatter,
+	ITokenRegistry tokenRegistry) : IRefreshTokenService
 {
-	public RefreshTokenService(
-		IIssuerProvider issuerProvider,
-		TimeProvider clock,
-		ITokenIdGenerator tokenIdGenerator,
-		IAuthServiceJwtFormatter jwtFormatter,
-		ITokenRegistry tokenRegistry)
-	{
-		_issuerProvider = issuerProvider;
-		_clock = clock;
-		_tokenIdGenerator = tokenIdGenerator;
-		_jwtFormatter = jwtFormatter;
-		_tokenRegistry = tokenRegistry;
-	}
-
-	private readonly IIssuerProvider _issuerProvider;
-	private readonly TimeProvider _clock;
-	private readonly ITokenIdGenerator _tokenIdGenerator;
-	private readonly IAuthServiceJwtFormatter _jwtFormatter;
-	private readonly ITokenRegistry _tokenRegistry;
-
 	/// <summary>
 	/// Generates a new refresh token based on the user's current authentication session and authorization context,
 	/// optionally renewing an existing refresh token. This facilitates prolonged access without re-authentication,
@@ -89,10 +80,10 @@ public class RefreshTokenService : IRefreshTokenService
 		    refreshToken is { Payload: { JwtId: { } jwtId, ExpiresAt: {} expiresAt }})
 		{
 			// Revokes used refresh token to prevent its reuse
-			await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 		}
 
-		var now = _clock.GetUtcNow();
+		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
 		expiresAt = CalculateExpiresAt(issuedAt, clientInfo.RefreshToken);
 		if (expiresAt < now)
@@ -107,18 +98,18 @@ public class RefreshTokenService : IRefreshTokenService
 			},
 			Payload =
 			{
-				JwtId = _tokenIdGenerator.GenerateTokenId(),
+				JwtId = tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = now,
 				ExpiresAt = expiresAt,
-				Issuer = LicenseChecker.CheckIssuer(_issuerProvider.GetIssuer()),
-				Audiences = new[] { clientInfo.ClientId },
+				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+				Audiences = [clientInfo.ClientId],
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
 		authContext.ApplyTo(newToken.Payload);
 
-		return new EncodedJsonWebToken(newToken, await _jwtFormatter.FormatAsync(newToken));
+		return new EncodedJsonWebToken(newToken, await jwtFormatter.FormatAsync(newToken));
 	}
 
 	private static DateTimeOffset CalculateExpiresAt(DateTimeOffset issuedAt, RefreshTokenOptions options)
@@ -143,12 +134,12 @@ public class RefreshTokenService : IRefreshTokenService
 	/// <param name="refreshToken">The refresh token to be validated and authorized.</param>
 	/// <returns>A task that, upon successful validation, results in an <see cref="AuthorizedGrant"/>
 	/// encapsulating the reconstituted authentication session and authorization context.</returns>
-	public Task<GrantAuthorizationResult> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
 	{
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 		var result = new RefreshTokenAuthorizedGrant(authSession, authContext, refreshToken);
 
-		return Task.FromResult<GrantAuthorizationResult>(result);
+		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(result);
 	}
 }

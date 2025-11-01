@@ -51,7 +51,7 @@ public class ClientManagementController : ControllerBase
     /// <param name="handler">The handler responsible for processing client registration requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client registration response.</param>
     /// <param name="request">The details of the client registration request.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result that includes
+    /// <returns>A task that returns an action result that includes
     /// the client registration response.</returns>
     /// <remarks>
     /// This method implements the OpenID Connect Dynamic Client Registration protocol, facilitating clients
@@ -77,7 +77,7 @@ public class ClientManagementController : ControllerBase
     /// <param name="handler">The handler responsible for processing client information requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client information response.</param>
     /// <param name="request">The details of the client information request.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result that includes
+    /// <returns>A task that returns an action result that includes
     /// the client information response.</returns>
     /// <remarks>
     /// This method allows clients to query their current configuration stored by the authorization server.
@@ -103,7 +103,7 @@ public class ClientManagementController : ControllerBase
     /// <param name="handler">The handler responsible for processing client removal requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client removal response.</param>
     /// <param name="request">The details of the client removal request.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result that confirms
+    /// <returns>A task that returns an action result that confirms
     /// the client removal.</returns>
     /// <remarks>
     /// This method supports the removal of clients from the authorization server. Following the OpenID Connect Dynamic

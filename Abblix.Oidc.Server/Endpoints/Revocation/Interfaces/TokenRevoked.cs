@@ -23,7 +23,12 @@
 namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 
 /// <summary>
-/// Represents an error response for token revocation.
-/// Contains error and error description information to be sent to the client.
+/// Represents a response indicating that the token has been successfully revoked.
 /// </summary>
-public record RevocationErrorResponse(string Error, string ErrorDescription) : RevocationResponse;
+/// <param name="TokenId">The unique identifier (jti) of the revoked token, if available.</param>
+/// <param name="TokenTypeHint">The type hint of the token that was revoked (e.g., access_token, refresh_token).</param>
+/// <param name="RevokedAt">The timestamp when the token was revoked.</param>
+public record TokenRevoked(
+    string? TokenId,
+    string? TokenTypeHint,
+    DateTimeOffset RevokedAt);

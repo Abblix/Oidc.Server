@@ -53,10 +53,9 @@ public class FromQueryOrFormAttribute : BindAttribute, IBindingSourceMetadata
 	/// Specifies that the binding source is a composite of both Query and Form sources.
 	/// </remarks>
 	public BindingSource BindingSource => CompositeBindingSource.Create(
-		new[]
-		{
+		[
 			BindingSource.Query,
-			BindingSource.Form,
-		},
+			BindingSource.Form
+		],
 		nameof(FromQueryOrFormAttribute));
 }

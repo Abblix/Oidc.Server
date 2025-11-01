@@ -50,7 +50,7 @@ internal static class StringExtensions
 	{
 		if (string.IsNullOrEmpty(source))
 		{
-			values = Array.Empty<string>();
+			values = [];
 			return true;
 		}
 

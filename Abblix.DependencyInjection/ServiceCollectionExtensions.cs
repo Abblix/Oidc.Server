@@ -360,7 +360,7 @@ public static class ServiceCollectionExtensions
                 return source;
 
             default:
-                return new[] { element };
+                return [element];
         }
     }
 
