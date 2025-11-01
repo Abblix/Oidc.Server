@@ -58,15 +58,16 @@ public class SecureHttpFetcher(
             using var response = await httpClient.GetAsync(uri); // NOSONAR S5144
             response.EnsureSuccessStatusCode();
 
+            using var responseContent = response.Content;
             if (typeof(T) == typeof(string))
             {
                 // For string type, return raw content (e.g., JWT)
-                content = (T)(object)await response.Content.ReadAsStringAsync();
+                content = (T)(object)await responseContent.ReadAsStringAsync();
             }
             else
             {
                 // For other types, deserialize as JSON
-                content = await response.Content.ReadFromJsonAsync<T>();
+                content = await responseContent.ReadFromJsonAsync<T>();
             }
         }
         catch (Exception ex)
