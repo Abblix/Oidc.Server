@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net;
+using System.Net.Sockets;
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -38,11 +39,42 @@ public class SsrfHttpFetchValidator(
     ILogger<SsrfHttpFetchValidator> logger) : ISecureHttpFetcher
 {
     /// <summary>
+    /// Common hostnames that typically resolve to internal/private networks.
+    /// These are blocked to prevent SSRF attacks targeting internal infrastructure.
+    /// </summary>
+    private static readonly string[] BlockedHostnames = [
+        "localhost",
+        "loopback",
+        "broadcasthost",
+        "local",
+        "internal",
+        "intranet",
+        "private",
+        "corp",
+        "home",
+        "lan"
+    ];
+
+    /// <summary>
+    /// Top-level domains (TLDs) commonly used for internal networks.
+    /// These are blocked as they typically indicate non-public infrastructure.
+    /// </summary>
+    private static readonly string[] BlockedTlds = [
+        ".local",
+        ".localhost",
+        ".internal",
+        ".intranet",
+        ".corp",
+        ".home",
+        ".lan"
+    ];
+
+    /// <summary>
     /// Fetches content with SSRF validation before making the request.
     /// </summary>
     public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
     {
-        var validationError = await ValidateSsrf(uri);
+        var validationError = await ValidateSsrfAsync(uri);
         if (validationError != null)
             return validationError;
 
@@ -62,7 +94,7 @@ public class SsrfHttpFetchValidator(
     /// where DNS could resolve to a different IP between this validation and the actual HTTP request.
     /// For additional protection, deploy behind a firewall or implement a custom HttpMessageHandler.
     /// </remarks>
-    private async Task<OidcError?> ValidateSsrf(Uri uri)
+    private async Task<OidcError?> ValidateSsrfAsync(Uri uri)
     {
         var hostname = uri.Host;
 
@@ -77,25 +109,26 @@ public class SsrfHttpFetchValidator(
         }
 
         // Resolve hostname and check IP addresses
+        IPHostEntry hostEntry;
         try
         {
-            var hostEntry = await Dns.GetHostEntryAsync(hostname);
-
-            var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
-            if (privateAddress != null)
-            {
-                logger.LogWarning(
-                    "URI {Uri} resolves to private/internal address {Address}",
-                    Sanitized.Value(uri),
-                    Sanitized.Value(privateAddress));
-
-                return ErrorFactory.InvalidClientMetadata("URI must not point to private or internal networks");
-            }
+            hostEntry = await Dns.GetHostEntryAsync(hostname);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Unable to resolve hostname for {Uri}", Sanitized.Value(uri));
             return ErrorFactory.InvalidClientMetadata("Unable to resolve hostname");
+        }
+
+        var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
+        if (privateAddress != null)
+        {
+            logger.LogWarning(
+                "URI {Uri} resolves to private/internal address {Address}",
+                Sanitized.Value(uri),
+                Sanitized.Value(privateAddress));
+
+            return ErrorFactory.InvalidClientMetadata("URI must not point to private or internal networks");
         }
 
         return null;
@@ -110,26 +143,11 @@ public class SsrfHttpFetchValidator(
         var normalizedHost = hostname.ToLowerInvariant();
 
         // Block common internal hostnames
-        string[] blockedHostnames =
-        [
-            "localhost",
-            "loopback",
-            "broadcasthost",
-            "local",
-            "internal",
-            "intranet",
-            "private",
-            "corp",
-            "home",
-            "lan"
-        ];
-
-        if (blockedHostnames.Contains(normalizedHost))
+        if (BlockedHostnames.Contains(normalizedHost))
             return true;
 
         // Block hostnames that end with common internal TLDs
-        string[] blockedTlds = [".local", ".localhost", ".internal", ".intranet", ".corp", ".home", ".lan"];
-        if (blockedTlds.Any(tld => normalizedHost.EndsWith(tld)))
+        if (BlockedTlds.Any(normalizedHost.EndsWith))
             return true;
 
         // Block single-label hostnames (no dots) as they're typically internal
@@ -153,7 +171,7 @@ public class SsrfHttpFetchValidator(
 
         return address.AddressFamily switch
         {
-            System.Net.Sockets.AddressFamily.InterNetwork =>
+            AddressFamily.InterNetwork =>
                 // Private: 10.0.0.0/8
                 bytes[0] == 10 ||
                 // Private: 172.16.0.0/12
@@ -165,7 +183,7 @@ public class SsrfHttpFetchValidator(
                 // Multicast: 224.0.0.0/4
                 bytes[0] >= 224,
 
-            System.Net.Sockets.AddressFamily.InterNetworkV6 =>
+            AddressFamily.InterNetworkV6 =>
                 // Link-local: fe80::/10
                 (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) ||
                 // Unique local: fc00::/7
