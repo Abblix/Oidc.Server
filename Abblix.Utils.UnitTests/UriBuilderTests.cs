@@ -382,4 +382,57 @@ public class UriBuilderTests
         Assert.True(result.IsAbsoluteUri);
         Assert.Contains(":8080", result.ToString());
     }
+
+    /// <summary>
+    /// Verifies that relative URIs without leading slash are correctly handled.
+    /// This is the Telegram webhook case: "setWebhook" should become a valid path.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithRelativePathWithoutLeadingSlash_CreatesValidUri()
+    {
+        var builder = new UriBuilder("setWebhook");
+
+        var result = builder.Uri;
+        Assert.False(result.IsAbsoluteUri);
+        Assert.Equal("setWebhook", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that relative URIs without leading slash work correctly with query parameters.
+    /// This reproduces the Telegram webhook registration issue where
+    /// new UriBuilder("setWebhook") { Query = { ["url"] = "..." } } should work.
+    /// </summary>
+    [Fact]
+    public void RelativeUri_WithoutLeadingSlash_WithQueryParameters_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("setWebhook")
+        {
+            Query = { ["url"] = "https://example.com/webhook" }
+        };
+
+        var result = builder.Uri;
+        Assert.False(result.IsAbsoluteUri);
+        Assert.StartsWith("setWebhook?", result.ToString());
+        Assert.Contains("url=https%3a%2f%2fexample.com%2fwebhook", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that relative URIs without leading slash can be combined with HttpClient BaseAddress.
+    /// When HttpClient has BaseAddress="https://api.telegram.org/bot123/" and we POST to "setWebhook?url=...",
+    /// the resulting URL should be "https://api.telegram.org/bot123/setWebhook?url=..."
+    /// </summary>
+    [Fact]
+    public void RelativeUri_WithoutLeadingSlash_CanBeCombinedWithBaseAddress()
+    {
+        var baseAddress = new Uri("https://api.telegram.org/bot123/");
+        var relativeUri = new UriBuilder("setWebhook")
+        {
+            Query = { ["url"] = "https://example.com/webhook" }
+        }.Uri;
+
+        var combined = new Uri(baseAddress, relativeUri);
+
+        Assert.True(combined.IsAbsoluteUri);
+        Assert.Equal("https://api.telegram.org/bot123/setWebhook?url=https%3a%2f%2fexample.com%2fwebhook", combined.ToString());
+    }
 }

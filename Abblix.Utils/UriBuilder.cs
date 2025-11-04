@@ -36,7 +36,7 @@ public class UriBuilder
     /// This base is stripped out when returning relative URIs.
     /// </summary>
 #pragma warning disable S1075 // URIs should not be hardcoded - This is a technical placeholder, not a configuration value
-    private const string PlaceholderBase = "http://localhost";
+    private const string PlaceholderBase = "http://localhost/";
 #pragma warning restore S1075
 
     /// <summary>
@@ -47,7 +47,8 @@ public class UriBuilder
     public UriBuilder(Uri uri)
         : this(uri.IsAbsoluteUri
             ? new System.UriBuilder(uri)
-            : new System.UriBuilder(PlaceholderBase + uri.OriginalString))
+            : new System.UriBuilder(CombineWithPlaceholder(uri.OriginalString)),
+            uri.OriginalString)
     {
         _isAbsoluteUri = uri.IsAbsoluteUri;
     }
@@ -67,15 +68,29 @@ public class UriBuilder
     /// Internal constructor that initializes the UriBuilder with a System.UriBuilder instance.
     /// </summary>
     /// <param name="builder">The System.UriBuilder instance to wrap.</param>
-    private UriBuilder(System.UriBuilder builder)
+    /// <param name="originalRelativePath">The original relative path without the placeholder base, if applicable.</param>
+    private UriBuilder(System.UriBuilder builder, string? originalRelativePath = null)
     {
         _builder = builder;
+        _originalRelativePath = originalRelativePath;
         Query = new ParametersBuilder(_builder.Query);
         Fragment = new ParametersBuilder(_builder.Fragment);
     }
 
     private readonly System.UriBuilder _builder;
     private readonly bool _isAbsoluteUri;
+    private readonly string? _originalRelativePath;
+
+    /// <summary>
+    /// Combines the placeholder base URI with a relative path, avoiding double slashes.
+    /// PlaceholderBase ends with '/', so skip leading '/' from relativePath if present.
+    /// </summary>
+    /// <param name="relativePath">The relative path to combine with the placeholder base.</param>
+    /// <returns>A valid absolute URI string combining the placeholder base with the relative path.</returns>
+    private static string CombineWithPlaceholder(string relativePath)
+        => PlaceholderBase + (relativePath.StartsWith('/')
+            ? relativePath[1..]  // Skip leading slash to avoid "http://localhost//path"
+            : relativePath);     // No leading slash, just append
 
     /// <summary>
     /// The path part of the URI.
@@ -118,7 +133,20 @@ public class UriBuilder
             };
 
             var uri = _builder.Uri;
-            return _isAbsoluteUri ? uri : new Uri(uri.PathAndQuery + uri.Fragment, UriKind.Relative);
+            if (_isAbsoluteUri)
+                return uri;
+
+            // For relative URIs, preserve the original form (with or without leading slash)
+            var pathAndQuery = uri.PathAndQuery + uri.Fragment;
+
+            // If we have an original relative path and it didn't start with '/',
+            // strip the leading '/' we added for the placeholder
+            if (_originalRelativePath != null && !_originalRelativePath.StartsWith('/') && pathAndQuery.StartsWith('/'))
+            {
+                return new Uri(pathAndQuery[1..], UriKind.Relative);
+            }
+
+            return new Uri(pathAndQuery, UriKind.Relative);
         }
     }
 
