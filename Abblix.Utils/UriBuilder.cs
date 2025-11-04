@@ -78,26 +78,26 @@ public class UriBuilder
     private readonly bool _isAbsoluteUri;
 
     /// <summary>
-    /// Gets or sets the path part of the URI.
+    /// The path part of the URI.
     /// </summary>
     public PathString Path
     {
-        get => new PathString(_builder.Path);
+        get => new(_builder.Path);
         set => _builder.Path = value.Value;
     }
 
     /// <summary>
-    /// Gets the ParametersBuilder for the query string.
+    /// ParametersBuilder for the query string.
     /// </summary>
     public ParametersBuilder Query { get; }
 
     /// <summary>
-    /// Gets the ParametersBuilder for the fragment part of the URI.
+    /// ParametersBuilder for the fragment part of the URI.
     /// </summary>
     public ParametersBuilder Fragment { get; }
 
     /// <summary>
-    /// Gets the URI constructed by the UriBuilder.
+    /// The URI constructed by the UriBuilder.
     /// For relative URIs, returns the path, query, and fragment without scheme and host.
     /// </summary>
     public Uri Uri
@@ -106,6 +106,16 @@ public class UriBuilder
         {
             _builder.Query = Query.ToString();
             _builder.Fragment = Fragment.ToString();
+
+            // Remove default port to avoid explicit port in URI (e.g., https://example.com:443/)
+            // System.UriBuilder includes port even when it's default, which creates verbose URIs
+            _builder.Port = (_builder.Uri.Scheme, _builder.Port) switch
+            {
+                ("http", 80) or
+                ("https", 443) or
+                ("ftp", 21) => -1, // -1 tells UriBuilder to omit the port from output
+                _ => _builder.Port,
+            };
 
             var uri = _builder.Uri;
             return _isAbsoluteUri ? uri : new Uri(uri.PathAndQuery + uri.Fragment, UriKind.Relative);

@@ -302,4 +302,84 @@ public class UriBuilderTests
         Assert.False(result.IsAbsoluteUri);
         Assert.Equal("/auth/api/signin-oidc", result.ToString());
     }
+
+    /// <summary>
+    /// Verifies that default HTTPS port (443) is omitted from the URI.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_WithDefaultHttpsPort_OmitsPort()
+    {
+        var absoluteUri = new Uri("https://example.com/path");
+        var builder = new UriBuilder(absoluteUri)
+        {
+            Query = { ["param"] = "value" }
+        };
+
+        var result = builder.Uri;
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Equal("https://example.com/path?param=value", result.ToString());
+        Assert.DoesNotContain(":443", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that default HTTP port (80) is omitted from the URI.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_WithDefaultHttpPort_OmitsPort()
+    {
+        var absoluteUri = new Uri("http://example.com/path");
+        var builder = new UriBuilder(absoluteUri);
+
+        var result = builder.Uri;
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Equal("http://example.com/path", result.ToString());
+        Assert.DoesNotContain(":80", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that non-default ports are included in the URI.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_WithNonDefaultPort_IncludesPort()
+    {
+        var absoluteUri = new Uri("https://localhost:5001/api");
+        var builder = new UriBuilder(absoluteUri)
+        {
+            Query = { ["param"] = "value" }
+        };
+
+        var result = builder.Uri;
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Contains(":5001", result.ToString());
+        Assert.Equal("https://localhost:5001/api?param=value", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that default FTP port (21) is omitted from the URI.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_WithDefaultFtpPort_OmitsPort()
+    {
+        var absoluteUri = new Uri("ftp://ftp.example.com/files");
+        var builder = new UriBuilder(absoluteUri);
+
+        var result = builder.Uri;
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Equal("ftp://ftp.example.com/files", result.ToString());
+        Assert.DoesNotContain(":21", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that non-standard schemes with ports keep the port in the URI.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_WithNonStandardScheme_KeepsPort()
+    {
+        var absoluteUri = new Uri("ws://localhost:8080/socket");
+        var builder = new UriBuilder(absoluteUri);
+
+        var result = builder.Uri;
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Contains(":8080", result.ToString());
+    }
 }
