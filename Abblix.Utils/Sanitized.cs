@@ -81,11 +81,12 @@ public readonly record struct Sanitized
 
             if (replacement != null)
             {
-                ReplaceTo(i, replacement);
+                builder ??= new StringBuilder(source, 0, i, source.Length + replacement.Length - 1);
+                builder.Append(replacement);
             }
             else if (0x00 <= c && c <= 0x1f || c == 0x7f)
             {
-                ReplaceTo(i, null);
+                builder ??= new StringBuilder(source, 0, i, source.Length - 1);
             }
             else
             {
@@ -93,12 +94,6 @@ public readonly record struct Sanitized
             }
         }
 
-        return builder != null ? builder.ToString() : source;
-
-        void ReplaceTo(int i, string? replacement)
-        {
-            builder ??= new StringBuilder(source, 0, i, source.Length + (replacement?.Length ?? 0) - 1);
-            builder.Append(replacement);
-        }
+        return builder?.ToString() ?? source;
     }
 }
