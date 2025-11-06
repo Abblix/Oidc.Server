@@ -22,7 +22,6 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeValidation;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 namespace Abblix.Oidc.Server.Model;
 

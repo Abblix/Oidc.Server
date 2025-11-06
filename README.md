@@ -148,6 +148,19 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 
 Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
 
+### Contributing Code
+
+**Before submitting pull requests, please review our [C# Code Style Guide](https://github.com/Abblix/Docs/blob/main/wiki/code-style.md).**
+
+Key requirements for contributors:
+- Follow Microsoft/.NET coding conventions
+- Use modern C# features (records, pattern matching, nullable types)
+- Comprehensive XML documentation on all public APIs
+- No defensive programming - let errors surface
+- No magic numbers - use named constants
+- Comments explain WHY, not WHAT
+- Write unit tests following AAA pattern
+
 We appreciate your support and look forward to making our product even better with your help!
 
 ## 📃 License

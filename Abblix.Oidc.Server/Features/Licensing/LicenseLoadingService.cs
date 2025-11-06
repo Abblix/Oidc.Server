@@ -67,7 +67,7 @@ internal class LicenseLoadingService(
         var licenses = _licenseJwtProvider.GetLicenseJwtAsync();
         if (licenses != null)
         {
-            await foreach (var license in licenses)
+            await foreach (var license in licenses.WithCancellation(cancellationToken))
             {
                 if (license.HasValue())
                     await LicenseLoader.LoadAsync(license);

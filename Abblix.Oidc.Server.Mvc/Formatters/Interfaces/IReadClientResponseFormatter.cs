@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc;
 

@@ -255,7 +255,7 @@ public class LicenseManager
                 ClientLimit = result.ClientLimit.Greater(license.ClientLimit),
                 IssuerLimit = result.IssuerLimit.Greater(license.IssuerLimit),
                 ExpiresAt = result.ExpiresAt.Lesser(license.ExpiresAt),
-                ValidIssuers = result.ValidIssuers.Join(result.ValidIssuers),
+                ValidIssuers = result.ValidIssuers.Join(license.ValidIssuers),
             };
         }
 
