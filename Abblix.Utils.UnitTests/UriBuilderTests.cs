@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Microsoft.AspNetCore.Http;
+using Xunit;
 
 namespace Abblix.Utils.UnitTests;
 
@@ -435,4 +436,462 @@ public class UriBuilderTests
         Assert.True(combined.IsAbsoluteUri);
         Assert.Equal("https://api.telegram.org/bot123/setWebhook?url=https%3a%2f%2fexample.com%2fwebhook", combined.ToString());
     }
+
+    #region Path Property Tests
+
+    /// <summary>
+    /// Verifies that Path property can be read from absolute URI.
+    /// </summary>
+    [Fact]
+    public void Path_GetFromAbsoluteUri_ReturnsCorrectPath()
+    {
+        var builder = new UriBuilder("https://example.com/api/users");
+
+        var path = builder.Path;
+
+        Assert.Equal("/api/users", path.Value);
+    }
+
+    /// <summary>
+    /// Verifies that Path property can be read from relative URI.
+    /// </summary>
+    [Fact]
+    public void Path_GetFromRelativeUri_ReturnsCorrectPath()
+    {
+        var builder = new UriBuilder("/auth/callback");
+
+        var path = builder.Path;
+
+        Assert.Equal("/auth/callback", path.Value);
+    }
+
+    /// <summary>
+    /// Verifies that Path property can be modified.
+    /// </summary>
+    [Fact]
+    public void Path_SetNewPath_UpdatesUri()
+    {
+        var builder = new UriBuilder("https://example.com/old/path")
+        {
+            Path = new PathString("/new/path")
+        };
+
+        var result = builder.Uri;
+
+        Assert.Equal("https://example.com/new/path", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that modifying Path preserves query parameters.
+    /// </summary>
+    [Fact]
+    public void Path_SetNewPath_PreservesQueryParameters()
+    {
+        var builder = new UriBuilder("/old/path")
+        {
+            Query = { ["param"] = "value" },
+            Path = new PathString("/new/path")
+        };
+
+        var result = builder.Uri;
+
+        Assert.Equal("/new/path?param=value", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that modifying Path preserves fragment.
+    /// </summary>
+    [Fact]
+    public void Path_SetNewPath_PreservesFragment()
+    {
+        var builder = new UriBuilder("/old/path")
+        {
+            Fragment = { ["section"] = "top" },
+            Path = new PathString("/new/path")
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("/new/path", result.ToString());
+        Assert.Contains("#section=top", result.ToString());
+    }
+
+    #endregion
+
+    #region Empty and Null Handling Tests
+
+    /// <summary>
+    /// Verifies that empty query parameters are handled correctly.
+    /// </summary>
+    [Fact]
+    public void Query_WithEmptyValue_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Query = { ["empty"] = string.Empty }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("empty=", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that empty fragment is handled correctly.
+    /// </summary>
+    [Fact]
+    public void Fragment_WithEmptyValue_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Fragment = { ["empty"] = string.Empty }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("#empty=", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that URI without query or fragment works correctly.
+    /// </summary>
+    [Fact]
+    public void Uri_WithoutQueryOrFragment_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/path");
+
+        var result = builder.Uri;
+
+        Assert.Equal("/path", result.ToString());
+        Assert.DoesNotContain("?", result.ToString());
+        Assert.DoesNotContain("#", result.ToString());
+    }
+
+    #endregion
+
+    #region OAuth/OIDC Implicit Flow Fragment Tests
+
+    /// <summary>
+    /// Verifies OAuth implicit flow fragment parameters (access_token in fragment).
+    /// </summary>
+    [Fact]
+    public void Fragment_WithOAuthImplicitFlowParameters_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("https://example.com/callback")
+        {
+            Fragment =
+            {
+                ["access_token"] = "eyJhbGc...",
+                ["token_type"] = "Bearer",
+                ["expires_in"] = "3600",
+                ["state"] = "xyz789"
+            }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("#access_token=eyJhbGc", result.ToString());
+        Assert.Contains("token_type=Bearer", result.ToString());
+        Assert.Contains("expires_in=3600", result.ToString());
+        Assert.Contains("state=xyz789", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies OIDC implicit flow fragment parameters (id_token in fragment).
+    /// </summary>
+    [Fact]
+    public void Fragment_WithOidcImplicitFlowParameters_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/callback")
+        {
+            Fragment =
+            {
+                ["id_token"] = "eyJhbGc...",
+                ["access_token"] = "eyJhbGc...",
+                ["state"] = "abc123"
+            }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("#id_token=eyJhbGc", result.ToString());
+        Assert.Contains("access_token=eyJhbGc", result.ToString());
+        Assert.Contains("state=abc123", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that both query and fragment can contain different parameters.
+    /// Used in OAuth/OIDC hybrid flows.
+    /// </summary>
+    [Fact]
+    public void QueryAndFragment_WithDifferentParameters_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/callback")
+        {
+            Query =
+            {
+                ["code"] = "auth_code_123",
+                ["state"] = "xyz789"
+            },
+            Fragment =
+            {
+                ["access_token"] = "eyJhbGc...",
+                ["token_type"] = "Bearer"
+            }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("?code=auth_code_123", result.ToString());
+        Assert.Contains("state=xyz789", result.ToString());
+        Assert.Contains("#access_token=eyJhbGc", result.ToString());
+        Assert.Contains("token_type=Bearer", result.ToString());
+    }
+
+    #endregion
+
+    #region Special Characters and URL Encoding Tests
+
+    /// <summary>
+    /// Verifies that special characters in query parameters are URL encoded.
+    /// Note: Spaces are encoded as '+' (application/x-www-form-urlencoded standard).
+    /// </summary>
+    [Fact]
+    public void Query_WithSpecialCharacters_EncodesCorrectly()
+    {
+        var builder = new UriBuilder("/search")
+        {
+            Query =
+            {
+                ["q"] = "C# .NET 8",
+                ["filter"] = "name=John&age>25"
+            }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("q=C%23+.NET+8", result.ToString());
+        Assert.Contains("filter=name%3dJohn%26age%3e25", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that spaces in query parameters are encoded as '+'.
+    /// This follows the application/x-www-form-urlencoded encoding standard.
+    /// </summary>
+    [Fact]
+    public void Query_WithSpaces_EncodesAsPlus()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Query = { ["text"] = "hello world" }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("text=hello+world", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that Unicode characters in query parameters are preserved.
+    /// ParametersBuilder uses Uri.EscapeDataString which supports Unicode directly.
+    /// </summary>
+    [Fact]
+    public void Query_WithUnicodeCharacters_PreservesUnicode()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Query = { ["name"] = "José García" }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("name=José+García", result.ToString());
+    }
+
+    #endregion
+
+    #region Multiple Uri Property Access Tests
+
+    /// <summary>
+    /// Verifies that accessing Uri property multiple times returns consistent results.
+    /// </summary>
+    [Fact]
+    public void Uri_AccessedMultipleTimes_ReturnsConsistentResults()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Query = { ["param"] = "value" }
+        };
+
+        var result1 = builder.Uri;
+        var result2 = builder.Uri;
+
+        Assert.Equal(result1.ToString(), result2.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that Uri property reflects changes to Query after first access.
+    /// </summary>
+    [Fact]
+    public void Uri_AfterQueryModification_ReflectsChanges()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Query = { ["param1"] = "value1" }
+        };
+
+        var result1 = builder.Uri;
+        builder.Query["param2"] = "value2";
+        var result2 = builder.Uri;
+
+        Assert.DoesNotContain("param2=value2", result1.ToString());
+        Assert.Contains("param2=value2", result2.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that Uri property reflects changes to Fragment after first access.
+    /// </summary>
+    [Fact]
+    public void Uri_AfterFragmentModification_ReflectsChanges()
+    {
+        var builder = new UriBuilder("/path")
+        {
+            Fragment = { ["section1"] = "top" }
+        };
+
+        var result1 = builder.Uri;
+        builder.Fragment["section2"] = "bottom";
+        var result2 = builder.Uri;
+
+        Assert.DoesNotContain("section2=bottom", result1.ToString());
+        Assert.Contains("section2=bottom", result2.ToString());
+    }
+
+    #endregion
+
+    #region Edge Cases Tests
+
+    /// <summary>
+    /// Verifies that root path "/" is handled correctly for relative URIs.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithRootPath_CreatesValidUri()
+    {
+        var builder = new UriBuilder("/");
+
+        var result = builder.Uri;
+
+        Assert.False(result.IsAbsoluteUri);
+        Assert.Equal("/", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that root path with query parameters works correctly.
+    /// </summary>
+    [Fact]
+    public void RootPath_WithQueryParameters_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/")
+        {
+            Query = { ["param"] = "value" }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Equal("/?param=value", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that deeply nested paths work correctly.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithDeeplyNestedPath_CreatesValidUri()
+    {
+        var builder = new UriBuilder("/a/b/c/d/e/f/g");
+
+        var result = builder.Uri;
+
+        Assert.False(result.IsAbsoluteUri);
+        Assert.Equal("/a/b/c/d/e/f/g", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that path with dots is handled correctly.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithPathContainingDots_CreatesValidUri()
+    {
+        var builder = new UriBuilder("/api/v1.0/users.json");
+
+        var result = builder.Uri;
+
+        Assert.Equal("/api/v1.0/users.json", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that IPv6 addresses in absolute URIs are handled correctly.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithIPv6Address_CreatesValidUri()
+    {
+        var builder = new UriBuilder("http://[::1]:5000/api");
+
+        var result = builder.Uri;
+
+        Assert.True(result.IsAbsoluteUri);
+        Assert.Contains("[::1]", result.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that query parameters with array-like names work correctly.
+    /// Common in API query strings like ?ids[]=1&ids[]=2
+    /// </summary>
+    [Fact]
+    public void Query_WithArrayLikeNames_BuildsCorrectly()
+    {
+        var builder = new UriBuilder("/api/items")
+        {
+            Query =
+            {
+                ["ids[]"] = "1",
+                ["filters[name]"] = "test"
+            }
+        };
+
+        var result = builder.Uri;
+
+        Assert.Contains("ids%5b%5d=1", result.ToString());
+        Assert.Contains("filters%5bname%5d=test", result.ToString());
+    }
+
+    #endregion
+
+    #region Comparison with System.UriBuilder Tests
+
+    /// <summary>
+    /// Verifies that our UriBuilder produces same results as System.UriBuilder for absolute URIs.
+    /// </summary>
+    [Fact]
+    public void AbsoluteUri_ProducesSameResultAsSystemUriBuilder()
+    {
+        var systemBuilder = new System.UriBuilder("https://example.com/path")
+        {
+            Query = "param1=value1&param2=value2"
+        };
+
+        var ourBuilder = new UriBuilder("https://example.com/path")
+        {
+            Query =
+            {
+                ["param1"] = "value1",
+                ["param2"] = "value2"
+            }
+        };
+
+        Assert.Equal(systemBuilder.Uri.Host, ourBuilder.Uri.Host);
+        Assert.Equal(systemBuilder.Uri.Scheme, ourBuilder.Uri.Scheme);
+        Assert.Equal(systemBuilder.Uri.PathAndQuery, ourBuilder.Uri.PathAndQuery);
+    }
+
+    #endregion
 }
