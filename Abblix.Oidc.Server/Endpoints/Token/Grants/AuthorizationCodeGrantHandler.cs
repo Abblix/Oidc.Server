@@ -76,7 +76,6 @@ public class AuthorizationCodeGrantHandler(
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
         var result = await authorizationCodeService.AuthorizeByCodeAsync(request.Code);
-
         if (result.TryGetFailure(out var error))
         {
             return error;

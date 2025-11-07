@@ -54,7 +54,7 @@ public abstract class ClientSecretAuthenticator(
 	/// </returns>
 	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, string? secret, string authenticationMethod)
 	{
-		if (clientId == null)
+		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
 		{
 			return null;
 		}
@@ -66,7 +66,7 @@ public abstract class ClientSecretAuthenticator(
 			return null;
 		}
 
-		if (client.ClientSecrets?.Length == 0 || !secret.HasValue())
+		if (client.ClientSecrets?.Length == 0)
 		{
 			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
 			return null;

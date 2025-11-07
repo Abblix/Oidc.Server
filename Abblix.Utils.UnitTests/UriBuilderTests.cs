@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Microsoft.AspNetCore.Http;
-using Xunit;
 
 namespace Abblix.Utils.UnitTests;
 

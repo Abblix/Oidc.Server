@@ -27,11 +27,27 @@ using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
 
+/// <summary>
+/// Unit tests for JWT (JSON Web Token) encryption and signing full lifecycle.
+/// Tests the complete cycle of creating, signing, encrypting, decrypting, validating, and verifying JWTs,
+/// including expiration handling per RFC 7519 (JWT), RFC 7515 (JWS), and RFC 7516 (JWE).
+/// </summary>
 public class JwtEncryptionTests
 {
     private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
 
+    /// <summary>
+    /// Verifies the complete JWT lifecycle: create → sign → encrypt → decrypt → validate → verify → expire.
+    /// Tests that:
+    /// - JWT can be created with header (algorithm RS256) and payload (claims, timestamps)
+    /// - Token is signed with RSA private key (JWS - RFC 7515)
+    /// - Token is encrypted with RSA public key (JWE - RFC 7516)
+    /// - Token can be decrypted with RSA private key
+    /// - Token signature validates correctly
+    /// - All claims round-trip correctly (simple, structured objects, arrays)
+    /// - Token expiration is enforced after ExpiresAt timestamp
+    /// </summary>
     [Fact]
     public async Task JwtFullCycleTest()
     {

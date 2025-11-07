@@ -222,6 +222,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
+            .AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
             .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
     }
