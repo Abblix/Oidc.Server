@@ -53,7 +53,7 @@ public class TokenContextValidatorCompositeTests
     public async Task ValidateAsync_WithNoValidators_ShouldSucceed()
     {
         // Arrange
-        var validator = new TokenContextValidatorComposite(Array.Empty<ITokenContextValidator>());
+        var validator = new TokenContextValidatorComposite([]);
         var context = CreateContext();
 
         // Act
@@ -79,12 +79,11 @@ public class TokenContextValidatorCompositeTests
         validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
         validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -111,11 +110,10 @@ public class TokenContextValidatorCompositeTests
 
         validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error1);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
-            validator2.Object,
-        });
+            validator2.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -143,12 +141,11 @@ public class TokenContextValidatorCompositeTests
         validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
         validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error2);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -178,12 +175,11 @@ public class TokenContextValidatorCompositeTests
         validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
         validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error3);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -222,12 +218,11 @@ public class TokenContextValidatorCompositeTests
             .Callback(new Action<TokenValidationContext>(_ => callOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -258,11 +253,10 @@ public class TokenContextValidatorCompositeTests
             .Callback(new Action<TokenValidationContext>(ctx => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new TokenContextValidatorComposite(new[]
-        {
+        var composite = new TokenContextValidatorComposite([
             validator1.Object,
-            validator2.Object,
-        });
+            validator2.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -285,7 +279,7 @@ public class TokenContextValidatorCompositeTests
         var validator = new Mock<ITokenContextValidator>(MockBehavior.Strict);
         validator.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
 
-        var composite = new TokenContextValidatorComposite(new[] { validator.Object });
+        var composite = new TokenContextValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act

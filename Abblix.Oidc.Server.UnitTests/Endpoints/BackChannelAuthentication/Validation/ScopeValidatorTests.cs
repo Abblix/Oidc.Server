@@ -56,7 +56,7 @@ public class ScopeValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = scopes ?? new[] { "openid" }
+            Scope = scopes ?? ["openid"]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -91,7 +91,7 @@ public class ScopeValidatorTests
                 return true;
             }));
 
-        var context = CreateContext(scopes: new[] { "openid" });
+        var context = CreateContext(scopes: ["openid"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -111,7 +111,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            scopes: new[] { "openid", "offline_access" },
+            scopes: ["openid", "offline_access"],
             offlineAccessAllowed: false);
 
         // Act
@@ -151,7 +151,7 @@ public class ScopeValidatorTests
             }));
 
         var context = CreateContext(
-            scopes: new[] { "openid", "offline_access" },
+            scopes: ["openid", "offline_access"],
             offlineAccessAllowed: true);
 
         // Act
@@ -179,7 +179,7 @@ public class ScopeValidatorTests
                 return false;
             }));
 
-        var context = CreateContext(scopes: new[] { "unknown_scope" });
+        var context = CreateContext(scopes: ["unknown_scope"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -226,7 +226,7 @@ public class ScopeValidatorTests
                 return true;
             }));
 
-        var context = CreateContext(scopes: new[] { "openid", "profile", "email" });
+        var context = CreateContext(scopes: ["openid", "profile", "email"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -269,8 +269,8 @@ public class ScopeValidatorTests
             }));
 
         var context = CreateContext(
-            scopes: new[] { "openid", "api:read" },
-            resources: new[] { resourceDefinition });
+            scopes: ["openid", "api:read"],
+            resources: [resourceDefinition]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -299,7 +299,7 @@ public class ScopeValidatorTests
                 return true;
             }));
 
-        var context = CreateContext(scopes: new[] { "openid" });
+        var context = CreateContext(scopes: ["openid"]);
 
         // Act
         await _validator.ValidateAsync(context);
@@ -336,7 +336,7 @@ public class ScopeValidatorTests
                 return false;
             }));
 
-        var context = CreateContext(scopes: new[] { "openid", "unknown", "profile" });
+        var context = CreateContext(scopes: ["openid", "unknown", "profile"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -355,7 +355,7 @@ public class ScopeValidatorTests
     {
         // Arrange - No scope manager setup, should fail on offline_access check first
         var context = CreateContext(
-            scopes: new[] { "openid", "offline_access" },
+            scopes: ["openid", "offline_access"],
             offlineAccessAllowed: false);
 
         // Act

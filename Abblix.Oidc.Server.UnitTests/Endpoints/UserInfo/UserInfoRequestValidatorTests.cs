@@ -33,7 +33,6 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -106,7 +105,7 @@ public class UserInfoRequestValidatorTests
     {
         return new AuthorizationContext(
             clientId: clientId,
-            scope: new[] { "openid", "profile" },
+            scope: ["openid", "profile"],
             requestedClaims: null);
     }
 

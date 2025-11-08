@@ -66,7 +66,7 @@ public class UserCodeValidatorTests
 
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             UserCode = userCode
         };
 

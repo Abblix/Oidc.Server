@@ -74,11 +74,11 @@ public class TokenHandlerTests
                 "local"),
             new Abblix.Oidc.Server.Common.AuthorizationContext(
                 "client_123",
-                Array.Empty<string>(),
+                [],
                 null)),
         new ClientInfo("client_123"),
-        Array.Empty<ScopeDefinition>(),
-        Array.Empty<ResourceDefinition>());
+        [],
+        []);
 
     private static TokenIssued CreateTokenIssued()
     {

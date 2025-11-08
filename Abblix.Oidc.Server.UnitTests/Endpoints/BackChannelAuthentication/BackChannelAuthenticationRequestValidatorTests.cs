@@ -59,7 +59,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = "user@example.com"
         };
 
@@ -71,8 +71,8 @@ public class BackChannelAuthenticationRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
-                ctx.Scope = new[] { new ScopeDefinition("openid", Array.Empty<string>()) };
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [new ScopeDefinition("openid", Array.Empty<string>())];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -99,7 +99,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" }
+            Scope = ["openid"]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -128,7 +128,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid", "profile" },
+            Scope = ["openid", "profile"],
             LoginHint = "user@example.com",
             BindingMessage = "Test message"
         };
@@ -148,8 +148,8 @@ public class BackChannelAuthenticationRequestValidatorTests
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -174,7 +174,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHintToken = "jwt-token"
         };
 
@@ -189,8 +189,8 @@ public class BackChannelAuthenticationRequestValidatorTests
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.LoginHintToken = loginHintToken;
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -213,7 +213,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             IdTokenHint = "id-token"
         };
 
@@ -228,8 +228,8 @@ public class BackChannelAuthenticationRequestValidatorTests
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.IdToken = idToken;
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -252,7 +252,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid", "profile", "email" },
+            Scope = ["openid", "profile", "email"],
             LoginHint = "user@example.com"
         };
 
@@ -272,7 +272,7 @@ public class BackChannelAuthenticationRequestValidatorTests
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = scopeDefinitions;
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -297,9 +297,9 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = "user@example.com",
-            Resources = new[] { new Uri("https://api1.example.com"), new Uri("https://api2.example.com") }
+            Resources = [new Uri("https://api1.example.com"), new Uri("https://api2.example.com")]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -316,7 +316,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
-                ctx.Scope = Array.Empty<ScopeDefinition>();
+                ctx.Scope = [];
                 ctx.Resources = resourceDefinitions;
             }))
             .ReturnsAsync((OidcError?)null);
@@ -341,9 +341,9 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = "user@example.com",
-            RequestedExpiry = 300 // 5 minutes
+            RequestedExpiry = TimeSpan.FromSeconds(300) // 5 minutes
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -354,8 +354,8 @@ public class BackChannelAuthenticationRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromSeconds(300);
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -377,7 +377,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = "user@example.com"
         };
 
@@ -389,8 +389,8 @@ public class BackChannelAuthenticationRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
 
@@ -411,7 +411,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" }
+            Scope = ["openid"]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };

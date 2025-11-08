@@ -41,14 +41,6 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 public class ClientCredentialsGrantHandlerTests
 {
     private const string ClientId = "service_client_123";
-    private const string SessionId = "session_123";
-
-    private static Mock<ISessionIdGenerator> CreateSessionIdGenerator()
-    {
-        var mock = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
-        mock.Setup(g => g.GenerateSessionId()).Returns(SessionId);
-        return mock;
-    }
 
     /// <summary>
     /// Verifies that a client credentials request with requested scopes successfully returns a grant.
@@ -60,8 +52,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var requestedScopes = new[] { "api.read", "api.write" };
         var tokenRequest = new TokenRequest
@@ -92,13 +83,9 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
-        var tokenRequest = new TokenRequest
-        {
-            Scope = null
-        };
+        var tokenRequest = new TokenRequest { Scope = null! };
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -119,8 +106,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest
         {
@@ -147,8 +133,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
@@ -170,8 +155,7 @@ public class ClientCredentialsGrantHandlerTests
         var callCount = 0;
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns(() => $"session_{++callCount}");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
@@ -197,8 +181,9 @@ public class ClientCredentialsGrantHandlerTests
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
         var fixedTime = new DateTimeOffset(2024, 11, 6, 12, 0, 0, TimeSpan.Zero);
-        var timeProvider = new FakeTimeProvider(fixedTime);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var timeProvider = new Mock<TimeProvider>();
+        timeProvider.Setup(t => t.GetUtcNow()).Returns(fixedTime);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider.Object);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
@@ -219,8 +204,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
@@ -241,8 +225,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
@@ -263,8 +246,7 @@ public class ClientCredentialsGrantHandlerTests
     {
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>();
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
 
         // Act
         var grantTypes = handler.GrantTypesSupported.ToArray();
@@ -283,8 +265,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo = new ClientInfo(ClientId);
         var requestedScopes = new[] { "api.read", "api.write", "api.delete", "admin" };
         var tokenRequest = new TokenRequest
@@ -309,8 +290,7 @@ public class ClientCredentialsGrantHandlerTests
         // Arrange
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
         var clientInfo1 = new ClientInfo("client1");
         var clientInfo2 = new ClientInfo("client2");
         var tokenRequest = new TokenRequest { Scope = ["api.read"] };
@@ -326,17 +306,5 @@ public class ClientCredentialsGrantHandlerTests
         Assert.Equal("client2", grant2.Context.ClientId);
         Assert.Equal("client1", grant1.AuthSession.Subject);
         Assert.Equal("client2", grant2.AuthSession.Subject);
-    }
-
-    /// <summary>
-    /// Fake TimeProvider for testing time-dependent logic.
-    /// </summary>
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FakeTimeProvider(DateTimeOffset now) => _now = now;
-
-        public override DateTimeOffset GetUtcNow() => _now;
     }
 }

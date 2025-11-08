@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -57,7 +58,7 @@ public class UserIdentityValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = loginHint,
             LoginHintToken = loginHintToken,
             IdTokenHint = idTokenHint
@@ -138,11 +139,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_WithValidLoginHintTokenJwt_ShouldReturnNull()
     {
         // Arrange
-        var token = new JsonWebToken(new JsonWebTokenHeader(), new JsonWebTokenPayload());
+        var token = new JsonWebToken();
         var validToken = new ValidJsonWebToken(token);
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token"))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((validToken, new ClientInfo("test-client")));
 
         var context = CreateContext(
@@ -165,11 +166,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_LoginHintTokenForDifferentClient_ShouldReturnInvalidRequest()
     {
         // Arrange
-        var token = new JsonWebToken(new JsonWebTokenHeader(), new JsonWebTokenPayload());
+        var token = new JsonWebToken();
         var validToken = new ValidJsonWebToken(token);
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token"))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((validToken, new ClientInfo("different-client")));
 
         var context = CreateContext(
@@ -193,10 +194,10 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_LoginHintTokenValidationFails_ShouldReturnInvalidRequest()
     {
         // Arrange
-        var validationError = new JwtValidationError(JwtError.InvalidSignature, "Invalid signature");
+        var validationError = new JwtValidationError(JwtError.TokenAlreadyUsed, "Already used");
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync("invalid-jwt"))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((validationError, (ClientInfo?)null));
 
         var context = CreateContext(
@@ -223,7 +224,7 @@ public class UserIdentityValidatorTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Not a JWT");
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync("not-jwt"))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((validationError, (ClientInfo?)null));
 
         var context = CreateContext(
@@ -245,13 +246,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_WithValidIdTokenHint_ShouldReturnNull()
     {
         // Arrange
-        var token = new JsonWebToken(
-            new JsonWebTokenHeader(),
-            new JsonWebTokenPayload { Audiences = new[] { "test-client" } });
+        var token = new JsonWebToken { Payload = { Audiences = ["test-client"] } };
         var validToken = new ValidJsonWebToken(token);
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync("id-token", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validToken);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -272,13 +271,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_IdTokenHintWrongAudience_ShouldReturnInvalidRequest()
     {
         // Arrange
-        var token = new JsonWebToken(
-            new JsonWebTokenHeader(),
-            new JsonWebTokenPayload { Audiences = new[] { "different-client" } });
+        var token = new JsonWebToken { Payload = { Audiences = ["different-client"] } };
         var validToken = new ValidJsonWebToken(token);
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync("id-token", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validToken);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -300,10 +297,10 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_IdTokenHintValidationFails_ShouldReturnInvalidRequest()
     {
         // Arrange
-        var validationError = new JwtValidationError(JwtError.InvalidSignature, "Invalid signature");
+        var validationError = new JwtValidationError(JwtError.TokenAlreadyUsed, "Already used");
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync("invalid-id-token", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         var context = CreateContext(idTokenHint: "invalid-id-token");
@@ -368,15 +365,13 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_IdTokenHintValidation_ShouldSkipLifetimeCheck()
     {
         // Arrange
-        var token = new JsonWebToken(
-            new JsonWebTokenHeader(),
-            new JsonWebTokenPayload { Audiences = new[] { "test-client" } });
+        var token = new JsonWebToken { Payload = { Audiences = ["test-client"] } };
         var validToken = new ValidJsonWebToken(token);
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
-            .Setup(v => v.ValidateAsync("id-token", It.IsAny<ValidationOptions>()))
-            .Callback<string, ValidationOptions>((_, opts) => capturedOptions = opts)
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
             .ReturnsAsync(validToken);
 
         var context = CreateContext(idTokenHint: "id-token");

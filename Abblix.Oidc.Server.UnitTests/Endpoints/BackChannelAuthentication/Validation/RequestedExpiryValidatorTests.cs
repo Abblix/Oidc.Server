@@ -63,8 +63,7 @@ public class RequestedExpiryValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            ClientId = "test-client",
-            Scope = "openid",
+            Scope = ["openid"],
             RequestedExpiry = requestedExpiry
         };
 

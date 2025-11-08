@@ -22,9 +22,7 @@
 
 using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;

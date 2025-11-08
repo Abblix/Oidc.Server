@@ -24,7 +24,6 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -52,7 +51,7 @@ public class EndSessionContextValidatorCompositeTests
     public async Task ValidateAsync_WithNoValidators_ShouldSucceed()
     {
         // Arrange
-        var validator = new EndSessionContextValidatorComposite(Array.Empty<IEndSessionContextValidator>());
+        var validator = new EndSessionContextValidatorComposite([]);
         var context = CreateContext();
 
         // Act
@@ -78,12 +77,11 @@ public class EndSessionContextValidatorCompositeTests
         validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
         validator3.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -110,11 +108,10 @@ public class EndSessionContextValidatorCompositeTests
 
         validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error1);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
-            validator2.Object,
-        });
+            validator2.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -142,12 +139,11 @@ public class EndSessionContextValidatorCompositeTests
         validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
         validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error2);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -177,12 +173,11 @@ public class EndSessionContextValidatorCompositeTests
         validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
         validator3.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error3);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -221,12 +216,11 @@ public class EndSessionContextValidatorCompositeTests
             .Callback(new Action<EndSessionValidationContext>(_ => callOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
             validator2.Object,
-            validator3.Object,
-        });
+            validator3.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -257,11 +251,10 @@ public class EndSessionContextValidatorCompositeTests
             .Callback(new Action<EndSessionValidationContext>(ctx => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
-            validator2.Object,
-        });
+            validator2.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -292,11 +285,10 @@ public class EndSessionContextValidatorCompositeTests
             .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new EndSessionContextValidatorComposite(new[]
-        {
+        var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
-            validator2.Object,
-        });
+            validator2.Object
+        ]);
         var context = CreateContext();
 
         // Act
@@ -318,7 +310,7 @@ public class EndSessionContextValidatorCompositeTests
         var validator = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
         validator.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
 
-        var composite = new EndSessionContextValidatorComposite(new[] { validator.Object });
+        var composite = new EndSessionContextValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act

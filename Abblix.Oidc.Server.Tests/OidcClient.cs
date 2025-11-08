@@ -56,11 +56,14 @@ public class OidcClient : IDisposable
 	{
 		var discoveryResponse = JsonDocument.Parse(await _client.GetStringAsync(".well-known/openid-configuration"));
 
-		Uri Discover(string name) => Uri.TryCreate(discoveryResponse.RootElement.GetProperty(name).GetString(), UriKind.RelativeOrAbsolute, out var uri) ? uri : default;
-
 		_authorizationEndpoint = Discover("authorization_endpoint");
 		_tokenEndpoint = Discover("token_endpoint");
 		_userInfoEndpoint = Discover("userinfo_endpoint");
+		return;
+
+		Uri Discover(string name) => new(
+			discoveryResponse.RootElement.GetProperty(name).GetString() ?? string.Empty,
+			UriKind.RelativeOrAbsolute);
 	}
 
 	public async Task<HttpResponseMessage> Authorize(IDictionary<string, string> parameters)
@@ -125,10 +128,8 @@ public class OidcClient : IDisposable
 	{
 		var authenticationHeaderValue = new AuthenticationHeaderValue(tokenType, accessToken);
 
-		using var request = new HttpRequestMessage(HttpMethod.Get, _userInfoEndpoint)
-		{
-			Headers = { Authorization = authenticationHeaderValue },
-		};
+		using var request = new HttpRequestMessage(HttpMethod.Get, _userInfoEndpoint);
+		request.Headers.Authorization = authenticationHeaderValue;
 
 		using var userInfoResponse = await _client.SendAsync(request);
 

@@ -24,9 +24,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Storages;
@@ -80,9 +84,9 @@ public class AuthorizationRequestProcessorTests
         var authRequest = new AuthorizationRequest
         {
             ClientId = "client_123",
-            ResponseType = responseType ?? new[] { ResponseTypes.Code },
+            ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = scope ?? new[] { Scopes.OpenId },
+            Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,
             AcrValues = acrValues,
@@ -93,19 +97,28 @@ public class AuthorizationRequestProcessorTests
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
         };
 
-        return new ValidAuthorizationRequest(authRequest, clientInfo);
+        var context = new AuthorizationValidationContext(authRequest)
+        {
+            ClientInfo = clientInfo,
+            ResponseMode = ResponseModes.Query,
+            Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
+            Resources = [],
+        };
+
+        return new ValidAuthorizationRequest(context);
     }
 
-    private AuthSession CreateAuthSession(
+    private static AuthSession CreateAuthSession(
         string sessionId = "session_123",
         DateTimeOffset? authTime = null,
         string? acr = null)
     {
-        return new AuthSession
+        return new AuthSession(
+            Subject: "user_123",
+            SessionId: sessionId,
+            AuthenticationTime: authTime ?? DateTimeOffset.UtcNow,
+            IdentityProvider: "local")
         {
-            SessionId = sessionId,
-            Subject = "user_123",
-            AuthenticationTime = authTime ?? DateTimeOffset.UtcNow,
             AuthContextClassRef = acr,
             AffectedClientIds = new List<string>(),
         };
@@ -119,16 +132,12 @@ public class AuthorizationRequestProcessorTests
     {
         return new UserConsents
         {
-            Granted = new ConsentDefinition
-            {
-                Scopes = grantedScopes ?? new[] { new ScopeDefinition(Scopes.OpenId) },
-                Resources = grantedResources ?? Array.Empty<ResourceDefinition>(),
-            },
-            Pending = new ConsentDefinition
-            {
-                Scopes = pendingScopes ?? Array.Empty<ScopeDefinition>(),
-                Resources = pendingResources ?? Array.Empty<ResourceDefinition>(),
-            },
+            Granted = new ConsentDefinition(
+                Scopes: grantedScopes ?? [new ScopeDefinition(Scopes.OpenId)],
+                Resources: grantedResources ?? []),
+            Pending = new ConsentDefinition(
+                Scopes: pendingScopes ?? [],
+                Resources: pendingResources ?? []),
         };
     }
 
@@ -198,7 +207,7 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         var loginRequired = Assert.IsType<LoginRequired>(result);
-        Assert.Same(request.Model, loginRequired.Request);
+        Assert.Same(request.Model, loginRequired.Model);
     }
 
     /// <summary>
@@ -243,8 +252,8 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         var accountSelection = Assert.IsType<AccountSelectionRequired>(result);
-        Assert.Equal(3, accountSelection.AuthSessions.Length);
-        Assert.Equal(sessions, accountSelection.AuthSessions);
+        Assert.Equal(3, accountSelection.Users.Length);
+        Assert.Equal(sessions, accountSelection.Users);
     }
 
     /// <summary>
@@ -267,7 +276,7 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         var accountSelection = Assert.IsType<AccountSelectionRequired>(result);
-        Assert.Single(accountSelection.AuthSessions);
+        Assert.Single(accountSelection.Users);
     }
 
     /// <summary>
@@ -280,7 +289,7 @@ public class AuthorizationRequestProcessorTests
         // Arrange
         var request = CreateRequest(prompt: Prompts.None);
         var session = CreateAuthSession();
-        var consents = CreateConsents(pendingScopes: new[] { new ScopeDefinition("email") });
+        var consents = CreateConsents(pendingScopes: [new ScopeDefinition("email")]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -325,7 +334,7 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         var consentRequired = Assert.IsType<ConsentRequired>(result);
-        Assert.Equal(pendingScopes, consentRequired.Consent.Scopes);
+        Assert.Equal(pendingScopes, consentRequired.RequiredUserConsents.Scopes);
     }
 
     /// <summary>
@@ -354,7 +363,7 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         var consentRequired = Assert.IsType<ConsentRequired>(result);
-        Assert.Equal(pendingResources, consentRequired.Consent.Resources);
+        Assert.Equal(pendingResources, consentRequired.RequiredUserConsents.Resources);
     }
 
     /// <summary>
@@ -365,7 +374,7 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithResponseTypeCode_ShouldGenerateAuthorizationCode()
     {
         // Arrange
-        var request = CreateRequest(responseType: new[] { ResponseTypes.Code });
+        var request = CreateRequest(responseType: [ResponseTypes.Code]);
         var session = CreateAuthSession();
         var consents = CreateConsents();
         var expectedCode = "auth_code_123";
@@ -406,10 +415,11 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithResponseTypeToken_ShouldGenerateAccessToken()
     {
         // Arrange
-        var request = CreateRequest(responseType: new[] { ResponseTypes.Token });
+        var request = CreateRequest(responseType: [ResponseTypes.Token]);
         var session = CreateAuthSession();
         var consents = CreateConsents();
-        var expectedToken = new EncodedJsonWebToken("access_token_jwt");
+        var jwt = new JsonWebToken();
+        var expectedToken = new EncodedJsonWebToken(jwt, "access_token_jwt");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -446,10 +456,11 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithResponseTypeIdToken_ShouldGenerateIdToken()
     {
         // Arrange
-        var request = CreateRequest(responseType: new[] { ResponseTypes.IdToken });
+        var request = CreateRequest(responseType: [ResponseTypes.IdToken]);
         var session = CreateAuthSession();
         var consents = CreateConsents();
-        var expectedIdToken = "id_token_jwt";
+        var jwt = new JsonWebToken();
+        var expectedIdToken = new EncodedJsonWebToken(jwt, "id_token_jwt");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -480,7 +491,7 @@ public class AuthorizationRequestProcessorTests
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
         Assert.Null(success.Code);
         Assert.Null(success.AccessToken);
-        Assert.Equal(expectedIdToken, success.IdToken);
+        Assert.Same(expectedIdToken, success.IdToken);
     }
 
     /// <summary>
@@ -491,11 +502,12 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithResponseTypeCodeToken_ShouldGenerateBoth()
     {
         // Arrange
-        var request = CreateRequest(responseType: new[] { ResponseTypes.Code, ResponseTypes.Token });
+        var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.Token]);
         var session = CreateAuthSession();
         var consents = CreateConsents();
         var expectedCode = "auth_code_123";
-        var expectedToken = new EncodedJsonWebToken("access_token_jwt");
+        var jwt = new JsonWebToken();
+        var expectedToken = new EncodedJsonWebToken(jwt, "access_token_jwt");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -582,7 +594,7 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithAcrValues_ShouldFilterByAcr()
     {
         // Arrange
-        var request = CreateRequest(acrValues: new[] { "acr:high", "acr:medium" });
+        var request = CreateRequest(acrValues: ["acr:high", "acr:medium"]);
 
         var lowAcrSession = CreateAuthSession("low", acr: "acr:low");
         var highAcrSession = CreateAuthSession("high", acr: "acr:high");
@@ -703,9 +715,9 @@ public class AuthorizationRequestProcessorTests
         var authRequest = new AuthorizationRequest
         {
             ClientId = "client_123",
-            ResponseType = new[] { ResponseTypes.Code },
+            ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = new[] { Scopes.OpenId },
+            Scope = [Scopes.OpenId, "email"],
             Nonce = nonce,
             CodeChallenge = codeChallenge,
             CodeChallengeMethod = codeChallengeMethod,
@@ -716,11 +728,20 @@ public class AuthorizationRequestProcessorTests
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
         };
 
-        var request = new ValidAuthorizationRequest(authRequest, clientInfo);
-        var session = CreateAuthSession();
-
         var grantedScopes = new[] { new ScopeDefinition(Scopes.OpenId), new ScopeDefinition("email") };
         var grantedResources = new[] { new ResourceDefinition(new Uri("https://api.example.com")) };
+
+        var context = new AuthorizationValidationContext(authRequest)
+        {
+            ClientInfo = clientInfo,
+            ResponseMode = ResponseModes.Query,
+            Scope = grantedScopes,
+            Resources = grantedResources,
+        };
+
+        var request = new ValidAuthorizationRequest(context);
+        var session = CreateAuthSession();
+
         var consents = CreateConsents(grantedScopes: grantedScopes, grantedResources: grantedResources);
 
         AuthorizedGrant? capturedGrant = null;
@@ -749,13 +770,400 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         Assert.NotNull(capturedGrant);
-        var context = capturedGrant.AuthorizationContext;
-        Assert.Equal("client_123", context.ClientId);
-        Assert.Equal(grantedScopes, context.Scope);
-        Assert.Equal(grantedResources, context.Resources);
-        Assert.Equal(nonce, context.Nonce);
-        Assert.Equal(codeChallenge, context.CodeChallenge);
-        Assert.Equal(codeChallengeMethod, context.CodeChallengeMethod);
-        Assert.Equal(request.Model.RedirectUri, context.RedirectUri);
+        var authContext = capturedGrant.Context;
+        Assert.Equal("client_123", authContext.ClientId);
+        Assert.Equal(grantedScopes.Select(s => s.Scope).ToArray(), authContext.Scope);
+        Assert.Equal(grantedResources.Select(r => r.Resource).ToArray(), authContext.Resources);
+        Assert.Equal(nonce, authContext.Nonce);
+        Assert.Equal(codeChallenge, authContext.CodeChallenge);
+        Assert.Equal(codeChallengeMethod, authContext.CodeChallengeMethod);
+        Assert.Equal(request.Model.RedirectUri, authContext.RedirectUri);
+    }
+
+    /// <summary>
+    /// Verifies hybrid flow with code and id_token.
+    /// Per OIDC Hybrid Flow, response_type=code id_token generates both.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeCodeIdToken_ShouldGenerateBoth()
+    {
+        // Arrange
+        var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        var expectedCode = "auth_code_123";
+        var jwt = new JsonWebToken();
+        var expectedIdToken = new EncodedJsonWebToken(jwt, "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync(expectedCode);
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                false,
+                expectedCode,
+                null))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Equal(expectedCode, success.Code);
+        Assert.Null(success.AccessToken);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// Verifies hybrid flow with token and id_token.
+    /// Per OIDC Hybrid Flow, response_type=token id_token generates both.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeTokenIdToken_ShouldGenerateBoth()
+    {
+        // Arrange
+        var request = CreateRequest(responseType: [ResponseTypes.Token, ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        var accessJwt = new JsonWebToken();
+        var expectedToken = new EncodedJsonWebToken(accessJwt, "access_token_jwt");
+        var idJwt = new JsonWebToken();
+        var expectedIdToken = new EncodedJsonWebToken(idJwt, "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .ReturnsAsync(expectedToken);
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                false,
+                null,
+                expectedToken.EncodedJwt))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Null(success.Code);
+        Assert.Same(expectedToken, success.AccessToken);
+        Assert.Equal(TokenTypes.Bearer, success.TokenType);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// Verifies hybrid flow with all three response types.
+    /// Per OIDC Hybrid Flow, response_type=code token id_token generates all three.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeCodeTokenIdToken_ShouldGenerateAll()
+    {
+        // Arrange
+        var request = CreateRequest(
+            responseType: [ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        var expectedCode = "auth_code_123";
+        var accessJwt = new JsonWebToken();
+        var expectedToken = new EncodedJsonWebToken(accessJwt, "access_token_jwt");
+        var idJwt = new JsonWebToken();
+        var expectedIdToken = new EncodedJsonWebToken(idJwt, "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync(expectedCode);
+
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .ReturnsAsync(expectedToken);
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                false,
+                expectedCode,
+                expectedToken.EncodedJwt))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Equal(expectedCode, success.Code);
+        Assert.Same(expectedToken, success.AccessToken);
+        Assert.Equal(TokenTypes.Bearer, success.TokenType);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// Verifies successful authorization with all session data passed to tokens.
+    /// Session details should be included in authorization grant.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ShouldPassSessionToTokenServices()
+    {
+        // Arrange
+        var request = CreateRequest(responseType: [ResponseTypes.Code]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.Is<AuthorizedGrant>(g => g.AuthSession == session),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        // Act
+        await _processor.ProcessAsync(request);
+
+        // Assert
+        _authorizationCodeService.Verify(
+            s => s.GenerateAuthorizationCodeAsync(
+                It.Is<AuthorizedGrant>(g => g.AuthSession == session),
+                request.ClientInfo.AuthorizationCodeExpiresIn),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies prompt=none with single valid session succeeds.
+    /// When prompt=none and exactly one session exists with all consents granted, authorization succeeds.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptNoneAndSingleSession_ShouldSucceed()
+    {
+        // Arrange
+        var request = CreateRequest(prompt: Prompts.None);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+    }
+
+    /// <summary>
+    /// Verifies max_age parameter filters all sessions when all are too old.
+    /// When max_age excludes all sessions, LoginRequired should be returned.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithMaxAgeExcludingAllSessions_ShouldReturnLoginRequired()
+    {
+        // Arrange
+        var now = DateTimeOffset.UtcNow;
+        var maxAge = TimeSpan.FromMinutes(30);
+        var request = CreateRequest(maxAge: maxAge);
+
+        var oldSession1 = CreateAuthSession("old1", authTime: now - TimeSpan.FromHours(2));
+        var oldSession2 = CreateAuthSession("old2", authTime: now - TimeSpan.FromHours(1));
+
+        _timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { oldSession1, oldSession2 }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<LoginRequired>(result);
+    }
+
+    /// <summary>
+    /// Verifies ACR filtering excludes all sessions when none match.
+    /// When requested ACR values don't match any session, LoginRequired should be returned.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithAcrValuesExcludingAllSessions_ShouldReturnLoginRequired()
+    {
+        // Arrange
+        var request = CreateRequest(acrValues: ["acr:high", "acr:medium"]);
+
+        var lowAcrSession1 = CreateAuthSession("low1", acr: "acr:low");
+        var lowAcrSession2 = CreateAuthSession("low2", acr: "acr:basic");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { lowAcrSession1, lowAcrSession2 }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<LoginRequired>(result);
+    }
+
+    /// <summary>
+    /// Verifies successful authorization includes session ID in result.
+    /// Session ID should be preserved in the authentication result.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ShouldIncludeSessionIdInResult()
+    {
+        // Arrange
+        var sessionId = "test_session_id_123";
+        var request = CreateRequest();
+        var session = CreateAuthSession(sessionId: sessionId);
+        var consents = CreateConsents();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Equal(sessionId, success.SessionId);
+    }
+
+    /// <summary>
+    /// Verifies ID token generation when it's the only response type.
+    /// When response_type=id_token only, at_hash and c_hash should not be included.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithIdTokenOnly_ShouldNotIncludeHashClaims()
+    {
+        // Arrange
+        var request = CreateRequest(responseType: [ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        var jwt = new JsonWebToken();
+        var expectedIdToken = new EncodedJsonWebToken(jwt, "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                true,
+                null,
+                null))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        await _processor.ProcessAsync(request);
+
+        // Assert
+        _identityTokenService.Verify(
+            s => s.CreateIdentityTokenAsync(
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                true,
+                null,
+                null),
+            Times.Once);
     }
 }

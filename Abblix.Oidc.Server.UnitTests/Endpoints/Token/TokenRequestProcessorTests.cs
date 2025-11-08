@@ -84,8 +84,8 @@ public class TokenRequestProcessorTests
             tokenRequest,
             authorizedGrant,
             new ClientInfo("client_123"),
-            Array.Empty<ScopeDefinition>(),
-            Array.Empty<ResourceDefinition>());
+            [],
+            []);
     }
 
     private static EncodedJsonWebToken CreateAccessToken() => new(
@@ -108,9 +108,9 @@ public class TokenRequestProcessorTests
     public async Task ProcessAsync_ShouldAlwaysCreateAccessToken()
     {
         // Arrange
-        var request = CreateValidTokenRequest(Array.Empty<string>());
+        var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", Array.Empty<string>(), null);
+        var authContext = new AuthorizationContext("client_123", [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -365,9 +365,9 @@ public class TokenRequestProcessorTests
     public async Task ProcessAsync_ShouldReturnBearerTokenType()
     {
         // Arrange
-        var request = CreateValidTokenRequest(Array.Empty<string>());
+        var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", Array.Empty<string>(), null);
+        var authContext = new AuthorizationContext("client_123", [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -396,9 +396,9 @@ public class TokenRequestProcessorTests
     public async Task ProcessAsync_ShouldSetExpiresInFromClientInfo()
     {
         // Arrange
-        var request = CreateValidTokenRequest(Array.Empty<string>());
+        var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", Array.Empty<string>(), null);
+        var authContext = new AuthorizationContext("client_123", [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -427,9 +427,9 @@ public class TokenRequestProcessorTests
     public async Task ProcessAsync_ShouldEvaluateAuthorizationContext()
     {
         // Arrange
-        var request = CreateValidTokenRequest(Array.Empty<string>());
+        var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", Array.Empty<string>(), null);
+        var authContext = new AuthorizationContext("client_123", [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -459,9 +459,9 @@ public class TokenRequestProcessorTests
     public async Task ProcessAsync_ShouldPassAuthSessionToServices()
     {
         // Arrange
-        var request = CreateValidTokenRequest(Array.Empty<string>());
+        var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", Array.Empty<string>(), null);
+        var authContext = new AuthorizationContext("client_123", [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -508,8 +508,8 @@ public class TokenRequestProcessorTests
             tokenRequest,
             refreshTokenGrant,
             new ClientInfo("client_123"),
-            Array.Empty<ScopeDefinition>(),
-            Array.Empty<ResourceDefinition>());
+            [],
+            []);
 
         var accessToken = CreateAccessToken();
         var newRefreshToken = CreateRefreshToken();

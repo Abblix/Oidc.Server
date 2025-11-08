@@ -42,7 +42,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             LoginHint = "user@example.com"
         };
 
@@ -73,12 +73,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 
@@ -109,12 +108,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 
@@ -148,12 +146,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 
@@ -189,12 +186,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 
@@ -217,7 +213,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
     public async Task ValidateAsync_WithNoValidators_ShouldReturnNull()
     {
         // Arrange
-        var composite = new BackChannelAuthenticationValidatorComposite(Array.Empty<IBackChannelAuthenticationContextValidator>());
+        var composite = new BackChannelAuthenticationValidatorComposite([]);
         var context = CreateContext();
 
         // Act
@@ -239,7 +235,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[] { validator.Object });
+        var composite = new BackChannelAuthenticationValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
@@ -264,7 +260,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         validator.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[] { validator.Object });
+        var composite = new BackChannelAuthenticationValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
@@ -302,12 +298,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
             .Callback(new Action<BackChannelAuthenticationValidationContext>(ctx => context3 = ctx))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 
@@ -347,12 +342,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
             .Callback(new Action<BackChannelAuthenticationValidationContext>(_ => executionOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
-        var composite = new BackChannelAuthenticationValidatorComposite(new[]
-        {
+        var composite = new BackChannelAuthenticationValidatorComposite([
             validator1.Object,
             validator2.Object,
             validator3.Object
-        });
+        ]);
 
         var context = CreateContext();
 

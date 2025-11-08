@@ -304,8 +304,9 @@ public class ClientSecretBasicAuthenticatorTests
     {
         // Arrange
         var now = DateTimeOffset.UtcNow;
-        var timeProvider = new FakeTimeProvider(now);
-        var (authenticator, mocks) = CreateAuthenticator(timeProvider);
+        var timeProvider = new Mock<TimeProvider>();
+        timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
+        var (authenticator, mocks) = CreateAuthenticator(timeProvider.Object);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -382,8 +383,9 @@ public class ClientSecretBasicAuthenticatorTests
     {
         // Arrange
         var now = DateTimeOffset.UtcNow;
-        var timeProvider = new FakeTimeProvider(now);
-        var (authenticator, mocks) = CreateAuthenticator(timeProvider);
+        var timeProvider = new Mock<TimeProvider>();
+        timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
+        var (authenticator, mocks) = CreateAuthenticator(timeProvider.Object);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -579,15 +581,4 @@ public class ClientSecretBasicAuthenticatorTests
         public Mock<IClientInfoProvider> ClientInfoProvider { get; init; } = null!;
     }
 
-    /// <summary>
-    /// Fake TimeProvider for testing time-dependent logic.
-    /// </summary>
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FakeTimeProvider(DateTimeOffset now) => _now = now;
-
-        public override DateTimeOffset GetUtcNow() => _now;
-    }
 }

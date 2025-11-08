@@ -66,7 +66,7 @@ public class AuthorizationGrantValidatorTests
 
         var clientInfo = new ClientInfo("client_123")
         {
-            AllowedGrantTypes = allowedGrantTypes ?? new[] { grantType },
+            AllowedGrantTypes = allowedGrantTypes ?? [grantType],
         };
         context.ClientInfo = clientInfo;
 
@@ -83,7 +83,7 @@ public class AuthorizationGrantValidatorTests
 
         var authContext = new AuthorizationContext(
             clientId: "client_123",
-            scope: new[] { "openid" },
+            scope: ["openid"],
             requestedClaims: null)
         {
             RedirectUri = redirectUri,
@@ -106,7 +106,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -126,7 +126,7 @@ public class AuthorizationGrantValidatorTests
         // Arrange
         var context = CreateContext(
             grantType: GrantTypes.AuthorizationCode,
-            allowedGrantTypes: new[] { GrantTypes.ClientCredentials });
+            allowedGrantTypes: [GrantTypes.ClientCredentials]);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -151,7 +151,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Failure<AuthorizedGrant, OidcError>(grantError));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Failure(grantError));
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -175,7 +175,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -199,7 +199,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -222,7 +222,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(context.Request, context.ClientInfo))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         await _validator.ValidateAsync(context);
@@ -241,7 +241,7 @@ public class AuthorizationGrantValidatorTests
         // Arrange
         var context = CreateContext(
             grantType: GrantTypes.RefreshToken,
-            allowedGrantTypes: new[] { GrantTypes.AuthorizationCode });
+            allowedGrantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
         await _validator.ValidateAsync(context);
@@ -263,7 +263,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         await _validator.ValidateAsync(context);
@@ -282,17 +282,17 @@ public class AuthorizationGrantValidatorTests
         // Arrange
         var context = CreateContext(
             grantType: GrantTypes.RefreshToken,
-            allowedGrantTypes: new[]
-            {
+            allowedGrantTypes:
+            [
                 GrantTypes.AuthorizationCode,
                 GrantTypes.RefreshToken,
                 GrantTypes.ClientCredentials
-            });
+            ]);
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -316,7 +316,7 @@ public class AuthorizationGrantValidatorTests
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
-            .ReturnsAsync(Result.Success<AuthorizedGrant, OidcError>(authorizedGrant));
+            .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
         var error = await _validator.ValidateAsync(context);

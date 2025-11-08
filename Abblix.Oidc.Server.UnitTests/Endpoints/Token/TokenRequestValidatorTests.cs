@@ -69,7 +69,7 @@ public class TokenRequestValidatorTests
             "local"),
         new Abblix.Oidc.Server.Common.AuthorizationContext(
             "client_123",
-            Array.Empty<string>(),
+            [],
             null));
 
     /// <summary>
@@ -89,8 +89,8 @@ public class TokenRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -148,8 +148,8 @@ public class TokenRequestValidatorTests
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -179,8 +179,8 @@ public class TokenRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -213,8 +213,8 @@ public class TokenRequestValidatorTests
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -246,8 +246,8 @@ public class TokenRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -307,8 +307,8 @@ public class TokenRequestValidatorTests
                 capturedContexts.Add(ctx);
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -350,8 +350,8 @@ public class TokenRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 
@@ -389,8 +389,8 @@ public class TokenRequestValidatorTests
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo("client_123");
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
-                ctx.Scope = Array.Empty<ScopeDefinition>();
-                ctx.Resources = Array.Empty<ResourceDefinition>();
+                ctx.Scope = [];
+                ctx.Resources = [];
             })
             .ReturnsAsync((OidcError?)null);
 

@@ -47,14 +47,8 @@ public class ScopeValidatorTests
         _validator = new ScopeValidator(_scopeManager.Object);
     }
 
-    private delegate bool ScopeManagerValidateCallback(
-        string[]? scopes,
-        ResourceDefinition[] resources,
-        [MaybeNullWhen(false)] out ScopeDefinition[] scopeDefinitions,
-        [MaybeNullWhen(true)] out string? errorDescription);
-
     private static TokenValidationContext CreateContext(
-        string[]? scope = null,
+        string[] scope,
         ResourceDefinition[]? resources = null)
     {
         var tokenRequest = new TokenRequest
@@ -71,6 +65,28 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// Helper to setup TryGet mock for a collection of scopes.
+    /// </summary>
+    private void SetupScopeManagerForScopes(params string[] scopes)
+    {
+        foreach (var scope in scopes)
+        {
+            var scopeDef = new ScopeDefinition(scope);
+            _scopeManager
+                .Setup(m => m.TryGet(scope, out It.Ref<ScopeDefinition>.IsAny))
+                .Returns(new ScopeManagerTryGetCallback((string s, out ScopeDefinition def) =>
+                {
+                    def = scopeDef;
+                    return true;
+                }));
+        }
+    }
+
+    private delegate bool ScopeManagerTryGetCallback(
+        string scope,
+        [MaybeNullWhen(false)] out ScopeDefinition definition);
+
+    /// <summary>
     /// Verifies successful validation with valid scopes.
     /// Per OAuth 2.0, scopes must be validated against scope manager.
     /// </summary>
@@ -79,32 +95,16 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(scope: ["read", "write"]);
-        var scopeDefinitions = new[]
-        {
-            new ScopeDefinition("read"),
-            new ScopeDefinition("write"),
-        };
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        SetupScopeManagerForScopes("read", "write");
 
         // Act
         var error = await _validator.ValidateAsync(context);
 
         // Assert
         Assert.Null(error);
-        Assert.Equal(scopeDefinitions, context.Scope);
+        Assert.Equal(2, context.Scope.Length);
+        Assert.Contains(context.Scope, s => s.Scope == "read");
+        Assert.Contains(context.Scope, s => s.Scope == "write");
     }
 
     /// <summary>
@@ -117,18 +117,9 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(scope: ["invalid_scope"]);
 
+        // Don't setup TryGet for "invalid_scope", so it returns false by default
         _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = null!;
-                error = "Invalid scope requested";
-                return false;
-            }))
+            .Setup(m => m.TryGet("invalid_scope", out It.Ref<ScopeDefinition>.IsAny))
             .Returns(false);
 
         // Act
@@ -137,47 +128,28 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidScope, error.Error);
-        Assert.Contains("Invalid scope requested", error.ErrorDescription);
+        Assert.Contains("not available", error.ErrorDescription);
     }
 
     /// <summary>
-    /// Verifies scope manager receives correct parameters.
-    /// Manager should receive scopes and resources from context.
+    /// Verifies scope manager receives correct scope requests via TryGet.
+    /// Manager should be called for each scope in the context.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ShouldPassCorrectParametersToScopeManager()
     {
         // Arrange
         var scopes = new[] { "openid", "profile", "email" };
-        var resources = new[] { new ResourceDefinition(new System.Uri("https://api.example.com")) };
-        var context = CreateContext(scope: scopes, resources: resources);
-        var scopeDefinitions = new[] { new ScopeDefinition("openid") };
-
-        string[]? capturedScopes = null;
-        ResourceDefinition[]? capturedResources = null;
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scp, ResourceDefinition[] res, out ScopeDefinition[] defs, out string? error) =>
-            {
-                capturedScopes = scp;
-                capturedResources = res;
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        var context = CreateContext(scope: scopes);
+        SetupScopeManagerForScopes("openid", "profile", "email");
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Equal(scopes, capturedScopes);
-        Assert.Same(resources, capturedResources);
+        _scopeManager.Verify(m => m.TryGet("openid", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet("profile", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet("email", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
     }
 
     /// <summary>
@@ -189,57 +161,29 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(scope: ["openid", "profile"]);
-        var scopeDefinitions = new[]
-        {
-            new ScopeDefinition("openid"),
-            new ScopeDefinition("profile"),
-        };
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        SetupScopeManagerForScopes("openid", "profile");
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Equal(scopeDefinitions, context.Scope);
         Assert.Equal(2, context.Scope.Length);
+        Assert.Contains(context.Scope, s => s.Scope == "openid");
+        Assert.Contains(context.Scope, s => s.Scope == "profile");
     }
 
     /// <summary>
-    /// Verifies error description is propagated from scope manager.
-    /// Scope manager error messages should be included in response.
+    /// Verifies error description is generated when scope is not available.
+    /// Extension method generates "The scope is not available" message.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ShouldPropagateErrorDescription()
     {
         // Arrange
         var context = CreateContext(scope: ["admin"]);
-        var errorMessage = "Scope 'admin' is not allowed for this client";
 
         _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = null!;
-                error = errorMessage;
-                return false;
-            }))
+            .Setup(m => m.TryGet("admin", out It.Ref<ScopeDefinition>.IsAny))
             .Returns(false);
 
         // Act
@@ -247,39 +191,27 @@ public class ScopeValidatorTests
 
         // Assert
         Assert.NotNull(error);
-        Assert.Equal(errorMessage, error.ErrorDescription);
+        Assert.Contains("not available", error.ErrorDescription);
     }
 
     /// <summary>
     /// Verifies validation with empty resources array.
-    /// Validator should pass empty resources to scope manager.
+    /// Scopes should still be validated via scope manager.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithEmptyResources_ShouldWork()
     {
         // Arrange
         var context = CreateContext(scope: ["read"], resources: []);
-        var scopeDefinitions = new[] { new ScopeDefinition("read") };
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        SetupScopeManagerForScopes("read");
 
         // Act
         var error = await _validator.ValidateAsync(context);
 
         // Assert
         Assert.Null(error);
+        Assert.Single(context.Scope);
+        Assert.Equal("read", context.Scope[0].Scope);
     }
 
     /// <summary>
@@ -292,21 +224,7 @@ public class ScopeValidatorTests
         // Arrange
         var scopes = new[] { "openid", "profile", "email", "address", "phone" };
         var context = CreateContext(scope: scopes);
-        var scopeDefinitions = scopes.Select(s => new ScopeDefinition(s)).ToArray();
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scp, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        SetupScopeManagerForScopes(scopes);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -314,75 +232,48 @@ public class ScopeValidatorTests
         // Assert
         Assert.Null(error);
         Assert.Equal(5, context.Scope.Length);
+        foreach (var scopeName in scopes)
+        {
+            Assert.Contains(context.Scope, s => s.Scope == scopeName);
+        }
     }
 
     /// <summary>
-    /// Verifies validation with null scope.
-    /// Null scope should be passed to scope manager.
+    /// Verifies validation with empty scope array.
+    /// Per OAuth 2.0, TokenRequest.Scope defaults to empty array, not null.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithNullScope_ShouldWork()
     {
         // Arrange
-        var context = CreateContext(scope: null);
-        var scopeDefinitions = System.Array.Empty<ScopeDefinition>();
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        var context = CreateContext(scope: []);
+        // No need to setup scope manager for empty scopes
 
         // Act
         var error = await _validator.ValidateAsync(context);
 
         // Assert
         Assert.Null(error);
+        Assert.Empty(context.Scope);
     }
 
     /// <summary>
-    /// Verifies scope manager is called once per validation.
-    /// Multiple calls to the same manager should be avoided.
+    /// Verifies scope manager TryGet is called once per scope.
+    /// Each scope should be looked up exactly once.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ShouldCallScopeManagerOnce()
     {
         // Arrange
         var context = CreateContext(scope: ["read"]);
-        var scopeDefinitions = new[] { new ScopeDefinition("read") };
-
-        _scopeManager
-            .Setup(m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ScopeManagerValidateCallback((string[]? scopes, ResourceDefinition[] resources, out ScopeDefinition[] defs, out string? error) =>
-            {
-                defs = scopeDefinitions;
-                error = null;
-                return true;
-            }))
-            .Returns(true);
+        SetupScopeManagerForScopes("read");
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
         _scopeManager.Verify(
-            m => m.Validate(
-                It.IsAny<string[]?>(),
-                It.IsAny<ResourceDefinition[]>(),
-                out It.Ref<ScopeDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny),
+            m => m.TryGet("read", out It.Ref<ScopeDefinition>.IsAny),
             Times.Once);
     }
 }

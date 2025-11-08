@@ -51,8 +51,7 @@ public class ClientValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            ClientId = "test-client",
-            Scope = "openid profile",
+            Scope = ["openid", "profile"],
         };
 
         var clientRequest = new ClientRequest
@@ -74,7 +73,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.Ciba }
+            AllowedGrantTypes = [GrantTypes.Ciba]
         };
 
         _clientAuthenticator
@@ -100,7 +99,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.AuthorizationCode, GrantTypes.Ciba, GrantTypes.RefreshToken }
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Ciba, GrantTypes.RefreshToken]
         };
 
         _clientAuthenticator
@@ -148,7 +147,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken]
         };
 
         _clientAuthenticator
@@ -175,7 +174,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = Array.Empty<string>()
+            AllowedGrantTypes = []
         };
 
         _clientAuthenticator
@@ -201,7 +200,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.Ciba },
+            AllowedGrantTypes = [GrantTypes.Ciba],
             ClientName = "Test Client"
         };
 
@@ -228,7 +227,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.Ciba }
+            AllowedGrantTypes = [GrantTypes.Ciba]
         };
 
         ClientRequest? capturedRequest = null;
@@ -258,8 +257,8 @@ public class ClientValidatorTests
 
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { GrantTypes.Ciba },
-            ClientType = ClientTypes.Confidential
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            ClientType = ClientType.Confidential
         };
 
         _clientAuthenticator
@@ -284,7 +283,7 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = new[] { "urn:openid:params:grant-type:CIBA" } // Wrong case
+            AllowedGrantTypes = ["urn:openid:params:grant-type:CIBA"] // Wrong case
         };
 
         _clientAuthenticator

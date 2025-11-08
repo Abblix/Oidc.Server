@@ -24,7 +24,6 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
@@ -76,7 +75,7 @@ public class UserInfoRequestProcessorTests
 
         var authContext = new Abblix.Oidc.Server.Common.AuthorizationContext(
             "client_123",
-            new[] { "openid", "profile", "email" },
+            ["openid", "profile", "email"],
             null);
 
         var clientInfo = new ClientInfo("client_123");
@@ -356,7 +355,7 @@ public class UserInfoRequestProcessorTests
 
         // Assert
         Assert.NotNull(capturedScopes);
-        Assert.Equal(new[] { "openid", "profile", "email" }, capturedScopes);
+        Assert.Equal(["openid", "profile", "email"], capturedScopes);
     }
 
     /// <summary>

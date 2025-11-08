@@ -72,7 +72,7 @@ public class UserInfoHandlerTests
 
         var authContext = new Abblix.Oidc.Server.Common.AuthorizationContext(
             "client_123",
-            new[] { "openid", "profile" },
+            ["openid", "profile"],
             null);
 
         var clientInfo = new ClientInfo("client_123");

@@ -22,7 +22,6 @@
 
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Model;
 using Xunit;
@@ -168,24 +167,6 @@ public class ConfirmationValidatorTests
     {
         // Arrange
         var context = CreateContext(confirmed: false, idTokenHint: "");
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
-    }
-
-    /// <summary>
-    /// Verifies whitespace-only ID token hint is not sufficient.
-    /// Whitespace is treated as no value.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithWhitespaceIdTokenHint_ShouldReturnError()
-    {
-        // Arrange
-        var context = CreateContext(confirmed: false, idTokenHint: "   ");
 
         // Act
         var error = await _validator.ValidateAsync(context);

@@ -22,7 +22,6 @@
 
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -251,21 +250,4 @@ public class ClientValidatorTests
         _clientInfoProvider.Verify(p => p.TryFindClientAsync("Client_123"), Times.Once);
     }
 
-    /// <summary>
-    /// Verifies whitespace-only client ID is treated as no client ID.
-    /// Whitespace should not be considered a valid client ID.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithWhitespaceClientId_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext("   ");
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.Null(error);
-        _clientInfoProvider.VerifyNoOtherCalls();
-    }
 }

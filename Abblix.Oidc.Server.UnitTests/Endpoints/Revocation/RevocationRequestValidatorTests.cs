@@ -23,15 +23,12 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
-using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;

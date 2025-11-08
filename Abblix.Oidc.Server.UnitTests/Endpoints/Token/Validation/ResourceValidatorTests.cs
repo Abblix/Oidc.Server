@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using System;
-using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -34,12 +34,22 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
 /// <summary>
 /// Unit tests for <see cref="ResourceValidator"/> verifying resource validation
-/// for token requests per OAuth 2.0 Resource Indicators specification.
+/// for token requests per OAuth 2.0 Resource Indicators specification (RFC 8707).
+/// Note: Resource validation logic is in ResourceManagerExtensions.Validate (extension method using TryGet).
 /// </summary>
 public class ResourceValidatorTests
 {
+    private static readonly Uri Resource1 = new("https://api1.example.com");
+    private static readonly Uri Resource2 = new("https://api2.example.com");
+    private static readonly Uri UnknownResource = new("https://unknown.example.com");
+
     private readonly Mock<IResourceManager> _resourceManager;
     private readonly ResourceValidator _validator;
+
+    // Delegate for mocking out parameter behavior
+    private delegate bool TryGetCallback(
+        Uri resource,
+        [MaybeNullWhen(false)] out ResourceDefinition definition);
 
     public ResourceValidatorTests()
     {
@@ -61,88 +71,14 @@ public class ResourceValidatorTests
     }
 
     /// <summary>
-    /// Verifies successful validation with valid resources.
-    /// Per OAuth 2.0 Resource Indicators, resources must be validated.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithValidResources_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext(
-            resources: new[] { new Uri("https://api.example.com") },
-            scope: new[] { "read", "write" });
-        var resourceDefinitions = new[] { new ResourceDefinition(new Uri("https://api.example.com")) };
-
-        _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
-            {
-                defs = resourceDefinitions;
-                error = null;
-            }))
-            .Returns(true);
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.Null(error);
-        Assert.Equal(resourceDefinitions, context.Resources);
-    }
-
-    private delegate void ResourceManagerCallback(
-        IEnumerable<Uri> resources,
-        IEnumerable<string> scope,
-        out ResourceDefinition[] definitions,
-        out string? errorDescription);
-
-    /// <summary>
-    /// Verifies error when resource validation fails.
-    /// Per OAuth 2.0, invalid resources must be rejected.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WhenResourceValidationFails_ShouldReturnError()
-    {
-        // Arrange
-        var context = CreateContext(
-            resources: new[] { new Uri("https://invalid.example.com") },
-            scope: new[] { "read" });
-
-        _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
-            {
-                defs = Array.Empty<ResourceDefinition>();
-                error = "Resource not found";
-            }))
-            .Returns(false);
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
-        Assert.Contains("Resource not found", error.ErrorDescription);
-    }
-
-    /// <summary>
     /// Verifies successful validation when no resources specified.
-    /// Per OAuth 2.0, resources are optional.
+    /// Per RFC 8707, resources are optional.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithoutResources_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext(resources: null, scope: new[] { "read" });
+        var context = CreateContext(resources: null, scope: ["read"]);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -160,7 +96,7 @@ public class ResourceValidatorTests
     public async Task ValidateAsync_WithEmptyResources_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext(resources: Array.Empty<Uri>(), scope: new[] { "read" });
+        var context = CreateContext(resources: [], scope: ["read"]);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -171,77 +107,118 @@ public class ResourceValidatorTests
     }
 
     /// <summary>
-    /// Verifies resource manager receives correct parameters.
-    /// Manager should receive resources and scope from request.
+    /// Verifies successful validation with valid resource.
+    /// Per RFC 8707, resources must be validated against resource manager.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldPassCorrectParametersToResourceManager()
+    public async Task ValidateAsync_WithValidResource_ShouldSucceed()
     {
         // Arrange
-        var resources = new[] { new Uri("https://api1.example.com"), new Uri("https://api2.example.com") };
-        var scope = new[] { "read", "write", "admin" };
-        var context = CreateContext(resources, scope);
-        var resourceDefinitions = new[] { new ResourceDefinition(new Uri("https://api1.example.com")) };
-
-        IEnumerable<Uri>? capturedResources = null;
-        IEnumerable<string>? capturedScope = null;
+        var context = CreateContext(
+            resources: [Resource1],
+            scope: ["read", "write"]);
+        var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scp, out ResourceDefinition[] defs, out string? error) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
             {
-                capturedResources = res;
-                capturedScope = scp;
-                defs = resourceDefinitions;
-                error = null;
-            }))
-            .Returns(true);
+                def = resourceDefinition;
+                return true;
+            }));
 
         // Act
-        await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Equal(resources, capturedResources);
-        Assert.Equal(scope, capturedScope);
+        Assert.Null(error);
+        Assert.NotNull(context.Resources);
+        Assert.Single(context.Resources);
+        Assert.Equal(Resource1, context.Resources[0].Resource);
     }
 
     /// <summary>
-    /// Verifies context.Resources is set correctly on success.
+    /// Verifies error when resource is not found.
+    /// Per RFC 8707, unknown resources must be rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUnknownResource_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext(
+            resources: [UnknownResource],
+            scope: ["read"]);
+
+        _resourceManager
+            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            {
+                def = null!;
+                return false;
+            }));
+
+        // Act
+        var error = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        Assert.Contains("unknown", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies correct error code per RFC 8707.
+    /// Invalid resources should return invalid_target error.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_OnValidationFailure_ShouldReturnInvalidTargetError()
+    {
+        // Arrange
+        var context = CreateContext(
+            resources: [UnknownResource],
+            scope: ["read"]);
+
+        _resourceManager
+            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            {
+                def = null!;
+                return false;
+            }));
+
+        // Act
+        var error = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies context.Resources is populated on success.
     /// Validated resource definitions should be assigned to context.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_OnSuccess_ShouldSetResourcesInContext()
     {
         // Arrange
-        var context = CreateContext(resources: new[] { new Uri("https://api.example.com") });
-        var resourceDefinitions = new[]
-        {
-            new ResourceDefinition(new Uri("https://api.example.com")),
-        };
+        var context = CreateContext(resources: [Resource1], scope: ["read"]);
+        var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
             {
-                defs = resourceDefinitions;
-                error = null;
-            }))
-            .Returns(true);
+                def = resourceDefinition;
+                return true;
+            }));
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Equal(resourceDefinitions, context.Resources);
-        Assert.Equal(new Uri("https://api.example.com"), context.Resources[0].Resource);
+        Assert.Equal(new[] { resourceDefinition }, context.Resources);
+        Assert.Equal(Resource1, context.Resources[0].Resource);
     }
 
     /// <summary>
@@ -252,91 +229,92 @@ public class ResourceValidatorTests
     public async Task ValidateAsync_WithMultipleResources_ShouldValidateAll()
     {
         // Arrange
-        var resources = new[] { new Uri("https://api1.example.com"), new Uri("https://api2.example.com"), new Uri("https://api3.example.com") };
-        var context = CreateContext(resources);
-        var resourceDefinitions = new[]
-        {
-            new ResourceDefinition(new Uri("https://api1.example.com")),
-            new ResourceDefinition(new Uri("https://api2.example.com")),
-            new ResourceDefinition(new Uri("https://api3.example.com")),
-        };
+        var resources = new[] { Resource1, Resource2 };
+        var context = CreateContext(resources, ["read", "write"]);
+        var resourceDef1 = new ResourceDefinition(Resource1);
+        var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
             {
-                defs = resourceDefinitions;
-                error = null;
-            }))
-            .Returns(true);
+                def = resourceDef1;
+                return true;
+            }));
+        _resourceManager
+            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            {
+                def = resourceDef2;
+                return true;
+            }));
 
         // Act
         var error = await _validator.ValidateAsync(context);
 
         // Assert
         Assert.Null(error);
-        Assert.Equal(3, context.Resources.Length);
+        Assert.Equal(2, context.Resources.Length);
     }
 
     /// <summary>
-    /// Verifies error description is propagated from resource manager.
-    /// Resource manager error messages should be included in response.
+    /// Verifies resource manager is called for each resource.
+    /// TryGet should be invoked once per resource.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldPropagateErrorDescription()
+    public async Task ValidateAsync_ShouldCallTryGetForEachResource()
     {
         // Arrange
-        var context = CreateContext(resources: new[] { new Uri("https://api.example.com") });
-        var errorMessage = "Resource 'https://api.example.com' is not registered";
+        var resources = new[] { Resource1, Resource2 };
+        var context = CreateContext(resources, ["read", "write"]);
+        var resourceDef1 = new ResourceDefinition(Resource1);
+        var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
             {
-                defs = Array.Empty<ResourceDefinition>();
-                error = errorMessage;
-            }))
-            .Returns(false);
+                def = resourceDef1;
+                return true;
+            }));
+        _resourceManager
+            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            {
+                def = resourceDef2;
+                return true;
+            }));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.NotNull(error);
-        Assert.Equal(errorMessage, error.ErrorDescription);
+        _resourceManager.Verify(
+            m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny),
+            Times.Once);
+        _resourceManager.Verify(
+            m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny),
+            Times.Once);
     }
 
     /// <summary>
-    /// Verifies validation with null scope.
-    /// Validator should handle requests without scope parameter.
+    /// Verifies validation with empty scope.
+    /// Validator should handle requests with empty scope array.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithNullScope_ShouldWork()
+    public async Task ValidateAsync_WithEmptyScope_ShouldWork()
     {
         // Arrange
-        var context = CreateContext(resources: new[] { new Uri("https://api.example.com") }, scope: null);
-        var resourceDefinitions = new[] { new ResourceDefinition(new Uri("https://api.example.com")) };
+        var context = CreateContext(resources: [Resource1], scope: []);
+        var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.Validate(
-                It.IsAny<IEnumerable<Uri>>(),
-                It.IsAny<IEnumerable<string>>(),
-                out It.Ref<ResourceDefinition[]>.IsAny,
-                out It.Ref<string?>.IsAny))
-            .Callback(new ResourceManagerCallback((IEnumerable<Uri> res, IEnumerable<string> scope, out ResourceDefinition[] defs, out string? error) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
             {
-                defs = resourceDefinitions;
-                error = null;
-            }))
-            .Returns(true);
+                def = resourceDefinition;
+                return true;
+            }));
 
         // Act
         var error = await _validator.ValidateAsync(context);
