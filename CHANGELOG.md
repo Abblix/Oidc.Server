@@ -5,7 +5,7 @@ All notable changes to Abblix OIDC Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-01-XX
+## [2.0.0] - 2025-11-XX
 
 ### 🚨 BREAKING CHANGES
 
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Use `replaceAll` instead of `replace` in checkSession.html (abc6a25)
 
 - **Testing**:
-  - Added comprehensive test suite with 834+ passing tests
+  - Added comprehensive test suite with 834 tests, increasing total number of tests to 1677 (all passing)
   - OAuth 2.0/OIDC endpoint test coverage (3e356b6)
   - Resource validation and dynamic client management tests (4597ca6)
   - UriBuilder comprehensive test coverage (0f9c359)
@@ -81,16 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Handle relative URIs without leading slash in UriBuilder (a4cb16c)
 - Omit default ports (80 for HTTP, 443 for HTTPS) in UriBuilder output (8fa3a9d)
-- Remove duplicate `Value` property in `ClientSecret` (feef7c7)
 - Store JWT claims in principal for proper cookie event access (#32, 69e593c)
 - Resolve SignOut cookie issues with explicit authentication scheme (#31, a72a909)
-
-### 🗑️ Removed
-
-- Deleted unused `Abblix.Oidc.Server.Tests` project (773785a)
-  - Contained only dead infrastructure code (OidcClient, Config classes)
-  - Moved single valuable test to `Abblix.Oidc.Server.UnitTests`
-  - Net result: -292 lines of dead code
 
 ### 📝 Documentation
 
@@ -98,22 +90,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced UriBuilder documentation (30c9ccf)
 - Comprehensive DI documentation (#30, 63c40aa)
 
-## [1.6.0] - 2024-XX-XX
+## [1.6.0] - 2024-08-14
+
+### 🚀 Features
+
+- **Authentication Method References (AMR)**: Added comprehensive support for Authentication Method Reference values in authentication sessions
+- **Enhanced Session Tracking**: Improved `AuthSession` authentication methods tracking capabilities
 
 ### 🚀 Performance
 
-- Base32 Encoding Optimization: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes
+- **Base32 Encoding Optimization**: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes
 
-### ✨ Features
+## [1.5.0] - 2024-06-25
 
-- AMR (Authentication Method Reference) Support: Added comprehensive support for Authentication Method Reference values in authentication sessions
-- Extended Session Capabilities: Improved authentication session handling with enhanced method tracking and validation capabilities
+### 🚀 Features
 
-### 📝 Notes
+- **Multi-value Claim Support**: Added support for claims with multiple values
+- **CIBA Infrastructure**: Added stub for Client-Initiated Backchannel Authentication (CIBA) `IUserDeviceAuthorizationHandler` interface
 
-- This release maintains full backward compatibility. No breaking changes were introduced.
+### 🛠️ Fixes
+
+- Fixed routing-template resolution
+
+## [1.4.0] - 2024-04-09
+
+### 🚀 Features
+
+- **Dynamic Route Resolution**: Configuration-driven route resolution in controller attributes for improved flexibility
+
+## [1.3.1] - 2023-12-03
+
+### 🛠️ Fixes
+
+- Added validation for the `request_uri` parameter in authorization requests
+
+## [1.3.0.1] - 2023-11-28
+
+### 🛠️ Fixes
+
+- Resolved issues with Dependency Injection (DI) setup for Pushed Authorization Requests (PAR)
+
+## [1.3.0] - 2023-11-13
+
+### 🚀 Features
+
+- **Full .NET 9 Support**: Added comprehensive support for .NET 9
+
+## [1.2.0.1] - 2023-10-16
+
+### 🔒 Security
+
+- Fixed Denial of Service vulnerability in cryptography libraries
+
+## [1.2.0] - 2023-10-11
+
+### 🚀 Features
+
+- **Client-Initiated Backchannel Authentication (CIBA)**: Added full support for CIBA specification
+
+## [1.1.0] - 2023-07-09
+
+### 🚀 Features
+
+- **Resource Indicators**: Added support for Resource Indicators (RFC 8707)
+
+### 🛠️ Fixes
+
+- Fixed issuer parameter return from Authorization endpoint
+
+## [1.0.100] - 2023-05-03
+
+### 🚀 Initial Release
+
+Comprehensive initial release with support for:
+
+- **OpenID Connect Core**: Full OIDC core specification implementation
+- **OpenID Connect Discovery**: Automatic discovery endpoint support
+- **OAuth 2.0 Authorization Framework**: Complete OAuth 2.0 implementation
+- **Dynamic Client Registration**: Runtime client registration capabilities
+- **Session Management**: Comprehensive session management features
+- **Multiple Logout Methods**: Support for various logout flows
+- **Pairwise Identifiers**: Privacy-enhanced user identification
 
 ---
 
 [2.0.0]: https://github.com/Abblix/Oidc.Server/compare/v1.6.0...v2.0.0
-[1.6.0]: https://github.com/Abblix/Oidc.Server/releases/tag/v1.6.0
+[1.6.0]: https://github.com/Abblix/Oidc.Server/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/Abblix/Oidc.Server/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/Abblix/Oidc.Server/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/Abblix/Oidc.Server/compare/v1.3.0.1...v1.3.1
+[1.3.0.1]: https://github.com/Abblix/Oidc.Server/compare/v1.3.0...v1.3.0.1
+[1.3.0]: https://github.com/Abblix/Oidc.Server/compare/v1.2.0.1...v1.3.0
+[1.2.0.1]: https://github.com/Abblix/Oidc.Server/compare/v1.2.0...v1.2.0.1
+[1.2.0]: https://github.com/Abblix/Oidc.Server/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/Abblix/Oidc.Server/compare/v1.0.100...v1.1.0
+[1.0.100]: https://github.com/Abblix/Oidc.Server/releases/tag/v1.0.100
