@@ -45,5 +45,5 @@ public class SecureHttpFetchOptions
     /// This limit prevents denial-of-service attacks via extremely large responses.
     /// Increase this value if you need to fetch larger documents (e.g., large JSON Web Key Sets).
     /// </remarks>
-    public long MaxResponseSizeBytes { get; set; } = 5 * 1024 * 1024;
+    public long MaxResponseSizeBytes { get; set; } = 5 << 20;
 }

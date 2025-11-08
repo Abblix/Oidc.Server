@@ -431,24 +431,57 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// The registered services include:
     /// - A typed HTTP client (<see cref="SecureHttpFetcher"/>) for making secure HTTP requests
-    /// - An SSRF validation decorator (<see cref="SsrfHttpFetchValidator"/>) that validates URIs before making requests
+    /// - A custom message handler (<see cref="SsrfValidatingHttpMessageHandler"/>) that provides comprehensive SSRF protection
     ///
     /// The SSRF protection includes:
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
     /// - Blocking requests to internal TLDs (.local, .internal, etc.)
     /// - DNS resolution and blocking of private/reserved IP address ranges
+    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
+    /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
     ///
-    /// Note: There is a potential DNS rebinding TOCTOU (Time-Of-Check-Time-Of-Use) vulnerability
-    /// where DNS could resolve to a different IP between validation and the actual HTTP request.
-    /// For additional protection, deploy behind a firewall or implement a custom HttpMessageHandler.
+    /// The multi-layered protection strategy follows OWASP SSRF Prevention guidelines and provides
+    /// defense-in-depth against various SSRF attack vectors including DNS rebinding and redirect-based bypasses.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <param name="configure">Optional configuration action to customize <see cref="SecureHttpFetchOptions"/>.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddSecureHttpFetch(this IServiceCollection services)
+    public static IServiceCollection AddSecureHttpFetch(
+        this IServiceCollection services,
+        Action<SecureHttpFetchOptions>? configure = null)
     {
-        return services
-            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>()
-            .Services
-            .Decorate<ISecureHttpFetcher, SsrfHttpFetchValidator>();
+        // Register and configure options
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+
+        if (configure != null)
+        {
+            optionsBuilder.Configure(configure);
+        }
+
+        services
+            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
+                client.Timeout = options.RequestTimeout;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SsrfValidatingHttpMessageHandler
+            {
+                InnerHandler = new HttpClientHandler
+                {
+                    // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
+                    // Attackers could redirect from public URL to private network (e.g., 169.254.169.254)
+                    AllowAutoRedirect = false,
+                    MaxAutomaticRedirections = 0,
+
+                    // Use system default credentials (none) - prevent NTLM auth to internal servers
+                    UseDefaultCredentials = false,
+
+                    // Disable decompression to prevent zip bomb attacks
+                    AutomaticDecompression = System.Net.DecompressionMethods.None,
+                }
+            });
+
+        return services;
     }
 }

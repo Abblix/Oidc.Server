@@ -26,24 +26,62 @@ using System.Net.Sockets;
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 
 /// <summary>
-/// HTTP message handler that prevents SSRF attacks by re-validating DNS resolution immediately before making HTTP requests.
-/// This handler provides defense against DNS rebinding attacks (TOCTOU - Time-Of-Check-Time-Of-Use vulnerability)
-/// where an attacker controls DNS and changes resolution between validation and HTTP request.
+/// HTTP message handler that prevents SSRF attacks through comprehensive validation:
+/// 1. Hostname-based blocking (localhost, internal, .local TLDs, etc.)
+/// 2. DNS resolution and IP-based blocking (private ranges, loopback, link-local)
+/// 3. Re-validation immediately before HTTP request to prevent DNS rebinding (TOCTOU attacks)
 /// </summary>
 /// <remarks>
+/// Defense-in-depth SSRF protection includes:
+/// - Blocking common internal hostnames (localhost, internal, intranet, corp, home, lan)
+/// - Blocking internal TLDs (.local, .localhost, .internal, .intranet, .corp, .home, .lan)
+/// - Blocking single-label hostnames without dots (typically internal)
+/// - DNS resolution with private IP blocking (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.)
+/// - Protection against DNS rebinding where attacker changes DNS between validation and request
+///
 /// Attack scenario prevented:
 /// 1. Initial validation: evil.com resolves to 8.8.8.8 (public IP, passes validation)
 /// 2. DNS TTL expires (low TTL like 1 second)
 /// 3. Attacker changes DNS: evil.com now resolves to 127.0.0.1
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
-///
-/// This handler is used as part of a defense-in-depth strategy alongside SsrfHttpFetchValidator.
 /// </remarks>
 public class SsrfValidatingHttpMessageHandler : DelegatingHandler
 {
     /// <summary>
-    /// Sends HTTP request with immediate pre-request DNS validation to prevent TOCTOU attacks.
+    /// Common hostnames that typically resolve to internal/private networks.
+    /// These are blocked to prevent SSRF attacks targeting internal infrastructure.
+    /// </summary>
+    private static readonly string[] BlockedHostnames = [
+        "localhost",
+        "loopback",
+        "broadcasthost",
+        "local",
+        "internal",
+        "intranet",
+        "private",
+        "corp",
+        "home",
+        "lan"
+    ];
+
+    /// <summary>
+    /// Top-level domains (TLDs) commonly used for internal networks.
+    /// These are blocked as they typically indicate non-public infrastructure.
+    /// </summary>
+    private static readonly string[] BlockedTlds = [
+        ".local",
+        ".localhost",
+        ".internal",
+        ".intranet",
+        ".corp",
+        ".home",
+        ".lan"
+    ];
+
+    /// <summary>
+    /// Sends HTTP request with comprehensive SSRF validation immediately before making the request.
+    /// Validates both hostname patterns and DNS resolution to prevent SSRF and DNS rebinding attacks.
     /// </summary>
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -55,16 +93,29 @@ public class SsrfValidatingHttpMessageHandler : DelegatingHandler
             throw new InvalidOperationException("Request URI cannot be null");
         }
 
-        // Re-validate DNS immediately before sending request to prevent DNS rebinding
         var hostname = uri.Host;
 
-        // Skip validation for IP addresses (already validated by SsrfHttpFetchValidator)
-        if (IPAddress.TryParse(hostname, out _))
+        // Step 1: Check for blocked hostnames before DNS resolution
+        if (IsInternalHostname(hostname))
         {
+            throw new HttpRequestException(
+                $"SSRF protection: Hostname '{hostname}' matches internal hostname pattern. " +
+                $"Request blocked to prevent access to internal infrastructure.");
+        }
+
+        // Step 2: For IP addresses, validate directly without DNS lookup
+        if (IPAddress.TryParse(hostname, out var ipAddress))
+        {
+            if (IsPrivateOrReservedAddress(ipAddress))
+            {
+                throw new HttpRequestException(
+                    $"SSRF protection: IP address '{ipAddress}' is private/internal. " +
+                    $"Request blocked to prevent access to internal infrastructure.");
+            }
             return await base.SendAsync(request, cancellationToken);
         }
 
-        // Resolve DNS and check all resolved addresses
+        // Step 3: Resolve DNS and validate all resolved IP addresses
         IPHostEntry hostEntry;
         try
         {
@@ -77,7 +128,7 @@ public class SsrfValidatingHttpMessageHandler : DelegatingHandler
                 ex);
         }
 
-        // Check if any resolved address is private/reserved
+        // Step 4: Check if any resolved address is private/reserved
         var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
         if (privateAddress != null)
         {
@@ -92,8 +143,31 @@ public class SsrfValidatingHttpMessageHandler : DelegatingHandler
     }
 
     /// <summary>
+    /// Checks if a hostname appears to be internal or non-public.
+    /// </summary>
+    private static bool IsInternalHostname(string hostname)
+    {
+        // Normalize to lowercase for comparison
+        var normalizedHost = hostname.ToLowerInvariant();
+
+        // Block common internal hostnames
+        if (BlockedHostnames.Contains(normalizedHost))
+            return true;
+
+        // Block hostnames that end with common internal TLDs
+        if (BlockedTlds.Any(normalizedHost.EndsWith))
+            return true;
+
+        // Block single-label hostnames (no dots) as they're typically internal
+        // Exception: Allow if it's a valid IP address
+        if (!normalizedHost.Contains('.') && !IPAddress.TryParse(normalizedHost, out _))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// Checks if an IP address is private, loopback, link-local, or otherwise reserved.
-    /// This is a duplicate of the method in SsrfHttpFetchValidator to avoid tight coupling.
     /// </summary>
     private static bool IsPrivateOrReservedAddress(IPAddress address)
     {
