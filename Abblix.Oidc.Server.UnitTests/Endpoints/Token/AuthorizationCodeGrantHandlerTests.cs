@@ -84,7 +84,7 @@ public class AuthorizationCodeGrantHandlerTests
 	[InlineData(CodeChallengeMethods.S256, "qwerty", null)]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "asdfgh")]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", null)]
-	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
 
@@ -93,7 +93,7 @@ public class AuthorizationCodeGrantHandlerTests
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
-	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		// arrange
 		var clientInfo = new ClientInfo("client1");

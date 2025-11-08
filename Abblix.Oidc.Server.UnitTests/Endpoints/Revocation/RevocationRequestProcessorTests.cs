@@ -68,7 +68,7 @@ public class RevocationRequestProcessorTests
         RevocationRequest request,
         JsonWebToken? token = null)
     {
-        return new ValidRevocationRequest(request, token);
+        return new ValidRevocationRequest(request, token!);
     }
 
     /// <summary>

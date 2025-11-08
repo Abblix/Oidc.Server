@@ -49,7 +49,7 @@ public class ResourceValidatorTests
     // Delegate for mocking out parameter behavior
     private delegate bool TryGetCallback(
         Uri resource,
-        [MaybeNullWhen(false)] out ResourceDefinition definition);
+        out ResourceDefinition? definition);
 
     public ResourceValidatorTests()
     {
@@ -64,7 +64,7 @@ public class ResourceValidatorTests
         var tokenRequest = new TokenRequest
         {
             Resources = resources,
-            Scope = scope,
+            Scope = scope!,
         };
         var clientRequest = new ClientRequest();
         return new TokenValidationContext(tokenRequest, clientRequest);
@@ -120,8 +120,8 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;
@@ -150,10 +150,10 @@ public class ResourceValidatorTests
             scope: ["read"]);
 
         _resourceManager
-            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
-                def = null!;
+                def = null;
                 return false;
             }));
 
@@ -179,10 +179,10 @@ public class ResourceValidatorTests
             scope: ["read"]);
 
         _resourceManager
-            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
-                def = null!;
+                def = null;
                 return false;
             }));
 
@@ -206,8 +206,8 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;
@@ -235,15 +235,15 @@ public class ResourceValidatorTests
         var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef1;
                 return true;
             }));
         _resourceManager
-            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef2;
                 return true;
@@ -271,15 +271,15 @@ public class ResourceValidatorTests
         var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef1;
                 return true;
             }));
         _resourceManager
-            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef2;
                 return true;
@@ -290,10 +290,10 @@ public class ResourceValidatorTests
 
         // Assert
         _resourceManager.Verify(
-            m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny),
+            m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny),
             Times.Once);
         _resourceManager.Verify(
-            m => m.TryGet(Resource2, out It.Ref<ResourceDefinition>.IsAny),
+            m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny),
             Times.Once);
     }
 
@@ -309,8 +309,8 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition def) =>
+            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;

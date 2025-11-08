@@ -268,7 +268,7 @@ public class ScopeManagerTests
 
         // Assert
         Assert.True(result);
-        Assert.Equal("api:full", definition.Scope);
+        Assert.Equal("api:full", definition!.Scope);
         Assert.Equal(3, definition.ClaimTypes.Length);
         Assert.Contains("claim1", definition.ClaimTypes);
         Assert.Contains("claim2", definition.ClaimTypes);

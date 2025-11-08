@@ -27,7 +27,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 
-namespace Abblix.Oidc.Server.Tests;
+namespace Abblix.Oidc.Server.UnitTests.Common;
 
 public class AuthorizationContextExtensionsTests
 {

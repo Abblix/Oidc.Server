@@ -313,7 +313,7 @@ public class AuthorizationRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
             .Callback<AuthorizationValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo(ctx.Request.ClientId);
+                ctx.ClientInfo = new ClientInfo(ctx.Request.ClientId!);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);

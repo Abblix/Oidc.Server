@@ -67,7 +67,7 @@ public class ScopeValidatorTests
             {
                 OfflineAccessAllowed = offlineAccessAllowed
             },
-            Resources = resources
+            Resources = resources!
         };
     }
 

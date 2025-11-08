@@ -168,7 +168,7 @@ public class LicenseManagerTests
     /// don't cause race conditions or exceptions.
     /// </summary>
     [Fact]
-    public void TryGetCurrentLicenseLimit_ConcurrentReadsAndWrites_NoExceptions()
+    public async Task TryGetCurrentLicenseLimit_ConcurrentReadsAndWrites_NoExceptions()
     {
         // Arrange
         var manager = new LicenseManager();
@@ -219,7 +219,7 @@ public class LicenseManagerTests
             }
         });
 
-        Task.WaitAll(readTask, writeTask);
+        await Task.WhenAll(readTask, writeTask);
 
         // Assert - No exceptions should occur
         Assert.Empty(exceptions);

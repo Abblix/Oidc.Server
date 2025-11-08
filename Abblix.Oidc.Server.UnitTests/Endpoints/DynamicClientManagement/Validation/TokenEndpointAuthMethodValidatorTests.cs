@@ -51,7 +51,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var request = new ClientRegistrationRequest
         {
             RedirectUris = [new Uri("https://example.com/callback")],
-            TokenEndpointAuthMethod = tokenEndpointAuthMethod
+            TokenEndpointAuthMethod = tokenEndpointAuthMethod!
         };
 
         return new ClientRegistrationValidationContext(request);

@@ -9,8 +9,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Jwt", "Abblix.Jwt\Ab
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Oidc.Server", "Abblix.Oidc.Server\Abblix.Oidc.Server.csproj", "{EA342C7F-0C31-4F8F-9983-66B61A8853E5}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Oidc.Server.Tests", "Abblix.Oidc.Server.Tests\Abblix.Oidc.Server.Tests.csproj", "{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Oidc.Server.UnitTests", "Abblix.Oidc.Server.UnitTests\Abblix.Oidc.Server.UnitTests.csproj", "{FAF56FB7-12B5-4AAA-BCA5-A76D49F0E273}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Abblix.Utils", "Abblix.Utils\Abblix.Utils.csproj", "{1281A1E9-59D5-4669-9FCA-2668A373319D}"
@@ -77,18 +75,6 @@ Global
 		{EA342C7F-0C31-4F8F-9983-66B61A8853E5}.Release|x64.Build.0 = Release|Any CPU
 		{EA342C7F-0C31-4F8F-9983-66B61A8853E5}.Release|x86.ActiveCfg = Release|Any CPU
 		{EA342C7F-0C31-4F8F-9983-66B61A8853E5}.Release|x86.Build.0 = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|x64.Build.0 = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Debug|x86.Build.0 = Debug|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|x64.ActiveCfg = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|x64.Build.0 = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|x86.ActiveCfg = Release|Any CPU
-		{9FB96BFA-8D23-42BA-BB2B-C50E2903CD6A}.Release|x86.Build.0 = Release|Any CPU
 		{FAF56FB7-12B5-4AAA-BCA5-A76D49F0E273}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{FAF56FB7-12B5-4AAA-BCA5-A76D49F0E273}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FAF56FB7-12B5-4AAA-BCA5-A76D49F0E273}.Debug|x64.ActiveCfg = Debug|Any CPU

@@ -73,8 +73,8 @@ public class ScopeValidatorTests
         {
             var scopeDef = new ScopeDefinition(scope);
             _scopeManager
-                .Setup(m => m.TryGet(scope, out It.Ref<ScopeDefinition>.IsAny))
-                .Returns(new ScopeManagerTryGetCallback((string s, out ScopeDefinition def) =>
+                .Setup(m => m.TryGet(scope, out It.Ref<ScopeDefinition?>.IsAny))
+                .Returns(new ScopeManagerTryGetCallback((string s, out ScopeDefinition? def) =>
                 {
                     def = scopeDef;
                     return true;
@@ -84,7 +84,7 @@ public class ScopeValidatorTests
 
     private delegate bool ScopeManagerTryGetCallback(
         string scope,
-        [MaybeNullWhen(false)] out ScopeDefinition definition);
+        out ScopeDefinition? definition);
 
     /// <summary>
     /// Verifies successful validation with valid scopes.
@@ -119,7 +119,7 @@ public class ScopeValidatorTests
 
         // Don't setup TryGet for "invalid_scope", so it returns false by default
         _scopeManager
-            .Setup(m => m.TryGet("invalid_scope", out It.Ref<ScopeDefinition>.IsAny))
+            .Setup(m => m.TryGet("invalid_scope", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
@@ -147,9 +147,9 @@ public class ScopeValidatorTests
         await _validator.ValidateAsync(context);
 
         // Assert
-        _scopeManager.Verify(m => m.TryGet("openid", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet("profile", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet("email", out It.Ref<ScopeDefinition>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet("profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet("email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scope: ["admin"]);
 
         _scopeManager
-            .Setup(m => m.TryGet("admin", out It.Ref<ScopeDefinition>.IsAny))
+            .Setup(m => m.TryGet("admin", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
@@ -273,7 +273,7 @@ public class ScopeValidatorTests
 
         // Assert
         _scopeManager.Verify(
-            m => m.TryGet("read", out It.Ref<ScopeDefinition>.IsAny),
+            m => m.TryGet("read", out It.Ref<ScopeDefinition?>.IsAny),
             Times.Once);
     }
 }

@@ -248,7 +248,7 @@ public class PasswordGrantHandlerTests
         {
             UserName = UserName,
             Password = Password,
-            Scope = null
+            Scope = null!
         };
 
         _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
@@ -256,7 +256,7 @@ public class PasswordGrantHandlerTests
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
-            Context: new AuthorizationContext(ClientId, null, null));
+            Context: new AuthorizationContext(ClientId, null!, null));
 
         _credentialsAuthenticator
             .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
@@ -307,7 +307,7 @@ public class PasswordGrantHandlerTests
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
-        AuthorizationContext capturedContext = null;
+        AuthorizationContext? capturedContext = null;
         _credentialsAuthenticator
             .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant)

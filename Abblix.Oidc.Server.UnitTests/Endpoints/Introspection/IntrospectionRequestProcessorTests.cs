@@ -62,7 +62,7 @@ public class IntrospectionRequestProcessorTests
         IntrospectionRequest request,
         JsonWebToken? token = null)
     {
-        return new ValidIntrospectionRequest(request, token);
+        return new ValidIntrospectionRequest(request, token!);
     }
 
     /// <summary>

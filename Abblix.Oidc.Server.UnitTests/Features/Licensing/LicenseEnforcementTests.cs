@@ -77,17 +77,17 @@ public class LicenseEnforcementTests
 
         // First client - should be allowed
         knownClients.TryAdd(client1, null!);
-        var shouldBlock1 = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < knownClients.Count;
+        var shouldBlock1 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
         Assert.False(shouldBlock1);
 
         // Second client - should be allowed
         knownClients.TryAdd(client2, null!);
-        var shouldBlock2 = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < knownClients.Count;
+        var shouldBlock2 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
         Assert.False(shouldBlock2);
 
         // Third client - should be blocked (2 * 1.3 = 2.6, current count is 2, so check if adding would exceed)
         // The check is: would adding this client exceed the buffer?
-        var wouldExceedBuffer = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
+        var wouldExceedBuffer = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
                                 !knownClients.ContainsKey(client3);
         Assert.True(wouldExceedBuffer);
     }
@@ -121,11 +121,11 @@ public class LicenseEnforcementTests
         }
 
         // Assert - 13 clients should be allowed (exactly at buffer limit: 10 * 1.3 = 13)
-        var shouldBlockAt13 = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < knownClients.Count;
+        var shouldBlockAt13 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
         Assert.False(shouldBlockAt13);
 
         // Assert - 14th client should be blocked (would exceed 13)
-        var wouldExceedAt14 = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
+        var wouldExceedAt14 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
                               !knownClients.ContainsKey("client-14");
         Assert.True(wouldExceedAt14);
     }
@@ -162,7 +162,7 @@ public class LicenseEnforcementTests
         // Assert - Should never block with unlimited license
         if (currentLicense.ClientLimit.HasValue)
         {
-            var shouldBlock = currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < knownClients.Count;
+            var shouldBlock = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
             Assert.False(shouldBlock);
         }
         else
@@ -241,7 +241,7 @@ public class LicenseEnforcementTests
 
         // Assert - Third issuer should exceed limit
         knownIssuers.TryAdd(issuer3, null!);
-        var shouldThrow = currentLicense.IssuerLimit.Value < knownIssuers.Count;
+        var shouldThrow = currentLicense.IssuerLimit!.Value < knownIssuers.Count;
         Assert.True(shouldThrow);
     }
 
@@ -275,7 +275,7 @@ public class LicenseEnforcementTests
         // Assert - Should never throw with unlimited license
         if (currentLicense.IssuerLimit.HasValue)
         {
-            var shouldThrow = currentLicense.IssuerLimit.Value < knownIssuers.Count;
+            var shouldThrow = currentLicense.IssuerLimit!.Value < knownIssuers.Count;
             Assert.False(shouldThrow);
         }
         else

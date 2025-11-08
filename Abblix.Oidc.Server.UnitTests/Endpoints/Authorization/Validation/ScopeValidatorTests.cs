@@ -69,29 +69,29 @@ public class ScopeValidatorTests
     /// </summary>
     private void SetupScopeManager()
     {
-        _scopeManager.Setup(m => m.TryGet(Scopes.OpenId, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.OpenId, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = _openIdScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Profile, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = _profileScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Email, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = _emailScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.OfflineAccess, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = _offlineAccessScope;
                 return true;
@@ -99,7 +99,7 @@ public class ScopeValidatorTests
     }
 
     // Delegate for Moq out parameter support
-    private delegate bool ScopeManagerTryGetCallback(string scope, out ScopeDefinition definition);
+    private delegate bool ScopeManagerTryGetCallback(string scope, out ScopeDefinition? definition);
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -276,8 +276,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithUnknownScope_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown_scope", out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet("unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -467,15 +467,15 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone]);
 
         // Setup additional scopes
-        _scopeManager.Setup(m => m.TryGet(Scopes.Address, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.Address, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Address);
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Phone, out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet(Scopes.Phone, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Phone);
                 return true;
@@ -537,8 +537,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithOfflineAccessAndUnknownScope_ShouldFailOnOfflineAccess()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown", out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -618,8 +618,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithScopeInNeitherManagerNorResources_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("custom_scope", out It.Ref<ScopeDefinition>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition definition) =>
+        _scopeManager.Setup(m => m.TryGet("custom_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;

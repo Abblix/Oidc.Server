@@ -66,6 +66,6 @@ public class ClientRegistrationRequestTest
         Assert.Equal("dynamic_client_1 RqxLk9BdhK8qC3z", req.ClientName);
         Assert.Equal(["implicit"], req.GrantTypes);
         Assert.Equal([["id_token", "token"]], req.ResponseTypes);
-        Assert.Equal(["certification@oidf.org"], req.Contacts);
+        Assert.Equal(["certification@oidf.org"], req.Contacts!);
     }
 }
