@@ -1,6 +1,6 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-6.0%2C%207.0%2C%208.0%2C%209.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
+[![.NET](https://img.shields.io/badge/.NET-8.0%2C%209.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
 [![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/ru-ru/dotnet/csharp/tour-of-csharp/overview)
 [![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
 [![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
@@ -8,6 +8,7 @@
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
+[![tests](https://img.shields.io/badge/tests-834%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
@@ -47,7 +48,28 @@ The library also supports Dependency Injection through the standard .NET DI cont
 
 ## ✨ What's New
 
-### Version 1.6.0 (Latest)
+### Version 2.0.0 (Latest)
+
+🚨 **BREAKING CHANGES**
+- **Result Pattern Migration**: Completely migrated to `Result<TSuccess, TFailure>` pattern for more explicit error handling and better functional programming support
+- **Framework Updates**: Dropped .NET 6 and .NET 7 support - now exclusively targets .NET 8 (LTS) and .NET 9
+- **API Simplification**: All response types renamed to remove redundant 'Response' suffix for cleaner, more intuitive APIs
+
+🔒 **Security Enhancements**
+- **SSRF Protection**: Multi-layered Server-Side Request Forgery protection with DNS validation, IP blocking, and comprehensive logging
+- **Supply Chain Security**: Hardened GitHub Actions workflows with commit SHA pinning and secure secret handling
+
+✨ **Quality Improvements**
+- **Zero Warnings**: Fixed all 45+ nullability warnings for improved type safety
+- **Test Coverage**: Added comprehensive test suite with 834+ passing tests across OAuth 2.0/OIDC endpoints
+- **Code Quality**: Enhanced UriBuilder implementation, improved licensing infrastructure
+
+> **⚠️ Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.
+
+<details>
+<summary><b>Previous Versions</b></summary>
+
+### Version 1.6.0
 
 🚀 **Performance Improvements**
 - **Base32 Encoding Optimization**: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes.
@@ -56,7 +78,7 @@ The library also supports Dependency Injection through the standard .NET DI cont
 - **AMR (Authentication Method Reference) Support**: Added comprehensive support for Authentication Method Reference values in authentication sessions, providing better tracking and validation of authentication methods used by users.
 - **Extended Session Capabilities**: Improved authentication session handling with enhanced method tracking and validation capabilities.
 
-> **Migration Note**: This release maintains full backward compatibility. No breaking changes were introduced.
+</details>
 
 ## 🎓 Certification
 
