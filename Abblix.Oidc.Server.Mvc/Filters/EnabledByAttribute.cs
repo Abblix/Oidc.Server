@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// endpoint is not enabled in <see cref="OidcOptions.EnabledEndpoints"/>.
 /// </summary>
 /// <remarks>
-/// This attribute is processed at application startup by <see cref="Conventions.EndpointControllerConvention"/>,
+/// This attribute is processed at application startup by <see cref="Conventions.EnabledByConvention"/>,
 /// which removes controllers or actions from the application model if their endpoint is disabled. This prevents
 /// the controller/action from being registered at all, rather than checking at runtime.
 /// </remarks>

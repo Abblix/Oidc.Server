@@ -104,7 +104,7 @@ public sealed class DiscoveryController : ControllerBase
 			RevocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation),
 			IntrospectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection),
 
-			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.Register),
+			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient),
 
 			FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,

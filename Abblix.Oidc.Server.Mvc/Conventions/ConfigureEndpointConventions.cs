@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Mvc.Conventions;
 /// <summary>
 /// Post-configures MVC options to add the EnabledBy convention.
 /// </summary>
-internal class ConfigureEndpointConvention(IOptions<OidcOptions> oidcOptions)
+internal class ConfigureEndpointConventions(IOptions<OidcOptions> oidcOptions)
     : IPostConfigureOptions<MvcOptions>
 {
     public void PostConfigure(string? name, MvcOptions options)

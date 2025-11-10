@@ -139,7 +139,7 @@ public static class ServiceCollectionExtensions
             .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
             .AddControllersAsServices()
             .Services
-            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConvention>();
+            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>();
 
         return services;
     }

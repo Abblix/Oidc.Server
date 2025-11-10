@@ -33,7 +33,7 @@ public enum OidcEndpoints
 	/// All OIDC endpoints are available, covering the full range of OpenID Connect operations.
 	/// </summary>
 	All = Configuration | Keys | Authorize | Token | UserInfo | CheckSession | EndSession | Revocation |
-	      Introspection | Register | PushedAuthorizationRequest | BackChannelAuthentication,
+	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication,
 
 	/// <summary>
 	/// The configuration endpoint, used by clients to dynamically discover information about the OpenID Provider.
@@ -93,7 +93,7 @@ public enum OidcEndpoints
 	/// The client registration endpoint, which allows dynamic registration of clients.
 	/// Clients can use this endpoint to register themselves with the OpenID Provider, typically during setup.
 	/// </summary>
-	Register = 1 << 9,
+	RegisterClient = 1 << 9,
 
 	/// <summary>
 	/// The pushed authorization request endpoint, where clients can pre-register authorization requests with the provider.

@@ -40,10 +40,10 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
-        var application = CreateApplicationModelWithController(OidcEndpoints.Register);
+        var application = CreateApplicationModelWithController(OidcEndpoints.RegisterClient);
 
         // Act
         convention.Apply(application);
@@ -58,10 +58,10 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
-        var application = CreateApplicationModelWithController(OidcEndpoints.Register);
+        var application = CreateApplicationModelWithController(OidcEndpoints.RegisterClient);
 
         // Act
         convention.Apply(application);
@@ -94,13 +94,13 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
         var application = new ApplicationModel();
 
         // Add controller with Register endpoint (should be removed)
-        application.Controllers.Add(CreateController(OidcEndpoints.Register));
+        application.Controllers.Add(CreateController(OidcEndpoints.RegisterClient));
 
         // Add controller with Token endpoint (should remain)
         application.Controllers.Add(CreateController(OidcEndpoints.Token));
@@ -121,13 +121,13 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
         var application = new ApplicationModel();
 
         var controller = CreateController(null);
-        controller.Actions.Add(CreateAction(OidcEndpoints.Register, "RegisterAction"));
+        controller.Actions.Add(CreateAction(OidcEndpoints.RegisterClient, "RegisterAction"));
         controller.Actions.Add(CreateAction(null, "OtherAction"));
         application.Controllers.Add(controller);
 
@@ -147,13 +147,13 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
         var application = new ApplicationModel();
 
         var controller = CreateController(null);
-        controller.Actions.Add(CreateAction(OidcEndpoints.Register, "RegisterAction"));
+        controller.Actions.Add(CreateAction(OidcEndpoints.RegisterClient, "RegisterAction"));
         controller.Actions.Add(CreateAction(null, "OtherAction"));
         application.Controllers.Add(controller);
 
@@ -172,12 +172,12 @@ public class EnabledByConventionTests
         // Arrange
         var options = new OidcOptions
         {
-            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.Register
+            EnabledEndpoints = OidcEndpoints.All & ~OidcEndpoints.RegisterClient
         };
         var convention = new EnabledByConvention(Options.Create(options));
         var application = new ApplicationModel();
 
-        var controller = CreateController(OidcEndpoints.Register);
+        var controller = CreateController(OidcEndpoints.RegisterClient);
         controller.Actions.Add(CreateAction(OidcEndpoints.Token, "TokenAction"));
         application.Controllers.Add(controller);
 

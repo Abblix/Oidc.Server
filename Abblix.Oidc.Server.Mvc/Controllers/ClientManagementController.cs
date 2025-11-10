@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
-[EnabledBy(OidcEndpoints.Register)]
+[EnabledBy(OidcEndpoints.RegisterClient)]
 public class ClientManagementController : ControllerBase
 {
     /// <summary>
