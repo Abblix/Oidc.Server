@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Oidc.Server.Mvc", "A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.DependencyInjection.UnitTests", "Abblix.DependencyInjection.UnitTests\Abblix.DependencyInjection.UnitTests.csproj", "{B16BAC80-81F1-4378-BD63-267877842CA2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abblix.Oidc.Server.Mvc.UnitTests", "Abblix.Oidc.Server.Mvc.UnitTests\Abblix.Oidc.Server.Mvc.UnitTests.csproj", "{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -147,6 +149,18 @@ Global
 		{B16BAC80-81F1-4378-BD63-267877842CA2}.Release|x64.Build.0 = Release|Any CPU
 		{B16BAC80-81F1-4378-BD63-267877842CA2}.Release|x86.ActiveCfg = Release|Any CPU
 		{B16BAC80-81F1-4378-BD63-267877842CA2}.Release|x86.Build.0 = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|x64.Build.0 = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Debug|x86.Build.0 = Debug|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|x64.ActiveCfg = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|x64.Build.0 = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|x86.ActiveCfg = Release|Any CPU
+		{D77EE986-9C12-4C4A-9BFD-EABE0488B2D6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

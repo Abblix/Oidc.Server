@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Configuration;
+using Abblix.Oidc.Server.Mvc.Conventions;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
@@ -37,6 +38,7 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -132,11 +134,14 @@ public static class ServiceCollectionExtensions
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     public static IServiceCollection AddOidcControllers(this IServiceCollection services)
     {
-        return services
+        services
             .AddControllers()
             .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
             .AddControllersAsServices()
-            .Services;
+            .Services
+            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConvention>();
+
+        return services;
     }
 
 	/// <summary>
