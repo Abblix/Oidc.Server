@@ -46,7 +46,19 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
 /// </remarks>
-public class SsrfValidatingHttpMessageHandler : DelegatingHandler
+public class SsrfValidatingHttpMessageHandler() : DelegatingHandler(
+    new HttpClientHandler
+    {
+        // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
+        // Attackers could redirect from public URL to private network (e.g., 169.254.169.254)
+        AllowAutoRedirect = false,
+
+        // Use system default credentials (none) - prevent NTLM auth to internal servers
+        UseDefaultCredentials = false,
+
+        // Disable decompression to prevent zip bomb attacks
+        AutomaticDecompression = DecompressionMethods.None,
+    })
 {
     /// <summary>
     /// Common hostnames that typically resolve to internal/private networks.

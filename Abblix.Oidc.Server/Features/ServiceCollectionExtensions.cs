@@ -465,22 +465,7 @@ public static class ServiceCollectionExtensions
                 var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
                 client.Timeout = options.RequestTimeout;
             })
-            .ConfigurePrimaryHttpMessageHandler(() => new SsrfValidatingHttpMessageHandler
-            {
-                InnerHandler = new HttpClientHandler
-                {
-                    // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
-                    // Attackers could redirect from public URL to private network (e.g., 169.254.169.254)
-                    AllowAutoRedirect = false,
-                    MaxAutomaticRedirections = 0,
-
-                    // Use system default credentials (none) - prevent NTLM auth to internal servers
-                    UseDefaultCredentials = false,
-
-                    // Disable decompression to prevent zip bomb attacks
-                    AutomaticDecompression = System.Net.DecompressionMethods.None,
-                }
-            });
+            .ConfigurePrimaryHttpMessageHandler(() => new SsrfValidatingHttpMessageHandler());
 
         return services;
     }
