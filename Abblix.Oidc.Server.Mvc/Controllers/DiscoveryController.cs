@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
+using Abblix.Oidc.Server.Mvc.Filters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -73,6 +74,7 @@ public sealed class DiscoveryController : ControllerBase
 	[HttpGet(Path.Configuration)]
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
+	[EnabledBy(OidcEndpoints.Configuration)]
 	public Task<ActionResult<ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IOptionsSnapshot<OidcOptions> options,
 		[FromServices] IIssuerProvider issuerProvider,
@@ -171,13 +173,10 @@ public sealed class DiscoveryController : ControllerBase
 	/// If the Keys endpoint is disabled, a 404 Not Found response is returned.
 	/// </returns>
 	[HttpGet(Path.Keys)]
+	[EnabledBy(OidcEndpoints.Keys)]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
-		[FromServices] IOptionsSnapshot<OidcOptions> options,
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider)
 	{
-		if (!options.Value.EnabledEndpoints.HasFlag(OidcEndpoints.Keys))
-			return NotFound();
-
 		var keys = await serviceKeysProvider.GetSigningKeys().ToArrayAsync();
 		return new JsonWebKeySet(keys);
 	}

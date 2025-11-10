@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net.Mime;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
@@ -30,6 +31,7 @@ using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Attributes;
+using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -74,6 +76,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpPost(Path.PushAuthorizationRequest)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
+    [EnabledBy(OidcEndpoints.PushedAuthorizationRequest)]
     public async Task<ActionResult<AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
@@ -105,6 +108,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpGetOrPost(Path.Authorize)]
     //[Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
+    [EnabledBy(OidcEndpoints.Authorize)]
     public async Task<ActionResult<AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
@@ -133,6 +137,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpGetOrPost(Path.UserInfo)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.UserInfo)]
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
@@ -165,6 +170,7 @@ public sealed class AuthenticationController : ControllerBase
     //[Consumes(MediaTypes.FormUrlEncoded, IsOptional = true)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.EndSession)]
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
         [FromServices] IEndSessionResponseFormatter formatter,
@@ -194,6 +200,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpGet(Path.CheckSession)]
     [Produces(MediaTypes.Javascript)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.CheckSession)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
         [FromServices] ICheckSessionResponseFormatter formatter)
@@ -232,6 +239,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </returns>
     [HttpPost(Path.BackChannelAuthentication)]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    [EnabledBy(OidcEndpoints.BackChannelAuthentication)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
