@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -43,9 +43,9 @@ public interface IClientJwtValidator
     /// <param name="options">Optional validation options that define the specific checks and constraints
     /// to apply during validation. Default is <see cref="ValidationOptions.Default"/>.</param>
     /// <returns>
-    /// A task that returns a tuple containing the validation result
-    /// and the associated <see cref="ClientInfo"/> if the JWT is valid; otherwise, it returns null for the client info.
+    /// A task that returns a Result containing either a ValidJsonWebToken on success,
+    /// or a JwtValidationError on failure.
     /// </returns>
-    public Task<(JwtValidationResult, ClientInfo?)> ValidateAsync(
+    public Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         string jwt, ValidationOptions options = ValidationOptions.Default);
 }

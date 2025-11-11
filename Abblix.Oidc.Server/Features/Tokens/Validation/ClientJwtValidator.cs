@@ -60,10 +60,10 @@ public class ClientJwtValidator(
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
-    /// A task that returns a tuple containing the validation result
-    /// and the associated client information if the issuer is validated.
+    /// A task that returns a Result containing either a ValidJsonWebToken on success,
+    /// or a JwtValidationError on failure.
     /// </returns>
-    public async Task<(JwtValidationResult, ClientInfo?)> ValidateAsync(
+    public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         string jwt,
         ValidationOptions options = ValidationOptions.Default)
     {
@@ -77,7 +77,7 @@ public class ClientJwtValidator(
                 ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
             });
 
-        return (result, ClientInfo);
+        return result.MapSuccess(token => new ValidJsonWebToken(token, ClientInfo.NotNull(nameof(ClientInfo))));
     }
 
     /// <summary>

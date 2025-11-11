@@ -22,9 +22,9 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -58,9 +58,9 @@ public class PrivateKeyJwtAuthenticator(
     /// </summary>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
-    /// A tuple containing the validation result and the associated client information if validation is successful.
+    /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected override async Task<(JwtValidationResult result, ClientInfo? clientInfo)> ValidateJwtAsync(string jwt)
+    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt)
     {
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();

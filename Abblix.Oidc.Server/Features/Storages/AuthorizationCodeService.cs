@@ -65,7 +65,7 @@ public class AuthorizationCodeService(
 	/// Validates and processes an authorization code, ensuring it is correct and has not expired or been used previously.
 	/// </summary>
 	/// <param name="authorizationCode">The authorization code to validate and process.</param>
-	/// <returns>A task that resolves to a <see cref="Result<AuthorizedGrant, AuthError>"/>, which indicates the outcome of
+	/// <returns>A task that resolves to a <see cref="Result{AuthorizedGrant, AuthError}"/>, which indicates the outcome of
 	/// the authorization attempt and contains any tokens issued.</returns>
 	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode)
 	{
