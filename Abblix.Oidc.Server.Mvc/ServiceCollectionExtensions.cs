@@ -94,7 +94,6 @@ public static class ServiceCollectionExtensions
 			.AddScoped<IAuthSessionService, AuthenticationSchemeAdapter>()
 			.AddSingleton<IUriResolver, UriResolver>()
 			.AddScoped<IEndpointResolver, EndpointResolver>()
-			.AddSingleton<IActionContextAccessor, ActionContextAccessor>()
 			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
 			.AddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>()
 			.AddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>()
@@ -193,12 +192,18 @@ public static class ServiceCollectionExtensions
 		Func<CorsPolicyBuilder> allowAnyValues,
 		Func<string[], CorsPolicyBuilder> withValues)
 	{
-		if (values == null)
-			return;
+		switch (values)
+		{
+			case null:
+				break;
 
-		if (values.Length == 1 && values[0] == "*")
-			allowAnyValues();
-		else
-			withValues(values);
+			case ["*"]:
+				allowAnyValues();
+				break;
+
+			default:
+				withValues(values);
+				break;
+		}
 	}
 }
