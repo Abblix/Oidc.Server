@@ -64,7 +64,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(validToken), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
         {
@@ -156,7 +156,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new JwtValidationError(JwtError.InvalidToken, "Invalid signature"), (ClientInfo?)null));
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid signature"));
 
         var request = new ClientRequest
         {
@@ -186,7 +186,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(invalidToken), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(invalidToken, clientInfo));
 
         var request = new ClientRequest
         {
@@ -216,7 +216,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(tokenWithoutIssuer), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(tokenWithoutIssuer, clientInfo));
 
         var request = new ClientRequest
         {
@@ -246,7 +246,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(tokenWithoutSubject), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(tokenWithoutSubject, clientInfo));
 
         var request = new ClientRequest
         {
@@ -278,7 +278,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(validToken), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
         {
@@ -311,7 +311,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(validToken), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
         {
@@ -347,7 +347,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(validToken), clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
         {

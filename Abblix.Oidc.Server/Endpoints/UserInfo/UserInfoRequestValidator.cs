@@ -23,13 +23,11 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.UserInfoRequest;
@@ -104,26 +102,20 @@ public class UserInfoRequestValidator(
 
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
-		AuthSession? authSession;
-		AuthorizationContext? authContext;
-
-		switch (result)
+		if (!result.TryGetSuccess(out var token))
 		{
-			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.AccessToken:
-				return new OidcError(
-					ErrorCodes.InvalidGrant,
-					$"Invalid token type: {tokenType}");
-
-			case ValidJsonWebToken { Token: var token }:
-				(authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
-				break;
-
-			case JwtValidationError error:
-				return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
-
-			default:
-				throw new UnexpectedTypeException(nameof(result), result.GetType());
+			var error = result.GetFailure();
+			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 		}
+
+		if (token.Header.Type is var tokenType && tokenType != JwtTypes.AccessToken)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				$"Invalid token type: {tokenType}");
+		}
+
+		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
 
 		var clientInfo = await clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
 		if (clientInfo == null)

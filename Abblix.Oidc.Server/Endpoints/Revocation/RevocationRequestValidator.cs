@@ -22,9 +22,7 @@
 
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -66,7 +64,7 @@ public class RevocationRequestValidator(
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a
-	/// <see cref="Result<ValidRevocationRequest, AuthError>"/>. The result indicates whether the request is valid or
+	/// <see cref="Result{ValidRevocationRequest, AuthError}"/>. The result indicates whether the request is valid or
 	/// contains any errors.
 	/// </returns>
 	/// <remarks>
@@ -88,25 +86,24 @@ public class RevocationRequestValidator(
 		}
 
 		var result = await jwtValidator.ValidateAsync(revocationRequest.Token);
-		switch (result)
+
+		// If token validation fails, log the error and return an invalid token result.
+		if (result.TryGetFailure(out var error))
 		{
-			// If token validation fails, log the error and return an invalid token result.
-			case JwtValidationError error:
-				logger.LogWarning("The token validation failed: {@Error}", error);
-				return ValidRevocationRequest.InvalidToken(revocationRequest);
-
-			// If the token was issued to a different client, log a warning and return an invalid token result.
-			case ValidJsonWebToken { Token.Payload.ClientId: var clientId } when clientId != clientInfo.ClientId:
-				logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
-				return ValidRevocationRequest.InvalidToken(revocationRequest);
-
-			// If the token is valid and belongs to the authenticated client, return a valid revocation request.
-			case ValidJsonWebToken { Token: var token }:
-				return new ValidRevocationRequest(revocationRequest, token);
-
-			// Unexpected result type, throw an exception to indicate a misconfiguration or unexpected validation outcome.
-			default:
-				throw new UnexpectedTypeException(nameof(result), result.GetType());
+			logger.LogWarning("The token validation failed: {@Error}", error);
+			return ValidRevocationRequest.InvalidToken(revocationRequest);
 		}
+
+		var token = result.GetSuccess();
+
+		// If the token was issued to a different client, log a warning and return an invalid token result.
+		if (token.Payload.ClientId is {} clientId && clientId != clientInfo.ClientId)
+		{
+			logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
+			return ValidRevocationRequest.InvalidToken(revocationRequest);
+		}
+
+		// If the token is valid and belongs to the authenticated client, return a valid revocation request.
+		return new ValidRevocationRequest(revocationRequest, token);
 	}
 }

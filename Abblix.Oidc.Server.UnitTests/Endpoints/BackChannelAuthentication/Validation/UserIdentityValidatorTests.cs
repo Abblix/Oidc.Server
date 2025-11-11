@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Moq;
 using Xunit;
 
@@ -140,11 +141,10 @@ public class UserIdentityValidatorTests
     {
         // Arrange
         var token = new JsonWebToken();
-        var validToken = new ValidJsonWebToken(token);
 
         _clientJwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validToken, new ClientInfo("test-client")));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         var context = CreateContext(
             loginHintToken: "jwt-token",
@@ -167,11 +167,10 @@ public class UserIdentityValidatorTests
     {
         // Arrange
         var token = new JsonWebToken();
-        var validToken = new ValidJsonWebToken(token);
 
         _clientJwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validToken, new ClientInfo("different-client")));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("different-client")));
 
         var context = CreateContext(
             loginHintToken: "jwt-token",
@@ -198,7 +197,7 @@ public class UserIdentityValidatorTests
 
         _clientJwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, (ClientInfo?)null));
+            .ReturnsAsync(validationError);
 
         var context = CreateContext(
             loginHintToken: "invalid-jwt",
@@ -225,7 +224,7 @@ public class UserIdentityValidatorTests
 
         _clientJwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, (ClientInfo?)null));
+            .ReturnsAsync(validationError);
 
         var context = CreateContext(
             loginHintToken: "not-jwt",
@@ -247,11 +246,10 @@ public class UserIdentityValidatorTests
     {
         // Arrange
         var token = new JsonWebToken { Payload = { Audiences = ["test-client"] } };
-        var validToken = new ValidJsonWebToken(token);
 
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(validToken);
+            .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
 
@@ -272,11 +270,10 @@ public class UserIdentityValidatorTests
     {
         // Arrange
         var token = new JsonWebToken { Payload = { Audiences = ["different-client"] } };
-        var validToken = new ValidJsonWebToken(token);
 
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(validToken);
+            .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
 
@@ -366,13 +363,12 @@ public class UserIdentityValidatorTests
     {
         // Arrange
         var token = new JsonWebToken { Payload = { Audiences = ["test-client"] } };
-        var validToken = new ValidJsonWebToken(token);
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
-            .ReturnsAsync(validToken);
+            .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
 

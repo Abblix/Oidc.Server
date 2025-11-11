@@ -130,7 +130,7 @@ public class UserInfoRequestValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_token_123",
                 It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
-            .ReturnsAsync(new ValidJsonWebToken(accessToken));
+            .ReturnsAsync(accessToken);
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
@@ -171,7 +171,7 @@ public class UserInfoRequestValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_token_123",
                 It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
-            .ReturnsAsync(new ValidJsonWebToken(accessToken));
+            .ReturnsAsync(accessToken);
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
@@ -321,7 +321,7 @@ public class UserInfoRequestValidatorTests
             .Setup(v => v.ValidateAsync(
                 "id_token_value",
                 It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
@@ -352,7 +352,7 @@ public class UserInfoRequestValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_token",
                 It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
-            .ReturnsAsync(new ValidJsonWebToken(accessToken));
+            .ReturnsAsync(accessToken);
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
@@ -391,7 +391,7 @@ public class UserInfoRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync("token_123", It.IsAny<ValidationOptions>()))
             .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
-            .ReturnsAsync(new ValidJsonWebToken(accessToken));
+            .ReturnsAsync(accessToken);
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))

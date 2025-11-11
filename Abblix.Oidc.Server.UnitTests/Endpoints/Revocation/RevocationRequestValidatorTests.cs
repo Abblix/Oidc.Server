@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -101,7 +102,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -162,7 +163,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(validationError));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -195,7 +196,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -231,7 +232,7 @@ public class RevocationRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .Callback(new Action<string, ValidationOptions>((_, __) => callOrder.Add("validate")))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -285,7 +286,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(jwt));
+            .ReturnsAsync(jwt);
 
         // Act
         await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -313,7 +314,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -342,7 +343,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
@@ -371,7 +372,7 @@ public class RevocationRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);

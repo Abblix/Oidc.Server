@@ -22,9 +22,7 @@
 
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -58,7 +56,7 @@ public class IntrospectionRequestValidator(
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
 	/// A task representing the asynchronous validation operation. The task result contains the
-	/// <see cref="Result<ValidIntrospectionRequest, AuthError>"/> which indicates whether the request is valid or contains errors.
+	/// <see cref="Result{ValidIntrospectionRequest, AuthError}"/> which indicates whether the request is valid or contains errors.
 	/// </returns>
 	public async Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
@@ -71,25 +69,21 @@ public class IntrospectionRequestValidator(
 		}
 
 		var result = await jwtValidator.ValidateAsync(introspectionRequest.Token);
-		switch (result)
+
+		if (result.TryGetFailure(out var error))
 		{
-			case ValidJsonWebToken { Token: var token }:
-
-				var clientId = token.Payload.ClientId;
-				if (clientId != clientInfo.ClientId)
-				{
-					// The token was issued to another client
-					return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-				}
-
-				return new ValidIntrospectionRequest(introspectionRequest, token);
-
-			case JwtValidationError error:
-				logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
-				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-
-			default:
-				throw new UnexpectedTypeException(nameof(result), result.GetType());
+			logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
+			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
 		}
+
+		var token = result.GetSuccess();
+		var clientId = token.Payload.ClientId;
+		if (clientId != clientInfo.ClientId)
+		{
+			// The token was issued to another client
+			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+		}
+
+		return new ValidIntrospectionRequest(introspectionRequest, token);
 	}
 }

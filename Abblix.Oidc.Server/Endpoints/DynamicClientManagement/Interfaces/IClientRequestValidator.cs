@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 public interface IClientRequestValidator
 {
     /// <summary>
-    /// Validates a client request asynchronously and returns a result of type Result<ValidClientRequest, AuthError>.
+    /// Validates a client request asynchronously and returns a result of type Result&lt;ValidClientRequest, AuthError&gt;.
     /// </summary>
     /// <param name="request">The client request to validate.</param>
     /// <returns>A task representing the validation result.</returns>

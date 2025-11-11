@@ -717,7 +717,8 @@ public class JsonWebTokenClaimsTests
             Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime
         };
 
-        var result = Assert.IsType<ValidJsonWebToken>(await validator.ValidateAsync(jwt, parameters));
-        return result.Token;
+        var validatorResult = await validator.ValidateAsync(jwt, parameters);
+        Assert.True(validatorResult.TryGetSuccess(out var result));
+        return result;
     }
 }

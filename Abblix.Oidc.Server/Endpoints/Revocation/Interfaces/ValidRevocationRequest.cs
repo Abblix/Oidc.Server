@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 /// <summary>
 /// Represents a valid revocation request, including the request model and the associated token, if available.
 /// </summary>
-public record ValidRevocationRequest : RevocationRequestValidationResult
+public record ValidRevocationRequest
 {
 	/// <summary>
 	/// Initializes a valid revocation request with the provided model and token.

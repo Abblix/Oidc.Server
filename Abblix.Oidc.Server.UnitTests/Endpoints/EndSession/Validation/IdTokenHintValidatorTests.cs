@@ -80,7 +80,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -105,7 +105,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -131,7 +131,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -157,7 +157,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -183,7 +183,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -271,7 +271,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync("id_token", It.IsAny<ValidationOptions>()))
             .Callback(new System.Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         await _validator.ValidateAsync(context);
@@ -296,7 +296,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         await _validator.ValidateAsync(context);
@@ -320,7 +320,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -345,7 +345,7 @@ public class IdTokenHintValidatorTests
             .Setup(v => v.ValidateAsync(
                 "id_token",
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var error = await _validator.ValidateAsync(context);

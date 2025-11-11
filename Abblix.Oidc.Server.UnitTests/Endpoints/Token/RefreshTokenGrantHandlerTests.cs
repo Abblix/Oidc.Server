@@ -83,7 +83,7 @@ public class RefreshTokenGrantHandlerTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(new ValidJsonWebToken(refreshToken));
+            .ReturnsAsync(refreshToken);
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
@@ -118,7 +118,7 @@ public class RefreshTokenGrantHandlerTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(new ValidJsonWebToken(refreshToken));
+            .ReturnsAsync(refreshToken);
 
         // Token belongs to different client
         var grantForDifferentClient = new AuthorizedGrant(
@@ -154,7 +154,7 @@ public class RefreshTokenGrantHandlerTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(new ValidJsonWebToken(accessToken));
+            .ReturnsAsync(accessToken);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -180,7 +180,7 @@ public class RefreshTokenGrantHandlerTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(new ValidJsonWebToken(idToken));
+            .ReturnsAsync(idToken);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -257,7 +257,7 @@ public class RefreshTokenGrantHandlerTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(new ValidJsonWebToken(refreshToken));
+            .ReturnsAsync(refreshToken);
 
         var serviceError = new OidcError(ErrorCodes.InvalidGrant, "Token has been revoked");
         _refreshTokenService

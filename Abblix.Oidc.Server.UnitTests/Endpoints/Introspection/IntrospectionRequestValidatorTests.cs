@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -101,7 +102,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -161,7 +162,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(validationError));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -193,7 +194,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -229,7 +230,7 @@ public class IntrospectionRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .Callback(new Action<string, ValidationOptions>((_, __) => callOrder.Add("validate")))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -283,7 +284,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(jwt));
+            .ReturnsAsync(jwt);
 
         // Act
         await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -311,7 +312,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -340,7 +341,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
@@ -369,7 +370,7 @@ public class IntrospectionRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Returns(Task.FromResult<JwtValidationResult>(new ValidJsonWebToken(token)));
+            .ReturnsAsync(token);
 
         // Act
         var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);

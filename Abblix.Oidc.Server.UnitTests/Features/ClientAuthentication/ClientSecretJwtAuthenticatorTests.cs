@@ -21,13 +21,13 @@
 // info@abblix.com
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
@@ -187,7 +187,7 @@ public class ClientSecretJwtAuthenticatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
-            .Returns(new Func<string, ValidationParameters, Task<JwtValidationResult>>(async (_, parameters) =>
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
@@ -196,7 +196,7 @@ public class ClientSecretJwtAuthenticatorTests
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
-                return new ValidJsonWebToken(token);
+                return token;
             }));
 
         _clientInfoProvider
@@ -274,7 +274,17 @@ public class ClientSecretJwtAuthenticatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
-            .ReturnsAsync(new ValidJsonWebToken(token));
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                // Simulate JWT validator executing the callbacks
+                if (parameters.ValidateIssuer != null)
+                    await parameters.ValidateIssuer(ClientId);
+
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
+                return token;
+            }));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ClientId))
@@ -317,7 +327,17 @@ public class ClientSecretJwtAuthenticatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
-            .ReturnsAsync(new ValidJsonWebToken(token));
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                // Simulate JWT validator executing the callbacks
+                if (parameters.ValidateIssuer != null)
+                    await parameters.ValidateIssuer(ClientId);
+
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
+                return token;
+            }));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ClientId))
@@ -360,7 +380,7 @@ public class ClientSecretJwtAuthenticatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
-            .Returns(new Func<string, ValidationParameters, Task<JwtValidationResult>>(async (_, parameters) =>
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
@@ -369,7 +389,7 @@ public class ClientSecretJwtAuthenticatorTests
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
-                return new ValidJsonWebToken(token);
+                return token;
             }));
 
         _clientInfoProvider

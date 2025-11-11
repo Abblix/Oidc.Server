@@ -24,10 +24,10 @@ using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.DependencyInjection;
@@ -155,7 +155,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, originalRequest))
@@ -190,7 +190,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, originalRequest))
@@ -220,7 +220,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, null));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await fetcher.FetchAsync(request, jwt);
@@ -254,7 +254,7 @@ public class RequestObjectFetcherTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
             .Callback<string, ValidationOptions>((_, opts) => capturedOptions = opts)
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -292,7 +292,7 @@ public class RequestObjectFetcherTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
             .Callback<string, ValidationOptions>((_, opts) => capturedOptions = opts)
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -327,7 +327,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -361,7 +361,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -406,7 +406,7 @@ public class RequestObjectFetcherTests
             {
                 var payload = jwt == jwt1 ? payload1 : payload2;
                 var token = jwt == jwt1 ? token1 : token2;
-                return (new ValidJsonWebToken(token), null);
+                return new ValidJsonWebToken(token, new ClientInfo("test-client"));
             });
 
         _jsonObjectBinder
@@ -438,7 +438,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, null));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await fetcher.FetchAsync(request, jwt);
@@ -463,7 +463,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, null));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await fetcher.FetchAsync(request, jwt);
@@ -501,7 +501,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, originalRequest))
@@ -536,7 +536,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -566,7 +566,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((validationError, null));
+            .ReturnsAsync(validationError);
 
         // Act
         var result = await fetcher.FetchAsync(request, jwt);
@@ -596,7 +596,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -631,7 +631,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((new ValidJsonWebToken(token), null));
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))

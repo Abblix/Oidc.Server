@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Utils;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -84,7 +85,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(token));
+            .ReturnsAsync(token);
 
         SetupKeyProviders();
 
@@ -200,7 +201,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 
@@ -265,7 +266,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 
@@ -364,7 +365,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 
@@ -390,7 +391,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 
@@ -416,7 +417,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 
@@ -448,7 +449,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(false))
@@ -483,7 +484,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(false))
@@ -553,7 +554,7 @@ public class AuthServiceJwtValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .ReturnsAsync(new ValidJsonWebToken(token));
+            .ReturnsAsync(token);
 
         SetupKeyProviders();
 
@@ -565,8 +566,8 @@ public class AuthServiceJwtValidatorTests
         var result = await _validator.ValidateAsync(ValidJwt);
 
         // Assert
-        var validToken = Assert.IsType<ValidJsonWebToken>(result);
-        Assert.Same(token, validToken.Token);
+        Assert.True(result.TryGetSuccess(out var validToken));
+        Assert.Same(token, validToken);
 
         _jwtValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
     }
@@ -589,7 +590,7 @@ public class AuthServiceJwtValidatorTests
         var result = await _validator.ValidateAsync(ValidJwt);
 
         // Assert
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("Invalid signature", error.ErrorDescription);
     }
@@ -612,7 +613,7 @@ public class AuthServiceJwtValidatorTests
         var result = await _validator.ValidateAsync(ValidJwt);
 
         // Assert
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("Token expired", error.ErrorDescription);
     }
@@ -629,7 +630,7 @@ public class AuthServiceJwtValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new ValidJsonWebToken(CreateValidToken()));
+            .ReturnsAsync(CreateValidToken());
 
         SetupKeyProviders();
 

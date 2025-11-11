@@ -80,44 +80,38 @@ public class RefreshTokenGrantHandler(
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);
 
-		switch (jwtValidationResult)
+		if (jwtValidationResult.TryGetFailure(out var error))
 		{
-			// If the token type is invalid, return an error indicating the issue.
-			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.RefreshToken:
-				return new OidcError(
-					ErrorCodes.InvalidGrant,
-					$"Invalid token type: {tokenType}");
-
-			// If the token is valid and of the correct type (refresh token), proceed with authorization.
-			case ValidJsonWebToken { Token: {} token }:
-
-				// Authorize the request based on the refresh token and check if the token belongs to the correct client.
-				var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token);
-
-				if (result.TryGetFailure(out var authError))
-				{
-					return authError;
-				}
-
-				var grant = result.GetSuccess();
-				if (grant.Context.ClientId != clientInfo.ClientId)
-				{
-					// If the client information in the token doesn't match the request, return an error.
-					return new OidcError(
-						ErrorCodes.InvalidGrant,
-						"The specified grant belongs to another client");
-				}
-
-				// If everything is valid, return the authorized result.
-				return grant;
-
-			// If there was a validation error, return it as an invalid grant result.
-			case JwtValidationError error:
-				return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
-
-			// If an unexpected result type is encountered, throw an exception.
-			default:
-				throw new UnexpectedTypeException(nameof(jwtValidationResult), jwtValidationResult.GetType());
+			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 		}
+
+		var token = jwtValidationResult.GetSuccess();
+
+		// If the token type is invalid, return an error indicating the issue.
+		if (token.Header.Type is var tokenType && tokenType != JwtTypes.RefreshToken)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				$"Invalid token type: {tokenType}");
+		}
+
+		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token);
+		if (result.TryGetFailure(out var authError))
+		{
+			return authError;
+		}
+
+		var grant = result.GetSuccess();
+		if (grant.Context.ClientId != clientInfo.ClientId)
+		{
+			// If the client information in the token doesn't match the request, return an error.
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"The specified grant belongs to another client");
+		}
+
+		// If everything is valid, return the authorized result.
+		return grant;
 	}
 }

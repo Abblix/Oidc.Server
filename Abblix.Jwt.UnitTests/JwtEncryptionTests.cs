@@ -88,22 +88,24 @@ public class JwtEncryptionTests
             ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
         };
 
-        var result = Assert.IsType<ValidJsonWebToken>(await validator.ValidateAsync(jwt, parameters));
+        var validatorResult = await validator.ValidateAsync(jwt, parameters);
+        Assert.True(validatorResult.TryGetSuccess(out var result));
         var expectedClaims = ExtractClaims(token);
-        var actualClaims = ExtractClaims(result.Token);
+        var actualClaims = ExtractClaims(result);
         Assert.Equal(expectedClaims, actualClaims);
 
-        var arrayValues = result.Token.Payload.Json.GetArrayOfStrings("colors");
+        var arrayValues = result.Payload.Json.GetArrayOfStrings("colors");
         Assert.Equal(["red", "green", "blue"], arrayValues);
 
-        var address = result.Token.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+        var address = result.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
         Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
 
         await Task.Delay(expiresIn);
 
-        var (error, description) = Assert.IsType<JwtValidationError>(await validator.ValidateAsync(jwt, parameters));
-        Assert.Equal(JwtError.InvalidToken, error);
-        Assert.Contains("Lifetime validation failed", description);
+        var result2 = await validator.ValidateAsync(jwt, parameters);
+        Assert.True(result2.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("Lifetime validation failed", error.ErrorDescription);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

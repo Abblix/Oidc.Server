@@ -52,8 +52,8 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var validToken = Assert.IsType<ValidJsonWebToken>(result);
-        Assert.Equal(token.Payload.Subject, validToken.Token.Payload.Subject);
+        Assert.True(result.TryGetSuccess(out var validToken));
+        Assert.Equal(token.Payload.Subject, validToken.Payload.Subject);
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -97,7 +97,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -125,7 +125,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("Lifetime validation failed", error.ErrorDescription);
     }
@@ -152,7 +152,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("Lifetime validation failed", error.ErrorDescription);
     }
@@ -181,7 +181,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
 
@@ -205,7 +205,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -228,7 +228,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -247,7 +247,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -267,7 +267,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -284,7 +284,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(string.Empty, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -305,8 +305,8 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var validToken = Assert.IsType<ValidJsonWebToken>(result);
-        Assert.Equal(token.Payload.Subject, validToken.Token.Payload.Subject);
+        Assert.True(result.TryGetSuccess(out var validToken));
+        Assert.Equal(token.Payload.Subject, validToken.Payload.Subject);
     }
 
     /// <summary>
@@ -327,7 +327,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -354,7 +354,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -375,7 +375,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -396,7 +396,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -417,7 +417,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -438,7 +438,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
 
@@ -464,7 +464,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var error = Assert.IsType<JwtValidationError>(result);
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
@@ -492,7 +492,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -520,9 +520,9 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        var validToken = Assert.IsType<ValidJsonWebToken>(result);
-        Assert.Equal(token.Payload.ClientId, validToken.Token.Payload.ClientId);
-        Assert.Equal(token.Payload.Nonce, validToken.Token.Payload.Nonce);
+        Assert.True(result.TryGetSuccess(out var validToken));
+        Assert.Equal(token.Payload.ClientId, validToken.Payload.ClientId);
+        Assert.Equal(token.Payload.Nonce, validToken.Payload.Nonce);
     }
 
     /// <summary>
@@ -552,7 +552,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
 
@@ -575,7 +575,7 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.IsType<ValidJsonWebToken>(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     private static JsonWebToken CreateValidToken()
