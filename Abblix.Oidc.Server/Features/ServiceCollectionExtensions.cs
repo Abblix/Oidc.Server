@@ -460,12 +460,13 @@ public static class ServiceCollectionExtensions
         }
 
         services
+            .AddSingleton<SsrfValidatingHttpMessageHandler>()
             .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
             {
                 var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
                 client.Timeout = options.RequestTimeout;
             })
-            .ConfigurePrimaryHttpMessageHandler(() => new SsrfValidatingHttpMessageHandler());
+            .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
 
         return services;
     }

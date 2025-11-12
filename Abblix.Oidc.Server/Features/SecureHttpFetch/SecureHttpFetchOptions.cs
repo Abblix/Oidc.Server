@@ -46,4 +46,29 @@ public class SecureHttpFetchOptions
     /// Increase this value if you need to fetch larger documents (e.g., large JSON Web Key Sets).
     /// </remarks>
     public long MaxResponseSizeBytes { get; set; } = 5 << 20;
+
+    /// <summary>
+    /// List of allowed URI schemes.
+    /// Default: null (all schemes allowed).
+    /// </summary>
+    /// <remarks>
+    /// When set, only URIs with schemes in this list will be allowed.
+    /// Common secure configuration: new[] { "https" } to enforce HTTPS-only fetching.
+    /// Setting this to null or empty array allows all schemes.
+    /// </remarks>
+    public string[]? AllowedSchemes { get; set; } = [Uri.UriSchemeHttps];
+
+    /// <summary>
+    /// Whether to block requests to private networks.
+    /// Default: true.
+    /// </summary>
+    /// <remarks>
+    /// When true, blocks requests to:
+    /// - Private IP ranges (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+    /// - Link-local addresses (169.254.0.0/16 for IPv4, fe80::/10 for IPv6)
+    /// - Loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
+    /// - Common internal hostnames (localhost, internal, etc.)
+    /// Set to false only in development environments where fetching from internal networks is required.
+    /// </remarks>
+    public bool BlockPrivateNetworks { get; set; } = true;
 }

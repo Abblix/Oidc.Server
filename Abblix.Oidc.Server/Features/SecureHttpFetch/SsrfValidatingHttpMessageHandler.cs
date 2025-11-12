@@ -22,6 +22,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 
@@ -46,7 +47,7 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
 /// </remarks>
-public class SsrfValidatingHttpMessageHandler() : DelegatingHandler(
+public class SsrfValidatingHttpMessageHandler(IOptions<SecureHttpFetchOptions> options) : DelegatingHandler(
     new HttpClientHandler
     {
         // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
@@ -105,20 +106,29 @@ public class SsrfValidatingHttpMessageHandler() : DelegatingHandler(
             throw new InvalidOperationException("Request URI cannot be null");
         }
 
+        // Check allowed schemes if configured
+        if (options.Value.AllowedSchemes is { Length: > 0 } &&
+            !options.Value.AllowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new HttpRequestException(
+                $"SSRF protection: URI scheme '{uri.Scheme}' is not allowed. " +
+                $"Allowed schemes: {string.Join(", ", options.Value.AllowedSchemes)}");
+        }
+
         var hostname = uri.Host;
 
-        // Step 1: Check for blocked hostnames before DNS resolution
-        if (IsInternalHostname(hostname))
+        // Check for blocked hostnames before DNS resolution (if private network blocking is enabled)
+        if (options.Value.BlockPrivateNetworks && IsInternalHostname(hostname))
         {
             throw new HttpRequestException(
                 $"SSRF protection: Hostname '{hostname}' matches internal hostname pattern. " +
                 $"Request blocked to prevent access to internal infrastructure.");
         }
 
-        // Step 2: For IP addresses, validate directly without DNS lookup
+        // For IP addresses, validate directly without DNS lookup
         if (IPAddress.TryParse(hostname, out var ipAddress))
         {
-            if (IsPrivateOrReservedAddress(ipAddress))
+            if (options.Value.BlockPrivateNetworks && IsPrivateOrReservedAddress(ipAddress))
             {
                 throw new HttpRequestException(
                     $"SSRF protection: IP address '{ipAddress}' is private/internal. " +
@@ -127,27 +137,30 @@ public class SsrfValidatingHttpMessageHandler() : DelegatingHandler(
             return await base.SendAsync(request, cancellationToken);
         }
 
-        // Step 3: Resolve DNS and validate all resolved IP addresses
-        IPHostEntry hostEntry;
-        try
+        // Resolve DNS and validate all resolved IP addresses (if private network blocking is enabled)
+        if (options.Value.BlockPrivateNetworks)
         {
-            hostEntry = await Dns.GetHostEntryAsync(hostname, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw new HttpRequestException(
-                $"SSRF protection: Unable to resolve hostname '{hostname}' immediately before request",
-                ex);
-        }
+            IPHostEntry hostEntry;
+            try
+            {
+                hostEntry = await Dns.GetHostEntryAsync(hostname, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                throw new HttpRequestException(
+                    $"SSRF protection: Unable to resolve hostname '{hostname}' immediately before request",
+                    ex);
+            }
 
-        // Step 4: Check if any resolved address is private/reserved
-        var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
-        if (privateAddress != null)
-        {
-            throw new HttpRequestException(
-                $"SSRF protection: DNS rebinding detected. Hostname '{hostname}' resolved to private/internal address {privateAddress} " +
-                $"immediately before HTTP request. This may indicate a DNS rebinding attack where the hostname resolved to " +
-                $"a public IP during initial validation but now resolves to a private IP.");
+            // Check if any resolved address is private/reserved
+            var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
+            if (privateAddress != null)
+            {
+                throw new HttpRequestException(
+                    $"SSRF protection: DNS rebinding detected. Hostname '{hostname}' resolved to private/internal address {privateAddress} " +
+                    $"immediately before HTTP request. This may indicate a DNS rebinding attack where the hostname resolved to " +
+                    $"a public IP during initial validation but now resolves to a private IP.");
+            }
         }
 
         // All checks passed, proceed with request
