@@ -47,7 +47,7 @@ public record TokenResponse
 	/// </summary>
 	[JsonPropertyName(Parameters.AccessToken)]
 	[JsonPropertyOrder(1)]
-	public string AccessToken { get; init; } = default!;
+	public string AccessToken { get; init; } = null!;
 
     /// <summary>
 	/// The type of the issued token, typically an absolute URI identifying the token type.
@@ -61,7 +61,7 @@ public record TokenResponse
 	/// </summary>
 	[JsonPropertyName(Parameters.TokenType)]
 	[JsonPropertyOrder(3)]
-	public string TokenType { get; init; } = default!;
+	public string TokenType { get; init; } = null!;
 
 	/// <summary>
 	/// The lifetime in seconds of the access token. After this duration, the token will expire and cease to be valid.

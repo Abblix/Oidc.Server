@@ -40,7 +40,7 @@ public record RevocationRequest
 	/// </summary>
 	[BindProperty(Name = Parameters.Token)]
 	[Required]
-	public string Token { get; set; } = default!;
+	public string Token { get; set; } = null!;
 
 	/// <summary>
 	/// A hint about the type of the token submitted for revocation.

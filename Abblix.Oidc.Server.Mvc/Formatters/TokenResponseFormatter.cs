@@ -59,6 +59,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     ExpiresIn = success.ExpiresIn,
 
                     RefreshToken = success.RefreshToken?.EncodedJwt,
+                    Scope = success.Scope.ToArray(),
                     IdToken = success.IdToken?.EncodedJwt,
                 };
 
