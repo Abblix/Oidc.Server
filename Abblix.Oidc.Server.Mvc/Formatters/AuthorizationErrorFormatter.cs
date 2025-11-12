@@ -43,7 +43,6 @@ public class AuthorizationErrorFormatter(
     IParametersProvider parametersProvider,
     IIssuerProvider issuerProvider)
 {
-
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,
     /// considering the request's redirect URI and the error details.

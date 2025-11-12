@@ -36,19 +36,11 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Implements response formatting for pushed authorization requests, extending the base functionality to handle
 /// specific response types.
 /// </summary>
-public class PushedAuthorizationResponseFormatter : AuthorizationErrorFormatter, IPushedAuthorizationResponseFormatter
+/// <param name="parametersProvider">Provides access to parameters used in formatting the response.</param>
+/// <param name="issuerProvider">Provides access to the issuer information used in responses.</param>
+public class PushedAuthorizationResponseFormatter(IParametersProvider parametersProvider, IIssuerProvider issuerProvider)
+    : AuthorizationErrorFormatter(parametersProvider, issuerProvider), IPushedAuthorizationResponseFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PushedAuthorizationResponseFormatter"/> class
-    /// with the specified parameters' provider.
-    /// </summary>
-    /// <param name="parametersProvider">Provides access to parameters used in formatting the response.</param>
-    /// <param name="issuerProvider">Provides access to the issuer information used in responses.</param>
-    public PushedAuthorizationResponseFormatter(IParametersProvider parametersProvider, IIssuerProvider issuerProvider)
-        : base(parametersProvider, issuerProvider)
-    {
-    }
-
     /// <summary>
     /// Asynchronously formats the response to a pushed authorization request.
     /// </summary>
