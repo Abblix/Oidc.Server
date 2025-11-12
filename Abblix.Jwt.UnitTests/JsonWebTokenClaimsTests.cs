@@ -686,6 +686,32 @@ public class JsonWebTokenClaimsTests
         Assert.Equal(new[] { "red", "green", "blue" }, colors);
     }
 
+    /// <summary>
+    /// Verifies that GetArrayOfStrings correctly filters out null elements from JsonArray.
+    /// Tests the OfType&lt;JsonNode&gt;() null filtering behavior when parsing arrays that may contain nulls.
+    /// This is important for defensive parsing of JWT claims from untrusted sources.
+    /// </summary>
+    [Fact]
+    public void GetArrayOfStrings_WithNullElements_FiltersOutNulls()
+    {
+        var token = CreateToken();
+
+        // Create a JsonArray with null elements
+        token.Payload.Json["colors"] = new JsonArray
+        {
+            "red",
+            null,
+            "green",
+            null,
+            "blue"
+        };
+
+        var result = token.Payload.Json.GetArrayOfStrings("colors").ToArray();
+
+        Assert.Equal(3, result.Length);
+        Assert.Equal(["red", "green", "blue"], result);
+    }
+
     private static JsonWebToken CreateToken()
     {
         var issuedAt = DateTimeOffset.UtcNow;
