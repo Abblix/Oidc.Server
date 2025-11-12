@@ -35,24 +35,10 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for user information responses.
 /// </summary>
-public class UserInfoResponseFormatter : IUserInfoResponseFormatter
+public class UserInfoResponseFormatter(
+    TimeProvider clock,
+    IClientJwtFormatter clientJwtFormatter) : IUserInfoResponseFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UserInfoResponseFormatter"/> class.
-    /// </summary>
-    /// <param name="clock">Provides the current time.</param>
-    /// <param name="clientJwtFormatter">Formats JWTs for clients.</param>
-    public UserInfoResponseFormatter(
-        TimeProvider clock,
-        IClientJwtFormatter clientJwtFormatter)
-    {
-        _clock = clock;
-        _clientJwtFormatter = clientJwtFormatter;
-    }
-
-    private readonly IClientJwtFormatter _clientJwtFormatter;
-    private readonly TimeProvider _clock;
-
     /// <summary>
     /// Asynchronously formats the response for a user information request.
     /// </summary>
@@ -88,7 +74,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
             Payload = new JsonWebTokenPayload(found.User)
             {
                 Issuer = found.Issuer,
-                IssuedAt = _clock.GetUtcNow(),
+                IssuedAt = clock.GetUtcNow(),
                 Audiences = [found.ClientInfo.ClientId],
             }
         };
@@ -96,7 +82,7 @@ public class UserInfoResponseFormatter : IUserInfoResponseFormatter
         return new ContentResult
         {
             ContentType = MediaTypes.Jwt,
-            Content = await _clientJwtFormatter.FormatAsync(token, found.ClientInfo),
+            Content = await clientJwtFormatter.FormatAsync(token, found.ClientInfo),
         };
     }
 }
