@@ -45,7 +45,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// </returns>
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
-        ArgumentNullException.ThrowIfNull(clientId, nameof(clientId));
+        ArgumentNullException.ThrowIfNull(clientId);
         return Task.FromResult(_clients.GetValueOrDefault(clientId));
     }
 
@@ -54,10 +54,10 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// </summary>
     /// <param name="clientInfo">The client information to be added.</param>
     /// <returns>A task that completes when the client is added.</returns>
-    public Task<TimeSpan?> AddClientAsync(ClientInfo clientInfo)
+    public Task AddClientAsync(ClientInfo clientInfo)
     {
         _clients.Add(clientInfo.ClientId, clientInfo);
-        return Task.FromResult<TimeSpan?>(null);
+        return Task.CompletedTask;
     }
 
     /// <summary>

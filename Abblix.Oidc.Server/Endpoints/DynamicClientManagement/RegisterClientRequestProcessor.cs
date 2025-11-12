@@ -62,9 +62,12 @@ public class RegisterClientRequestProcessor(
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
         var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
 
-        var expiresIn = await clientInfoManager.AddClientAsync(clientInfo);
+        await clientInfoManager.AddClientAsync(clientInfo);
 
-        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(credentials.ClientId, issuedAt, expiresIn);
+        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            credentials.ClientId,
+            issuedAt,
+            clientInfo.ExpiresAfter);
 
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,
