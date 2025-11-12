@@ -426,8 +426,8 @@ public class ClientJwtValidatorTests
     public async Task ValidateAsync_ShouldResolveSigningKeysFromClientKeysProvider()
     {
         // Arrange
-        var signingKey1 = new JsonWebKey { KeyId = "client_key1", Algorithm = SigningAlgorithms.RS256 };
-        var signingKey2 = new JsonWebKey { KeyId = "client_key2", Algorithm = SigningAlgorithms.RS256 };
+        var signingKey1 = new RsaJsonWebKey { KeyId = "client_key1", Algorithm = SigningAlgorithms.RS256 };
+        var signingKey2 = new RsaJsonWebKey { KeyId = "client_key2", Algorithm = SigningAlgorithms.RS256 };
         var signingKeys = new[] { signingKey1, signingKey2 };
 
         var token = CreateValidToken();

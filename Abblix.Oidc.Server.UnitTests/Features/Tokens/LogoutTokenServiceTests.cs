@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -52,6 +53,7 @@ public class LogoutTokenServiceTests
 
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter;
     private readonly Mock<IClientJwtFormatter> _jwtFormatter;
+    private readonly Mock<ITokenIdGenerator> _tokenIdGenerator;
     private readonly LogoutTokenService _service;
 
     private readonly DateTimeOffset _currentTime;
@@ -66,12 +68,19 @@ public class LogoutTokenServiceTests
 
         _subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         _jwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
+        _tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+
+        // Setup to return unique ID each time (for uniqueness test)
+        var idCounter = 0;
+        _tokenIdGenerator.Setup(g => g.GenerateTokenId())
+            .Returns(() => $"unique-jwt-id-{++idCounter}");
 
         _service = new LogoutTokenService(
             logger.Object,
             timeProvider.Object,
             _subjectTypeConverter.Object,
-            _jwtFormatter.Object);
+            _jwtFormatter.Object,
+            _tokenIdGenerator.Object);
     }
 
     #region JWT Structure Tests

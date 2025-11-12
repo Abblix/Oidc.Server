@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Utils;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -49,7 +48,6 @@ public class AuthServiceJwtValidatorTests
 
     private readonly Mock<IJsonWebTokenValidator> _jwtValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
-    private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
     private readonly AuthServiceJwtValidator _validator;
 
@@ -57,15 +55,15 @@ public class AuthServiceJwtValidatorTests
     {
         _jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
+        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _issuerProvider.Setup(p => p.GetIssuer()).Returns(ExpectedIssuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(ExpectedIssuer);
 
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             _clientInfoProvider.Object,
-            _issuerProvider.Object,
+            issuerProvider.Object,
             _serviceKeysProvider.Object);
     }
 
@@ -441,8 +439,8 @@ public class AuthServiceJwtValidatorTests
     public async Task ValidateAsync_ShouldResolveSigningKeysFromProvider()
     {
         // Arrange
-        var signingKey1 = new Abblix.Jwt.JsonWebKey { KeyId = "key1", Algorithm = SigningAlgorithms.RS256 };
-        var signingKey2 = new Abblix.Jwt.JsonWebKey { KeyId = "key2", Algorithm = SigningAlgorithms.RS256 };
+        var signingKey1 = new RsaJsonWebKey { KeyId = "key1", Algorithm = SigningAlgorithms.RS256 };
+        var signingKey2 = new RsaJsonWebKey { KeyId = "key2", Algorithm = SigningAlgorithms.RS256 };
         var signingKeys = new[] { signingKey1, signingKey2 };
 
         ValidationParameters? capturedParams = null;
@@ -457,7 +455,7 @@ public class AuthServiceJwtValidatorTests
 
         _serviceKeysProvider
             .Setup(p => p.GetEncryptionKeys(true))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
         await _validator.ValidateAsync(ValidJwt);
@@ -476,8 +474,8 @@ public class AuthServiceJwtValidatorTests
     public async Task ValidateAsync_ShouldResolveEncryptionKeysWithPrivateKeys()
     {
         // Arrange
-        var encryptionKey1 = new JsonWebKey { KeyId = "enc1", Algorithm = "RSA-OAEP" };
-        var encryptionKey2 = new JsonWebKey { KeyId = "enc2", Algorithm = "RSA-OAEP" };
+        var encryptionKey1 = new RsaJsonWebKey { KeyId = "enc1", Algorithm = "RSA-OAEP" };
+        var encryptionKey2 = new RsaJsonWebKey { KeyId = "enc2", Algorithm = "RSA-OAEP" };
         var encryptionKeys = new[] { encryptionKey1, encryptionKey2 };
 
         ValidationParameters? capturedParams = null;
@@ -488,7 +486,7 @@ public class AuthServiceJwtValidatorTests
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(false))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
             .Setup(p => p.GetEncryptionKeys(true))
@@ -522,11 +520,11 @@ public class AuthServiceJwtValidatorTests
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(false))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
             .Setup(p => p.GetEncryptionKeys(true))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
         await _validator.ValidateAsync(ValidJwt);
@@ -650,9 +648,9 @@ public class AuthServiceJwtValidatorTests
 
     #region Helper Methods
 
-    private static Abblix.Jwt.JsonWebToken CreateValidToken()
+    private static JsonWebToken CreateValidToken()
     {
-        return new Abblix.Jwt.JsonWebToken
+        return new JsonWebToken
         {
             Header =
             {
@@ -682,11 +680,11 @@ public class AuthServiceJwtValidatorTests
     {
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(false))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
             .Setup(p => p.GetEncryptionKeys(true))
-            .Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
     }
 
     #endregion

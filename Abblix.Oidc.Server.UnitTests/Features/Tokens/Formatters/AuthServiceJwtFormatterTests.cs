@@ -56,9 +56,9 @@ public class AuthServiceJwtFormatterTests
 
         _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
 
-        _signingKeyRS256 = new JsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-        _signingKeyRS384 = new JsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
-        _encryptionKey = new JsonWebKey { KeyId = "enc-key", Algorithm = "RSA-OAEP" };
+        _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+        _signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+        _encryptionKey = new RsaJsonWebKey { KeyId = "enc-key", Algorithm = "RSA-OAEP" };
     }
 
     #region Signing Key Selection Tests
@@ -300,7 +300,7 @@ public class AuthServiceJwtFormatterTests
             Payload = { Subject = "user123" }
         };
 
-        var secondEncryptionKey = new JsonWebKey { KeyId = "enc-key-2", Algorithm = "RSA-OAEP" };
+        var secondEncryptionKey = new RsaJsonWebKey { KeyId = "enc-key-2", Algorithm = "RSA-OAEP" };
         JsonWebKey? capturedEncryptionKey = null;
 
         _keysProvider

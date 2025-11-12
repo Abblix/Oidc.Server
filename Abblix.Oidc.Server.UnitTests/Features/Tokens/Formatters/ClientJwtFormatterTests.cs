@@ -63,8 +63,8 @@ public class ClientJwtFormatterTests
             _clientKeysProvider.Object,
             _serviceKeysProvider.Object);
 
-        _signingKeyRS256 = new JsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-        _clientEncryptionKey = new JsonWebKey { KeyId = "client-enc", Algorithm = "RSA-OAEP" };
+        _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+        _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = "RSA-OAEP" };
         _clientInfo = new ClientInfo(ClientId);
     }
 
