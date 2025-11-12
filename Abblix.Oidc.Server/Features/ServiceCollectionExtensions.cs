@@ -74,6 +74,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
             .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
+            // mTLS self-signed client authentication per RFC 8705
+            .AddSingleton<IClientAuthenticator, TlsClientAuthenticator>()
             .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 

@@ -54,6 +54,8 @@ internal class AuthorizationResponseFormatter(
     IIssuerProvider issuerProvider)
     : AuthorizationErrorFormatter(parametersProvider, issuerProvider), IAuthorizationResponseFormatter
 {
+    private readonly IIssuerProvider _issuerProvider = issuerProvider;
+
     /// <summary>
     /// Formats an authorization response based on the specified request and response model asynchronously.
     /// It handles various outcomes such as redirections for additional user interactions and successful authentication,
@@ -91,7 +93,7 @@ internal class AuthorizationResponseFormatter(
                 var modelResponse = new AuthorizationResponse
                 {
                     State = response.Model.State,
-                    Issuer = issuerProvider.GetIssuer(),
+                    Issuer = _issuerProvider.GetIssuer(),
                     Scope = string.Join(' ', response.Model.Scope),
                     Code = success.Code,
                     TokenType = success.TokenType,

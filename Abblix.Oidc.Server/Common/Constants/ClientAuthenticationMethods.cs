@@ -50,5 +50,18 @@ public static class ClientAuthenticationMethods
 	/// <summary>
 	/// Indicates that no client authentication is for the OAuth request.
 	/// </summary>
-	public const string None = "none";
+    public const string None = "none";
+
+    /// <summary>
+    /// Mutual TLS client authentication where the client's certificate chain is validated against
+    /// the AS trust store and matched using client metadata (subject/SAN). RFC 8705.
+    /// Note: Full metadata matching is not implemented in this release.
+    /// </summary>
+    public const string TlsClientAuth = "tls_client_auth";
+
+    /// <summary>
+    /// Mutual TLS client authentication using a self-signed client certificate and the client's
+    /// registered JWKS to identify acceptable public keys. RFC 8705.
+    /// </summary>
+    public const string SelfSignedTlsClientAuth = "self_signed_tls_client_auth";
 }
