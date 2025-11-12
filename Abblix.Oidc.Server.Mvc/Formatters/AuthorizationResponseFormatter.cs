@@ -62,7 +62,8 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
     /// Accessor to obtain the current HTTP context, facilitating access to request and response objects.</param>
     /// <param name="issuerProvider">
     /// Provides issuer information crucial for generating consistent authorization responses.</param>
-    public AuthorizationResponseFormatter(IOptions<OidcOptions> options,
+    public AuthorizationResponseFormatter(
+        IOptions<OidcOptions> options,
         IAuthorizationRequestStorage authorizationRequestStorage,
         IParametersProvider parametersProvider,
         ISessionManagementService sessionManagementService,
@@ -76,7 +77,6 @@ internal class AuthorizationResponseFormatter : AuthorizationErrorFormatter, IAu
         _httpContextAccessor = httpContextAccessor;
         _issuerProvider = issuerProvider;
     }
-
     private readonly IAuthorizationRequestStorage _authorizationRequestStorage;
     private readonly ISessionManagementService _sessionManagementService;
     private readonly IHttpContextAccessor _httpContextAccessor;

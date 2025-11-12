@@ -22,6 +22,8 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -32,7 +34,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// are valid and authorized. This class serves as a bridge between the request validation and the actual
 /// retrieval of client details from the system's data store.
 /// </summary>
-public class ReadClientRequestProcessor : IReadClientRequestProcessor
+public class ReadClientRequestProcessor(
+    IRegistrationAccessTokenService registrationAccessTokenService,
+    IIssuerProvider issuerProvider,
+    TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <summary>
     /// Asynchronously retrieves the details of a client based on a valid request.
@@ -41,7 +46,7 @@ public class ReadClientRequestProcessor : IReadClientRequestProcessor
     /// <param name="request">A <see cref="ValidClientRequest"/> object containing the identification details
     /// of the client whose information is being requested.</param>
     /// <returns>
-    /// A <see cref="Task"/> that, upon completion, yields a <see cref="ReadClientResponse"/> containing the details
+    /// A <see cref="Task"/> that, upon completion, yields a <see cref="ReadClientSuccessfulResponse"/> containing the details
     /// of the client. The response includes information such as the client's ID, redirect URIs, and the URL for
     /// initiating login, among other possible client configuration details.
     /// </returns>
@@ -51,18 +56,62 @@ public class ReadClientRequestProcessor : IReadClientRequestProcessor
     /// of registered clients, facilitating transparency and ease of management. Note that sensitive information,
     /// like client secrets, are not directly retrievable to maintain security.
     /// </remarks>
-    public Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
         var client = request.ClientInfo;
 
-        //TODO add missing properties
-        return Task.FromResult<Result<ReadClientSuccessfulResponse, OidcError>>(
-            new ReadClientSuccessfulResponse
-            {
-                ClientId = client.ClientId,
-                //ClientSecret = we do not store secrets in initial forms, only hashes
-                RedirectUris = client.RedirectUris,
-                InitiateLoginUri = client.InitiateLoginUri,
-            });
+        var issuer = issuerProvider.GetIssuer();
+        var registrationClientUri = new Uri(new Uri(issuer), $"register/{client.ClientId}");
+
+        var issuedAt = clock.GetUtcNow();
+        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(client.ClientId, issuedAt, null);
+
+        return new ReadClientSuccessfulResponse
+        {
+            ClientId = client.ClientId,
+            ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
+            ClientSecretExpiresAt = GetClientSecretExpiresAt(client),
+            RegistrationClientUri = registrationClientUri,
+            RegistrationAccessToken = registrationAccessToken,
+            TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
+            ApplicationType = client.ApplicationType,
+            RedirectUris = client.RedirectUris,
+            ClientName = client.ClientName,
+            LogoUri = client.LogoUri,
+            SubjectType = client.SubjectType,
+            SectorIdentifierUri = Uri.TryCreate(client.SectorIdentifier, UriKind.Absolute, out var uri) ? uri : null,
+            JwksUri = client.JwksUri,
+            UserInfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlgorithm,
+            UserInfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEncryption,
+            Contacts = client.Contacts,
+            RequestUris = client.RequestUris,
+            InitiateLoginUri = client.InitiateLoginUri,
+        };
+    }
+
+    /// <summary>
+    /// Determines the latest expiration time among all client secrets.
+    /// </summary>
+    /// <param name="client">The client information containing secret configurations.</param>
+    /// <returns>
+    /// The latest expiration time if any secrets have expiration dates; otherwise, null.
+    /// Returns null if the client has no secrets or all secrets have no expiration.
+    /// </returns>
+    private static DateTimeOffset? GetClientSecretExpiresAt(ClientInfo client)
+    {
+        if (client.ClientSecrets == null)
+            return null;
+
+        DateTimeOffset? result = null;
+        foreach (var expiresAt in client.ClientSecrets.Select(secret => secret.ExpiresAt))
+        {
+            if (!expiresAt.HasValue)
+                continue;
+
+            if (!result.HasValue || result.Value < expiresAt.Value)
+                result = expiresAt;
+        }
+
+        return result;
     }
 }

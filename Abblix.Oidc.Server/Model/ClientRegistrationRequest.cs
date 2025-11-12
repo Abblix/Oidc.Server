@@ -41,7 +41,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = default!;
+    public Uri[] RedirectUris { get; set; } = null!;
 
     /// <summary>
     /// List of OAuth 2.0 response_type values that the client will use.

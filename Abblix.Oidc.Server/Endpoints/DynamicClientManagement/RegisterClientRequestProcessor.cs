@@ -20,15 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -42,8 +38,7 @@ public class RegisterClientRequestProcessor(
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    IAuthServiceJwtFormatter serviceJwtFormatter,
-    IIssuerProvider issuerProvider) : IRegisterClientRequestProcessor
+    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -67,15 +62,17 @@ public class RegisterClientRequestProcessor(
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
         var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
 
-        await clientInfoManager.AddClientAsync(clientInfo);
+        var expiresIn = await clientInfoManager.AddClientAsync(clientInfo);
 
-        var registrationAccessToken = await IssueRegistrationAccessTokenAsync(credentials.ClientId, issuedAt);
+        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(credentials.ClientId, issuedAt, expiresIn);
 
-        var response = new ClientRegistrationSuccessResponse(credentials.ClientId, issuedAt)
+        var response = new ClientRegistrationSuccessResponse(
+            credentials.ClientId,
+            issuedAt,
+            registrationAccessToken)
         {
             ClientSecret = credentials.ClientSecret,
             ClientSecretExpiresAt = credentials.ExpiresAt,
-            RegistrationAccessToken = registrationAccessToken,
         };
 
         return response;
@@ -133,9 +130,11 @@ public class RegisterClientRequestProcessor(
             [
                 new ClientSecret
                 {
-                    Value = clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt
-                        ? credentials.ClientSecret
-                        : null,
+                    Value = clientInfo.TokenEndpointAuthMethod switch
+                    {
+                        ClientAuthenticationMethods.ClientSecretJwt => credentials.ClientSecret,
+                        _ => null,
+                    },
                     Sha512Hash = credentials.Sha512Hash,
                     ExpiresAt = credentials.ExpiresAt,
                 }
@@ -172,32 +171,5 @@ public class RegisterClientRequestProcessor(
         }
 
         return clientInfo;
-    }
-
-    /// <summary>
-    /// Issues a registration access token for managing the registered client.
-    /// </summary>
-    private Task<string> IssueRegistrationAccessTokenAsync(string clientId, DateTimeOffset issuedAt)
-    {
-        var token = new JsonWebToken
-        {
-            Header =
-            {
-                Type = JwtTypes.RegistrationAccessToken,
-                Algorithm = SigningAlgorithms.RS256,
-            },
-            Payload =
-            {
-                IssuedAt = issuedAt,
-                NotBefore = issuedAt,
-                //ExpiresAt = issuedAt + ..., //TODO think about the expiration of this token
-
-                Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-                Audiences = [clientId],
-                Subject = clientId,
-            },
-        };
-
-        return serviceJwtFormatter.FormatAsync(token);
     }
 }
