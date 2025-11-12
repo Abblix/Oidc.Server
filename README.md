@@ -51,32 +51,24 @@ The library also supports Dependency Injection through the standard .NET DI cont
 ### Version 2.0.0 (Latest)
 
 🚨 **BREAKING CHANGES**
-- **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for explicit error handling and better functional programming support
-- **Framework Updates**: Dropped .NET 6 and .NET 7 support - now exclusively targets .NET 8 (LTS), .NET 9 and .NET 10 (LTS)
-- **API Simplification**: All response types renamed to remove redundant 'Response' suffix for cleaner, more intuitive APIs
+- **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for compiler-enforced explicit error handling and functional programming style
+- **Framework Updates**: Dropped .NET 6 & 7 (EOL) - now targets .NET 8 (LTS), .NET 9 (STS), and .NET 10 (LTS - released Nov 2025, supported until Nov 2028)
+
+🆕 **New Features**
+- **client_secret_jwt**: Standards-compliant JWT-based client authentication method
+- **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
+- **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
 
 🔒 **Security Enhancements**
-- **SSRF Protection**: Multi-layered Server-Side Request Forgery protection with DNS validation, IP blocking, and comprehensive logging
-- **Supply Chain Security**: Hardened GitHub Actions workflows with commit SHA pinning and secure secret handling
+- **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
+- **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
 
 ✨ **Quality Improvements**
-- **Test Coverage**: Added comprehensive test suite with 800+ passing tests across OAuth 2.0/OIDC endpoints
+- **Test Coverage**: 50,000+ lines of new tests across all OAuth 2.0/OIDC flows
+- **Primary Constructors**: Migrated 74 classes to C# 12 syntax, reducing ~900 lines of boilerplate
 
-> **⚠️ Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.
-
-<details>
-<summary><b>Previous Versions</b></summary>
-
-### Version 1.6.0
-
-🚀 **Performance Improvements**
-- **Base32 Encoding Optimization**: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes.
-
-🔐 **Enhanced Authentication Session Management**
-- **AMR (Authentication Method Reference) Support**: Added comprehensive support for Authentication Method Reference values in authentication sessions, providing better tracking and validation of authentication methods used by users.
-- **Extended Session Capabilities**: Improved authentication session handling with enhanced method tracking and validation capabilities.
-
-</details>
+📋 **[Read the full release notes](RELEASE-2.0.md)** for detailed explanations of all changes and their impact.
+⚠️ **Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.
 
 ## 🎓 Certification
 
