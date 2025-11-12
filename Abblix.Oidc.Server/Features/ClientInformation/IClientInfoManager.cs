@@ -40,7 +40,7 @@ public interface IClientInfoManager
     /// This operation typically involves persisting the <paramref name="clientInfo"/> to a database or another form of storage,
     /// making the client available for OAuth 2.0 and OpenID Connect authentication and authorization processes.
     /// </remarks>
-    Task AddClientAsync(ClientInfo clientInfo);
+    Task<TimeSpan?> AddClientAsync(ClientInfo clientInfo);
 
     /// <summary>
     /// Asynchronously removes an existing client and its information from the storage system.

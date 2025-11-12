@@ -54,10 +54,10 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// </summary>
     /// <param name="clientInfo">The client information to be added.</param>
     /// <returns>A task that completes when the client is added.</returns>
-    public Task AddClientAsync(ClientInfo clientInfo)
+    public Task<TimeSpan?> AddClientAsync(ClientInfo clientInfo)
     {
         _clients.Add(clientInfo.ClientId, clientInfo);
-        return Task.CompletedTask;
+        return Task.FromResult<TimeSpan?>(null);
     }
 
     /// <summary>

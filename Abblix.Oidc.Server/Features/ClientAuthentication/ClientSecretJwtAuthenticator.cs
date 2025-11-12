@@ -189,10 +189,9 @@ public class ClientSecretJwtAuthenticator(
     /// <param name="algorithm">The HMAC algorithm identifier (e.g., HS256, HS384, HS512).</param>
     /// <param name="secret"></param>
     /// <returns>A JSON Web Key configured for the specified HMAC algorithm.</returns>
-    private static JsonWebKey CreateSymmetricKey(string algorithm, byte[] secret) => new()
+    private static JsonWebKey CreateSymmetricKey(string algorithm, byte[] secret) => new OctetJsonWebKey
     {
-        KeyType = JsonWebKeyTypes.Octet,
         Algorithm = algorithm,
-        SymmetricKey = secret,
+        KeyValue = secret,
     };
 }

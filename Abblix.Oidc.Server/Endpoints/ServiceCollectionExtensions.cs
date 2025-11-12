@@ -319,6 +319,7 @@ public static class ServiceCollectionExtensions
             .AddTransient(newClientOptionsFactory)
 
             .AddScoped<IClientCredentialFactory, ClientCredentialFactory>()
+            .AddScoped<IRegistrationAccessTokenService, RegistrationAccessTokenService>()
 
             .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
             .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
