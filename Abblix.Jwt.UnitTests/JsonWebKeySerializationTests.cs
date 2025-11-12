@@ -404,7 +404,7 @@ public class JsonWebKeySerializationTests
         var json = """{"kid":"test","alg":"RS256"}""";
 
         // Act & Assert
-        Assert.Throws<NotSupportedException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, JsonOptions));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, JsonOptions));
     }
 
     /// <summary>
@@ -453,5 +453,99 @@ public class JsonWebKeySerializationTests
         Assert.Equal(original.Certificates[0], deserialized.Certificates[0]);
         Assert.Equal(original.Certificates[1], deserialized.Certificates[1]);
         Assert.Equal(original.Thumbprint, deserialized.Thumbprint);
+    }
+
+    /// <summary>
+    /// Verifies that kty is present when serializing concrete RsaJsonWebKey type directly (not through base).
+    /// This ensures the KeyType property is serialized in non-polymorphic scenarios.
+    /// </summary>
+    [Fact]
+    public void RsaJsonWebKey_DirectSerialization_IncludesKty()
+    {
+        // Arrange
+        var key = new RsaJsonWebKey
+        {
+            KeyId = "rsa-key-1",
+            Exponent = new byte[] { 1, 0, 1 },
+            Modulus = new byte[] { 0xAB, 0xCD },
+        };
+
+        // Act - Serialize as concrete type, not base type
+        var json = JsonSerializer.Serialize(key, JsonOptions);
+        var jsonDoc = JsonDocument.Parse(json);
+
+        // Assert - kty must be present
+        Assert.True(jsonDoc.RootElement.TryGetProperty("kty", out var ktyProp));
+        Assert.Equal("RSA", ktyProp.GetString());
+    }
+
+    /// <summary>
+    /// Verifies that kty is present when serializing through base JsonWebKey type (polymorphic).
+    /// This ensures the discriminator is added correctly.
+    /// </summary>
+    [Fact]
+    public void RsaJsonWebKey_PolymorphicSerialization_IncludesKty()
+    {
+        // Arrange
+        var key = new RsaJsonWebKey
+        {
+            KeyId = "rsa-key-1",
+            Exponent = new byte[] { 1, 0, 1 },
+            Modulus = new byte[] { 0xAB, 0xCD },
+        };
+
+        // Act - Serialize through base type to trigger polymorphic behavior
+        var json = JsonSerializer.Serialize<JsonWebKey>(key, JsonOptions);
+        var jsonDoc = JsonDocument.Parse(json);
+
+        // Assert - kty must be present (from discriminator)
+        Assert.True(jsonDoc.RootElement.TryGetProperty("kty", out var ktyProp));
+        Assert.Equal("RSA", ktyProp.GetString());
+    }
+
+    /// <summary>
+    /// Verifies that EllipticCurveJsonWebKey includes kty when serialized directly.
+    /// </summary>
+    [Fact]
+    public void EllipticCurveJsonWebKey_DirectSerialization_IncludesKty()
+    {
+        // Arrange
+        var key = new EllipticCurveJsonWebKey
+        {
+            KeyId = "ec-key-1",
+            Curve = "P-256",
+            X = new byte[] { 0x11, 0x22 },
+            Y = new byte[] { 0x33, 0x44 },
+        };
+
+        // Act - Serialize as concrete type
+        var json = JsonSerializer.Serialize(key, JsonOptions);
+        var jsonDoc = JsonDocument.Parse(json);
+
+        // Assert - kty must be present
+        Assert.True(jsonDoc.RootElement.TryGetProperty("kty", out var ktyProp));
+        Assert.Equal("EC", ktyProp.GetString());
+    }
+
+    /// <summary>
+    /// Verifies that OctetJsonWebKey includes kty when serialized directly.
+    /// </summary>
+    [Fact]
+    public void OctetJsonWebKey_DirectSerialization_IncludesKty()
+    {
+        // Arrange
+        var key = new OctetJsonWebKey
+        {
+            KeyId = "oct-key-1",
+            KeyValue = new byte[] { 0xAA, 0xBB, 0xCC },
+        };
+
+        // Act - Serialize as concrete type
+        var json = JsonSerializer.Serialize(key, JsonOptions);
+        var jsonDoc = JsonDocument.Parse(json);
+
+        // Assert - kty must be present
+        Assert.True(jsonDoc.RootElement.TryGetProperty("kty", out var ktyProp));
+        Assert.Equal("oct", ktyProp.GetString());
     }
 }

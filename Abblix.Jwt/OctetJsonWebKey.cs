@@ -29,11 +29,14 @@ namespace Abblix.Jwt;
 /// Represents a Symmetric JSON Web Key (JWK) containing symmetric key material for algorithms like HMAC.
 /// Supports symmetric keys per RFC 7518 Section 6.4.
 /// </summary>
-public record SymmetricJsonWebKey : JsonWebKey
+public sealed record OctetJsonWebKey : JsonWebKey
 {
     /// <summary>
     /// The key type identifier for symmetric (Octet Sequence) keys. Always returns "oct".
     /// </summary>
+    [JsonPropertyName(JsonWebKeyPropertyNames.KeyType)]
+    [JsonPropertyOrder(1)]
+    [JsonInclude]
     public override string KeyType => JsonWebKeyTypes.Octet;
 
     /// <summary>
@@ -41,7 +44,7 @@ public record SymmetricJsonWebKey : JsonWebKey
     /// used in algorithms like HMAC-SHA256, HMAC-SHA384, and HMAC-SHA512.
     /// This is a required parameter for symmetric keys and must be kept confidential.
     /// </summary>
-    [JsonPropertyName("k")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.KeyValue)]
     [JsonPropertyOrder(17)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? KeyValue { get; set; }
@@ -51,7 +54,7 @@ public record SymmetricJsonWebKey : JsonWebKey
     /// </summary>
     /// <param name="includePrivateKeys">Whether to include the symmetric key value in the sanitized output.</param>
     /// <returns>
-    /// A new instance of <see cref="SymmetricJsonWebKey"/> with or without the key value based on the input parameter.
+    /// A new instance of <see cref="OctetJsonWebKey"/> with or without the key value based on the input parameter.
     /// </returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when includePrivateKeys is true but the key contains no key value.

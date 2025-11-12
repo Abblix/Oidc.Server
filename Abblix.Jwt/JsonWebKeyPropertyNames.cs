@@ -101,12 +101,12 @@ public static class JsonWebKeyPropertyNames
     /// <summary>
     /// ECC X Coordinate parameter (x).
     /// </summary>
-    public const string X = "x";
+    public const string EllipticCurveX = "x";
 
     /// <summary>
     /// ECC Y Coordinate parameter (y).
     /// </summary>
-    public const string Y = "y";
+    public const string EllipticCurveY = "y";
 
     /// <summary>
     /// ECC Curve parameter (crv).

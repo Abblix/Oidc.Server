@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
@@ -58,6 +59,7 @@ public record AuthorizationRequest
 	/// or an identity token.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.ResponseType)]
+	[Required]
     [AllowedValues(ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)]
 	[ModelBinder(typeof(SpaceSeparatedValuesBinder))]
     public string[]? ResponseType { get; init; }

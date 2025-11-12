@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -52,8 +53,10 @@ public record EndSessionRequest
     /// <summary>
     /// The client identifier for the application requesting the logout.
     /// This helps the server in identifying which client application is initiating the logout process.
+    /// Required when PostLogoutRedirectUri is specified.
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.ClientId)]
+    [RequiredWhenPostLogoutRedirectUri]
     public string? ClientId { get; set; }
 
     /// <summary>
@@ -103,4 +106,15 @@ public record EndSessionRequest
             Confirmed = Confirmed,
         };
     }
+}
+
+/// <summary>
+/// Validates that the ClientId is required when PostLogoutRedirectUri is specified.
+/// Per OpenID Connect RP-Initiated Logout 1.0 specification, when post_logout_redirect_uri is present,
+/// the client_id parameter is required.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
+file sealed class RequiredWhenPostLogoutRedirectUriAttribute : ConditionalRequiredAttribute
+{
+    protected override bool IsRequired(object model) => model is EndSessionRequest { PostLogoutRedirectUri: not null };
 }

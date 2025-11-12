@@ -29,20 +29,21 @@ namespace Abblix.Jwt;
 /// Represents an RSA JSON Web Key (JWK) containing RSA-specific cryptographic parameters.
 /// Supports both public and private RSA keys per RFC 7518 Section 6.3.
 /// </summary>
-public record RsaJsonWebKey : JsonWebKey
+public sealed record RsaJsonWebKey : JsonWebKey
 {
     /// <summary>
     /// The key type identifier for RSA keys. Always returns "RSA".
     /// </summary>
-    [JsonPropertyName("kty")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.KeyType)]
     [JsonPropertyOrder(1)]
-    public override string KeyType => "RSA";
+    [JsonInclude]
+    public override string KeyType => JsonWebKeyTypes.Rsa;
 
     /// <summary>
     /// RSA Public Key Exponent (e). Part of the RSA public key.
     /// This is a required parameter for RSA public keys.
     /// </summary>
-    [JsonPropertyName("e")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.Exponent)]
     [JsonPropertyOrder(6)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? Exponent { get; set; }
@@ -51,7 +52,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA Public Key Modulus (n). Part of the RSA public key.
     /// This is a required parameter for RSA public keys.
     /// </summary>
-    [JsonPropertyName("n")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.Modulus)]
     [JsonPropertyOrder(7)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? Modulus { get; set; }
@@ -60,7 +61,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA Private Exponent (d). Part of the RSA private key.
     /// This parameter must be kept confidential and should only be present in private keys.
     /// </summary>
-    [JsonPropertyName("d")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.PrivateExponent)]
     [JsonPropertyOrder(11)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? PrivateExponent { get; set; }
@@ -69,7 +70,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA First Prime Factor (p). Part of the RSA private key.
     /// Used in Chinese Remainder Theorem (CRT) optimization for RSA operations.
     /// </summary>
-    [JsonPropertyName("p")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.FirstPrimeFactor)]
     [JsonPropertyOrder(12)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? FirstPrimeFactor { get; set; }
@@ -78,7 +79,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA Second Prime Factor (q). Part of the RSA private key.
     /// Used in Chinese Remainder Theorem (CRT) optimization for RSA operations.
     /// </summary>
-    [JsonPropertyName("q")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.SecondPrimeFactor)]
     [JsonPropertyOrder(13)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? SecondPrimeFactor { get; set; }
@@ -87,7 +88,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA First Factor CRT Exponent (dp). Part of the RSA private key in Chinese Remainder Theorem (CRT) format.
     /// Computed as d mod (p-1), where d is the private exponent and p is the first prime factor.
     /// </summary>
-    [JsonPropertyName("dp")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.FirstFactorCrtExponent)]
     [JsonPropertyOrder(14)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? FirstFactorCrtExponent { get; set; }
@@ -96,7 +97,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA Second Factor CRT Exponent (dq). Part of the RSA private key in CRT format.
     /// Computed as d mod (q-1), where d is the private exponent and q is the second prime factor.
     /// </summary>
-    [JsonPropertyName("dq")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.SecondFactorCrtExponent)]
     [JsonPropertyOrder(15)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? SecondFactorCrtExponent { get; set; }
@@ -105,7 +106,7 @@ public record RsaJsonWebKey : JsonWebKey
     /// RSA First CRT Coefficient (qi). Part of the RSA private key in CRT format.
     /// Computed as q^(-1) mod p, the modular multiplicative inverse of q modulo p.
     /// </summary>
-    [JsonPropertyName("qi")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.FirstCrtCoefficient)]
     [JsonPropertyOrder(16)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? FirstCrtCoefficient { get; set; }

@@ -29,20 +29,21 @@ namespace Abblix.Jwt;
 /// Represents an Elliptic Curve JSON Web Key (JWK) containing EC-specific cryptographic parameters.
 /// Supports both public and private EC keys per RFC 7518 Section 6.2.
 /// </summary>
-public record EcJsonWebKey : JsonWebKey
+public sealed record EllipticCurveJsonWebKey : JsonWebKey
 {
     /// <summary>
     /// The key type identifier for Elliptic Curve keys. Always returns "EC".
     /// </summary>
-    [JsonPropertyName("kty")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.KeyType)]
     [JsonPropertyOrder(1)]
-    public override string KeyType => "EC";
+    [JsonInclude]
+    public override string KeyType => JsonWebKeyTypes.EllipticCurve;
 
     /// <summary>
     /// X-coordinate for Elliptic Curve (x). Part of the Elliptic Curve public key.
     /// This is a required parameter for EC public keys.
     /// </summary>
-    [JsonPropertyName("x")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.EllipticCurveX)]
     [JsonPropertyOrder(8)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? X { get; set; }
@@ -51,7 +52,7 @@ public record EcJsonWebKey : JsonWebKey
     /// Y-coordinate for Elliptic Curve (y). Part of the Elliptic Curve public key.
     /// This is a required parameter for EC public keys.
     /// </summary>
-    [JsonPropertyName("y")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.EllipticCurveY)]
     [JsonPropertyOrder(9)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? Y { get; set; }
@@ -61,7 +62,7 @@ public record EcJsonWebKey : JsonWebKey
     /// Common values include "P-256", "P-384", "P-521" for NIST curves.
     /// This is a required parameter for EC keys.
     /// </summary>
-    [JsonPropertyName("crv")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.Curve)]
     [JsonPropertyOrder(10)]
     public string? Curve { get; set; }
 
@@ -69,7 +70,7 @@ public record EcJsonWebKey : JsonWebKey
     /// ECC Private Key (d). Represents the private part of an Elliptic Curve key.
     /// This parameter must be kept confidential and should only be present in private keys.
     /// </summary>
-    [JsonPropertyName("d")]
+    [JsonPropertyName(JsonWebKeyPropertyNames.PrivateExponent)]
     [JsonPropertyOrder(11)]
     [JsonConverter(typeof(Base64UrlTextEncoderConverter))]
     public byte[]? PrivateKey { get; set; }
@@ -79,7 +80,7 @@ public record EcJsonWebKey : JsonWebKey
     /// </summary>
     /// <param name="includePrivateKeys">Whether to include private key data in the sanitized output.</param>
     /// <returns>
-    /// A new instance of <see cref="EcJsonWebKey"/> with or without private key data based on the input parameter.
+    /// A new instance of <see cref="EllipticCurveJsonWebKey"/> with or without private key data based on the input parameter.
     /// </returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when includePrivateKeys is true but the key contains no private key data.

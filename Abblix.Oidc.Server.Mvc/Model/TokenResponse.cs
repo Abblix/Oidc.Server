@@ -38,6 +38,7 @@ public record TokenResponse
 		public const string IssuedTokenType = "issued_token_type";
 		public const string ExpiresIn = "expires_in";
 		public const string RefreshToken = "refresh_token";
+		public const string Scope = "scope";
 		public const string IdToken = "id_token";
 	}
 
@@ -53,7 +54,7 @@ public record TokenResponse
 	/// </summary>
 	[JsonPropertyName(Parameters.IssuedTokenType)]
 	[JsonPropertyOrder(2)]
-	public Uri IssuedTokenType { get; set; } = default!;
+	public Uri? IssuedTokenType { get; set; }
 
 	/// <summary>
 	/// The type of token that is issued, usually 'Bearer'.
@@ -78,9 +79,18 @@ public record TokenResponse
 	public string? RefreshToken { get; init; }
 
 	/// <summary>
+	/// The scope of the access token as granted by the resource owner. If omitted, the authorization server SHOULD
+	/// return the same scope as requested or the full scope granted when different from the requested scope.
+	/// </summary>
+	[JsonPropertyName(Parameters.Scope)]
+	[JsonPropertyOrder(6)]
+	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	public string[]? Scope { get; init; }
+
+	/// <summary>
 	/// The ID token, which is a JSON Web Token (JWT) that contains the user's identity information. Present in OpenID Connect flows.
 	/// </summary>
 	[JsonPropertyName(Parameters.IdToken)]
-	[JsonPropertyOrder(6)]
+	[JsonPropertyOrder(7)]
 	public string? IdToken { get; init; }
 }
