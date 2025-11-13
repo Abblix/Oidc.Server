@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// <param name="serializer">The serializer used for converting objects to and from binary format.</param>
 public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySerializer serializer) : IEntityStorage
 {
-
 	/// <summary>
 	/// Asynchronously stores an object in the distributed cache.
 	/// </summary>
@@ -49,7 +48,7 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 		return cache.SetAsync(
 			key,
 			serializer.Serialize(value),
-			new DistributedCacheEntryOptions
+			new ()
 			{
 				AbsoluteExpiration = options.AbsoluteExpiration,
 				AbsoluteExpirationRelativeToNow = options.AbsoluteExpirationRelativeToNow,

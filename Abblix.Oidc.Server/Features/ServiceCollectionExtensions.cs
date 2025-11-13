@@ -42,6 +42,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -109,7 +110,8 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
+        //services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
+        services.TryAddSingleton<IBinarySerializer, ProtobufSerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
     }
@@ -372,6 +374,7 @@ public static class ServiceCollectionExtensions
     /// configurations to be chained.</returns>
     public static IServiceCollection AddStorages(this IServiceCollection services)
     {
+        services.TryAddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         return services;

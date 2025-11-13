@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// Represents an authentication session for a logged-in user
+message AuthSession {
+  // The unique identifier for the user
+  string subject = 1;
+
+  // The unique identifier of the session
+  string session_id = 2;
+
+  // The timestamp when the user was authenticated
+  google.protobuf.Timestamp authentication_time = 3;
+
+  // The provider used to authenticate the user's identity
+  string identity_provider = 4;
+
+  // Authentication context class reference (SAML/OIDC)
+  optional string auth_context_class_ref = 5;
+
+  // Client identifiers the user has interacted with during the session
+  repeated string affected_client_ids = 6;
+
+  // Authentication methods used (AMR values)
+  repeated string authentication_method_references = 7;
+
+  // The email address used for authentication
+  optional string email = 8;
+
+  // Whether the email address has been verified
+  optional bool email_verified = 9;
+
+  // Additional custom claims stored as a structured JSON object.
+  // Struct provides efficient binary serialization with support for nested objects,
+  // arrays, and primitive values (string, number, boolean, null).
+  // Maps directly to C# JsonObject without intermediate JSON string encoding.
+  optional google.protobuf.Struct additional_claims = 10;
+}

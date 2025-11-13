@@ -36,15 +36,23 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 public class TokenRegistryTests
 {
     private readonly Mock<IEntityStorage> _storage;
+    private readonly Mock<IEntityStorageKeyFactory> _keyFactory;
     private readonly TokenRegistry _registry;
 
     public TokenRegistryTests()
     {
         _storage = new Mock<IEntityStorage>(MockBehavior.Strict);
-        _registry = new TokenRegistry(_storage.Object);
+        _keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+
+        // Setup key factory to return expected keys
+        _keyFactory
+            .Setup(kf => kf.JsonWebTokenStatusKey(It.IsAny<string>()))
+            .Returns<string>(jwtId => $"Abblix.Oidc.Server:JWT:{jwtId}");
+
+        _registry = new TokenRegistry(_storage.Object, _keyFactory.Object);
     }
 
-    private static string CreateExpectedKey(string jwtId) => $"jwtId:{jwtId}";
+    private static string CreateExpectedKey(string jwtId) => $"Abblix.Oidc.Server:JWT:{jwtId}";
 
     /// <summary>
     /// Verifies that GetStatusAsync returns Unknown status for existing token.
@@ -148,14 +156,14 @@ public class TokenRegistryTests
 
     /// <summary>
     /// Verifies that GetStatusAsync uses correct key format.
-    /// Key format "jwtId:{jwtId}" ensures consistent storage access patterns.
+    /// Key format "Abblix.Oidc.Server:JWT:{jwtId}" ensures consistent storage access patterns.
     /// </summary>
     [Fact]
     public async Task GetStatusAsync_ShouldUseCorrectKeyFormat()
     {
         // Arrange
         var jwtId = "format_test_jwt";
-        var expectedKey = $"jwtId:{jwtId}";
+        var expectedKey = $"Abblix.Oidc.Server:JWT:{jwtId}";
 
         _storage
             .Setup(s => s.GetAsync<JsonWebTokenStatus>(
@@ -406,7 +414,7 @@ public class TokenRegistryTests
         var jwtId = "key_format_jwt";
         var status = JsonWebTokenStatus.Used;
         var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
-        var expectedKey = $"jwtId:{jwtId}";
+        var expectedKey = $"Abblix.Oidc.Server:JWT:{jwtId}";
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1023,7 +1031,7 @@ public class TokenRegistryTests
 
         // Assert
         Assert.Equal(status, result);
-        Assert.Equal("jwtId:", CreateExpectedKey(jwtId));
+        Assert.Equal("Abblix.Oidc.Server:JWT:", CreateExpectedKey(jwtId));
     }
 
     /// <summary>

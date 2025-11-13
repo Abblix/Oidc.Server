@@ -39,13 +39,24 @@ public class AuthorizationRequestStorageTests
 {
     private readonly Mock<IAuthorizationRequestUriGenerator> _uriGenerator;
     private readonly Mock<IEntityStorage> _storage;
+    private readonly Mock<IEntityStorageKeyFactory> _keyFactory;
     private readonly AuthorizationRequestStorage _requestStorage;
 
     public AuthorizationRequestStorageTests()
     {
         _uriGenerator = new Mock<IAuthorizationRequestUriGenerator>(MockBehavior.Strict);
         _storage = new Mock<IEntityStorage>(MockBehavior.Strict);
-        _requestStorage = new AuthorizationRequestStorage(_uriGenerator.Object, _storage.Object);
+        _keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+
+        // Setup key factory to return URI as key (original string)
+        _keyFactory
+            .Setup(kf => kf.AuthorizationRequestKey(It.IsAny<Uri>()))
+            .Returns<Uri>(uri => $"Abblix.Oidc.Server:PAR:{uri.OriginalString}");
+
+        _requestStorage = new AuthorizationRequestStorage(
+            _uriGenerator.Object,
+            _storage.Object,
+            _keyFactory.Object);
     }
 
     /// <summary>
@@ -152,7 +163,7 @@ public class AuthorizationRequestStorageTests
         await _requestStorage.StoreAsync(request, expiresIn);
 
         // Assert
-        Assert.Equal(requestUri.OriginalString, capturedKey);
+        Assert.Equal($"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}", capturedKey);
     }
 
     /// <summary>
@@ -279,7 +290,7 @@ public class AuthorizationRequestStorageTests
         await _requestStorage.StoreAsync(request, expiresIn);
 
         // Assert
-        Assert.Equal(requestUri.OriginalString, capturedKey);
+        Assert.Equal($"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}", capturedKey);
     }
 
     /// <summary>
@@ -434,7 +445,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(expectedRequest);
@@ -459,7 +470,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync((AuthorizationRequest?)null);
@@ -484,7 +495,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -495,7 +506,7 @@ public class AuthorizationRequestStorageTests
         // Assert
         _storage.Verify(
             s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()),
             Times.Once);
@@ -570,7 +581,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -602,14 +613,14 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri1.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri1.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request1);
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri2.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri2.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request2);
@@ -642,7 +653,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 request,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -650,7 +661,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -681,7 +692,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 request,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -689,7 +700,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 true,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -715,7 +726,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -731,7 +742,7 @@ public class AuthorizationRequestStorageTests
         Assert.Same(request, result3);
         _storage.Verify(
             s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()),
             Times.Exactly(3));
@@ -750,7 +761,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .SetupSequence(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 true,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request)
@@ -786,7 +797,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                uri1.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri1.OriginalString}",
                 request1,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -794,7 +805,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                uri2.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri2.OriginalString}",
                 request2,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -802,14 +813,14 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri1.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri1.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request1);
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri2.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri2.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request2);
@@ -841,14 +852,14 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri1.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri1.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request1);
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                uri2.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{uri2.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request2);
@@ -882,7 +893,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 It.IsAny<AuthorizationRequest>(),
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -890,7 +901,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .SetupSequence(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request1)
@@ -907,7 +918,7 @@ public class AuthorizationRequestStorageTests
         Assert.Same(request2, getResult2);
         _storage.Verify(
             s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 It.IsAny<AuthorizationRequest>(),
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()),
@@ -932,7 +943,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 request,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -940,7 +951,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -975,7 +986,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.SetAsync(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 request,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -983,7 +994,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                requestUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -1085,14 +1096,14 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                urnUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{urnUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                httpsUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{httpsUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -1120,7 +1131,7 @@ public class AuthorizationRequestStorageTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizationRequest>(
-                complexUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{complexUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(request);
@@ -1132,7 +1143,7 @@ public class AuthorizationRequestStorageTests
         Assert.Same(request, result);
         _storage.Verify(
             s => s.GetAsync<AuthorizationRequest>(
-                complexUri.OriginalString,
+                $"Abblix.Oidc.Server:PAR:{complexUri.OriginalString}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()),
             Times.Once);

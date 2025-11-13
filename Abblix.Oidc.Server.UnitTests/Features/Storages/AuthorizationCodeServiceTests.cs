@@ -41,13 +41,24 @@ public class AuthorizationCodeServiceTests
 {
     private readonly Mock<IAuthorizationCodeGenerator> _codeGenerator;
     private readonly Mock<IEntityStorage> _storage;
+    private readonly Mock<IEntityStorageKeyFactory> _keyFactory;
     private readonly AuthorizationCodeService _service;
 
     public AuthorizationCodeServiceTests()
     {
         _codeGenerator = new Mock<IAuthorizationCodeGenerator>(MockBehavior.Strict);
         _storage = new Mock<IEntityStorage>(MockBehavior.Strict);
-        _service = new AuthorizationCodeService(_codeGenerator.Object, _storage.Object);
+        _keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+
+        // Setup key factory to return expected key format
+        _keyFactory
+            .Setup(kf => kf.AuthorizedGrantKey(It.IsAny<string>()))
+            .Returns<string>(code => $"Abblix.Oidc.Server:Grant:{code}");
+
+        _service = new AuthorizationCodeService(
+            _codeGenerator.Object,
+            _storage.Object,
+            _keyFactory.Object);
     }
 
     private static AuthorizedGrant CreateGrant()
@@ -158,7 +169,7 @@ public class AuthorizationCodeServiceTests
         await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
 
         // Assert
-        Assert.Equal($"authorizationCode:{code}", capturedKey);
+        Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
     }
 
     /// <summary>
@@ -279,7 +290,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(expectedGrant);
@@ -304,7 +315,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync((AuthorizedGrant?)null);
@@ -329,7 +340,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync((AuthorizedGrant?)null);
@@ -354,7 +365,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync((AuthorizedGrant?)null);
@@ -408,7 +419,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(grant);
@@ -419,7 +430,7 @@ public class AuthorizationCodeServiceTests
         // Assert
         _storage.Verify(
             s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()),
             Times.Once);
@@ -447,7 +458,7 @@ public class AuthorizationCodeServiceTests
         // Assert
         _storage.Verify(
             s => s.RemoveAsync(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 It.IsAny<System.Threading.CancellationToken?>()),
             Times.Once);
     }
@@ -475,7 +486,7 @@ public class AuthorizationCodeServiceTests
         await _service.RemoveAuthorizationCodeAsync(code);
 
         // Assert
-        Assert.Equal($"authorizationCode:{code}", capturedKey);
+        Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
     }
 
     /// <summary>
@@ -535,7 +546,7 @@ public class AuthorizationCodeServiceTests
         await _service.UpdateAuthorizationGrantAsync(code, grant, expiresIn);
 
         // Assert
-        Assert.Equal($"authorizationCode:{code}", capturedKey);
+        Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
     }
 
     /// <summary>
@@ -597,7 +608,7 @@ public class AuthorizationCodeServiceTests
         // Assert
         _storage.Verify(
             s => s.SetAsync(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 It.IsAny<AuthorizedGrant>(),
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()),
@@ -622,7 +633,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.SetAsync(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 grant,
                 It.IsAny<StorageOptions>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
@@ -630,14 +641,14 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(grant);
 
         _storage
             .Setup(s => s.RemoveAsync(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 It.IsAny<System.Threading.CancellationToken?>()))
             .Returns(Task.CompletedTask);
 
@@ -650,7 +661,7 @@ public class AuthorizationCodeServiceTests
         Assert.Equal(code, generatedCode);
         Assert.True(authorizeResult.TryGetSuccess(out var retrievedGrant));
         Assert.Same(grant, retrievedGrant);
-        _storage.Verify(s => s.RemoveAsync($"authorizationCode:{code}", It.IsAny<System.Threading.CancellationToken?>()), Times.Once);
+        _storage.Verify(s => s.RemoveAsync($"Abblix.Oidc.Server:Grant:{code}", It.IsAny<System.Threading.CancellationToken?>()), Times.Once);
     }
 
     /// <summary>
@@ -665,7 +676,7 @@ public class AuthorizationCodeServiceTests
 
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
-                $"authorizationCode:{code}",
+                $"Abblix.Oidc.Server:Grant:{code}",
                 false,
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync((AuthorizedGrant?)null);
@@ -712,8 +723,8 @@ public class AuthorizationCodeServiceTests
         // Assert
         Assert.Equal(2, keys.Count);
         Assert.NotEqual(keys[0], keys[1]);
-        Assert.Equal("authorizationCode:code_1", keys[0]);
-        Assert.Equal("authorizationCode:code_2", keys[1]);
+        Assert.Equal("Abblix.Oidc.Server:Grant:code_1", keys[0]);
+        Assert.Equal("Abblix.Oidc.Server:Grant:code_2", keys[1]);
     }
 
     /// <summary>

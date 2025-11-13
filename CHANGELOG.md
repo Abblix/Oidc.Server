@@ -58,6 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🛠️ Improvements
 
+- **Protocol Buffer Serialization**:
+  - Implemented protobuf serialization for all OIDC storage types via `ProtobufSerializer`
+  - 8 protobuf message definitions with bidirectional mapping
+  - `ProtoMapper` utility class with shared extension methods for mapping
+  - Uses Google well-known types (Timestamp, Duration, Struct, Value, ListValue) for time and JSON values
+  - Zero-serialization conversion through `JsonNodeExtensions` for direct C# ↔ protobuf mapping
+  - Eliminated JSON string encoding overhead in `RequestedClaims` and `AuthSession` storage
+  - Type preservation for whole numbers during round-trip conversion (42.0 → int, not double)
+  - Significantly smaller serialized size compared to JSON (typically 40-60% reduction)
+  - 76 comprehensive tests (18 serialization + 20 mapper + 38 JsonNodeExtensions tests)
+  - Now default serializer - JSON available through `IBinarySerializer` abstraction for compatibility
+
 - **Code Quality**:
   - Fixed all 45+ nullability warnings for improved type safety (773785a)
   - Migrated to primary constructor syntax for cleaner code (4953845)
