@@ -74,9 +74,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddConfigurationEndpoint(this IServiceCollection services)
     {
         return services
-            .AddSingleton<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>()
-            .AddSingleton<IScopesAndClaimsProvider, ScopesAndClaimsProvider>()
-            .AddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>()
+            .AddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>()
+            .AddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>()
+            .AddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>()
             .AddScoped<IConfigurationHandler, ConfigurationHandler>();
     }
 
