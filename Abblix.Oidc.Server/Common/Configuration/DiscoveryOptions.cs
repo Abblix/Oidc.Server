@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Model;
-
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>

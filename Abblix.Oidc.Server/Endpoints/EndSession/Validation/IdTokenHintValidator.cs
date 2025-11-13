@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 

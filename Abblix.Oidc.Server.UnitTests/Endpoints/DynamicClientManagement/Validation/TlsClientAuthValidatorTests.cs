@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;

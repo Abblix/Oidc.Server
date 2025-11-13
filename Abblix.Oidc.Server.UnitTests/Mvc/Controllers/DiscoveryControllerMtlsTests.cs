@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -31,7 +30,6 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
-using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Microsoft.Extensions.Options;
