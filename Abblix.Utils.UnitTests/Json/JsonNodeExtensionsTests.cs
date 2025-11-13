@@ -37,7 +37,7 @@ public class JsonNodeExtensionsTests
     public void ObjectToProtoValue_Null_ReturnsNull()
     {
         // Act
-        var result = ((object?)null).ToProtoValue();
+        var result = ((object?)null).ToValue();
 
         // Assert
         Assert.Null(result);
@@ -60,7 +60,7 @@ public class JsonNodeExtensionsTests
         var value = true;
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -77,7 +77,7 @@ public class JsonNodeExtensionsTests
         var value = "test@example.com";
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -96,7 +96,7 @@ public class JsonNodeExtensionsTests
     public void ObjectToProtoValue_Int_PreservesType(int value)
     {
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -113,7 +113,7 @@ public class JsonNodeExtensionsTests
     public void ObjectToProtoValue_Long_PreservesType(long value)
     {
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -140,7 +140,7 @@ public class JsonNodeExtensionsTests
     public void ObjectToProtoValue_Double_RoundTrip(double value)
     {
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -157,7 +157,7 @@ public class JsonNodeExtensionsTests
         var value = 3.14f;
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -174,7 +174,7 @@ public class JsonNodeExtensionsTests
         var value = 123.456m;
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -196,7 +196,7 @@ public class JsonNodeExtensionsTests
         };
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -217,7 +217,7 @@ public class JsonNodeExtensionsTests
         object[] value = ["apple", "banana", "cherry"];
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -239,7 +239,7 @@ public class JsonNodeExtensionsTests
         object[] value = ["text", 42, true, 3.14];
 
         // Act
-        var proto = value.ToProtoValue();
+        var proto = value.ToValue();
         var result = proto.ToObject();
 
         // Assert
@@ -263,7 +263,7 @@ public class JsonNodeExtensionsTests
     public void ToProtoStruct_Null_ReturnsNull()
     {
         // Act
-        var result = ((JsonObject?)null).ToProtoStruct();
+        var result = ((JsonObject?)null).ToStruct();
 
         // Assert
         Assert.Null(result);
@@ -286,7 +286,7 @@ public class JsonNodeExtensionsTests
         var jsonObject = new JsonObject();
 
         // Act
-        var proto = jsonObject.ToProtoStruct();
+        var proto = jsonObject.ToStruct();
         var result = proto.ToJsonObject();
 
         // Assert
@@ -315,7 +315,7 @@ public class JsonNodeExtensionsTests
         };
 
         // Act
-        var proto = jsonObject.ToProtoStruct();
+        var proto = jsonObject.ToStruct();
         var result = proto.ToJsonObject();
 
         // Assert
@@ -344,7 +344,7 @@ public class JsonNodeExtensionsTests
     public void ObjectArrayToProtoListValue_Null_ReturnsNull()
     {
         // Act
-        var result = ((object[]?)null).ObjectArrayToProtoListValue();
+        var result = ((object[]?)null).ToListValue();
 
         // Assert
         Assert.Null(result);
@@ -367,7 +367,7 @@ public class JsonNodeExtensionsTests
         var array = Array.Empty<object>();
 
         // Act
-        var proto = array.ObjectArrayToProtoListValue();
+        var proto = array.ToListValue();
         var result = proto.ToObjectArray();
 
         // Assert
@@ -383,7 +383,7 @@ public class JsonNodeExtensionsTests
         object[] array = ["en-US", "en-GB", "en"];
 
         // Act
-        var proto = array.ObjectArrayToProtoListValue();
+        var proto = array.ToListValue();
         var result = proto.ToObjectArray();
 
         // Assert
@@ -402,7 +402,7 @@ public class JsonNodeExtensionsTests
         object[] array = [1, 2, 3, 42, 100];
 
         // Act
-        var proto = array.ObjectArrayToProtoListValue();
+        var proto = array.ToListValue();
         var result = proto.ToObjectArray();
 
         // Assert
@@ -432,7 +432,7 @@ public class JsonNodeExtensionsTests
         ];
 
         // Act
-        var proto = array.ObjectArrayToProtoListValue();
+        var proto = array.ToListValue();
         var result = proto.ToObjectArray();
 
         // Assert

@@ -106,10 +106,10 @@ internal static class RequestedClaimsMapper
             proto.Essential = source.Essential.Value;
 
         if (source.Value != null)
-            proto.Value = source.Value.ToProtoValue();
+            proto.Value = source.Value.ToValue();
 
         if (source.Values != null)
-            proto.Values = source.Values.ObjectArrayToProtoListValue();
+            proto.Values = source.Values.ToListValue();
 
         return proto;
     }

@@ -38,7 +38,7 @@ public static class JsonNodeExtensions
     /// </summary>
     /// <param name="jsonObject">The JsonObject to convert (null allowed).</param>
     /// <returns>Protobuf Struct representation, or null if input is null.</returns>
-    public static Struct? ToProtoStruct(this JsonObject? jsonObject)
+    public static Struct? ToStruct(this JsonObject? jsonObject)
     {
         if (jsonObject == null)
             return null;
@@ -46,7 +46,24 @@ public static class JsonNodeExtensions
         var protoStruct = new Struct();
 
         foreach (var (key, value) in jsonObject)
-            protoStruct.Fields[key] = value.ToProtoValue();
+            protoStruct.Fields[key] = value.ToValue();
+
+        return protoStruct;
+    }
+
+    /// <summary>
+    /// Converts Dictionary&lt;string, object&gt; to protobuf Struct.
+    /// </summary>
+    /// <param name="dictionary">The dictionary to convert.</param>
+    /// <returns>Protobuf Struct representation, or empty Struct if input is null.</returns>
+    public static Struct ToStruct(this IDictionary<string, object>? dictionary)
+    {
+        var protoStruct = new Struct();
+        if (dictionary == null)
+            return protoStruct;
+
+        foreach (var kvp in dictionary)
+            protoStruct.Fields[kvp.Key] = ToValue(kvp.Value);
 
         return protoStruct;
     }
@@ -78,14 +95,14 @@ public static class JsonNodeExtensions
     /// </summary>
     /// <param name="node">The JsonNode to convert (null allowed).</param>
     /// <returns>Protobuf Value representation.</returns>
-    private static Value ToProtoValue(this JsonNode? node)
+    private static Value ToValue(this JsonNode? node)
     {
         return node switch
         {
             null => Value.ForNull(),
-            JsonValue jsonValue => jsonValue.ToProtoValue(),
-            JsonObject jsonObject => Value.ForStruct(jsonObject.ToProtoStruct()),
-            JsonArray jsonArray => Value.ForList(jsonArray.Select(ToProtoValue).ToArray()),
+            JsonValue jsonValue => jsonValue.ToValue(),
+            JsonObject jsonObject => Value.ForStruct(jsonObject.ToStruct()),
+            JsonArray jsonArray => Value.ForList(jsonArray.Select(ToValue).ToArray()),
             _ => Value.ForNull(),
         };
     }
@@ -94,7 +111,7 @@ public static class JsonNodeExtensions
     /// Converts JsonValue to protobuf Value.
     /// Handles primitive types: boolean, integer (int/long/uint/ulong), floating-point (double/float/decimal), and string.
     /// </summary>
-    private static Value ToProtoValue(this JsonValue jsonValue)
+    private static Value ToValue(this JsonValue jsonValue)
     {
         if (jsonValue.TryGetValue<bool>(out var boolValue))
             return Value.ForBool(boolValue);
@@ -175,7 +192,7 @@ public static class JsonNodeExtensions
     /// </summary>
     /// <param name="obj">The object to convert (null allowed).</param>
     /// <returns>Protobuf Value representation, or null if input is null.</returns>
-    public static Value? ToProtoValue(this object? obj)
+    public static Value? ToValue(this object? obj)
     {
         return obj switch
         {
@@ -189,9 +206,9 @@ public static class JsonNodeExtensions
             float f => Value.ForNumber(f),
             decimal m => Value.ForNumber((double)m),
             string s => Value.ForString(s),
-            JsonNode node => node.ToProtoValue(),
-            object[] array => Value.ForList(array.Select(ToProtoValue).Where(v => v != null).ToArray()),
-            _ => JsonSerializer.SerializeToNode(obj).ToProtoValue()  // Fallback for complex types only
+            JsonNode node => node.ToValue(),
+            object[] array => Value.ForList(array.Select(ToValue).Where(v => v != null).ToArray()),
+            _ => JsonSerializer.SerializeToNode(obj).ToValue()  // Fallback for complex types only
         };
     }
 
@@ -244,7 +261,7 @@ public static class JsonNodeExtensions
     /// </summary>
     /// <param name="array">The array to convert (null allowed).</param>
     /// <returns>Protobuf ListValue representation, or null if input is null.</returns>
-    public static ListValue? ObjectArrayToProtoListValue(this object[]? array)
+    public static ListValue? ToListValue(this object[]? array)
     {
         if (array == null)
             return null;
@@ -252,7 +269,7 @@ public static class JsonNodeExtensions
         var listValue = new ListValue();
         foreach (var item in array)
         {
-            var value = item.ToProtoValue();
+            var value = item.ToValue();
             if (value != null)
                 listValue.Values.Add(value);
         }
@@ -273,5 +290,26 @@ public static class JsonNodeExtensions
         return listValue.Values
             .Select(v => v.ToObject())
             .ToArray()!;
+    }
+
+    /// <summary>
+    /// Converts protobuf Struct to Dictionary&lt;string, object&gt;.
+    /// </summary>
+    /// <param name="protoStruct">The protobuf Struct to convert.</param>
+    /// <returns>Dictionary representation of the Struct, or empty dictionary if input is null.</returns>
+    public static Dictionary<string, object> ToDictionary(this Struct? protoStruct)
+    {
+        if (protoStruct == null)
+            return new Dictionary<string, object>();
+
+        var result = new Dictionary<string, object>();
+        foreach (var field in protoStruct.Fields)
+        {
+            var value = ToObject(field.Value);
+            if (value != null)
+                result[field.Key] = value;
+        }
+
+        return result;
     }
 }

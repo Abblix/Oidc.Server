@@ -55,7 +55,7 @@ internal static class AuthSessionMapper
         if (source.EmailVerified.HasValue)
             proto.EmailVerified = source.EmailVerified.Value;
 
-        proto.AdditionalClaims = source.AdditionalClaims.ToProtoStruct();
+        proto.AdditionalClaims = source.AdditionalClaims.ToStruct();
 
         return proto;
     }

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Google.Protobuf;
 using Google.Protobuf.Collections;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -29,6 +30,20 @@ namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 /// </summary>
 internal static class ProtoMapper
 {
+    /// <summary>
+    /// Converts a protobuf ByteString to a Guid.
+    /// </summary>
+    /// <param name="bytes">The ByteString containing the Guid bytes (must be 16 bytes).</param>
+    /// <returns>Guid reconstructed from the byte array.</returns>
+    public static Guid ToGuid(this ByteString bytes) => new(bytes.ToByteArray());
+
+    /// <summary>
+    /// Converts a Guid to protobuf ByteString representation.
+    /// </summary>
+    /// <param name="guid">The Guid to convert.</param>
+    /// <returns>ByteString containing the Guid bytes (16 bytes).</returns>
+    public static ByteString ToProto(this Guid guid) => ByteString.CopyFrom(guid.ToByteArray());
+
     /// <summary>
     /// Adds elements to a RepeatedField if the source is not null.
     /// </summary>
