@@ -89,7 +89,45 @@ public static class JsonWebKeyExtensions
 	/// <param name="includePrivateKeys">Indicates whether to include private keys in the conversion.</param>
 	/// <returns>A JsonWebKey representing the certificate.</returns>
 	public static JsonWebKey ToJsonWebKey(this X509Certificate2 certificate, bool includePrivateKeys = false)
-		=> new X509SecurityKey(certificate).ToJsonWebKey(SecurityAlgorithms.RsaSha256, includePrivateKeys);
+	{
+		// Try ECDSA first
+		var ecdsaPublicKey = certificate.GetECDsaPublicKey();
+		if (ecdsaPublicKey != null)
+		{
+			var ecdsaPrivateKey = includePrivateKeys ? certificate.GetECDsaPrivateKey() : null;
+
+			var jwk = CreateEcKey(new X509SecurityKey(certificate), SecurityAlgorithms.EcdsaSha256)
+				.Apply(ecdsaPublicKey.ExportParameters(false))
+				.Apply(certificate);
+
+			if (ecdsaPrivateKey != null)
+			{
+				jwk = jwk.Apply(ecdsaPrivateKey.ExportParameters(true));
+			}
+
+			return jwk;
+		}
+
+		// Fall back to RSA
+		var rsaPublicKey = certificate.GetRSAPublicKey();
+		if (rsaPublicKey != null)
+		{
+			var rsaPrivateKey = includePrivateKeys ? certificate.GetRSAPrivateKey() : null;
+
+			var jwk = CreateRsaKey(new X509SecurityKey(certificate), SecurityAlgorithms.RsaSha256)
+				.Apply(rsaPublicKey.ExportParameters(false))
+				.Apply(certificate);
+
+			if (rsaPrivateKey != null)
+			{
+				jwk = jwk.Apply(rsaPrivateKey.ExportParameters(true));
+			}
+
+			return jwk;
+		}
+
+		throw new InvalidOperationException($"Certificate does not contain a supported public key algorithm");
+	}
 
 	/// <summary>
 	/// Converts a SecurityKey to a JsonWebKey with a specified algorithm. The private keys can be optionally included.
