@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
@@ -41,7 +42,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// included in error responses if applicable.</param>
 public class AuthorizationErrorFormatter(
     IParametersProvider parametersProvider,
-    IIssuerProvider issuerProvider)
+    IIssuerProvider issuerProvider) : IAuthorizationErrorFormatter
 {
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,

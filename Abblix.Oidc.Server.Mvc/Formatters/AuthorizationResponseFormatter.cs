@@ -45,7 +45,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// This formatter is responsible for transforming internal authorization response models into appropriate
 /// HTTP responses that can be understood by clients and end-users.
 /// </summary>
-internal class AuthorizationResponseFormatter(
+public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IParametersProvider parametersProvider,

@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formats OpenID Connect configuration responses by enriching them with resolved MVC endpoint URLs.
 /// </summary>
-public sealed class ConfigurationResponseFormatter(
+public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
 	IEndpointResolver endpointResolver) : IConfigurationResponseFormatter
 {
