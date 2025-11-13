@@ -72,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - UriBuilder comprehensive test coverage (0f9c359)
   - Licensing test suite with bug fixes (36016b1)
   - Fixed unit test mocking for extension methods (6f57a20)
+  - Added comprehensive mTLS test suite with 102 tests for RFC 8705 compliance
+    - TlsClientAuthenticatorTests: Self-signed certificate authentication (19 tests)
+    - TlsClientAuthValidatorTests: Client registration validation (7 tests)
+    - CertificateForwardingExtensionsTests: Reverse proxy certificate forwarding (17 tests)
+    - DiscoveryControllerMtlsTests: mTLS endpoint alias auto-computation (10 tests)
 
 - **Configuration**:
   - Moved `ExcludeFromCodeCoverage` attribute to project-level configuration (6bc1ba8)
@@ -79,6 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
+- Fixed ECDSA certificate support in `JsonWebKeyExtensions.ToJsonWebKey()` method
+  - Method was hardcoded to use RSA algorithm for all certificates
+  - Now properly detects and handles both RSA and ECDSA certificates
+  - Extracts public/private keys directly using `GetECDsaPublicKey()` / `GetRSAPublicKey()`
 - Handle relative URIs without leading slash in UriBuilder (a4cb16c)
 - Omit default ports (80 for HTTP, 443 for HTTPS) in UriBuilder output (8fa3a9d)
 - Store JWT claims in principal for proper cookie event access (#32, 69e593c)

@@ -59,21 +59,12 @@ Running identity infrastructure on unsupported frameworks creates security risks
 All response types migrated from inheritance-based patterns to `Result<TSuccess, TFailure>` pattern for improved type safety and functional programming support.
 
 **Previous Pattern:**
-```csharp
-public abstract record TokenResponse;
-public record TokenIssuedResponse : TokenResponse { }
-public record TokenErrorResponse : TokenResponse { }
-```
+
+The old approach used inheritance with abstract base types and concrete success/error subtypes, allowing developers to potentially forget handling error cases.
 
 **New Pattern:**
-```csharp
-Result<TokenIssued, TokenError> result = await tokenHandler.HandleAsync(...);
 
-await result.MatchAsync(
-    success => /* handle success */,
-    error => /* handle error */
-);
-```
+The Result pattern wraps success and failure in a discriminated union type, forcing explicit handling of both paths through pattern matching or dedicated match methods.
 
 **Why This Matters:**
 
@@ -101,15 +92,10 @@ For security-critical identity infrastructure, unhandled error paths can expose 
 ### API Interface Changes
 
 **Handler Interfaces Updated:**
-```csharp
-// Before
-Task<TokenResponse> HandleAsync(TokenRequest request);
 
-// After
-Task<Result<TokenIssued, TokenError>> HandleAsync(TokenRequest request);
-```
+All handler interfaces changed from returning abstract response types to returning Result with explicit success and failure generic parameters.
 
-All endpoint handlers now return `Result<,>` types:
+Affected endpoint handlers:
 - `ITokenHandler`
 - `IAuthorizationHandler`
 - `IEndSessionHandler`
@@ -123,15 +109,7 @@ All endpoint handlers now return `Result<,>` types:
 
 ### MVC Response Formatter Changes
 
-Response formatters updated to work with Result pattern:
-
-```csharp
-// Before
-Task FormatResponseAsync(HttpResponse httpResponse, TokenResponse response);
-
-// After
-Task FormatResponseAsync(HttpResponse httpResponse, Result<TokenIssued, TokenError> result);
-```
+Response formatters updated to accept Result types instead of abstract response types, enabling pattern matching on success and failure cases directly in the formatter.
 
 ### OidcEndpoints Enum Changes
 
@@ -150,15 +128,7 @@ The original enum values could overlap when combined using bitwise operations, p
 
 **What It Does:**
 
-Implemented `client_secret_jwt` authentication method per OpenID Connect Core specification:
-
-```csharp
-public class ClientSecretJwtAuthenticator : JwtAssertionAuthenticatorBase
-{
-    // Validates JWT assertions signed with client_secret
-    // Supports HS256, HS384, HS512 algorithms
-}
-```
+Implemented client secret JWT authentication method per OpenID Connect Core specification through a dedicated authenticator that validates JWT assertions signed with the client secret, supporting HMAC algorithms HS256, HS384, and HS512.
 
 **Features:**
 - HMAC-based JWT signature validation
@@ -174,26 +144,60 @@ Traditional client authentication sends secrets in HTTP headers or request bodie
 
 Financial institutions and healthcare providers can now integrate applications that require JWT-based client authentication, expanding Abblix's applicability to highly regulated industries. The built-in clock skew tolerance handles real-world timing issues without compromising security.
 
+### Mutual TLS (mTLS) Client Authentication (RFC 8705)
+
+**What It Does:**
+
+Implemented comprehensive RFC 8705 mutual TLS client authentication supporting both self-signed certificates and PKI/certificate authority validation through two specialized authenticators. The self-signed authenticator validates certificate public keys against the client's registered JWKS, supporting both RSA and ECDSA certificates. The metadata-based authenticator validates certificates against registered Subject Distinguished Names and Subject Alternative Name entries including DNS names, URIs, IP addresses, and email addresses.
+
+**Authentication Methods:**
+- `self_signed_tls_client_auth` - Public key matching against client JWKS
+- `tls_client_auth` - Subject DN and SAN validation against registered metadata
+
+**Features:**
+- **Certificate-bound tokens** - Automatic SHA-256 certificate thumbprint injection in confirmation claim for holder-of-key semantics
+- **Flexible validation** - Match by Subject Distinguished Name, DNS name, URI, IP address, or email address
+- **Proper ASN.1 parsing** - Locale-independent Subject Alternative Name extraction using standard ASN.1 DER decoding
+- **RFC 4514 DN normalization** - Binary Distinguished Name comparison for accurate matching
+- **Certificate forwarding** - Integration with ASP.NET Core's built-in certificate forwarding middleware for reverse proxy scenarios
+- **Discovery support** - Auto-computed mTLS endpoint aliases for RFC 8705 compliance
+- **Multi-algorithm support** - RSA and ECDSA certificate validation
+- **Registration validation** - Validates mTLS metadata during dynamic client registration
+
+**Certificate Forwarding:**
+
+Applications can leverage ASP.NET Core's built-in certificate forwarding middleware by registering it with a convenience extension method that configures certificate header parsing. The middleware must be added to the pipeline before authentication middleware to properly populate certificate information from reverse proxy headers.
+
+**Why This Matters:**
+
+Mutual TLS provides cryptographic proof of client identity at the transport layer, eliminating password-based authentication vulnerabilities. Certificate-based authentication is:
+- **Phishing-resistant** - No credentials to steal or replay
+- **Rotation-friendly** - Certificates expire and rotate automatically
+- **Hardware-bound** - Can be stored in HSMs or TPMs
+- **Compliance-ready** - Required by PSD2, Open Banking, FAPI, and other regulatory frameworks
+
+Traditional client secrets can be intercepted, stolen from code repositories, or leaked through logs. mTLS binds authentication to cryptographic material that never leaves the client's control. Certificate-bound tokens prevent token theft attacks - even if an attacker steals an access token, they can't use it without the matching client certificate.
+
+**Real-World Impact:**
+
+Financial APIs (PSD2, Open Banking), healthcare systems (FHIR), and government services increasingly mandate mTLS for machine-to-machine authentication. Organizations can now:
+- Meet regulatory compliance requirements without custom authentication infrastructure
+- Eliminate client secret rotation challenges across distributed microservices
+- Prevent token replay attacks through cryptographic binding
+- Deploy zero-trust architectures with hardware-backed authentication
+
+The implementation supports common reverse proxy scenarios (nginx, Envoy, HAProxy) where TLS termination occurs at the edge, with certificate forwarding to backend services. Automatic mTLS endpoint discovery enables clients to discover dedicated mTLS endpoints per RFC 8705 requirements.
+
 ### SSRF Protection Enhancement
 
 **What It Does:**
 
-Multi-layered Server-Side Request Forgery protection:
-
-```csharp
-services.AddSecureHttpFetch(options =>
-{
-    options.MaxResponseSizeBytes = 10_485_760; // 10 MB
-    options.RequestTimeout = TimeSpan.FromSeconds(30);
-    options.AllowedSchemes = new[] { "https" }; // HTTPS only
-    options.BlockPrivateNetworks = true; // Block private IPs (default)
-});
-```
+Multi-layered Server-Side Request Forgery protection through configurable options including response size limits, request timeouts, allowed URI schemes, and private network blocking enabled by default.
 
 **New Components:**
-- `SecureHttpFetcher` - Secure HTTP client with validation
-- `SsrfValidatingHttpMessageHandler` - HTTP handler with SSRF checks
-- `SecureHttpFetchOptions` - Configuration for security policies
+- Secure HTTP fetcher with built-in validation
+- SSRF validating HTTP message handler with security checks
+- Configuration options for customizing security policies
 
 **Protection Features:**
 - Blocks private IP ranges (RFC 1918, RFC 4193)
@@ -220,24 +224,12 @@ The multi-layered protection prevents attackers from exploiting OpenID Connect's
 
 **What It Does:**
 
-New attribute-based endpoint enabling/disabling:
-
-```csharp
-[EnabledBy(OidcEndpoints.Token)]
-public class TokenController : ControllerBase
-{
-    [EnabledBy(OidcEndpoints.Token)]
-    public Task<IActionResult> Token([FromBody] TokenRequest request)
-    {
-        // Automatically disabled if OidcEndpoints.Token not in OidcOptions.Endpoints
-    }
-}
-```
+New attribute-based endpoint enabling and disabling through declarative attributes applied to controllers and actions. Controllers and actions are automatically removed from routing when their corresponding endpoints are not enabled in configuration.
 
 **Components:**
-- `EnabledByAttribute` - Declarative endpoint control
-- `EnabledByConvention` - Convention-based registration
-- Automatic route filtering based on `OidcOptions.Endpoints` configuration
+- EnabledBy attribute for declarative endpoint control
+- Convention-based registration for automatic discovery
+- Automatic route filtering based on endpoint configuration flags
 
 **Why This Matters:**
 
@@ -251,14 +243,7 @@ Security audits can now verify that unused endpoints truly don't exist rather th
 
 **What It Does:**
 
-Dynamic grant type discovery infrastructure:
-
-```csharp
-public interface IGrantTypeInformer
-{
-    IEnumerable<string> GetSupportedGrantTypes();
-}
-```
+Dynamic grant type discovery infrastructure through an interface allowing handlers to report their supported grant types, which the discovery endpoint automatically aggregates and publishes.
 
 **Features:**
 - Authorization handlers automatically report implicit grant support
@@ -278,16 +263,7 @@ When you add a custom grant type handler, clients automatically discover it thro
 
 **What It Does:**
 
-Extended `AuthSession` with external authentication support:
-
-```csharp
-public record AuthSession
-{
-    public string? Email { get; init; }
-    public bool? EmailVerified { get; init; }
-    // ... existing properties
-}
-```
+Extended authentication session with additional properties for email address and email verification status, preserving exact values from external authentication providers.
 
 **Benefits:**
 - Preserves exact email from external providers (Google, Microsoft, etc.)
@@ -305,12 +281,7 @@ Applications implementing "Sign in with Google" can now trust the email_verified
 
 ### Keyed Service Decoration
 
-Enhanced dependency injection with keyed service support:
-
-```csharp
-services.AddKeyedScoped<IService, Service>("key");
-services.DecorateKeyed<IService>("key", (inner, sp) => new Decorator(inner));
-```
+Enhanced dependency injection with keyed service support through new extension methods for decorating keyed services, enabling decorator pattern with service keys.
 
 **Features:**
 - `DecorateKeyed` extension method for keyed services
@@ -320,13 +291,7 @@ services.DecorateKeyed<IService>("key", (inner, sp) => new Decorator(inner));
 
 ### UriBuilder Enhancements
 
-Enhanced URI building with ASP.NET Core integration:
-
-```csharp
-var builder = new UriBuilder("/callback");
-builder.AppendQuery("code", authCode);
-Uri uri = builder.Uri; // Handles relative and absolute URIs
-```
+Enhanced URI building with ASP.NET Core integration through new properties and methods supporting relative URIs, PathString conversion, and automatic handling of URI kind determination.
 
 **Features:**
 - Relative URI support (previously required absolute URIs)
@@ -338,16 +303,7 @@ Uri uri = builder.Uri; // Handles relative and absolute URIs
 
 ### SSRF Validation Enhancements
 
-```csharp
-public class SsrfValidatingHttpMessageHandler : HttpClientHandler
-{
-    // Multi-layered SSRF protection:
-    // 1. Blocks private IP ranges before DNS resolution
-    // 2. Validates resolved IPs after DNS lookup
-    // 3. Prevents DNS rebinding attacks
-    // 4. Enforces HTTPS when configured
-}
-```
+The SSRF validating HTTP message handler provides multi-layered protection by blocking private IP ranges before DNS resolution, validating resolved IPs after DNS lookup, preventing DNS rebinding attacks, and enforcing HTTPS when configured.
 
 **Protected Ranges:**
 - 127.0.0.0/8 (Loopback)
@@ -387,14 +343,7 @@ Integration time decreases significantly when developers can configure services 
 
 **What Changed:**
 
-Fixed critical session accumulation issue with distributed cache:
-
-```csharp
-// Critical claims now stored in ClaimsPrincipal instead of AuthenticationProperties
-// This ensures they're accessible in cookie authentication events
-claims.Add(new Claim(JwtClaimTypes.SessionId, sessionId));
-claims.Add(new Claim(JwtClaimTypes.AuthenticationTime, authTime));
-```
+Fixed critical session accumulation issue with distributed cache by moving critical claims from AuthenticationProperties to ClaimsPrincipal, ensuring they're accessible in cookie authentication SignOut events for proper session cleanup.
 
 **Benefits:**
 - Proper session cleanup in distributed cache scenarios
@@ -412,57 +361,21 @@ Production systems can now run indefinitely without cache storage exhaustion. Di
 
 ### Cookie Authentication Improvements
 
-```csharp
-public class AuthenticationSchemeAdapter
-{
-    public AuthenticationSchemeAdapter(
-        IAuthenticationService authService,
-        string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme)
-    {
-        // Explicit authentication scheme support
-        // Fixes multi-scheme scenarios
-    }
-}
-```
+Authentication scheme adapter now accepts explicit authentication scheme parameter, fixing multi-scheme authentication scenarios where multiple authentication schemes are registered.
 
 ### URI Resolution
 
-Extracted duplicate URI resolution logic to shared extension:
-
-```csharp
-public static Uri ToAbsoluteUri(this HttpRequest request, string path)
-{
-    // Handles both relative and app-relative paths (~/...)
-    // Centralizes conversion to absolute URIs
-}
-```
+Extracted duplicate URI resolution logic to shared extension method that handles both relative and application-relative paths, centralizing conversion to absolute URIs.
 
 ### User Info Provider Enhancement
 
-Updated interface to accept `AuthSession` for better context:
-
-```csharp
-Task<UserInfo> GetUserInfoAsync(AuthSession authSession);
-// Instead of: Task<UserInfo> GetUserInfoAsync(string subject);
-```
-
-Enables access to authentication method, email from external providers, and other session context.
+Updated user info provider interface to accept full authentication session instead of just subject identifier, enabling access to authentication method, email from external providers, and other session context.
 
 ### Collection Expressions
 
 **What Changed:**
 
-Modernized to C# 12 collection expressions:
-
-```csharp
-// Before
-Array.Empty<string>()
-new[] { "value1", "value2" }
-
-// After
-[]
-["value1", "value2"]
-```
+Modernized entire codebase to C# 12 collection expressions, replacing empty array calls and array initializers with concise bracket syntax for improved readability and potential compiler optimizations.
 
 **Why This Matters:**
 
@@ -474,15 +387,7 @@ Throughout the codebase, collection initialization patterns are now consistent a
 
 ### Client Cache Expiration
 
-Added per-client TTL control for dynamic registration:
-
-```csharp
-public record ClientInfo
-{
-    public TimeSpan? ExpiresAfter { get; init; }
-    // Enables pseudo-sliding expiration in distributed cache
-}
-```
+Added per-client time-to-live control for dynamic registration through optional expiration property, enabling pseudo-sliding expiration behavior in distributed cache scenarios.
 
 ## Bug Fixes
 
@@ -505,18 +410,7 @@ Third-party OAuth 2.0 client libraries that strictly follow specifications now i
 
 ### Fixed OidcEndpoints Enum Flag Values
 
-Corrected bitwise flag values to prevent conflicts:
-
-```csharp
-public enum OidcEndpoints
-{
-    None = 0,
-    Authorization = 1,
-    Token = 2,
-    UserInfo = 4,
-    // ... properly spaced flag values
-}
-```
+Corrected bitwise flag values in OidcEndpoints enum to prevent conflicts, ensuring each flag uses proper power-of-two values for safe bitwise operations.
 
 ### Fixed UriBuilder Edge Cases
 
@@ -527,12 +421,7 @@ public enum OidcEndpoints
 
 ### Fixed AttributeUsage Declarations
 
-Added explicit `AttributeUsage` to validation attributes:
-
-```csharp
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
-public class ElementsRequiredAttribute : ValidationAttribute
-```
+Added explicit AttributeUsage declarations to validation attributes, specifying valid targets as properties and parameters.
 
 ### Fixed Nullability Warnings
 
@@ -540,14 +429,7 @@ Removed unused test projects and resolved nullability warnings across codebase.
 
 ### Fixed JSON Deserialization Edge Cases
 
-Robust handling of claim arrays in both JSON and plain text formats:
-
-```csharp
-public static bool TryGetStringList(this ClaimsPrincipal principal, string claimType, out string[] values)
-{
-    // Handles both ["value1", "value2"] and "plain text" formats
-}
-```
+Robust handling of claim arrays in both JSON array format and plain text format through improved deserialization logic in claims principal extensions.
 
 ### Fixed checkSession.html
 
@@ -557,28 +439,7 @@ Replaced deprecated `String.replace()` with `String.replaceAll()` for better bro
 
 ### Primary Constructors (C# 12)
 
-Migrated entire codebase to primary constructor syntax:
-
-```csharp
-// Before
-public class TokenHandler
-{
-    private readonly ITokenService _tokenService;
-
-    public TokenHandler(ITokenService tokenService)
-    {
-        _tokenService = tokenService;
-    }
-}
-
-// After
-public class TokenHandler(ITokenService tokenService)
-{
-    // ~900 lines of boilerplate removed across codebase
-}
-```
-
-**Impact:** 74 classes refactored, significant reduction in boilerplate code.
+Migrated entire codebase to primary constructor syntax, eliminating approximately 900 lines of constructor boilerplate across 74 classes by capturing constructor parameters directly in class declarations.
 
 **Why This Matters:**
 
@@ -592,38 +453,7 @@ Code reviews become faster because reviewers can immediately see class dependenc
 
 **What Changed:**
 
-Established strongly-typed JWK hierarchy with RFC compliance:
-
-```csharp
-public abstract record JsonWebKey
-{
-    public abstract string KeyType { get; }
-    // ... common properties
-}
-
-public record RsaJsonWebKey : JsonWebKey
-{
-    public override string KeyType => JsonWebKeyTypes.Rsa;
-    public string N { get; init; } // Modulus
-    public string E { get; init; } // Exponent
-    // ... RSA-specific properties
-}
-
-public record EllipticCurveJsonWebKey : JsonWebKey
-{
-    public override string KeyType => JsonWebKeyTypes.EllipticCurve;
-    public string Crv { get; init; } // Curve
-    public string X { get; init; }
-    public string Y { get; init; }
-    // ... EC-specific properties
-}
-
-public record OctetJsonWebKey : JsonWebKey
-{
-    public override string KeyType => JsonWebKeyTypes.Octet;
-    public string K { get; init; } // Key value
-}
-```
+Established strongly-typed JSON Web Key hierarchy with abstract base record and concrete implementations for RSA, elliptic curve, and octet key types, each with algorithm-specific properties per RFC 7517.
 
 **Benefits:**
 - Type safety for cryptographic operations
@@ -646,58 +476,19 @@ When implementing custom JWT validation or key rotation logic, the type system p
 
 ### JWT Validation Pattern Migration
 
-Migrated from inheritance to Result pattern:
-
-```csharp
-// Before
-public abstract record JwtValidationResult;
-public record ValidJsonWebToken : JwtValidationResult;
-public record JwtValidationError : JwtValidationResult;
-
-// After
-Result<JsonWebToken, JwtValidationError> result = await validator.ValidateAsync(token);
-```
+Migrated JWT validation from inheritance-based result types to Result pattern with explicit success and failure generic parameters.
 
 ### Sanitized Security Pattern
 
-Refactored to static factory pattern:
-
-```csharp
-// Before
-var sanitized = new Sanitized(userInput);
-
-// After
-var sanitized = Sanitized.Value(userInput);
-```
-
-Strengthens log injection prevention with clearer API semantics.
+Refactored log sanitization to static factory pattern, strengthening log injection prevention with clearer API semantics through named factory method.
 
 ### HttpClientHandler Encapsulation
 
-Encapsulated configuration in `SsrfValidatingHttpMessageHandler`:
-
-```csharp
-public class SsrfValidatingHttpMessageHandler : HttpClientHandler
-{
-    public SsrfValidatingHttpMessageHandler()
-    {
-        // Centralized configuration
-        ServerCertificateCustomValidationCallback = ...;
-        SslProtocols = ...;
-        // SSRF validation logic
-    }
-}
-```
+Encapsulated HTTP client configuration in SSRF validating message handler constructor, centralizing server certificate validation callbacks, SSL protocol settings, and SSRF validation logic.
 
 ### ExcludeFromCodeCoverage Configuration
 
-Moved to project-level configuration for consistency:
-
-```xml
-<ItemGroup>
-  <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage" />
-</ItemGroup>
-```
+Moved ExcludeFromCodeCoverage attribute to project-level assembly attributes for consistent code coverage exclusion across test projects.
 
 ## Testing
 
@@ -777,13 +568,7 @@ Teams can now refactor code, upgrade dependencies, and add features with confide
 
 ### Test Infrastructure Improvements
 
-Fixed unit test mocking for extension methods:
-
-```csharp
-// Proper setup for extension method mocks
-var mockService = new Mock<IService>();
-// Comprehensive test helper organization
-```
+Fixed unit test mocking for extension methods by properly setting up mock services with explicit parameter handling for methods with optional parameters.
 
 ## Migration Guide
 
