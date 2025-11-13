@@ -367,7 +367,7 @@ public class UserIdentityValidatorTests
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
+            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");

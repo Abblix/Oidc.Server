@@ -270,7 +270,7 @@ public class IdTokenHintValidatorTests
         ValidationOptions? capturedOptions = null;
         _jwtValidator
             .Setup(v => v.ValidateAsync("id_token", It.IsAny<ValidationOptions>()))
-            .Callback(new System.Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
+            .Callback(new System.Action<string, ValidationOptions>((_, options) => capturedOptions = options))
             .ReturnsAsync(idToken);
 
         // Act

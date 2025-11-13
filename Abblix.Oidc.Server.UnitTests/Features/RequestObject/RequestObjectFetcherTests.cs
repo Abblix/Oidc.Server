@@ -253,7 +253,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .Callback<string, ValidationOptions>((_, opts) => capturedOptions = opts)
+            .Callback<string, ValidationOptions>((_, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -291,7 +291,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
-            .Callback<string, ValidationOptions>((_, opts) => capturedOptions = opts)
+            .Callback<string, ValidationOptions>((_, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder

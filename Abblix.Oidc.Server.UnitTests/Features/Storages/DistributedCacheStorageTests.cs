@@ -168,7 +168,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, opts, _) => capturedOptions = opts)
+                (_, _, options, _) => capturedOptions = options)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -206,7 +206,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, opts, _) => capturedOptions = opts)
+                (_, _, options, _) => capturedOptions = options)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -242,7 +242,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, opts, _) => capturedOptions = opts)
+                (_, _, options, _) => capturedOptions = options)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -278,7 +278,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, opts, _) => capturedOptions = opts)
+                (_, _, options, _) => capturedOptions = options)
             .Returns(Task.CompletedTask);
 
         // Act

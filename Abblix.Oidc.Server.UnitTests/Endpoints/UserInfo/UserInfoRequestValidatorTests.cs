@@ -390,7 +390,7 @@ public class UserInfoRequestValidatorTests
         ValidationOptions? capturedOptions = null;
         _jwtValidator
             .Setup(v => v.ValidateAsync("token_123", It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
+            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
