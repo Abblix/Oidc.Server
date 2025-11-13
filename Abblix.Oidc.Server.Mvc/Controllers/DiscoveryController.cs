@@ -184,8 +184,8 @@ public sealed class DiscoveryController : ControllerBase
             if (original == null)
 	            return null;
 
-            var basePath = baseUri.AbsolutePath?.TrimEnd('/') ?? string.Empty;
-            var origPath = original.AbsolutePath?.TrimStart('/') ?? string.Empty;
+            var basePath = baseUri.AbsolutePath.TrimEnd('/');
+            var origPath = original.AbsolutePath.TrimStart('/');
             var combinedPath = string.IsNullOrEmpty(basePath) || basePath == "/"
                 ? $"/{origPath}"
                 : $"{basePath}/{origPath}";
@@ -203,7 +203,6 @@ public sealed class DiscoveryController : ControllerBase
 	/// This endpoint returns a JSON Web Key Set (JWKS) containing the public keys used by the provider.
 	/// Clients can use these keys to verify the authenticity of identity tokens and access tokens issued by the provider.
 	/// </summary>
-	/// <param name="options">Options for OpenID Connect, containing configuration settings and enabled endpoints.</param>
 	/// <param name="serviceKeysProvider">Provider for retrieving the service's public key information.</param>
 	/// <returns>
 	/// A JSON Web Key Set (JWKS) response in the form of <see cref="JsonWebKeySet"/> if the Keys endpoint is enabled,
