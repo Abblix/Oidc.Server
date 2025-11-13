@@ -21,29 +21,22 @@
 // info@abblix.com
 
 using System.Net.Mime;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.LogoutNotification;
-using Abblix.Oidc.Server.Features.UserInfo;
-using Abblix.Oidc.Server.Model;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Filters;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
 
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 
 /// <summary>
-/// The DiscoveryController handles requests for OpenID Connect Discovery, providing information about the OpenID Provider's configuration.
-/// It supports endpoints for retrieving the provider's metadata and its public key information.
+/// The DiscoveryController handles requests for OpenID Connect Discovery, providing information about
+/// the OpenID Provider's configuration. It supports endpoints for retrieving the provider's metadata and
+/// its public key information.
 /// </summary>
 /// <remarks>
 /// This controller implements the functionality described in the OpenID Connect Discovery 1.0 specification,
@@ -69,133 +62,20 @@ public sealed class DiscoveryController : ControllerBase
 	/// The response adheres to the OpenID Connect Discovery specification, providing a
 	/// standardized set of information necessary for clients to interact with the provider.
 	/// </remarks>
+	/// <param name="handler">The service responsible for building discovery metadata.</param>
+	/// <param name="formatter">The service responsible for enriching the response with endpoint URLs.</param>
 	/// <returns>A task that results in an action result containing the provider's configuration details
 	/// in JSON format.</returns>
 	[HttpGet(Path.Configuration)]
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[EnabledBy(OidcEndpoints.Configuration)]
-    public Task<ActionResult<ConfigurationResponse>> ConfigurationAsync(
-        [FromServices] IOptionsSnapshot<OidcOptions> options,
-		[FromServices] IIssuerProvider issuerProvider,
-		[FromServices] ILogoutNotifier logoutNotifier,
-		[FromServices] IClientAuthenticator clientAuthenticator,
-		[FromServices] IEnumerable<IGrantTypeInformer> grantTypeProviders,
-		[FromServices] IScopeClaimsProvider scopeClaimsProvider,
-		[FromServices] IJsonWebTokenCreator jwtCreator,
-		[FromServices] IJsonWebTokenValidator jwtValidator,
-		[FromServices] IAuthorizationHandler authorizationHandler,
-		[FromServices] ISubjectTypeConverter subjectTypeConverter,
-		[FromServices] IEndpointResolver endpointResolver)
+	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
+		[FromServices] IConfigurationHandler handler,
+		[FromServices] IConfigurationResponseFormatter formatter)
 	{
-        var response = new ConfigurationResponse
-        {
-			Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-
-			JwksUri = Resolve<DiscoveryController>(nameof(KeysAsync), OidcEndpoints.Keys),
-
-			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize),
-			UserInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo),
-			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession),
-			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession),
-			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest),
-
-			TokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token),
-			RevocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation),
-			IntrospectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection),
-
-			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient),
-
-			FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
-			FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
-			BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
-			BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
-
-			ClaimsParameterSupported = authorizationHandler.Metadata.ClaimsParameterSupported,
-
-			ScopesSupported = scopeClaimsProvider.ScopesSupported,
-			ClaimsSupported = scopeClaimsProvider.ClaimsSupported,
-
-			GrantTypesSupported = grantTypeProviders
-				.SelectMany(provider => provider.GrantTypesSupported)
-				.Distinct()
-				.ToArray(),
-
-			ResponseTypesSupported = authorizationHandler.Metadata.ResponseTypesSupported,
-			ResponseModesSupported = authorizationHandler.Metadata.ResponseModesSupported,
-
-			TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
-			TokenEndpointAuthSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
-
-			SubjectTypesSupported = subjectTypeConverter.SubjectTypesSupported,
-			PromptValuesSupported = authorizationHandler.Metadata.PromptValuesSupported,
-
-			CodeChallengeMethodsSupported = authorizationHandler.Metadata.CodeChallengeMethodsSupported,
-
-			RequestParameterSupported = authorizationHandler.Metadata.RequestParameterSupported,
-			RequestObjectSigningAlgValuesSupported = authorizationHandler.Metadata.RequestParameterSupported
-				? jwtValidator.SigningAlgorithmsSupported
-				: null,
-
-			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
-			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
-
-			IdTokenSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
-			UserInfoSigningAlgValuesSupported = jwtCreator.SignedResponseAlgorithmsSupported,
-
-			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
-			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
-			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
-            BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
-        };
-
-        // Compose mtls aliases from options.MtlsEndpointAliases and optional base URI
-        var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-        var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
-
-        if (mtlsOptions != null || mtlsBaseUri != null)
-        {
-	        response = response with {
-		        MtlsEndpointAliases = new MtlsAliases
-		        {
-			        TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(response.TokenEndpoint, mtlsBaseUri),
-			        RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(response.RevocationEndpoint, mtlsBaseUri),
-			        IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(response.IntrospectionEndpoint, mtlsBaseUri),
-			        UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(response.UserInfoEndpoint, mtlsBaseUri),
-		        }
-	        };
-        }
-
-        return Task.FromResult<ActionResult<ConfigurationResponse>>(response);
-
-		Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag) where T : ControllerBase
-		{
-			return options.Value.Discovery.AllowEndpointPathsDiscovery &&
-			       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
-				? endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName))
-				: null;
-        }
-
-        Uri? Rebase(Uri? original, Uri? baseUri)
-        {
-	        if (baseUri == null)
-		        return original;
-
-            if (original == null)
-	            return null;
-
-            var basePath = baseUri.AbsolutePath.TrimEnd('/');
-            var origPath = original.AbsolutePath.TrimStart('/');
-            var combinedPath = string.IsNullOrEmpty(basePath) || basePath == "/"
-                ? $"/{origPath}"
-                : $"{basePath}/{origPath}";
-
-            var ub = new UriBuilder(baseUri)
-            {
-                Path = combinedPath,
-            };
-            return ub.Uri;
-        }
+		var response = await handler.HandleAsync();
+		return await formatter.FormatResponseAsync(response);
 	}
 
 	/// <summary>
