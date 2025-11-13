@@ -53,10 +53,10 @@ public record EndSessionRequest
     /// <summary>
     /// The client identifier for the application requesting the logout.
     /// This helps the server in identifying which client application is initiating the logout process.
-    /// Required when PostLogoutRedirectUri is specified.
+    /// Required when PostLogoutRedirectUri is specified or when IdTokenHint is not provided.
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.ClientId)]
-    [RequiredWhenPostLogoutRedirectUri]
+    [RequiredWhenNoIdTokenHint]
     public string? ClientId { get; set; }
 
     /// <summary>
@@ -109,12 +109,16 @@ public record EndSessionRequest
 }
 
 /// <summary>
-/// Validates that the ClientId is required when PostLogoutRedirectUri is specified.
-/// Per OpenID Connect RP-Initiated Logout 1.0 specification, when post_logout_redirect_uri is present,
-/// the client_id parameter is required.
+/// Validates that the ClientId is required when PostLogoutRedirectUri is specified but IdTokenHint is not.
+/// Per OIDC RP-Initiated Logout 1.0 specification:
+/// - When post_logout_redirect_uri is used without id_token_hint, client_id identifies the client
+/// - When id_token_hint is provided, the OP can extract client identity from the token
+/// - When neither are provided, the OP uses session cookies to identify the user
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-file sealed class RequiredWhenPostLogoutRedirectUriAttribute : ConditionalRequiredAttribute
+file sealed class RequiredWhenNoIdTokenHintAttribute : ConditionalRequiredAttribute
 {
-    protected override bool IsRequired(object model) => model is EndSessionRequest { PostLogoutRedirectUri: not null };
+    protected override bool IsRequired(object model)
+        => model is EndSessionRequest { PostLogoutRedirectUri: not null } request &&
+           string.IsNullOrEmpty(request.IdTokenHint);
 }
