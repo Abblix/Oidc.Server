@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc;
+using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 
@@ -38,4 +39,13 @@ public interface IAuthorizationErrorFormatter
     /// <param name="error">The authorization error to be formatted.</param>
     /// <returns>A task that resolves to the formatted HTTP action result.</returns>
     Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error);
+
+    /// <summary>
+    /// Converts an authorization response into the appropriate action result type based on the specified response mode.
+    /// </summary>
+    /// <param name="response">The authorization response to convert.</param>
+    /// <param name="responseMode">The response mode indicating how the response should be delivered.</param>
+    /// <param name="redirectUri">The URI to redirect to, if applicable.</param>
+    /// <returns>The action result for the given authorization response.</returns>
+    Task<ActionResult> FormatResponseAsync(AuthorizationResponse response, string responseMode, Uri redirectUri);
 }

@@ -29,11 +29,8 @@ using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
@@ -48,13 +45,11 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
     IAuthorizationRequestStorage authorizationRequestStorage,
-    IParametersProvider parametersProvider,
     ISessionManagementService sessionManagementService,
-    IHttpContextAccessor httpContextAccessor,
-    IIssuerProvider issuerProvider)
-    : AuthorizationErrorFormatter(parametersProvider, issuerProvider), IAuthorizationResponseFormatter
+    IUriResolver uriResolver,
+    IIssuerProvider issuerProvider,
+    IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
-    private readonly IIssuerProvider _issuerProvider = issuerProvider;
 
     /// <summary>
     /// Formats an authorization response based on the specified request and response model asynchronously.
@@ -93,7 +88,7 @@ public class AuthorizationResponseFormatter(
                 var modelResponse = new AuthorizationResponse
                 {
                     State = response.Model.State,
-                    Issuer = _issuerProvider.GetIssuer(),
+                    Issuer = issuerProvider.GetIssuer(),
                     Scope = string.Join(' ', response.Model.Scope),
                     Code = success.Code,
                     TokenType = success.TokenType,
@@ -102,7 +97,7 @@ public class AuthorizationResponseFormatter(
                     SessionState = success.SessionState,
                 };
 
-                var actionResult = ToActionResult(modelResponse, success.ResponseMode, redirectUri);
+                var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, success.ResponseMode, redirectUri);
 
                 if (sessionManagementService.Enabled  &&
                     success.SessionId.HasValue() &&
@@ -119,7 +114,7 @@ public class AuthorizationResponseFormatter(
                 return actionResult;
 
             case AuthorizationError error:
-                return await base.FormatResponseAsync(response.Model, error);
+                return await errorFormatter.FormatResponseAsync(response.Model, error);
 
             default:
                 throw new UnexpectedTypeException(nameof(response), response.GetType());
@@ -140,13 +135,7 @@ public class AuthorizationResponseFormatter(
 
         if (!uri.IsAbsoluteUri)
         {
-            var httpContext = httpContextAccessor.HttpContext;
-
-            var requestUri = new Uri(
-                httpContext.NotNull(nameof(httpContext)).Request.GetDisplayUrl(),
-                UriKind.Absolute);
-
-            uri = new Uri(requestUri, uri);
+            uri = uriResolver.Content(uri.OriginalString);
         }
 
         return new RedirectResult(new UriBuilder(uri)

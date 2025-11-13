@@ -51,17 +51,7 @@ public class AuthorizationErrorFormatter(
     /// <param name="request">The original authorization request that led to the error.</param>
     /// <param name="error">The authorization error to be formatted.</param>
     /// <returns>A task that resolves to the formatted HTTP action result.</returns>
-    public Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
-        => Task.FromResult(FormatResponse(request, error));
-
-    /// <summary>
-    /// Internally formats the authorization error response based on the request context and the error's properties,
-    /// such as whether to use a redirect URI.
-    /// </summary>
-    /// <param name="request">The authorization request associated with the error.</param>
-    /// <param name="error">The error to be formatted into a response.</param>
-    /// <returns>The action result representing the formatted error response.</returns>
-    private ActionResult FormatResponse(AuthorizationRequest request, AuthorizationError error)
+    public async Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
     {
         switch (error)
         {
@@ -76,7 +66,7 @@ public class AuthorizationErrorFormatter(
                     ErrorUri = error.ErrorUri,
                 };
 
-                return ToActionResult(response, error.ResponseMode, redirectUri);
+                return await FormatResponseAsync(response, error.ResponseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));
@@ -90,9 +80,9 @@ public class AuthorizationErrorFormatter(
     /// <param name="responseMode">The response mode indicating how the response should be delivered.</param>
     /// <param name="redirectUri">The URI to redirect to, if applicable.</param>
     /// <returns>The action result for the given authorization response.</returns>
-    protected ActionResult ToActionResult(AuthorizationResponse response, string responseMode, Uri redirectUri)
+    public Task<ActionResult> FormatResponseAsync(AuthorizationResponse response, string responseMode, Uri redirectUri)
     {
-        return responseMode switch
+        return Task.FromResult<ActionResult>(responseMode switch
         {
             ResponseModes.FormPost => new OkObjectResult(response)
             {
@@ -103,7 +93,7 @@ public class AuthorizationErrorFormatter(
             ResponseModes.Fragment => new RedirectResult(redirectUri.AddToFragment(GetParametersFrom(response))),
 
             _ => throw new ArgumentOutOfRangeException(nameof(responseMode)),
-        };
+        });
     }
 
     /// <summary>

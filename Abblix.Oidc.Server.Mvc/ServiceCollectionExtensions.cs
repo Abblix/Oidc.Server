@@ -23,7 +23,6 @@
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Configuration;
@@ -96,6 +95,7 @@ public static class ServiceCollectionExtensions
 			.AddScoped<IEndpointResolver, EndpointResolver>()
 			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
 			.AddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>()
+			.AddScoped<IAuthorizationErrorFormatter, AuthorizationErrorFormatter>()
 			.AddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>()
 			.AddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>()
 			.AddScoped<ITokenResponseFormatter, TokenResponseFormatter>()
