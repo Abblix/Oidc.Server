@@ -75,6 +75,8 @@ public record ConfigurationResponse
         public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
         public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
         public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
+        // RFC 8705 mTLS endpoint aliases
+        public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
     }
 
     /// <summary>
@@ -319,4 +321,10 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
     public bool? BackChannelUserCodeParameterSupported { get; init; }
+
+    /// <summary>
+    /// RFC 8705: mTLS endpoint aliases block to advertise alternate endpoints served on an mTLS-bound host.
+    /// </summary>
+    [JsonPropertyName(Parameters.MtlsEndpointAliases)]
+    public MtlsAliases? MtlsEndpointAliases { get; init; }
 }

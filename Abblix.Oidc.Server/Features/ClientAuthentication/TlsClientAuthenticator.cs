@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,12 @@ public class TlsClientAuthenticator(
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientKeysProvider) : IClientAuthenticator
 {
+    /// <summary>
+    /// Gets the collection of client authentication methods supported by this authenticator.
+    /// </summary>
+    /// <value>
+    /// A collection containing <see cref="ClientAuthenticationMethods.SelfSignedTlsClientAuth"/>.
+    /// </value>
     public IEnumerable<string> ClientAuthenticationMethodsSupported
     {
         get
@@ -49,6 +56,25 @@ public class TlsClientAuthenticator(
         }
     }
 
+    /// <summary>
+    /// Attempts to authenticate a client using self-signed TLS client authentication.
+    /// Validates the client certificate's public key against the client's registered JWKS.
+    /// </summary>
+    /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
+    /// <returns>
+    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
+    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
+    /// or certificate public key doesn't match any key in the client's JWKS.
+    /// </returns>
+    /// <remarks>
+    /// This method implements RFC 8705 self_signed_tls_client_auth by:
+    /// 1. Verifying a client certificate is present
+    /// 2. Looking up client configuration by client_id
+    /// 3. Checking the client uses self_signed_tls_client_auth method
+    /// 4. Extracting the public key from the certificate
+    /// 5. Comparing it against all keys in the client's JWKS (jwks or jwks_uri)
+    /// Supports both RSA and ECDSA certificates.
+    /// </remarks>
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
         // Require client certificate and client_id
@@ -60,7 +86,7 @@ public class TlsClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId!).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (client == null)
         {
             logger.LogDebug("mTLS auth failed: unknown client_id {ClientId}", clientId);
@@ -75,27 +101,68 @@ public class TlsClientAuthenticator(
 
         // Compute certificate public key and compare against client's JWKS signing keys
         var certJwk = certificate.ToJsonWebKey();
-        if (certJwk is not RsaJsonWebKey certRsa)
+        if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
-            logger.LogDebug("mTLS auth failed: unsupported certificate key type for client {ClientId}", clientId);
+            logger.LogWarning("mTLS auth failed: no matching JWKS public key found for client_id {ClientId}", clientId);
             return null;
         }
 
-        await foreach (var key in clientKeysProvider.GetSigningKeys(client))
-        {
-            if (key is RsaJsonWebKey rsa &&
-                rsa.Modulus != null && rsa.Exponent != null &&
-                certRsa.Modulus != null && certRsa.Exponent != null &&
-                rsa.Modulus.AsSpan().SequenceEqual(certRsa.Modulus) &&
-                rsa.Exponent.AsSpan().SequenceEqual(certRsa.Exponent))
-            {
-                logger.LogInformation("mTLS client authenticated via self-signed certificate for client_id {ClientId}", clientId);
-                return client;
-            }
-        }
+        logger.LogInformation("mTLS client authenticated via self-signed certificate for client_id {ClientId}",
+            clientId);
+        return client;
+    }
 
-        logger.LogWarning("mTLS auth failed: no matching JWKS public key found for client_id {ClientId}", clientId);
-        return null;
+    /// <summary>
+    /// Creates a predicate function that checks if a JWKS key matches the certificate's public key.
+    /// Supports RSA and ECDSA key types with appropriate comparison logic for each.
+    /// </summary>
+    /// <param name="certJwk">The JSON Web Key extracted from the client certificate.</param>
+    /// <returns>
+    /// A function that takes a <see cref="JsonWebKey"/> from the client's JWKS and returns true if it matches
+    /// the certificate's public key; otherwise, false.
+    /// Returns a function that always returns false if the certificate key type is unsupported.
+    /// </returns>
+    /// <remarks>
+    /// RSA keys are matched by comparing modulus and exponent.
+    /// ECDSA keys are matched by comparing curve name and coordinates (X, Y).
+    /// Other key types (EdDSA, symmetric, etc.) are not supported and will not match.
+    /// </remarks>
+    private static Func<JsonWebKey, bool> PublicKeysMatch(JsonWebKey certJwk)
+    {
+        return certJwk switch
+        {
+            RsaJsonWebKey
+                {
+                    Modulus: { } certModulus,
+                    Exponent: { } certExponent,
+                } =>
+                // RSA key matching
+                jwk => jwk is RsaJsonWebKey
+                       {
+                           Modulus: { } jwkModulus,
+                           Exponent: { } jwkExponent,
+                       } &&
+                       certModulus.SequenceEqual(jwkModulus) &&
+                       certExponent.SequenceEqual(jwkExponent),
+
+            EllipticCurveJsonWebKey
+                {
+                    Curve: { } certCurve,
+                    X: { } certX,
+                    Y: { } certY,
+                } =>
+                // ECDSA key matching
+                jwk => jwk is EllipticCurveJsonWebKey
+                       {
+                           Curve: { } jwkCurve,
+                           X: { } jwkX,
+                           Y: { } jwkY,
+                       } &&
+                       string.Equals(certCurve, jwkCurve, StringComparison.Ordinal) &&
+                       certX.SequenceEqual(jwkX) &&
+                       certY.SequenceEqual(jwkY),
+
+            _ => _ => false,
+        };
     }
 }
-

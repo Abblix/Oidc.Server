@@ -181,6 +181,42 @@ public record ReadClientSuccessfulResponse
     [AbsoluteUri]
     public Uri? InitiateLoginUri { get; init; }
 
+    // --- RFC 8705 tls_client_auth metadata ---
+    /// <summary>
+    /// Exact Subject Distinguished Name required when using tls_client_auth.
+    /// </summary>
+    [JsonPropertyOrder(19)]
+    [JsonPropertyName(Parameters.TlsClientAuthSubjectDn)]
+    public string? TlsClientAuthSubjectDn { get; init; }
+
+    /// <summary>
+    /// Required DNS Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyOrder(20)]
+    [JsonPropertyName(Parameters.TlsClientAuthSanDns)]
+    public string[]? TlsClientAuthSanDns { get; init; }
+
+    /// <summary>
+    /// Required URI Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyOrder(21)]
+    [JsonPropertyName(Parameters.TlsClientAuthSanUri)]
+    public Uri[]? TlsClientAuthSanUri { get; init; }
+
+    /// <summary>
+    /// Required IP Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyOrder(22)]
+    [JsonPropertyName(Parameters.TlsClientAuthSanIp)]
+    public string[]? TlsClientAuthSanIp { get; init; }
+
+    /// <summary>
+    /// Required email Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyOrder(23)]
+    [JsonPropertyName(Parameters.TlsClientAuthSanEmail)]
+    public string[]? TlsClientAuthSanEmail { get; init; }
+
     /// <summary>
     /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
     /// </summary>
@@ -204,5 +240,11 @@ public record ReadClientSuccessfulResponse
         public const string Contacts = "contacts";
         public const string RequestUris = "request_uris";
         public const string InitiateLoginUri = "initiate_login_uri";
+        // RFC 8705 tls_client_auth metadata
+        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
     }
 }

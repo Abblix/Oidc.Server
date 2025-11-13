@@ -86,6 +86,12 @@ public class ReadClientRequestProcessor(
             Contacts = client.Contacts,
             RequestUris = client.RequestUris,
             InitiateLoginUri = client.InitiateLoginUri,
+            // tls_client_auth metadata (if configured)
+            TlsClientAuthSubjectDn = client.TlsClientAuth?.SubjectDn,
+            TlsClientAuthSanDns = client.TlsClientAuth?.SanDns,
+            TlsClientAuthSanUri = client.TlsClientAuth?.SanUris,
+            TlsClientAuthSanIp = client.TlsClientAuth?.SanIps,
+            TlsClientAuthSanEmail = client.TlsClientAuth?.SanEmails,
         };
     }
 

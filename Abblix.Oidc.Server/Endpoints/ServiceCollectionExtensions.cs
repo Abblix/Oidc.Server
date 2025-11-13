@@ -348,6 +348,7 @@ public static class ServiceCollectionExtensions
                 .AddSingleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, TlsClientAuthValidator>()
                 .Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }
 

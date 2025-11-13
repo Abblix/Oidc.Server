@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
@@ -58,6 +59,15 @@ public static class AuthorizationContextExtensions
             ? Array.ConvertAll(context.Resources, res => res.OriginalString)
             : [context.ClientId];
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(context.RequestedClaims, JsonSerializerOptions);
+
+        // Add certificate-bound token confirmation if available
+        if (!string.IsNullOrWhiteSpace(context.X509CertificateSha256Thumbprint))
+        {
+            payload[IanaClaimTypes.Cnf] = new JsonObject
+            {
+                ["x5t#S256"] = context.X509CertificateSha256Thumbprint,
+            };
+        }
     }
 
     /// <summary>
@@ -73,13 +83,16 @@ public static class AuthorizationContextExtensions
     /// </remarks>
     public static AuthorizationContext ToAuthorizationContext(this JsonWebTokenPayload payload)
     {
-        var resources =
-            payload.Audiences.Count() == 1 && payload.Audiences.Single() == payload.ClientId
-                ? null
-                : payload.Audiences
-            .Select(aud => Uri.TryCreate(aud, UriKind.Absolute, out var uri) ? uri : null)
-            .OfType<Uri>()
-            .ToArray();
+        var audiences = payload.Audiences.ToArray();
+
+        Uri[]? resources = null;
+        if (audiences.Length != 1 || audiences[0] != payload.ClientId)
+        {
+            resources = audiences
+                .Select(aud => Uri.TryCreate(aud, UriKind.Absolute, out var uri) ? uri : null)
+                .OfType<Uri>()
+                .ToArray();
+        }
 
         return new AuthorizationContext(
             payload.ClientId.NotNull(nameof(payload.ClientId)),

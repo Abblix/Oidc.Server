@@ -127,6 +127,19 @@ public class RegisterClientRequestProcessor(
             TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
         };
 
+        // Map tls_client_auth metadata if selected
+        if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        {
+            clientInfo.TlsClientAuth = new TlsClientAuthOptions
+            {
+                SubjectDn = model.TlsClientAuthSubjectDn,
+                SanDns = model.TlsClientAuthSanDns,
+                SanUris = model.TlsClientAuthSanUri,
+                SanIps = model.TlsClientAuthSanIp,
+                SanEmails = model.TlsClientAuthSanEmail,
+            };
+        }
+
         if (credentials.ClientSecret.HasValue())
         {
             clientInfo.ClientSecrets =

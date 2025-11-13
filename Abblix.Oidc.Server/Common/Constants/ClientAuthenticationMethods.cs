@@ -55,7 +55,6 @@ public static class ClientAuthenticationMethods
     /// <summary>
     /// Mutual TLS client authentication where the client's certificate chain is validated against
     /// the AS trust store and matched using client metadata (subject/SAN). RFC 8705.
-    /// Note: Full metadata matching is not implemented in this release.
     /// </summary>
     public const string TlsClientAuth = "tls_client_auth";
 

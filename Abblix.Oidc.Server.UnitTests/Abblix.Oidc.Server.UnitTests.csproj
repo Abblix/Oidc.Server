@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
   </ItemGroup>
 
 </Project>

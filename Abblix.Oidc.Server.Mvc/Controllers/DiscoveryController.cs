@@ -75,8 +75,8 @@ public sealed class DiscoveryController : ControllerBase
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[EnabledBy(OidcEndpoints.Configuration)]
-	public Task<ActionResult<ConfigurationResponse>> ConfigurationAsync(
-		[FromServices] IOptionsSnapshot<OidcOptions> options,
+    public Task<ActionResult<ConfigurationResponse>> ConfigurationAsync(
+        [FromServices] IOptionsSnapshot<OidcOptions> options,
 		[FromServices] IIssuerProvider issuerProvider,
 		[FromServices] ILogoutNotifier logoutNotifier,
 		[FromServices] IClientAuthenticator clientAuthenticator,
@@ -88,8 +88,8 @@ public sealed class DiscoveryController : ControllerBase
 		[FromServices] ISubjectTypeConverter subjectTypeConverter,
 		[FromServices] IEndpointResolver endpointResolver)
 	{
-		var response = new ConfigurationResponse
-		{
+        var response = new ConfigurationResponse
+        {
 			Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 
 			JwksUri = Resolve<DiscoveryController>(nameof(KeysAsync), OidcEndpoints.Keys),
@@ -146,10 +146,27 @@ public sealed class DiscoveryController : ControllerBase
 			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
 			BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
 			BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
-			BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
-		};
+            BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtValidator.SigningAlgorithmsSupported,
+        };
 
-		return Task.FromResult<ActionResult<ConfigurationResponse>>(response);
+        // Compose mtls aliases from options.MtlsEndpointAliases and optional base URI
+        var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
+        var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
+
+        if (mtlsOptions != null || mtlsBaseUri != null)
+        {
+	        response = response with {
+		        MtlsEndpointAliases = new MtlsAliases
+		        {
+			        TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(response.TokenEndpoint, mtlsBaseUri),
+			        RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(response.RevocationEndpoint, mtlsBaseUri),
+			        IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(response.IntrospectionEndpoint, mtlsBaseUri),
+			        UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(response.UserInfoEndpoint, mtlsBaseUri),
+		        }
+	        };
+        }
+
+        return Task.FromResult<ActionResult<ConfigurationResponse>>(response);
 
 		Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag) where T : ControllerBase
 		{
@@ -157,7 +174,28 @@ public sealed class DiscoveryController : ControllerBase
 			       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
 				? endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName))
 				: null;
-		}
+        }
+
+        Uri? Rebase(Uri? original, Uri? baseUri)
+        {
+	        if (baseUri == null)
+		        return original;
+
+            if (original == null)
+	            return null;
+
+            var basePath = baseUri.AbsolutePath?.TrimEnd('/') ?? string.Empty;
+            var origPath = original.AbsolutePath?.TrimStart('/') ?? string.Empty;
+            var combinedPath = string.IsNullOrEmpty(basePath) || basePath == "/"
+                ? $"/{origPath}"
+                : $"{basePath}/{origPath}";
+
+            var ub = new UriBuilder(baseUri)
+            {
+                Path = combinedPath,
+            };
+            return ub.Uri;
+        }
 	}
 
 	/// <summary>
