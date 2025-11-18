@@ -57,6 +57,11 @@ public class AuthorizationCodeGrantHandlerTests
 			_authCodeService.Object);
 	}
 
+	/// <summary>
+	/// Verifies that PKCE (Proof Key for Code Exchange) validation succeeds
+	/// when the code verifier correctly matches the code challenge using both S256 and Plain methods.
+	/// Tests RFC 7636 PKCE flow for OAuth 2.0 public clients.
+	/// </summary>
 	[Theory]
 	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "qwerty")]
@@ -69,12 +74,17 @@ public class AuthorizationCodeGrantHandlerTests
 		Assert.NotNull(grant);
 	}
 
+	/// <summary>
+	/// Verifies that PKCE validation fails and returns InvalidGrant error
+	/// when the code verifier doesn't match the code challenge or is missing.
+	/// This prevents authorization code interception attacks per RFC 7636.
+	/// </summary>
 	[Theory]
 	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "abc")]
 	[InlineData(CodeChallengeMethods.S256, "qwerty", null)]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "asdfgh")]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", null)]
-	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
 
@@ -83,7 +93,7 @@ public class AuthorizationCodeGrantHandlerTests
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
-	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
+	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		// arrange
 		var clientInfo = new ClientInfo("client1");

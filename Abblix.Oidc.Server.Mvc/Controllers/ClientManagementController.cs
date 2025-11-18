@@ -21,7 +21,9 @@
 // info@abblix.com
 
 using System.Net.Mime;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +44,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
+[EnabledBy(OidcEndpoints.RegisterClient)]
 public class ClientManagementController : ControllerBase
 {
     /// <summary>

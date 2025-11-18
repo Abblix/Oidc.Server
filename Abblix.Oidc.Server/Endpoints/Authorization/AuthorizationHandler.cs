@@ -25,7 +25,6 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 

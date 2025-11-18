@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Controllers;
@@ -36,19 +35,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Provides a response formatter for client registration responses.
 /// </summary>
-public class RegisterClientResponseFormatter : IRegisterClientResponseFormatter
+/// <param name="uriResolver">The action URI provider used for generating URIs for client management actions.</param>
+public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegisterClientResponseFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RegisterClientResponseFormatter"/> class.
-    /// </summary>
-    /// <param name="uriResolver">The action URI provider used for generating URIs for client management actions.</param>
-    public RegisterClientResponseFormatter(IUriResolver uriResolver)
-    {
-        _uriResolver = uriResolver;
-    }
-
-    private readonly IUriResolver _uriResolver;
-
     /// <summary>
     /// Formats a client registration response asynchronously, converting the response model to an appropriate
     /// <see cref="ActionResult"/> based on the nature of the response.
@@ -70,12 +59,12 @@ public class RegisterClientResponseFormatter : IRegisterClientResponseFormatter
     {
         return Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => (ActionResult)new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 
     private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
     {
-        var modelResponse = new Abblix.Oidc.Server.Model.ClientRegistrationResponse
+        var modelResponse = new ClientRegistrationResponse
         {
             ClientId = success.ClientId,
             ClientIdIssuedAt = success.ClientIdIssuedAt,
@@ -95,7 +84,7 @@ public class RegisterClientResponseFormatter : IRegisterClientResponseFormatter
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
     }
 
-    private Uri GetClientReadUrl(string clientId) => _uriResolver.Action(
+    private Uri GetClientReadUrl(string clientId) => uriResolver.Action(
         MvcUtils.TrimAsync(nameof(ClientManagementController.ReadClientAsync)),
         MvcUtils.NameOf<ClientManagementController>(),
         new RouteValueDictionary

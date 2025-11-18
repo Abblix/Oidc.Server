@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/duration.proto";
+import "Features/Storages/Proto/RequestedClaims.proto";
+
+// Represents an authorization request for OpenID Connect or OAuth 2.0
+message AuthorizationRequest {
+  // The requested scopes
+  repeated string scope = 1;
+
+  // Detailed request for specific claims (UserInfo and ID Token).
+  // Uses structured protobuf types (Value, ListValue) for efficient binary serialization
+  // without JSON string encoding. Supports essential flags and value constraints.
+  optional RequestedClaims claims = 2;
+
+  // The requested response types
+  repeated string response_type = 3;
+
+  // The client ID of the requesting client
+  optional string client_id = 4;
+
+  // The redirect URI where the response should be sent
+  optional string redirect_uri = 5;
+
+  // State parameter to maintain state between request and callback
+  optional string state = 6;
+
+  // The requested response mode
+  optional string response_mode = 7;
+
+  // Nonce value to associate client session with ID token
+  optional string nonce = 8;
+
+  // How the authorization server displays authentication and consent UI
+  optional string display = 9;
+
+  // Whether to prompt the user for re-authentication and consent
+  optional string prompt = 10;
+
+  // Allowable elapsed time since last user authentication
+  optional google.protobuf.Duration max_age = 11;
+
+  // UI locales requested for the user interface (BCP47 language tags)
+  repeated string ui_locales = 12;
+
+  // Claims locales requested for the authorization response (BCP47 language tags)
+  repeated string claims_locales = 13;
+
+  // ID token hint to pre-fill authentication and consent UI
+  optional string id_token_hint = 14;
+
+  // Login hint to pre-fill authentication UI
+  optional string login_hint = 15;
+
+  // Authentication Context Class References requested
+  repeated string acr_values = 16;
+
+  // PKCE code challenge
+  optional string code_challenge = 17;
+
+  // PKCE code challenge method
+  optional string code_challenge_method = 18;
+
+  // JWT that encapsulates the entire authorization request
+  optional string request = 19;
+
+  // URL referencing a Request Object (JWT)
+  optional string request_uri = 20;
+
+  // Resources for which the access token is requested (RFC 8707)
+  repeated string resources = 21;
+}

@@ -162,6 +162,11 @@ public record ClientInfo(string ClientId)
     public string TokenEndpointAuthMethod { get; set; } = ClientAuthenticationMethods.ClientSecretBasic;
 
     /// <summary>
+    /// TLS client authentication metadata (RFC 8705) for tls_client_auth method.
+    /// </summary>
+    public TlsClientAuthOptions? TlsClientAuth { get; set; }
+
+    /// <summary>
     /// Determines the algorithm used for signing responses from the UserInfo endpoint.
     /// This can enhance the security of transmitted user information.
     /// </summary>

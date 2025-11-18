@@ -22,10 +22,10 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -72,30 +72,22 @@ public abstract class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        var (result, clientInfo) = await ValidateJwtAsync(request.ClientAssertion);
+        var validationResult = await ValidateJwtAsync(request.ClientAssertion);
 
-        JsonWebToken token;
-        switch (result, clientInfo)
+        if (!validationResult.TryGetSuccess(out var validJwt))
         {
-            case (ValidJsonWebToken validToken, { TokenEndpointAuthMethod: {} authMethod })
-                when ClientAuthenticationMethodsSupported.Contains(authMethod):
-                token = validToken.Token;
-                break;
+            var error = validationResult.GetFailure();
+            logger.LogWarning("JWT validation error: {@Error}", error);
+            return null;
+        }
 
-            case (ValidJsonWebToken, clientInfo: not null):
-                logger.LogWarning("The authentication method is not allowed for the client {@ClientId}", clientInfo.ClientId);
-                return null;
+        var token = validJwt.Token;
+        var clientInfo = validJwt.Client;
 
-            case (ValidJsonWebToken, clientInfo: null):
-                logger.LogWarning("Something went wrong, token cannot be validated without client specified");
-                return null;
-
-            case (JwtValidationError error, _):
-                logger.LogWarning("JWT validation error: {@Error}", error);
-                return null;
-
-            default:
-                throw new UnexpectedTypeException(nameof(result), result.GetType());
+        if (!ClientAuthenticationMethodsSupported.Contains(clientInfo.TokenEndpointAuthMethod.NotNull(nameof(clientInfo.TokenEndpointAuthMethod))))
+        {
+            logger.LogWarning("The authentication method is not allowed for the client {@ClientId}", clientInfo.ClientId);
+            return null;
         }
 
         string? subject;
@@ -130,7 +122,7 @@ public abstract class JwtAssertionAuthenticatorBase(
     /// </summary>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
-    /// A tuple containing the validation result and the associated client information if validation is successful.
+    /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected abstract Task<(JwtValidationResult result, ClientInfo? clientInfo)> ValidateJwtAsync(string jwt);
+    protected abstract Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt);
 }

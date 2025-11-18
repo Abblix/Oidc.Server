@@ -22,6 +22,9 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Utils;
+using System.Security.Cryptography;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
@@ -61,10 +64,23 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         }
 
         // Return a new authorization context updated with the determined scopes and resources.
+        // Compute certificate-bound confirmation thumbprint if applicable
+        string? thumbprint = null;
+        if (request.ClientCertificate != null)
+        {
+            var authMethod = request.ClientInfo.TokenEndpointAuthMethod;
+            if (string.Equals(authMethod, ClientAuthenticationMethods.SelfSignedTlsClientAuth, StringComparison.Ordinal)
+                || string.Equals(authMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+            {
+                thumbprint = HttpServerUtility.UrlTokenEncode(SHA256.HashData(request.ClientCertificate.RawData));
+            }
+        }
+
         return authContext with
         {
             Scope = scope,
             Resources = resources,
+            X509CertificateSha256Thumbprint = thumbprint,
         };
     }
 }

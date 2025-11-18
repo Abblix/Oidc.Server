@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
 using Parameters = Abblix.Oidc.Server.Model.ClientRequest.Parameters;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
 
@@ -72,6 +73,13 @@ public record ClientRequest
     public string? ClientAssertion { get; set; }
 
     /// <summary>
+    /// The client X.509 certificate bound to the request (mTLS),
+    /// either presented at TLS handshake or forwarded by a trusted proxy.
+    /// </summary>
+    [ModelBinder(typeof(ClientCertificateBinder))]
+    public X509Certificate2? ClientCertificate { get; set; }
+
+    /// <summary>
     /// Maps the properties of this client request to a <see cref="Core.ClientRequest"/> object.
     /// This method is used to translate the request data into a format that can be processed by the core logic of the server.
     /// </summary>
@@ -86,7 +94,8 @@ public record ClientRequest
             ClientSecret = ClientSecret,
 
             ClientAssertionType = ClientAssertionType,
-            ClientAssertion = ClientAssertion
+            ClientAssertion = ClientAssertion,
+            ClientCertificate = ClientCertificate
         };
     }
 }

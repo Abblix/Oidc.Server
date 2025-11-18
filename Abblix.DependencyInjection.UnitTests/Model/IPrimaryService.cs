@@ -1,5 +1,3 @@
 namespace Abblix.DependencyInjection.UnitTests.Model;
 
-public interface IPrimaryService : IBaseService
-{
-}
+public interface IPrimaryService : IBaseService;

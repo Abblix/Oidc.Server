@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
+using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
 
@@ -39,6 +40,7 @@ public record AuthorizationResponse
 
 		public const string TokenType = "token_type";
 		public const string AccessToken = "access_token";
+		public const string ExpiresIn = "expires_in";
 
 		public const string IdToken = "id_token";
 
@@ -99,6 +101,14 @@ public record AuthorizationResponse
 	/// </summary>
 	[JsonPropertyName(Parameters.AccessToken)]
 	public string? AccessToken { get; set; }
+
+	/// <summary>
+	/// The lifetime in seconds of the access token. After this duration, the token will expire and cease to be valid.
+	/// This is typically included in implicit and hybrid flows.
+	/// </summary>
+	[JsonPropertyName(Parameters.ExpiresIn)]
+	[JsonConverter(typeof(TimeSpanSecondsConverter))]
+	public TimeSpan? ExpiresIn { get; set; }
 
 	/// <summary>
 	/// The ID token issued by the authorization server in OpenID Connect flows.

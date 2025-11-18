@@ -32,8 +32,8 @@ public enum OidcEndpoints
 	/// <summary>
 	/// All OIDC endpoints are available, covering the full range of OpenID Connect operations.
 	/// </summary>
-	All = Configuration | Keys | Authorize | Token | UserInfo | CheckSession | EndSession | Revocation | Register |
-	      PushedAuthorizationRequest | BackChannelAuthentication,
+	All = Configuration | Keys | Authorize | Token | UserInfo | CheckSession | EndSession | Revocation |
+	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication,
 
 	/// <summary>
 	/// The configuration endpoint, used by clients to dynamically discover information about the OpenID Provider.
@@ -87,23 +87,23 @@ public enum OidcEndpoints
 	/// The introspection endpoint, where clients can check the status of a token (e.g., whether it is active or expired).
 	/// It provides detailed information about the token such as its expiration time and associated scopes.
 	/// </summary>
-	Introspection = 1 << 7,
+	Introspection = 1 << 8,
 
 	/// <summary>
 	/// The client registration endpoint, which allows dynamic registration of clients.
 	/// Clients can use this endpoint to register themselves with the OpenID Provider, typically during setup.
 	/// </summary>
-	Register = 1 << 8,
+	RegisterClient = 1 << 9,
 
 	/// <summary>
 	/// The pushed authorization request endpoint, where clients can pre-register authorization requests with the provider.
 	/// It provides an additional layer of security in certain authorization flows.
 	/// </summary>
-	PushedAuthorizationRequest = 1 << 9,
+	PushedAuthorizationRequest = 1 << 10,
 
 	/// <summary>
 	/// The backchannel authentication endpoint, used in CIBA (Client-Initiated Backchannel Authentication) flows.
 	/// It allows clients to initiate out-of-band authentication requests, often via a separate user device.
 	/// </summary>
-	BackChannelAuthentication = 1 << 10,
+	BackChannelAuthentication = 1 << 11,
 }

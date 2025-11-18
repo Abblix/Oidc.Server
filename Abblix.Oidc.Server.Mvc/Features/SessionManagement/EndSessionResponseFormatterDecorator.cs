@@ -34,24 +34,12 @@ namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 /// <summary>
 /// A decorator class that adds session management functionality to the End Session response formatting process.
 /// </summary>
-public class EndSessionResponseFormatterDecorator: IEndSessionResponseFormatter
+/// <param name="inner">The inner End Session response formatter.</param>
+/// <param name="sessionManagementService">The service responsible for session management.</param>
+public class EndSessionResponseFormatterDecorator(
+    IEndSessionResponseFormatter inner,
+    ISessionManagementService sessionManagementService): IEndSessionResponseFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EndSessionResponseFormatterDecorator"/> class.
-    /// </summary>
-    /// <param name="inner">The inner End Session response formatter.</param>
-    /// <param name="sessionManagementService">The service responsible for session management.</param>
-    public EndSessionResponseFormatterDecorator(
-        IEndSessionResponseFormatter inner,
-        ISessionManagementService sessionManagementService)
-    {
-        _inner = inner;
-        _sessionManagementService = sessionManagementService;
-    }
-
-    private readonly IEndSessionResponseFormatter _inner;
-    private readonly ISessionManagementService _sessionManagementService;
-
     /// <summary>
     /// Formats an End Session response and performs session management operations if enabled.
     /// </summary>
@@ -63,11 +51,11 @@ public class EndSessionResponseFormatterDecorator: IEndSessionResponseFormatter
     /// </returns>
     public async Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
     {
-        var result = await _inner.FormatResponseAsync(request, response);
+        var result = await inner.FormatResponseAsync(request, response);
 
-        if (_sessionManagementService.Enabled)
+        if (sessionManagementService.Enabled)
         {
-            var cookie = _sessionManagementService.GetSessionCookie();
+            var cookie = sessionManagementService.GetSessionCookie();
             result = result.WithDeleteCookie(cookie.Name, cookie.Options.ConvertOptions());
         }
 

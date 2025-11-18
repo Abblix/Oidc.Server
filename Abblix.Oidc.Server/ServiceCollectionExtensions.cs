@@ -144,6 +144,7 @@ public static class ServiceCollectionExtensions
 	public static IServiceCollection AddEndpoints(this IServiceCollection services)
 	{
 		return services
+			.AddConfigurationEndpoint()
 			.AddAuthorizationEndpoint()
 			.AddPushedAuthorizationEndpoint()
 			.AddTokenEndpoint()

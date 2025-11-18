@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// This class is integral in handling requests to the UserInfo endpoint, ensuring that the returned user information
 /// adheres to requested scopes and complies with OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-internal class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
+public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid user information request and returns a structured response containing

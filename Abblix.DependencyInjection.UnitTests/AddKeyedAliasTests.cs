@@ -22,7 +22,6 @@
 
 using System;
 using System.Linq;
-using Abblix.DependencyInjection;
 using Abblix.DependencyInjection.UnitTests.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

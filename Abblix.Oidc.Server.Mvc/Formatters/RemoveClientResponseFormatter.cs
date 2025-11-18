@@ -43,7 +43,7 @@ public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
     /// A task that returns the formatted action result.
     /// </returns>
     public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response)
-        => Task.FromResult(response.Match(
-            onSuccess: _ => (ActionResult)new NoContentResult(),
+        => Task.FromResult(response.Match<ActionResult>(
+            onSuccess: _ => new NoContentResult(),
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
 }

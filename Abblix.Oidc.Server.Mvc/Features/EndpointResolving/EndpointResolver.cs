@@ -31,32 +31,18 @@ namespace Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 /// <summary>
 /// Resolves a fully qualified URI for a specific controller and action based on ASP.NET Core's endpoint routing.
 /// </summary>
-public class EndpointResolver : IEndpointResolver
+/// <param name="logger">The logger for debugging endpoint resolution.</param>
+/// <param name="endpointDataSource">
+/// The endpoint data source that provides access to all configured route endpoints in the application.
+/// </param>
+/// <param name="httpContextAccessor">
+/// The HTTP context accessor used to determine the base URL of the current request.
+/// </param>
+public class EndpointResolver(
+    ILogger<EndpointResolver> logger,
+    EndpointDataSource endpointDataSource,
+    IHttpContextAccessor httpContextAccessor) : IEndpointResolver
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EndpointResolver"/> class.
-    /// </summary>
-    /// <param name="logger"></param>
-    /// <param name="endpointDataSource">
-    /// The endpoint data source that provides access to all configured route endpoints in the application.
-    /// </param>
-    /// <param name="httpContextAccessor">
-    /// The HTTP context accessor used to determine the base URL of the current request.
-    /// </param>
-    public EndpointResolver(
-        ILogger<EndpointResolver> logger,
-        EndpointDataSource endpointDataSource,
-        IHttpContextAccessor httpContextAccessor)
-    {
-        _logger = logger;
-        _endpointDataSource = endpointDataSource;
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    private readonly ILogger _logger;
-    private readonly EndpointDataSource _endpointDataSource;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
     /// <summary>
     /// Resolves the absolute URI for a given controller and action based on the configured routes.
     /// </summary>
@@ -72,7 +58,7 @@ public class EndpointResolver : IEndpointResolver
     /// </remarks>
     public Uri? Resolve(string controllerName, string actionName)
     {
-        var endpoint = _endpointDataSource.Endpoints
+        var endpoint = endpointDataSource.Endpoints
             .OfType<RouteEndpoint>()
             .FirstOrDefault(e =>
             {
@@ -80,7 +66,7 @@ public class EndpointResolver : IEndpointResolver
                 if (descriptor == null)
                     return false;
 
-                _logger.LogDebug("Controller: {ControllerName}, Action: {ActionName}", descriptor.ControllerName, descriptor.ActionName);
+                logger.LogDebug("Controller: {ControllerName}, Action: {ActionName}", descriptor.ControllerName, descriptor.ActionName);
 
                 return string.Equals(descriptor.ControllerName, controllerName, StringComparison.OrdinalIgnoreCase) &&
                        string.Equals(descriptor.ActionName, actionName, StringComparison.OrdinalIgnoreCase);
@@ -90,7 +76,7 @@ public class EndpointResolver : IEndpointResolver
         if (string.IsNullOrEmpty(actionUri))
             return null;
 
-        var httpContext = _httpContextAccessor.HttpContext;
+        var httpContext = httpContextAccessor.HttpContext;
         return httpContext.NotNull(nameof(httpContext)).Request.ToAbsoluteUri(actionUri);
     }
 }

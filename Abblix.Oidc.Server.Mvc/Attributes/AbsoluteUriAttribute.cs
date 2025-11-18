@@ -35,6 +35,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 /// The absence of a value is considered valid; use the <see cref="System.ComponentModel.DataAnnotations.RequiredAttribute"/>
 /// in combination with this attribute to enforce non-null/empty values.
 /// </remarks>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public sealed class AbsoluteUriAttribute : ValidationAttribute
 {
 	/// <summary>

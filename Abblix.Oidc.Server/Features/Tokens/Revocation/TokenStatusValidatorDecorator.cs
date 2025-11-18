@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -45,17 +46,17 @@ public class TokenStatusValidatorDecorator(
 	/// <param name="jwt">The JWT to be validated.</param>
 	/// <param name="parameters">Validation parameters to use during validation.</param>
 	/// <returns>
-	/// A <see cref="JwtValidationResult"/> indicating the validation outcome.
-	/// If the token is revoked or already used, it returns a <see cref="JwtValidationError"/>.
+	/// A Result containing either a validated JsonWebToken or a JwtValidationError.
+	/// If the token is revoked or already used, it returns a JwtValidationError.
 	/// Otherwise, it returns the result from the inner validator.
 	/// </returns>
-	public async Task<JwtValidationResult> ValidateAsync(
+	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		string jwt,
 		ValidationParameters parameters)
 	{
 		var result = await innerValidator.ValidateAsync(jwt, parameters);
 
-		if (result is ValidJsonWebToken { Token.Payload.JwtId: { } jwtId })
+		if (result.TryGetSuccess(out var token) && token.Payload.JwtId is { } jwtId)
 		{
 			switch (await tokenRegistry.GetStatusAsync(jwtId))
 			{

@@ -31,19 +31,9 @@ namespace Abblix.Oidc.Server.Mvc;
 /// Implements <see cref="IRequestInfoProvider"/> to encapsulate the retrieval of request-specific data,
 /// such as URLs and HTTPS status, facilitating access to these details throughout the application.
 /// </summary>
-public class HttpRequestInfoAdapter : IRequestInfoProvider
+/// <param name="httpContextAccessor">Accessor to obtain the <see cref="HttpContext"/>.</param>
+public class HttpRequestInfoAdapter(IHttpContextAccessor httpContextAccessor) : IRequestInfoProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="HttpRequestInfoAdapter"/> class.
-    /// </summary>
-    /// <param name="httpContextAccessor">Accessor to obtain the <see cref="HttpContext"/>.</param>
-    public HttpRequestInfoAdapter(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
     /// <summary>
     /// Gets the <see cref="HttpRequest"/> representing the current HTTP request.
     /// </summary>
@@ -51,7 +41,7 @@ public class HttpRequestInfoAdapter : IRequestInfoProvider
     {
         get
         {
-            var httpContext = _httpContextAccessor.HttpContext;
+            var httpContext = httpContextAccessor.HttpContext;
             return httpContext.NotNull(nameof(httpContext)).Request;
         }
     }

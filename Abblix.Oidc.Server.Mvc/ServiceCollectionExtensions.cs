@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Configuration;
+using Abblix.Oidc.Server.Mvc.Conventions;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
@@ -34,9 +35,9 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -92,8 +93,9 @@ public static class ServiceCollectionExtensions
 			.AddScoped<IAuthSessionService, AuthenticationSchemeAdapter>()
 			.AddSingleton<IUriResolver, UriResolver>()
 			.AddScoped<IEndpointResolver, EndpointResolver>()
-			.AddSingleton<IActionContextAccessor, ActionContextAccessor>()
 			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
+			.AddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>()
+			.AddScoped<IAuthorizationErrorFormatter, AuthorizationErrorFormatter>()
 			.AddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>()
 			.AddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>()
 			.AddScoped<ITokenResponseFormatter, TokenResponseFormatter>()
@@ -132,11 +134,14 @@ public static class ServiceCollectionExtensions
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     public static IServiceCollection AddOidcControllers(this IServiceCollection services)
     {
-        return services
+        services
             .AddControllers()
             .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
             .AddControllersAsServices()
-            .Services;
+            .Services
+            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>();
+
+        return services;
     }
 
 	/// <summary>
@@ -188,12 +193,18 @@ public static class ServiceCollectionExtensions
 		Func<CorsPolicyBuilder> allowAnyValues,
 		Func<string[], CorsPolicyBuilder> withValues)
 	{
-		if (values == null)
-			return;
+		switch (values)
+		{
+			case null:
+				break;
 
-		if (values.Length == 1 && values[0] == "*")
-			allowAnyValues();
-		else
-			withValues(values);
+			case ["*"]:
+				allowAnyValues();
+				break;
+
+			default:
+				withValues(values);
+				break;
+		}
 	}
 }

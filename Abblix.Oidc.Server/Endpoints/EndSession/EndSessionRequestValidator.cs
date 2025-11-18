@@ -48,7 +48,7 @@ public class EndSessionRequestValidator(IEndSessionContextValidator validator) :
     /// <param name="request">The end-session request to be validated.</param>
     /// <returns>
     /// A task representing the asynchronous validation operation. The task result contains the
-    /// <see cref="Result<ValidEndSessionRequest, AuthError>"/> which encapsulates the validation outcome.
+    /// <see cref="Result{ValidEndSessionRequest, AuthError}"/> which encapsulates the validation outcome.
     /// </returns>
     public async Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(EndSessionRequest request)
     {

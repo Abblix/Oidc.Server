@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
@@ -66,7 +67,7 @@ public record AuthorizationRequest
 	/// Unique identifier of the client application making the authorization request.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.ClientId)]
-	public string? ClientId { get; init; } = default!;
+	public string? ClientId { get; init; } = null!;
 
 	/// <summary>
 	/// URL to which the response from the authorization request should be sent.

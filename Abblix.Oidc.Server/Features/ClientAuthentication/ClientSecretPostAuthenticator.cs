@@ -38,7 +38,11 @@ public class ClientSecretPostAuthenticator(
 	ILogger<ClientSecretPostAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService) : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
+	IHashService hashService)
+	: ClientSecretAuthenticator(
+		logger,
+		clientInfoProvider,
+		clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_post'.
@@ -62,7 +66,7 @@ public class ClientSecretPostAuthenticator(
 	/// </returns>
 	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
 	{
-		if (!request.ClientId.HasValue() || !request.ClientSecret.HasValue())
+		if (!request.ClientId.NotNullOrWhiteSpace() || !request.ClientSecret.NotNullOrWhiteSpace())
 			return null;
 
 		return await TryAuthenticateAsync(

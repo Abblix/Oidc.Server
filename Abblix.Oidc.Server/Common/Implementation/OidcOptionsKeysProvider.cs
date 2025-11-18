@@ -43,7 +43,7 @@ internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthSer
 	/// </summary>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for encryption purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys)
+	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
 	{
 		var jsonWebKeys =
 			from jwk in options.Value.EncryptionKeys
@@ -57,7 +57,7 @@ internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthSer
 	/// </summary>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for signing purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys)
+	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
 	{
 		var jsonWebKeys =
 			from jwk in options.Value.SigningKeys

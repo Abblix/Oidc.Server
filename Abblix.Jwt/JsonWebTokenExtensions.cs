@@ -128,9 +128,8 @@ public static class JsonWebTokenExtensions
                 break;
 
             case JsonArray array:
-                foreach (var element in array)
-                    if (element != null)
-                        yield return element.GetValue<string>();
+                foreach (var node in array.OfType<JsonNode>())
+                    yield return node.GetValue<string>();
                 break;
         }
     }

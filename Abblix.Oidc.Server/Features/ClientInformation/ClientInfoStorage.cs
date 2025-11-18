@@ -45,7 +45,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// </returns>
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
-        ArgumentNullException.ThrowIfNull(clientId, nameof(clientId));
+        ArgumentNullException.ThrowIfNull(clientId);
         return Task.FromResult(_clients.GetValueOrDefault(clientId));
     }
 

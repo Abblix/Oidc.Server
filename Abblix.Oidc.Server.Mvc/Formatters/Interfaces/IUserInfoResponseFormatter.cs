@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
-using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;

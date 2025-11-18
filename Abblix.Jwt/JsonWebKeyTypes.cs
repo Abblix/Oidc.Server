@@ -29,10 +29,10 @@ namespace Abblix.Jwt;
 public static class JsonWebKeyTypes
 {
 	/// <summary>
-	/// Represents an Elliptical Curve cryptographic key.
+	/// Represents an Elliptic Curve cryptographic key.
 	/// This type is used for keys that employ elliptic curve cryptography (ECC) algorithms.
 	/// </summary>
-	public const string EllipticalCurve = "EC";
+	public const string EllipticCurve = "EC";
 
 	/// <summary>
 	/// Represents a RSA cryptographic key.
