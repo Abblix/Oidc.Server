@@ -1,23 +1,25 @@
 # License Agreement
 
+**Effective Date:** Novemver 18, 2025
+
 This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership ("Copyright Holder") for the OIDC Server ("Software").
 
 **ATTENTION!** Please thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you agree to be bound by the terms set forth in this License Agreement. If you do not agree to these terms, you have no right to use the Software and must promptly uninstall it from your System.
 
 ## 1. Definitions
-1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license).
+1.1. **"Software"** refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license).
 
-1.2. "System" refers to an operating system, virtual machine, or equipment, including a server, on which the Software is installed and/or used.
+1.2. **"System"** refers to an operating system, virtual machine, or equipment, including a server, on which the Software is installed and/or used.
 
-1.3. "User" or "You" refers to a natural or legal person who installs and/or uses the Software on their behalf or legally owns a copy of the Software. If the Software was downloaded or acquired on behalf of a legal entity, the term "User" or "You" refers to the legal entity for which the Software was downloaded or acquired, and is accepting this Agreement through an authorized representative.
+1.3. **"User"** or **"You"** refers to a natural or legal person who installs and/or uses the Software on their behalf or legally owns a copy of the Software. If the Software was downloaded or acquired on behalf of a legal entity, the term "User" or "You" refers to the legal entity for which the Software was downloaded or acquired, and is accepting this Agreement through an authorized representative.
 
-1.4. "Partners" refers to organizations that distribute the Software based on agreement with the Copyright Holder.
+1.4. **"Partners"** refers to organizations that distribute the Software based on agreement with the Copyright Holder.
 
-1.5. "Software Extensions" are additional software components and software solutions provided by the Copyright Holder that extend the functionality of the Software and may require the purchase of a separate license or an extension of an existing license. Software Extensions can be provided both free of charge and paid. You can obtain more detailed information before receiving such extensions.
+1.5. **"Software Extensions"** are additional software components and software solutions provided by the Copyright Holder that extend the functionality of the Software and may require the purchase of a separate license or an extension of an existing license. Software Extensions can be provided both free of charge and paid. You can obtain more detailed information before receiving such extensions.
 
-1.6. "Client" or "Client Application" refers to software programs that interact with the Software (OpenID Connect server) to authenticate users and obtain tokens for accessing protected resources. Each unique client application is identified by a distinct client identifier (client_id) registered with the Software.
+1.6. **"Client"** or **"Client Application"** refers to software programs that interact with the Software (OpenID Connect server) to authenticate users and obtain tokens for accessing protected resources. Each unique client application is identified by a distinct client identifier (client_id) registered with the Software.
 
-1.7. "Issuer" refers to an authorization server instance as defined in the OAuth 2.0 specification (RFC 6749) and OpenID Connect Core specification.
+1.7. **"Issuer"** refers to an authorization server instance as defined in the OAuth 2.0 specification (RFC 6749) and OpenID Connect Core specification.
 
 1.8. **System Definition for Licensing Purposes.** For purposes of determining license compliance:
 
@@ -29,7 +31,13 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
    
    (d) Multiple instances of the Software serving different hostnames or independent services constitute multiple Systems, regardless of whether they run on the same physical or virtual host or on separate hosts;
    
-   (e) Geo-distributed deployments spanning multiple regions or data centers are considered one System if: (i) all servers serve the same primary public hostname(s) accessible to end users, and (ii) regional hostnames (if any) exist solely for infrastructure routing, monitoring, or failover purposes. If regional instances are designed to be independently accessible via distinct public hostnames for normal user operations (even if the primary scenario does not require users to use these additional hostnames), each regional deployment constitutes a separate System;
+   (e) Geo-distributed deployments spanning multiple regions or data centers are considered one System if:
+   
+   (i) all servers serve the same primary public hostname(s) accessible to end users, and
+   
+   (ii) regional hostnames (if any) exist solely for infrastructure routing, monitoring, or failover purposes.
+   
+   If regional instances are designed to be independently accessible via distinct public hostnames for normal user operations (even if the primary scenario does not require users to use these additional hostnames), each regional deployment constitutes a separate System;
    
    (f) Non-production environments (development, testing, staging, beta, QA, or similar) used solely for internal development, quality assurance, or pre-production testing are not counted as separate Systems, provided they are not accessible to external end users or used to provide production services. Each production environment constitutes a separate System.
 
@@ -37,21 +45,36 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 2.1. You are granted a non-exclusive license to use the Software within the scope of the functionality described on the Copyright Holder's official website, available at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality), provided that you comply with all restrictions and conditions specified in this License Agreement. This license does not grant sublicensing or redistribution rights to third parties. To obtain sublicensing or redistribution rights, you must purchase a separate type of license.
 
 2.2. **Prohibited Actions.** You may not:
+
    (a) Modify, alter, translate, adapt, or create derivative works from the Software;
+   
    (b) Reverse engineer, decompile, or disassemble the Software;
+   
    (c) Distribute, sublicense, sell, rent, lease, or lend the Software;
+   
    (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls.
 
-2.3. You may not use the Software in commercial projects, except as provided in clause 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
-   - Free educational projects;
-   - Games without monetization;
-   - Test versions of commercial systems for piloting/demonstrating performance in internal non-commercial environments without generating profit.
+2.3. You may not use the Software in commercial projects, except as provided in Section 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
+
+   (a) Free educational projects;
+   
+   (b) Games without monetization;
+   
+   (c) Internal testing or evaluation of the Software before purchasing a commercial license, provided such use does not occur in production environments and does not generate revenue.
+
 If your product generates revenue through advertising, paid subscriptions, or any commercial means, you may not use the Software under the free non-commercial license.
 
 2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions:
-   (a) **Client Limit**: Maximum 2 (two) unique client applications may be used;
-   (b) **Issuer Limit**: Maximum 1 (one) issuer may be used;
-   (c) **Enforcement**: These limits are enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either: (i) reducing the number of clients or issuers to compliant levels, or (ii) upgrading to a commercial license under Section 2.5 or Section 2.6.
+
+   (a) **Client Limit**: Maximum **2 (two)** unique client applications may be used;
+   
+   (b) **Issuer Limit**: Maximum **1 (one)** issuer may be used;
+   
+   (c) **Enforcement**: These limits are enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either:
+   
+   (i) reducing the number of clients or issuers to compliant levels, or
+   
+   (ii) upgrading to a commercial license under Section 2.5 or Section 2.6.
 
 2.4. If the laws of your country prohibit you from using the Software, you are not authorized to use it, and you agree to comply with all applicable laws and regulations concerning your use of the Software.
 
@@ -74,17 +97,17 @@ If your product generates revenue through advertising, paid subscriptions, or an
 
    (a) **Immediate Termination.** The Copyright Holder may terminate this Agreement immediately upon written notice for material breaches that cannot be reasonably cured, including but not limited to:
    
-      (i) Unauthorized modification, reverse engineering, or redistribution of the Software;
-      
-      (ii) Removal or circumvention of license key protection or technical controls;
-      
-      (iii) Forgery, unauthorized generation, or modification of license keys;
-      
-      (iv) Violation of intellectual property rights specified in Section 10.
+   (i) Unauthorized modification, reverse engineering, or redistribution of the Software;
+   
+   (ii) Removal or circumvention of license key protection or technical controls;
+   
+   (iii) Forgery, unauthorized generation, or modification of license keys;
+   
+   (iv) Violation of intellectual property rights specified in Section 10.
 
-   (b) **Termination with Notice.** For all other breaches, the Copyright Holder shall provide thirty (30) days' written notice (as defined in Section 11.6) specifying the breach. You shall have thirty (30) days from receipt of notice to cure the breach. If the breach is not cured within this period, the Copyright Holder may terminate this Agreement upon expiration of the cure period.
+   (b) **Termination with Notice.** For all other breaches, the Copyright Holder shall provide **thirty (30) days'** written notice (as defined in Section 11.6) specifying the breach. You shall have **thirty (30) days** from receipt of notice to cure the breach. If the breach is not cured within this period, the Copyright Holder may terminate this Agreement upon expiration of the cure period.
 
-   (c) **Effect of Termination.** Upon termination, You must immediately cease all use of the Software, uninstall all copies, and certify destruction in writing to the Copyright Holder within ten (10) days.
+   (c) **Effect of Termination.** Upon termination, You must immediately cease all use of the Software, uninstall all copies, and certify destruction in writing to the Copyright Holder within **ten (10) days**.
 
 3.6. **License Keys.** All license keys are generated exclusively by the Copyright Holder and cannot be self-generated, transferred, or modified. You are responsible for maintaining the confidentiality of your license keys. License keys expire on the date specified; renewal requires explicit request to the Copyright Holder.
 
@@ -93,6 +116,8 @@ If your product generates revenue through advertising, paid subscriptions, or an
 ## 4. Data Processing
 
 4.1. **Library Architecture.** The Software is a library integrated into your applications. It does not transmit data to the Copyright Holder or any third parties. All data processing occurs within your infrastructure under your control.
+
+4.2. **Data Protection.** The Copyright Holder is not a Data Processor under GDPR, CCPA, or similar data protection laws. You act as the Data Controller and are solely responsible for compliance with all applicable data protection regulations.
 
 ## 5. Software Rights
 5.1. The Software is wholly owned by the Copyright Holder and is licensed to You, not sold. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties. Except for the limited rights of use granted herein, all rights, title, and interest in the Software, including patents, copyrights, and trademarks in and to the Software, accompanying printed materials, and any copies of the Software, belong to the Copyright Holder.
@@ -139,7 +164,7 @@ For non-commercial licenses granted at no charge, the Copyright Holder shall hav
 
 At the Licensee's option, exercised by written notice to the Copyright Holder prior to any dispute arising, the Licensee may elect to have this Agreement governed by the acting law of the Astana International Financial Centre (AIFC), with disputes subject to the exclusive jurisdiction of the AIFC Court.
 
-11.2. **Negotiation Before Litigation.** In the event of any dispute, controversy, or claim arising out of or relating to this License Agreement, or the breach, termination, or invalidity thereof, the parties shall first seek to resolve the dispute through good faith negotiations. This process should involve direct communication between the parties or their designated representatives with the aim to reach an amicable settlement. If the dispute cannot be resolved through negotiation within thirty (30) days, then either party may proceed to litigation as described in Section 11.1.
+11.2. **Negotiation Before Litigation.** In the event of any dispute, controversy, or claim arising out of or relating to this License Agreement, or the breach, termination, or invalidity thereof, the parties shall first seek to resolve the dispute through good faith negotiations. This process should involve direct communication between the parties or their designated representatives with the aim to reach an amicable settlement. If the dispute cannot be resolved through negotiation within **thirty (30) days**, then either party may proceed to litigation as described in Section 11.1.
 
 11.3. **Severability.** If any provision of this License Agreement is held to be void, voidable, unenforceable, or illegal, the remaining provisions of this License Agreement will remain in full force and effect. In the event of a conflict between the terms of this Agreement and the terms of any software product license agreement concluded between you and the Partners or the Copyright Holder, the terms of such a license agreement shall prevail; in all other respects, the terms of this Agreement and such agreement shall apply.
 
@@ -155,25 +180,39 @@ At the Licensee's option, exercised by written notice to the Copyright Holder pr
 
 11.5. **Entire Agreement.** This Agreement, together with any purchase agreement or order confirmation referencing this Agreement, constitutes the entire agreement between You and the Copyright Holder regarding the Software and supersedes all prior or contemporaneous understandings, agreements, representations, and warranties, whether written or oral, regarding such subject matter. This Agreement may be modified only by a written amendment signed by authorized representatives of both parties. No provision of this Agreement may be waived except by a writing signed by the party against whom the waiver is sought to be enforced.
 
-11.6. **Notices.** All notices required under this Agreement must be in writing and shall be deemed given when: (a) delivered personally; (b) sent by confirmed email to the addresses specified in Section 16 (Contact Information); or (c) three (3) business days after deposit with an internationally recognized courier service with tracking capability. Either party may update its notice address by providing written notice to the other party in accordance with this section.
+11.6. **Notices.** All notices required under this Agreement must be in writing and shall be deemed given when:
+
+   (a) delivered personally;
+   
+   (b) sent by confirmed email to the addresses specified in Section 16 (Contact Information); or
+   
+   (c) **three (3) business days** after deposit with an internationally recognized courier service with tracking capability.
+   
+   Either party may update its notice address by providing written notice to the other party in accordance with this section.
 
 ## 12. Intellectual Property Claims
 
 12.1. If You receive a third-party claim that the Software infringes intellectual property rights, the Copyright Holder will provide reasonable documentary and technical support for Your defense, including ownership documentation and technical evidence.
 
-12.2. You must promptly notify the Copyright Holder of any such claim within thirty (30) days. The Copyright Holder assumes no financial responsibility for defense costs, damages, or settlements.
+12.2. You must promptly notify the Copyright Holder of any such claim within **thirty (30) days**. The Copyright Holder assumes no financial responsibility for defense costs, damages, or settlements.
 
-12.3. If the Software is subject to a valid infringement claim, the Copyright Holder may at its option: (a) procure the right for You to continue using the Software; (b) modify the Software to be non-infringing; or (c) terminate the license and refund pro-rata fees for the unused term (commercial licenses only).
+12.3. If the Software is subject to a valid infringement claim, the Copyright Holder may at its option:
+
+   (a) procure the right for You to continue using the Software;
+   
+   (b) modify the Software to be non-infringing; or
+   
+   (c) terminate the license and refund pro-rata fees for the unused term (commercial licenses only).
 
 ## 13. Force Majeure
 
 13.1. The Copyright Holder shall not be liable for any failure or delay in providing updates, support, or other services due to causes beyond its reasonable control, including war, terrorism, civil unrest, strikes, government actions, epidemics, pandemics, natural disasters, or telecommunications failures.
 
-13.2. If such event continues for more than ninety (90) days, You may terminate this Agreement upon written notice. The Copyright Holder shall refund pro-rata license fees for the unused portion of the prepaid term (commercial licenses only).
+13.2. If such event continues for more than **ninety (90) days**, You may terminate this Agreement upon written notice. The Copyright Holder shall refund pro-rata license fees for the unused portion of the prepaid term (commercial licenses only).
 
 ## 14. Assignment
 
-You may not assign this Agreement without prior written consent of the Copyright Holder, except in connection with a merger, acquisition, or sale of substantially all assets, provided You notify the Copyright Holder within thirty (30) days.
+You may not assign this Agreement without prior written consent of the Copyright Holder, except in connection with a merger, acquisition, or sale of substantially all assets, provided You notify the Copyright Holder within **thirty (30) days**.
 
 ## 15. Survival
 
