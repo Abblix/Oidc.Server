@@ -33,7 +33,7 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 2.2. **Prohibited Actions.** You may not:
    (a) Modify, alter, translate, adapt, or create derivative works from the Software;
    (b) Reverse engineer, decompile, or disassemble the Software;
-   (c) Distribute, sublicense, sell, rent, or lease the Software;
+   (c) Distribute, sublicense, sell, rent, lease, or lend the Software;
    (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls.
 
 2.3. You may not use the Software in commercial projects, except as provided in clause 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
@@ -168,13 +168,6 @@ The following sections shall survive termination or expiration of this Agreement
 ## 16. Contact Information
 
 **Copyright Holder**: Abblix Limited Liability Partnership
-
 **Website**: [abblix.com](https://www.abblix.com)
-
 **Email**: [info@abblix.com](mailto:info@abblix.com)
-
 **Support**: [support@abblix.com](mailto:support@abblix.com)
-
----
-
-*Last Updated: October 22, 2025*
