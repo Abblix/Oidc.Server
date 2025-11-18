@@ -20,11 +20,17 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 1.7. "Issuer" refers to an authorization server instance as defined in the OAuth 2.0 specification (RFC 6749) and OpenID Connect Core specification.
 
 1.8. **System Definition for Licensing Purposes.** For purposes of determining license compliance:
+
    (a) A single physical server or virtual machine (VM) running one instance of the Software with one public hostname constitutes one System;
+   
    (b) Containerized deployments (Docker containers, Kubernetes pods, or similar technologies) running on a single physical or virtual host and serving one public hostname are considered part of that single System and do not constitute separate Systems;
+   
    (c) Multiple physical servers or VMs serving one public hostname for load-balancing, high availability, or failure-resistance purposes are considered one System;
+   
    (d) Multiple instances of the Software serving different hostnames or independent services constitute multiple Systems, regardless of whether they run on the same physical or virtual host or on separate hosts;
+   
    (e) Geo-distributed deployments spanning multiple regions or data centers are considered one System if: (i) all servers serve the same primary public hostname(s) accessible to end users, and (ii) regional hostnames (if any) exist solely for infrastructure routing, monitoring, or failover purposes. If regional instances are designed to be independently accessible via distinct public hostnames for normal user operations (even if the primary scenario does not require users to use these additional hostnames), each regional deployment constitutes a separate System;
+   
    (f) Non-production environments (development, testing, staging, beta, QA, or similar) used solely for internal development, quality assurance, or pre-production testing are not counted as separate Systems, provided they are not accessible to external end users or used to provide production services. Each production environment constitutes a separate System.
 
 ## 2. License Grant
@@ -67,9 +73,13 @@ If your product generates revenue through advertising, paid subscriptions, or an
 3.5. **Termination for Breach.**
 
    (a) **Immediate Termination.** The Copyright Holder may terminate this Agreement immediately upon written notice for material breaches that cannot be reasonably cured, including but not limited to:
+   
       (i) Unauthorized modification, reverse engineering, or redistribution of the Software;
+      
       (ii) Removal or circumvention of license key protection or technical controls;
+      
       (iii) Forgery, unauthorized generation, or modification of license keys;
+      
       (iv) Violation of intellectual property rights specified in Section 10.
 
    (b) **Termination with Notice.** For all other breaches, the Copyright Holder shall provide thirty (30) days' written notice (as defined in Section 11.6) specifying the breach. You shall have thirty (30) days from receipt of notice to cure the breach. If the breach is not cured within this period, the Copyright Holder may terminate this Agreement upon expiration of the cure period.
@@ -134,9 +144,13 @@ At the Licensee's option, exercised by written notice to the Copyright Holder pr
 11.3. **Severability.** If any provision of this License Agreement is held to be void, voidable, unenforceable, or illegal, the remaining provisions of this License Agreement will remain in full force and effect. In the event of a conflict between the terms of this Agreement and the terms of any software product license agreement concluded between you and the Partners or the Copyright Holder, the terms of such a license agreement shall prevail; in all other respects, the terms of this Agreement and such agreement shall apply.
 
 11.4. **External Document Conflicts.** In the event of a conflict between the terms of this License Agreement and information provided on external websites (including but not limited to oidc.abblix.com, GitHub repositories, or third-party documentation):
+
    (a) This License Agreement shall prevail for all legal rights, obligations, warranties, and limitations of liability;
+   
    (b) External website content is provided for informational and technical reference purposes only;
+   
    (c) You acknowledge that external content may be updated without notice and does not modify the terms of this Agreement unless explicitly incorporated by reference;
+   
    (d) Any discrepancies should be reported to info@abblix.com for clarification.
 
 11.5. **Entire Agreement.** This Agreement, together with any purchase agreement or order confirmation referencing this Agreement, constitutes the entire agreement between You and the Copyright Holder regarding the Software and supersedes all prior or contemporaneous understandings, agreements, representations, and warranties, whether written or oral, regarding such subject matter. This Agreement may be modified only by a written amendment signed by authorized representatives of both parties. No provision of this Agreement may be waived except by a writing signed by the party against whom the waiver is sought to be enforced.
