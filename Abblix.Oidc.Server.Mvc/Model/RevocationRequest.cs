@@ -38,17 +38,17 @@ public record RevocationRequest
 	/// The token that the client wants to revoke.
 	/// This is the actual string value of the token which is intended to be invalidated and discontinued for further use.
 	/// </summary>
-	[BindProperty(SupportsGet = true, Name = Parameters.Token)]
+	[BindProperty(Name = Parameters.Token)]
 	[Required]
-	public string Token { get; set; } = default!;
+	public string Token { get; set; } = null!;
 
 	/// <summary>
 	/// A hint about the type of the token submitted for revocation.
 	/// Providing this information can help the revocation endpoint handle the token more efficiently.
 	/// If omitted, the server may assume a default token type.
 	/// </summary>
-	[BindProperty(SupportsGet = true, Name = Parameters.TokenTypeHint)]
-	public string? TokenTypeHint { get; set; } // TODO consider to use enum here
+	[BindProperty(Name = Parameters.TokenTypeHint)]
+	public string? TokenTypeHint { get; set; }
 
 	/// <summary>
 	/// Maps the properties of this revocation request to a <see cref="Core.RevocationRequest"/> object.

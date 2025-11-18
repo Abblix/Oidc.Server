@@ -1,6 +1,6 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-6.0%2C%207.0%2C%208.0%2C%209.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
+[![.NET](https://img.shields.io/badge/.NET-8.0%2C%209.0%2C%2010.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
 [![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/ru-ru/dotnet/csharp/tour-of-csharp/overview)
 [![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
 [![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
@@ -8,6 +8,7 @@
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
+[![tests](https://img.shields.io/badge/tests-1677%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
@@ -47,16 +48,27 @@ The library also supports Dependency Injection through the standard .NET DI cont
 
 ## ✨ What's New
 
-### Version 1.6.0 (Latest)
+### Version 2.0.0 (Latest)
 
-🚀 **Performance Improvements**
-- **Base32 Encoding Optimization**: Significantly improved performance of Base32 encoding operations, enhancing overall system throughput for token generation and validation processes.
+🚨 **BREAKING CHANGES**
+- **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for compiler-enforced explicit error handling and functional programming style
+- **Framework Updates**: Dropped .NET 6 & 7 (EOL) - now targets .NET 8 (LTS), .NET 9 (STS), and .NET 10 (LTS - released Nov 2025, supported until Nov 2028)
 
-🔐 **Enhanced Authentication Session Management**
-- **AMR (Authentication Method Reference) Support**: Added comprehensive support for Authentication Method Reference values in authentication sessions, providing better tracking and validation of authentication methods used by users.
-- **Extended Session Capabilities**: Improved authentication session handling with enhanced method tracking and validation capabilities.
+🆕 **New Features**
+- **client_secret_jwt**: Standards-compliant JWT-based client authentication method
+- **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
+- **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
 
-> **Migration Note**: This release maintains full backward compatibility. No breaking changes were introduced.
+🔒 **Security Enhancements**
+- **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
+- **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
+
+✨ **Quality Improvements**
+- **Test Coverage**: 50,000+ lines of new tests across all OAuth 2.0/OIDC flows
+- **Primary Constructors**: Migrated 74 classes to C# 12 syntax, reducing ~900 lines of boilerplate
+
+📋 **[Read the full release notes](RELEASE-2.0.md)** for detailed explanations of all changes and their impact.
+⚠️ **Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.
 
 ## 🎓 Certification
 
@@ -147,6 +159,19 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 > Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. Your insights help us make the Abblix OIDC Server library more robust and user-friendly.
 
 Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
+
+### Contributing Code
+
+**Before submitting pull requests, please review our [C# Code Style Guide](https://github.com/Abblix/Docs/blob/main/wiki/code-style.md).**
+
+Key requirements for contributors:
+- Follow Microsoft/.NET coding conventions
+- Use modern C# features (records, pattern matching, nullable types)
+- Comprehensive XML documentation on all public APIs
+- No defensive programming - let errors surface
+- No magic numbers - use named constants
+- Comments explain WHY, not WHAT
+- Write unit tests following AAA pattern
 
 We appreciate your support and look forward to making our product even better with your help!
 

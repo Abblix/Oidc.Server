@@ -58,6 +58,16 @@ public static class StringExtensions
         => !string.IsNullOrEmpty(value);
 
     /// <summary>
+    /// Determines whether the specified string is not null, empty, or consists only of white-space characters.
+    /// </summary>
+    /// <param name="value">The string to test.</param>
+    /// <returns>true if the value parameter is not null, empty, or whitespace-only; otherwise, false.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [DebuggerStepThrough]
+    public static bool NotNullOrWhiteSpace([NotNullWhen(true)] this string? value)
+        => !string.IsNullOrWhiteSpace(value);
+
+    /// <summary>
     /// Trims the specified suffix from the end of the string, if it exists.
     /// </summary>
     /// <param name="source">The source string to trim.</param>

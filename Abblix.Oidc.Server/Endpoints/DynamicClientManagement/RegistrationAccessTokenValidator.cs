@@ -23,7 +23,6 @@
 using System.Net.Http.Headers;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
@@ -65,30 +64,21 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
             header.Parameter,
             ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
-        switch (result)
+        if (!result.TryGetSuccess(out var token))
         {
-            case ValidJsonWebToken
-            {
-                Token:
-                {
-                    Header.Type: var tokenType,
-                    Payload: { Audiences: var audiences, Subject: var subject },
-                }
-            }:
-                if (tokenType != JwtTypes.RegistrationAccessToken)
-                    return $"Invalid token type: {tokenType}";
-
-                if (subject != clientId || !audiences.Contains(clientId))
-                    return "The access token unauthorized";
-
-                break;
-
-            case JwtValidationError error:
-                return error.ErrorDescription;
-
-            default:
-                throw new UnexpectedTypeException(nameof(result), result.GetType());
+            var error = result.GetFailure();
+            return error.ErrorDescription;
         }
+
+        var tokenType = token.Header.Type;
+        var audiences = token.Payload.Audiences;
+        var subject = token.Payload.Subject;
+
+        if (tokenType != JwtTypes.RegistrationAccessToken)
+            return $"Invalid token type: {tokenType}";
+
+        if (subject != clientId || !audiences.Contains(clientId))
+            return "The access token unauthorized";
 
         return default;
     }

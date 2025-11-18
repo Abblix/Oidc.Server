@@ -42,6 +42,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -74,6 +75,10 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
             .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
+            // mTLS self-signed client authentication per RFC 8705
+            .AddSingleton<IClientAuthenticator, TlsClientAuthenticator>()
+            // mTLS metadata-driven subject/SAN matching (tls_client_auth)
+            .AddSingleton<IClientAuthenticator, TlsMetadataClientAuthenticator>()
             .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 
@@ -105,7 +110,8 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
+        //services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
+        services.TryAddSingleton<IBinarySerializer, ProtobufSerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
     }
@@ -368,6 +374,7 @@ public static class ServiceCollectionExtensions
     /// configurations to be chained.</returns>
     public static IServiceCollection AddStorages(this IServiceCollection services)
     {
+        services.TryAddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         return services;
@@ -431,24 +438,43 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// The registered services include:
     /// - A typed HTTP client (<see cref="SecureHttpFetcher"/>) for making secure HTTP requests
-    /// - An SSRF validation decorator (<see cref="SsrfHttpFetchValidator"/>) that validates URIs before making requests
+    /// - A custom message handler (<see cref="SsrfValidatingHttpMessageHandler"/>) that provides comprehensive SSRF protection
     ///
     /// The SSRF protection includes:
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
     /// - Blocking requests to internal TLDs (.local, .internal, etc.)
     /// - DNS resolution and blocking of private/reserved IP address ranges
+    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
+    /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
     ///
-    /// Note: There is a potential DNS rebinding TOCTOU (Time-Of-Check-Time-Of-Use) vulnerability
-    /// where DNS could resolve to a different IP between validation and the actual HTTP request.
-    /// For additional protection, deploy behind a firewall or implement a custom HttpMessageHandler.
+    /// The multi-layered protection strategy follows OWASP SSRF Prevention guidelines and provides
+    /// defense-in-depth against various SSRF attack vectors including DNS rebinding and redirect-based bypasses.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <param name="configure">Optional configuration action to customize <see cref="SecureHttpFetchOptions"/>.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddSecureHttpFetch(this IServiceCollection services)
+    public static IServiceCollection AddSecureHttpFetch(
+        this IServiceCollection services,
+        Action<SecureHttpFetchOptions>? configure = null)
     {
-        return services
-            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>()
-            .Services
-            .Decorate<ISecureHttpFetcher, SsrfHttpFetchValidator>();
+        // Register and configure options
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+
+        if (configure != null)
+        {
+            optionsBuilder.Configure(configure);
+        }
+
+        services
+            .AddSingleton<SsrfValidatingHttpMessageHandler>()
+            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
+                client.Timeout = options.RequestTimeout;
+            })
+            .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
+
+        return services;
     }
 }

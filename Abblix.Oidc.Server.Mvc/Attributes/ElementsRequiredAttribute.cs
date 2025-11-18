@@ -32,6 +32,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 /// Use this attribute to validate that collections do not contain any null elements.
 /// It extends the standard <see cref="ValidationAttribute"/> and overrides the <see cref="IsValid"/> method.
 /// </remarks>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public sealed class ElementsRequiredAttribute : ValidationAttribute
 {
     /// <summary>

@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -68,9 +69,9 @@ public class ClientSecretJwtAuthenticator(
     /// </summary>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
-    /// A tuple containing the validation result and the associated client information if validation is successful.
+    /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected override async Task<(JwtValidationResult result, ClientInfo? clientInfo)> ValidateJwtAsync(string jwt)
+    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt)
     {
         var context = new ValidationContext();
 
@@ -84,7 +85,7 @@ public class ClientSecretJwtAuthenticator(
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(issuer, context),
             });
 
-        return (result, context.ClientInfo);
+        return result.MapSuccess(token => new ValidJsonWebToken(token, context.ClientInfo.NotNull(nameof(context.ClientInfo))));
     }
 
     /// <summary>
@@ -188,10 +189,9 @@ public class ClientSecretJwtAuthenticator(
     /// <param name="algorithm">The HMAC algorithm identifier (e.g., HS256, HS384, HS512).</param>
     /// <param name="secret"></param>
     /// <returns>A JSON Web Key configured for the specified HMAC algorithm.</returns>
-    private static JsonWebKey CreateSymmetricKey(string algorithm, byte[] secret) => new()
+    private static JsonWebKey CreateSymmetricKey(string algorithm, byte[] secret) => new OctetJsonWebKey
     {
-        KeyType = JsonWebKeyTypes.Octet,
         Algorithm = algorithm,
-        SymmetricKey = secret,
+        KeyValue = secret,
     };
 }

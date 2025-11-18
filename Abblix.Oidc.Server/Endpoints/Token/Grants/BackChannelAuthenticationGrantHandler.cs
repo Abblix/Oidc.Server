@@ -96,8 +96,8 @@ public class BackChannelAuthenticationGrantHandler(
             // If the client making the request is not the same as the one that initiated the authentication
             case { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId:
                 return new OidcError(
-                    ErrorCodes.UnauthorizedClient,
-                    "The authentication request was started by another client");
+                    ErrorCodes.InvalidGrant,
+                    "The authentication request was issued to another client");
 
             // If the request is still pending and not yet time to poll again
             case { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: {} nextPollAt }

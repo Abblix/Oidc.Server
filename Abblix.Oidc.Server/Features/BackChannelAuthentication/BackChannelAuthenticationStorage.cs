@@ -31,9 +31,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// </summary>
 /// <param name="storage">The storage system used for persisting authentication requests.</param>
 /// <param name="authenticationRequestIdGenerator">Generator for creating unique authentication request IDs.</param>
+/// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 public class BackChannelAuthenticationStorage(
 	IEntityStorage storage,
-	IAuthenticationRequestIdGenerator authenticationRequestIdGenerator) : IBackChannelAuthenticationStorage
+	IAuthenticationRequestIdGenerator authenticationRequestIdGenerator,
+	IEntityStorageKeyFactory keyFactory) : IBackChannelAuthenticationStorage
 {
 	/// <summary>
 	/// Asynchronously stores a backchannel authentication request and generates a unique identifier for it.
@@ -49,9 +51,9 @@ public class BackChannelAuthenticationStorage(
 		var authenticationRequestId = authenticationRequestIdGenerator.GenerateAuthenticationRequestId();
 
 		await storage.SetAsync(
-			ToKeyString(authenticationRequestId),
+			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
 			authenticationRequest,
-			new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
+			new() { AbsoluteExpirationRelativeToNow = expiresIn });
 
 		return authenticationRequestId;
 	}
@@ -65,7 +67,8 @@ public class BackChannelAuthenticationStorage(
 	/// otherwise, null.
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId)
-		=> storage.GetAsync<BackChannelAuthenticationRequest>(ToKeyString(authenticationRequestId), true);
+		=> storage.GetAsync<BackChannelAuthenticationRequest>(
+			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId), true);
 
 	/// <summary>
 	/// Removes a backchannel authentication request from storage using its unique identifier.
@@ -76,13 +79,5 @@ public class BackChannelAuthenticationStorage(
 	/// A task that completes when the request is removed from storage.
 	/// </returns>
 	public Task RemoveAsync(string authenticationRequestId)
-		=> storage.RemoveAsync(ToKeyString(authenticationRequestId));
-
-	/// <summary>
-	/// Converts the authentication request ID into a key string format for storage purposes.
-	/// </summary>
-	/// <param name="authenticationRequestId">The unique identifier of the authentication request.</param>
-	/// <returns>A formatted key string for storing the request in the storage system.</returns>
-	private static string ToKeyString(string authenticationRequestId)
-		=> $"{nameof(authenticationRequestId)}:{authenticationRequestId}";
+		=> storage.RemoveAsync(keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId));
 }

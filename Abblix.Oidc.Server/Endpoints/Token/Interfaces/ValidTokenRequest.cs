@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using System.Security.Cryptography.X509Certificates;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -42,19 +43,21 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <param name="Resources">The resources associated with the token request,
 /// detailing the specific resources the client is requesting access to.</param>
 public record ValidTokenRequest(
-	TokenRequest Model,
-	AuthorizedGrant AuthorizedGrant,
-	ClientInfo ClientInfo,
-	ScopeDefinition[] Scope,
-	ResourceDefinition[] Resources)
+    TokenRequest Model,
+    AuthorizedGrant AuthorizedGrant,
+    ClientInfo ClientInfo,
+    ScopeDefinition[] Scope,
+    ResourceDefinition[] Resources,
+    X509Certificate2? ClientCertificate = null)
 {
-	public ValidTokenRequest(TokenValidationContext context)
-		: this(
-			context.Request,
-			context.AuthorizedGrant,
-			context.ClientInfo,
-			context.Scope,
-			context.Resources)
-	{
-	}
+    public ValidTokenRequest(TokenValidationContext context)
+        : this(
+            context.Request,
+            context.AuthorizedGrant,
+            context.ClientInfo,
+            context.Scope,
+            context.Resources,
+            context.ClientRequest.ClientCertificate)
+    {
+    }
 }

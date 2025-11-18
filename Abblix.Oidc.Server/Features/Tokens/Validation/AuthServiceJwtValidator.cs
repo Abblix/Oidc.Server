@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -51,10 +52,9 @@ public class AuthServiceJwtValidator(
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
 	/// <returns>
-	/// A task representing the asynchronous validation operation, which yields a <see cref="JwtValidationResult"/>
-	/// indicating the result of the validation.
+	/// A task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.
 	/// </returns>
-	public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
+	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
 	{
 		return validator.ValidateAsync(
 			jwt,

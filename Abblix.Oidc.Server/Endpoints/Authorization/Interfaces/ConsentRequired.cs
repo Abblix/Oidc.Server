@@ -39,6 +39,4 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// This includes the specific scopes and resources that need user consent before proceeding with the authorization
 /// process. </param>
 public record ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession, ConsentDefinition RequiredUserConsents)
-    : AuthorizationResponse(Model)
-{
-}
+    : AuthorizationResponse(Model);

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Mvc;
 using CookieOptions = Microsoft.AspNetCore.Http.CookieOptions;
 
@@ -47,4 +48,26 @@ public static class ActionResultExtensions
 	/// <returns>A decorated <see cref="ActionResult"/> that deletes the specified cookie.</returns>
 	public static ActionResult WithDeleteCookie(this ActionResult innerResult, string name, CookieOptions options)
 		=> new ActionResultDecorator(innerResult, response => response.Cookies.Delete(name, options));
+
+	/// <summary>
+	/// Decorates an <see cref="ActionResult"/> to append a header to the response.
+	/// </summary>
+	/// <param name="innerResult">The <see cref="ActionResult"/> to decorate.</param>
+	/// <param name="name">The name of the header to append.</param>
+	/// <param name="value">The value of the header.</param>
+	/// <returns>A decorated <see cref="ActionResult"/> that appends the specified header.</returns>
+	public static ActionResult WithHeader(this ActionResult innerResult, string name, string value)
+		=> new ActionResultDecorator(innerResult, response => response.Headers[name] = value);
+
+	/// <summary>
+	/// Decorates an <see cref="ActionResult"/> to prevent caching by appending standard no-cache headers.
+	/// Appends 'Cache-Control: no-store' and 'Pragma: no-cache' headers as required by
+	/// <see href="https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse">OpenID Connect Core specification</see>.
+	/// </summary>
+	/// <param name="innerResult">The <see cref="ActionResult"/> to decorate.</param>
+	/// <returns>A decorated <see cref="ActionResult"/> with cache prevention headers.</returns>
+	public static ActionResult WithNoCacheHeaders(this ActionResult innerResult)
+		=> innerResult
+			.WithHeader(HttpResponseHeaders.CacheControl, HttpResponseHeaders.CacheControlValues.NoStore)
+			.WithHeader(HttpResponseHeaders.Pragma, HttpResponseHeaders.PragmaValues.NoCache);
 }

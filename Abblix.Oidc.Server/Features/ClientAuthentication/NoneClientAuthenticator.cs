@@ -69,7 +69,7 @@ public class NoneClientAuthenticator(
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
         var clientId = request.ClientId;
-        if (!clientId.HasValue())
+        if (!clientId.NotNullOrWhiteSpace())
             return null;
 
         var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();

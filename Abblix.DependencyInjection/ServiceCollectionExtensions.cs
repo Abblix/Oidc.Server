@@ -413,8 +413,10 @@ public static class ServiceCollectionExtensions
     /// This method allows partial control over dependency injection by mixing resolved and custom parameters.
     /// Useful in plugin scenarios, factory setups, or advanced test setups.
     /// </remarks>
-    public static object CreateService(this IServiceProvider serviceProvider,
-        Type type, params Dependency[] dependencies)
+    public static object CreateService(
+        this IServiceProvider serviceProvider,
+        Type type,
+        params Dependency[] dependencies)
     {
         var factory = ActivatorUtilities.CreateFactory(type, Array.ConvertAll(dependencies, d => d.Type));
         return factory(serviceProvider, Array.ConvertAll(dependencies, d => d.Factory(serviceProvider)));

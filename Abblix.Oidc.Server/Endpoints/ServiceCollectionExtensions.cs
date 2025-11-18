@@ -34,6 +34,8 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -60,6 +62,24 @@ namespace Abblix.Oidc.Server.Endpoints;
 
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds the configuration handler for OpenID Connect Discovery endpoint.
+    /// </summary>
+    /// <remarks>
+    /// This handler builds discovery metadata according to OpenID Connect Discovery specification,
+    /// providing framework-agnostic metadata about the provider's configuration.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddConfigurationEndpoint(this IServiceCollection services)
+    {
+        return services
+            .AddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>()
+            .AddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>()
+            .AddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>()
+            .AddScoped<IConfigurationHandler, ConfigurationHandler>();
+    }
+
     /// <summary>
     /// Adds services and processors for handling authorization requests to the service collection.
     /// </summary>
@@ -222,6 +242,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
+            .AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
             .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
     }
@@ -318,6 +339,7 @@ public static class ServiceCollectionExtensions
             .AddTransient(newClientOptionsFactory)
 
             .AddScoped<IClientCredentialFactory, ClientCredentialFactory>()
+            .AddScoped<IRegistrationAccessTokenService, RegistrationAccessTokenService>()
 
             .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
             .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
@@ -346,6 +368,7 @@ public static class ServiceCollectionExtensions
                 .AddSingleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, TlsClientAuthValidator>()
                 .Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }
 

@@ -23,7 +23,6 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -83,34 +82,31 @@ public class UserIdentityValidator(
         // Validate the LoginHintToken if it is provided and the client is configured to parse it as a JWT
         if (request.LoginHintToken.HasValue() && context.ClientInfo.ParseLoginHintTokenAsJwt)
         {
-            var (loginHintTokenResult, clientInfo) = await clientJwtValidator.ValidateAsync(request.LoginHintToken);
-            switch (loginHintTokenResult, clientInfo)
+            var loginHintTokenResult = await clientJwtValidator.ValidateAsync(request.LoginHintToken);
+
+            if (loginHintTokenResult.TryGetSuccess(out var validJwt))
             {
                 // The token was issued for another client
-                case (ValidJsonWebToken, { ClientId: var clientId})
-                    when clientId != context.ClientInfo.ClientId:
-
+                if (validJwt.Client.ClientId != context.ClientInfo.ClientId)
+                {
                     return new OidcError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken issued by another client.");
+                }
 
                 // If the token is valid and issued for the correct client, store it in the validation context
-                case (ValidJsonWebToken { Token: var loginHintToken }, _):
-                    context.LoginHintToken = loginHintToken;
-                    break;
-
-                case (JwtValidationError { Error: JwtError.InvalidToken }, _):
-                    break;
-
-                // If JWT validation fails, return an error
-                case (JwtValidationError, _):
+                context.LoginHintToken = validJwt.Token;
+            }
+            else
+            {
+                var error = loginHintTokenResult.GetFailure();
+                if (error.Error != JwtError.InvalidToken)
+                {
+                    // If JWT validation fails, return an error
                     return new OidcError(
                         ErrorCodes.InvalidRequest,
                         "LoginHintToken validation failed.");
-
-                // Unexpected cases should result in an exception
-                default:
-                    throw new InvalidOperationException("Something went wrong.");
+                }
             }
         }
 
@@ -146,23 +142,21 @@ public class UserIdentityValidator(
             idTokenHint,
             ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
-        return result switch
+        if (!result.TryGetSuccess(out var token))
         {
-            ValidJsonWebToken { Token.Payload.Audiences: var audiences }
-                when !audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal)
-                => new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The id token hint contains token issued for the client other than specified"),
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The id token hint contains invalid token");
+        }
 
-            JwtValidationError
-                => new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The id token hint contains invalid token"),
+        var audiences = token.Payload.Audiences;
+        if (!audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The id token hint contains token issued for the client other than specified");
+        }
 
-            ValidJsonWebToken { Token: var idToken }
-                => idToken,
-
-            _ => throw new UnexpectedTypeException(nameof(result), result.GetType()),
-        };
+        return token;
     }
 }

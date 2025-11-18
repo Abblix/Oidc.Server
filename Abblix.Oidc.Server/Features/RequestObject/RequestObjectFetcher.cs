@@ -25,7 +25,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
@@ -106,14 +105,15 @@ public class RequestObjectFetcher(
 
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-        var (result, _) = await tokenValidator.ValidateAsync(requestObject, validationOptions);
+        var result = await tokenValidator.ValidateAsync(requestObject, validationOptions);
 
-        return result switch
+        if (!result.TryGetSuccess(out var validJwt))
         {
-            ValidJsonWebToken { Token.Payload.Json: var payload } => payload,
-            JwtValidationError error => InvalidRequestObject(error),
-            _ => throw new UnexpectedTypeException(nameof(result), result.GetType()),
-        };
+            var error = result.GetFailure();
+            return InvalidRequestObject(error);
+        }
+
+        return validJwt.Token.Payload.Json;
     }
 
     private OidcError InvalidRequestObject(JwtValidationError error)

@@ -25,6 +25,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
@@ -41,11 +42,13 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// Converter for transforming subject identifiers based on client configurations.</param>
 /// <param name="jwtFormatter">Formatter for encoding the generated logout token into a compact serialized format.
 /// </param>
+/// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
 public class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
-    IClientJwtFormatter jwtFormatter) : ILogoutTokenService
+    IClientJwtFormatter jwtFormatter,
+    ITokenIdGenerator tokenIdGenerator) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
@@ -72,9 +75,6 @@ public class LogoutTokenService(
                 $"Both {nameof(subjectId)} and {nameof(logoutContext.SessionId)} are null or empty, unable to specify the session should be finished");
         }
 
-        //TODO extract id generator to separate class
-        var jwtId = CryptoRandom.GetRandomBytes(16).ToHexString();
-
         var issuedAt = clock.GetUtcNow();
 
         var logoutToken = new JsonWebToken
@@ -89,7 +89,7 @@ public class LogoutTokenService(
                 // Attention: according to the https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken
                 // the nonce is PROHIBITED in Logout tokens.
 
-                JwtId = jwtId,
+                JwtId = tokenIdGenerator.GenerateTokenId(),
 
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,

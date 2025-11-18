@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -39,7 +40,6 @@ public interface IAuthServiceJwtValidator
 	/// <param name="jwt">The JWT string to be validated.</param>
 	/// <param name="options">The validation options that control how the JWT is validated, including checks for issuer,
 	/// audience, expiration, and more. Defaults to <see cref="ValidationOptions.Default"/> if not specified.</param>
-	/// <returns>A task representing the asynchronous operation, resulting in a <see cref="JwtValidationResult"/>
-	/// that indicates whether the JWT is valid or provides details of any validation errors.</returns>
-	public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default);
+	/// <returns>A task representing the asynchronous operation, resulting in a Result containing either a validated JsonWebToken or a JwtValidationError.</returns>
+	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default);
 }

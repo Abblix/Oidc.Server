@@ -57,12 +57,10 @@ public class BackChannelAuthenticationResponseFormatter : IBackChannelAuthentica
         BackChannelAuthenticationRequest request,
         Result<BackChannelAuthenticationSuccess, OidcError> response)
     {
-        return Task.FromResult(response.Match(
-            onSuccess: success => new OkObjectResult(success) as ActionResult,
+        return Task.FromResult(response.Match<ActionResult>(
+            onSuccess: success => new OkObjectResult(success),
             onFailure: error =>
             {
-                ArgumentNullException.ThrowIfNull(error);
-
                 return error switch
                 {
                     BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }

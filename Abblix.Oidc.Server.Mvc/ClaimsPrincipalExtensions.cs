@@ -53,7 +53,7 @@ public static class ClaimsPrincipalExtensions
 			return values != null;
 		}
 
-		values = new List<string> { claimValue };
+		values = [claimValue];
 		return true;
 	}
 }

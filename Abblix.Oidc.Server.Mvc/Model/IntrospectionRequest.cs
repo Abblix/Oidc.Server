@@ -40,7 +40,7 @@ public record IntrospectionRequest
 	/// </summary>
 	[BindProperty(Name = Parameters.Token)]
 	[Required]
-	public string Token { get; set; } = default!;
+	public string Token { get; set; } = null!;
 
 	/// <summary>
 	/// A hint about the type of the token submitted for introspection.
@@ -48,7 +48,7 @@ public record IntrospectionRequest
 	/// If not provided, the endpoint may try various token types until it finds one that matches.
 	/// </summary>
 	[BindProperty(Name = Parameters.TokenTypeHint)]
-	public string? TokenTypeHint { get; set; } // TODO consider to use enum here
+	public string? TokenTypeHint { get; set; }
 
 	/// <summary>
 	/// Maps the properties of this introspection request to a <see cref="Core.IntrospectionRequest"/> object.

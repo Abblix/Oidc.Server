@@ -75,6 +75,8 @@ public record ConfigurationResponse
         public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
         public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
         public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
+        // RFC 8705 mTLS endpoint aliases
+        public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
     }
 
     /// <summary>
@@ -82,7 +84,7 @@ public record ConfigurationResponse
     /// when issuing requests to the provider to ensure that the request is directed to the correct entity.
     /// </summary>
     [JsonPropertyName(Parameters.Issuer)]
-    public string Issuer { init; get; } = default!;
+    public string Issuer { init; get; } = null!;
 
     /// <summary>
     /// The URL of the OpenID Provider's JSON Web Key Set (JWKS) document. This document contains the provider's public
@@ -191,42 +193,42 @@ public record ConfigurationResponse
     /// Lists the scopes supported by the OpenID Provider, defining the extent of access granted by the authorization.
     /// </summary>
     [JsonPropertyName(Parameters.ScopesSupported)]
-    public IEnumerable<string> ScopesSupported { init; get; } = default!;
+    public IEnumerable<string> ScopesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the claims supported by the OpenID Provider, indicating the user information that can be included
     /// in the ID token or obtained from the UserInfo endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.ClaimsSupported)]
-    public IEnumerable<string> ClaimsSupported { init; get; } = default!;
+    public IEnumerable<string> ClaimsSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the grant types supported by the OpenID Provider, defining the methods through which
     /// clients can request tokens.
     /// </summary>
     [JsonPropertyName(Parameters.GrantTypesSupported)]
-    public IEnumerable<string> GrantTypesSupported { init; get; } = default!;
+    public IEnumerable<string> GrantTypesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the response types supported by the OpenID Provider, indicating the formats that can be used
     /// for the authorization response.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseTypesSupported)]
-    public IEnumerable<string> ResponseTypesSupported { init; get; } = default!;
+    public IEnumerable<string> ResponseTypesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the response modes supported by the OpenID Provider, defining how the authorization response
     /// should be delivered to the client.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseModesSupported)]
-    public IEnumerable<string> ResponseModesSupported { init; get; } = default!;
+    public IEnumerable<string> ResponseModesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the token endpoint authentication methods supported by the OpenID Provider,
     /// specifying how clients authenticate to the token endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethodsSupported)]
-    public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = default!;
+    public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the signing algorithms supported by the OpenID Provider for authenticating clients at the token endpoint.
@@ -241,21 +243,21 @@ public record ConfigurationResponse
     /// indicating the algorithms that can be used to sign the ID token.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSigningAlgValuesSupported)]
-    public IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; } = default!;
+    public IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the subject types supported by the OpenID Provider,
     /// defining how the subject's identifier is formatted and presented to the client.
     /// </summary>
     [JsonPropertyName(Parameters.SubjectTypesSupported)]
-    public IEnumerable<string> SubjectTypesSupported { init; get; } = default!;
+    public IEnumerable<string> SubjectTypesSupported { init; get; } = null!;
 
     /// <summary>
     /// Lists the code challenge methods supported by the OpenID Provider for PKCE,
     /// enhancing the security of the authorization code flow.
     /// </summary>
     [JsonPropertyName(Parameters.CodeChallengeMethodsSupported)]
-    public IEnumerable<string> CodeChallengeMethodsSupported { init; get; } = default!;
+    public IEnumerable<string> CodeChallengeMethodsSupported { init; get; } = null!;
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports the use of the request parameter,
@@ -269,7 +271,7 @@ public record ConfigurationResponse
     /// specifying how the provider should prompt the user during authentication.
     /// </summary>
     [JsonPropertyName(Parameters.PromptValuesSupported)]
-    public IEnumerable<string> PromptValuesSupported { init; get; } = default!;
+    public IEnumerable<string> PromptValuesSupported { init; get; } = null!;
 
     /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for user information endpoints.
@@ -319,4 +321,10 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
     public bool? BackChannelUserCodeParameterSupported { get; init; }
+
+    /// <summary>
+    /// RFC 8705: mTLS endpoint aliases block to advertise alternate endpoints served on an mTLS-bound host.
+    /// </summary>
+    [JsonPropertyName(Parameters.MtlsEndpointAliases)]
+    public MtlsAliases? MtlsEndpointAliases { get; init; }
 }

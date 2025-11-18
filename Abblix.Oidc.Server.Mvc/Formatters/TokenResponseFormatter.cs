@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -50,8 +51,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
         return Task.FromResult(response.Match(
             onSuccess: success =>
             {
-                //TODO: append headers 'Cache-Control: no-store' and 'Pragma: no-cache' to response - as requires https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse
-                return new ActionResult<TokenResponse>(new TokenResponse
+                var tokenResponse = new TokenResponse
                 {
                     AccessToken = success.AccessToken.EncodedJwt,
                     TokenType = success.TokenType,
@@ -59,8 +59,12 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     ExpiresIn = success.ExpiresIn,
 
                     RefreshToken = success.RefreshToken?.EncodedJwt,
+                    Scope = success.Scope.ToArray(),
                     IdToken = success.IdToken?.EncodedJwt,
-                });
+                };
+
+                return new ActionResult<TokenResponse>(
+                    new OkObjectResult(tokenResponse).WithNoCacheHeaders());
             },
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }

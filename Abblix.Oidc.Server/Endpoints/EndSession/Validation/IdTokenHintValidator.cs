@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -51,39 +50,33 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
                 request.IdTokenHint,
                 ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
-            switch (result)
+            if (!result.TryGetSuccess(out var idToken))
             {
-                case ValidJsonWebToken { Token: var idToken, Token.Payload.Audiences: var audiences }:
-                    if (!request.ClientId.HasValue())
-                    {
-                        try
-                        {
-                            context.ClientId = audiences.Single();
-                        }
-                        catch (Exception)
-                        {
-                            return new OidcError(
-                                ErrorCodes.InvalidRequest,
-                                "The audience in the id token hint is missing or have multiple values.");
-                        }
-                    }
-                    else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
-                    {
-                        return new OidcError(
-                            ErrorCodes.InvalidRequest,
-                            "The id token hint contains token issued for the client other than specified");
-                    }
-
-                    context.IdToken = idToken;
-                    break;
-
-                case JwtValidationError:
-                    return new OidcError(ErrorCodes.InvalidRequest,
-                        "The id token hint contains invalid token");
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
+                return new OidcError(ErrorCodes.InvalidRequest, "The id token hint contains invalid token");
             }
+
+            var audiences = idToken.Payload.Audiences;
+            if (!request.ClientId.HasValue())
+            {
+                try
+                {
+                    context.ClientId = audiences.Single();
+                }
+                catch (Exception)
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequest,
+                        "The audience in the id token hint is missing or have multiple values.");
+                }
+            }
+            else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
+            {
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "The id token hint contains token issued for the client other than specified");
+            }
+
+            context.IdToken = idToken;
         }
 
         return null;
