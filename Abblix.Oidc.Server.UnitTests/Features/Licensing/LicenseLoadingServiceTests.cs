@@ -154,7 +154,7 @@ public class LicenseLoadingServiceTests
         var cancellationToken = CancellationToken.None;
 
         // Act & Assert - Invalid license should throw during validation
-        await Assert.ThrowsAnyAsync<System.Exception>(() =>
+        await Assert.ThrowsAnyAsync<Exception>(() =>
             service.StartAsync(cancellationToken));
     }
 

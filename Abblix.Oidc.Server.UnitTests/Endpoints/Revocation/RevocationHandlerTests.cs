@@ -63,7 +63,7 @@ public class RevocationHandlerTests
 
     private static ValidRevocationRequest CreateValidRevocationRequest(RevocationRequest request)
     {
-        var token = new Abblix.Jwt.JsonWebToken();
+        var token = new Jwt.JsonWebToken();
         return new ValidRevocationRequest(request, token);
     }
 

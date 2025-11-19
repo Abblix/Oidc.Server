@@ -70,7 +70,7 @@ public class UserInfoHandlerTests
             DateTimeOffset.UtcNow,
             "local");
 
-        var authContext = new Abblix.Oidc.Server.Common.AuthorizationContext(
+        var authContext = new AuthorizationContext(
             "client_123",
             ["openid", "profile"],
             null);

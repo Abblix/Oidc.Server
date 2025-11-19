@@ -72,7 +72,7 @@ public class TokenHandlerTests
                 "session_123",
                 DateTimeOffset.UtcNow,
                 "local"),
-            new Abblix.Oidc.Server.Common.AuthorizationContext(
+            new AuthorizationContext(
                 "client_123",
                 [],
                 null)),
@@ -82,7 +82,7 @@ public class TokenHandlerTests
 
     private static TokenIssued CreateTokenIssued()
     {
-        var jwt = new Abblix.Jwt.JsonWebToken();
+        var jwt = new Jwt.JsonWebToken();
         return new TokenIssued(
             new EncodedJsonWebToken(jwt, "access_token_jwt"),
             TokenTypes.Bearer,

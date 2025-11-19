@@ -221,12 +221,12 @@ public class CompositeClientAuthenticatorTests
         var firstAuthenticator = new Mock<IClientAuthenticator>();
         firstAuthenticator
             .Setup(a => a.ClientAuthenticationMethodsSupported)
-            .Returns(new[] { ClientAuthenticationMethods.ClientSecretBasic, ClientAuthenticationMethods.ClientSecretPost });
+            .Returns([ClientAuthenticationMethods.ClientSecretBasic, ClientAuthenticationMethods.ClientSecretPost]);
 
         var secondAuthenticator = new Mock<IClientAuthenticator>();
         secondAuthenticator
             .Setup(a => a.ClientAuthenticationMethodsSupported)
-            .Returns(new[] { ClientAuthenticationMethods.PrivateKeyJwt });
+            .Returns([ClientAuthenticationMethods.PrivateKeyJwt]);
 
         var composite = CreateCompositeAuthenticator(firstAuthenticator.Object, secondAuthenticator.Object);
 
@@ -268,12 +268,12 @@ public class CompositeClientAuthenticatorTests
         var firstAuthenticator = new Mock<IClientAuthenticator>();
         firstAuthenticator
             .Setup(a => a.ClientAuthenticationMethodsSupported)
-            .Returns(new[] { ClientAuthenticationMethods.ClientSecretBasic });
+            .Returns([ClientAuthenticationMethods.ClientSecretBasic]);
 
         var secondAuthenticator = new Mock<IClientAuthenticator>();
         secondAuthenticator
             .Setup(a => a.ClientAuthenticationMethodsSupported)
-            .Returns(new[] { ClientAuthenticationMethods.ClientSecretBasic });
+            .Returns([ClientAuthenticationMethods.ClientSecretBasic]);
 
         var composite = CreateCompositeAuthenticator(firstAuthenticator.Object, secondAuthenticator.Object);
 
@@ -374,6 +374,6 @@ public class CompositeClientAuthenticatorTests
         var type = typeof(IClientAuthenticator).Assembly.GetTypes()
             .First(t => t.Name == "CompositeClientAuthenticator");
 
-        return (IClientAuthenticator)Activator.CreateInstance(type, new object[] { authenticators })!;
+        return (IClientAuthenticator)Activator.CreateInstance(type, [authenticators])!;
     }
 }

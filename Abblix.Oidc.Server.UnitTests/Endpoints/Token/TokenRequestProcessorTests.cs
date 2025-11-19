@@ -89,15 +89,15 @@ public class TokenRequestProcessorTests
     }
 
     private static EncodedJsonWebToken CreateAccessToken() => new(
-        new Abblix.Jwt.JsonWebToken(),
+        new Jwt.JsonWebToken(),
         "access_token_jwt");
 
     private static EncodedJsonWebToken CreateRefreshToken() => new(
-        new Abblix.Jwt.JsonWebToken(),
+        new Jwt.JsonWebToken(),
         "refresh_token_jwt");
 
     private static EncodedJsonWebToken CreateIdToken() => new(
-        new Abblix.Jwt.JsonWebToken(),
+        new Jwt.JsonWebToken(),
         "id_token_jwt");
 
     /// <summary>
@@ -495,7 +495,7 @@ public class TokenRequestProcessorTests
     {
         // Arrange
         var scopes = new[] { Scopes.OfflineAccess };
-        var existingRefreshToken = new Abblix.Jwt.JsonWebToken();
+        var existingRefreshToken = new Jwt.JsonWebToken();
         var authSession = CreateAuthSession();
         var authContext = new AuthorizationContext("client_123", scopes, null);
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(

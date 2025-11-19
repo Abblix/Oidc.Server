@@ -98,7 +98,7 @@ public class ProtobufSerializerTests
             IdToken = new()
             {
                 ["sub"] = new RequestedClaimDetails { Essential = true },
-                ["roles"] = new RequestedClaimDetails { Values = new object[] { "admin", "user" } },
+                ["roles"] = new RequestedClaimDetails { Values = ["admin", "user"] },
             },
         };
 
@@ -127,8 +127,8 @@ public class ProtobufSerializerTests
             "local")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
-            AffectedClientIds = new[] { "client-1", "client-2" },
-            AuthenticationMethodReferences = new[] { "pwd", "mfa" },
+            AffectedClientIds = ["client-1", "client-2"],
+            AuthenticationMethodReferences = ["pwd", "mfa"],
             Email = "user@example.com",
             EmailVerified = true,
             AdditionalClaims = new JsonObject
@@ -163,7 +163,7 @@ public class ProtobufSerializerTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            new[] { "openid", "profile", "email" },
+            ["openid", "profile", "email"],
             new RequestedClaims
             {
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
@@ -174,7 +174,7 @@ public class ProtobufSerializerTests
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = "S256",
-            Resources = new[] { new Uri("https://api.example.com") },
+            Resources = [new Uri("https://api.example.com")],
         };
 
         // Act
@@ -200,14 +200,14 @@ public class ProtobufSerializerTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context)
         {
-            IssuedTokens = new[]
-            {
+            IssuedTokens =
+            [
                 new TokenInfo("access-token-1", DateTimeOffset.UtcNow.AddHours(1)),
-                new TokenInfo("refresh-token-1", DateTimeOffset.UtcNow.AddDays(30)),
-            },
+                new TokenInfo("refresh-token-1", DateTimeOffset.UtcNow.AddDays(30))
+            ],
         };
 
         // Act
@@ -229,8 +229,8 @@ public class ProtobufSerializerTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = new[] { "openid", "profile", "email" },
-            ResponseType = new[] { "code" },
+            Scope = ["openid", "profile", "email"],
+            ResponseType = ["code"],
             ClientId = "client-123",
             RedirectUri = new Uri("https://example.com/callback"),
             State = "state-xyz",
@@ -239,16 +239,16 @@ public class ProtobufSerializerTests
             Display = "page",
             Prompt = "consent",
             MaxAge = TimeSpan.FromMinutes(30),
-            UiLocales = new[] { new CultureInfo("en-US"), new CultureInfo("fr-FR") },
-            ClaimsLocales = new[] { new CultureInfo("en-US") },
+            UiLocales = [new CultureInfo("en-US"), new CultureInfo("fr-FR")],
+            ClaimsLocales = [new CultureInfo("en-US")],
             IdTokenHint = "eyJhbGc...",
             LoginHint = "user@example.com",
-            AcrValues = new[] { "urn:mace:incommon:iap:silver" },
+            AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = "S256",
             Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
-            Resources = new[] { new Uri("https://api.example.com") },
+            Resources = [new Uri("https://api.example.com")],
             Claims = new RequestedClaims
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
@@ -295,7 +295,7 @@ public class ProtobufSerializerTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
         var bcRequest = new BackChannelAuthenticationRequest(grant)
         {
@@ -342,7 +342,7 @@ public class ProtobufSerializerTests
     public void Deserialize_EmptyBytes_ReturnsDefault()
     {
         // Act
-        var result = _serializer.Deserialize<TokenInfo>(Array.Empty<byte>());
+        var result = _serializer.Deserialize<TokenInfo>([]);
 
         // Assert
         Assert.Null(result);
@@ -366,7 +366,7 @@ public class ProtobufSerializerTests
         var bytes = new byte[] { 1, 2, 3 };
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => _serializer.Deserialize<string>(bytes));
+        var ex = Assert.Throws<InvalidOperationException>(() => _serializer.Deserialize<int>(bytes));
         Assert.Contains("not supported for protobuf deserialization", ex.Message);
     }
 
@@ -396,8 +396,8 @@ public class ProtobufSerializerTests
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local")
         {
-            AffectedClientIds = new[] { "client-1", "client-2", "client-3" },
-            AuthenticationMethodReferences = new[] { "pwd", "mfa", "otp" },
+            AffectedClientIds = ["client-1", "client-2", "client-3"],
+            AuthenticationMethodReferences = ["pwd", "mfa", "otp"],
             Email = "user@example.com",
         };
 

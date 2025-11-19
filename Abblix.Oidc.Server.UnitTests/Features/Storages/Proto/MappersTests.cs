@@ -91,7 +91,7 @@ public class MappersTests
                 },
                 ["name"] = new RequestedClaimDetails
                 {
-                    Values = new object[] { "John", "Jane" },
+                    Values = ["John", "Jane"],
                 },
             },
             IdToken = new()
@@ -143,8 +143,8 @@ public class MappersTests
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "google")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-            AffectedClientIds = new[] { "client-1", "client-2", "client-3" },
-            AuthenticationMethodReferences = new[] { "pwd", "mfa", "face" },
+            AffectedClientIds = ["client-1", "client-2", "client-3"],
+            AuthenticationMethodReferences = ["pwd", "mfa", "face"],
             Email = "user@example.com",
             EmailVerified = true,
             AdditionalClaims = new JsonObject
@@ -203,15 +203,15 @@ public class MappersTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            new[] { "openid", "profile" },
+            ["openid", "profile"],
             null)
         {
             RedirectUri = new Uri("https://example.com/callback?state=xyz"),
-            Resources = new[]
-            {
+            Resources =
+            [
                 new Uri("https://api.example.com/v1"),
-                new Uri("https://api2.example.com/v2"),
-            },
+                new Uri("https://api2.example.com/v2")
+            ],
         };
 
         // Act
@@ -232,7 +232,7 @@ public class MappersTests
     public void AuthorizationContextMapper_ToProto_HandlesPkce()
     {
         // Arrange
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null)
+        var context = new AuthorizationContext("client-123", ["openid"], null)
         {
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             CodeChallengeMethod = "S256",
@@ -258,15 +258,15 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context)
         {
-            IssuedTokens = new[]
-            {
+            IssuedTokens =
+            [
                 new TokenInfo("access-123", DateTimeOffset.UtcNow.AddHours(1)),
                 new TokenInfo("refresh-456", DateTimeOffset.UtcNow.AddDays(30)),
-                new TokenInfo("id-789", DateTimeOffset.UtcNow.AddHours(1)),
-            },
+                new TokenInfo("id-789", DateTimeOffset.UtcNow.AddHours(1))
+            ],
         };
 
         // Act
@@ -287,7 +287,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context); // No IssuedTokens
 
         // Act
@@ -306,14 +306,14 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = new[] { "openid" },
-            UiLocales = new[]
-            {
+            Scope = ["openid"],
+            UiLocales =
+            [
                 new CultureInfo("en-US"),
                 new CultureInfo("fr-FR"),
-                new CultureInfo("de-DE"),
-            },
-            ClaimsLocales = new[] { new CultureInfo("en-GB") },
+                new CultureInfo("de-DE")
+            ],
+            ClaimsLocales = [new CultureInfo("en-GB")],
         };
 
         // Act
@@ -340,7 +340,7 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = new[] { "openid" },
+            Scope = ["openid"],
             MaxAge = TimeSpan.FromMinutes(30),
         };
 
@@ -361,12 +361,12 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = new[] { "openid", "profile", "email" },
+            Scope = ["openid", "profile", "email"],
             Claims = new RequestedClaims
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
             },
-            ResponseType = new[] { "code", "id_token" },
+            ResponseType = ["code", "id_token"],
             ClientId = "client-123",
             RedirectUri = new Uri("https://example.com/callback"),
             State = "state-xyz",
@@ -377,12 +377,12 @@ public class MappersTests
             MaxAge = TimeSpan.FromMinutes(15),
             IdTokenHint = "eyJhbGc...",
             LoginHint = "user@example.com",
-            AcrValues = new[] { "urn:mace:incommon:iap:silver" },
+            AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge",
             CodeChallengeMethod = "S256",
             Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
-            Resources = new[] { new Uri("https://api.example.com") },
+            Resources = [new Uri("https://api.example.com")],
         };
 
         // Act
@@ -424,7 +424,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
         var request = new BackChannelAuthenticationRequest(grant) { Status = status };
 
@@ -441,7 +441,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
         var nextPoll = DateTimeOffset.UtcNow.AddSeconds(45);
         var request = new BackChannelAuthenticationRequest(grant)
@@ -467,7 +467,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
+        var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
         var request = new BackChannelAuthenticationRequest(grant); // NextPollAt is null
 
