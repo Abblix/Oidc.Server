@@ -28,6 +28,8 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.DeviceAuthorization;
+using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
@@ -110,8 +112,9 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        //services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
-        services.TryAddSingleton<IBinarySerializer, ProtobufSerializer>();
+        services.AddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
+        services.AddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
+        services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
     }
@@ -427,6 +430,21 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
         services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        return services;
+    }
+
+    /// <summary>
+    /// Configures services for handling Device Authorization Grant (RFC 8628) requests,
+    /// enabling devices with limited input capabilities to obtain user authorization.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddDeviceAuthorization(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IDeviceCodeGenerator, DeviceCodeGenerator>();
+        services.TryAddSingleton<IUserCodeGenerator, UserCodeGenerator>();
+        services.TryAddSingleton<IDeviceAuthorizationStorage, DeviceAuthorizationStorage>();
+        services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
         return services;
     }
 

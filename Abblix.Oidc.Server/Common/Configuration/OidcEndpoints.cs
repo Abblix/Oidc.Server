@@ -33,7 +33,7 @@ public enum OidcEndpoints
 	/// All OIDC endpoints are available, covering the full range of OpenID Connect operations.
 	/// </summary>
 	All = Configuration | Keys | Authorize | Token | UserInfo | CheckSession | EndSession | Revocation |
-	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication,
+	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication | DeviceAuthorization,
 
 	/// <summary>
 	/// The configuration endpoint, used by clients to dynamically discover information about the OpenID Provider.
@@ -106,4 +106,10 @@ public enum OidcEndpoints
 	/// It allows clients to initiate out-of-band authentication requests, often via a separate user device.
 	/// </summary>
 	BackChannelAuthentication = 1 << 11,
+
+	/// <summary>
+	/// The device authorization endpoint, used in Device Authorization Grant (RFC 8628) flows.
+	/// It allows devices with limited input capabilities to obtain user authorization via a secondary device.
+	/// </summary>
+	DeviceAuthorization = 1 << 12,
 }
