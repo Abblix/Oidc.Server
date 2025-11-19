@@ -59,4 +59,20 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
     public string BackChannelAuthenticationRequestKey(string requestId)
         => $"Abblix.Oidc.Server:CIBA:{requestId}";
+
+    /// <summary>
+    /// Generates a storage key for a device authorization request by device code.
+    /// </summary>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for the device authorization request.</returns>
+    public string DeviceAuthorizationRequestKey(string deviceCode)
+        => $"Abblix.Oidc.Server:Device:{deviceCode}";
+
+    /// <summary>
+    /// Generates a storage key for mapping a user code to its device code.
+    /// </summary>
+    /// <param name="userCode">The user-friendly verification code.</param>
+    /// <returns>A formatted storage key for the user code mapping.</returns>
+    public string DeviceAuthorizationUserCodeKey(string userCode)
+        => $"Abblix.Oidc.Server:UserCode:{userCode}";
 }

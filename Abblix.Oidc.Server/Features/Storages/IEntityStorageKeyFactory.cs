@@ -55,4 +55,18 @@ public interface IEntityStorageKeyFactory
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
     string BackChannelAuthenticationRequestKey(string requestId);
+
+    /// <summary>
+    /// Generates a storage key for a device authorization request by device code.
+    /// </summary>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for the device authorization request.</returns>
+    string DeviceAuthorizationRequestKey(string deviceCode);
+
+    /// <summary>
+    /// Generates a storage key for mapping a user code to its device code.
+    /// </summary>
+    /// <param name="userCode">The user-friendly verification code.</param>
+    /// <returns>A formatted storage key for the user code mapping.</returns>
+    string DeviceAuthorizationUserCodeKey(string userCode);
 }

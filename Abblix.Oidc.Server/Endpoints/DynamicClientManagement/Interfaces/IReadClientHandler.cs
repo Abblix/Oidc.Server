@@ -45,5 +45,5 @@ public interface IReadClientHandler
     /// configuration details. If the request is invalid or if the client cannot be found, an appropriate error
     /// response is generated.
     /// </remarks>
-    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(Model.ClientRequest clientRequest);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
 }

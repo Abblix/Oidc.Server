@@ -54,7 +54,7 @@ public class ReadClientHandler(
     /// configurations. It ensures that only valid requests are processed, safeguarding against unauthorized access
     /// to client information.
     /// </remarks>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(Model.ClientRequest clientRequest)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await validator.ValidateAsync(clientRequest);
 
