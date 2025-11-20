@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- Implemented Device Authorization Grant (RFC 8628) for input-constrained devices (1e1ed21)
+  - Complete OAuth 2.0 flow for smart TVs, streaming devices, game consoles, and IoT devices
+  - Device authorization endpoint (`/device_authorization`) with device code and user code generation
+  - Token endpoint support for `urn:ietf:params:oauth:grant-type:device_code` grant type
+  - User code verification service with customizable authentication UI
+  - Status tracking: pending, authorized, denied, expired
+  - Configurable numeric and base-20 user code formats with adjustable length and expiration
+  - Protocol Buffer serialization for device authorization state
+  - Validation framework for client types, scopes, and resources per RFC 8628
+  - Enhanced with rate limiting and atomic operations in commit 7eaa064 (see Security section)
+
 - Implemented `client_secret_jwt` authentication method (#35, 6f4d240)
   - Full support for JWT-based client authentication per RFC 7523
 
