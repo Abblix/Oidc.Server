@@ -60,10 +60,51 @@ public record BackChannelAuthenticationOptions
     /// <summary>
     /// Specifies the length of authentication request identifiers used by the OIDC server.
     /// This value ensures that each backchannel authentication request is uniquely identified.
+    /// Per CIBA specification, the auth_req_id MUST have a minimum entropy of 128 bits (16 bytes).
     /// </summary>
-    public int RequestIdLength { get; set; } = 64;
+    /// <remarks>
+    /// The minimum value is 16 bytes (128 bits) as required by OpenID Connect CIBA specification.
+    /// Default is 64 bytes (512 bits) for enhanced security.
+    /// </remarks>
+    public int RequestIdLength
+    {
+        get => _requestIdLength;
+        set
+        {
+            if (value < MinimumRequestIdLength)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(RequestIdLength),
+                    value,
+                    $"RequestIdLength must be at least {MinimumRequestIdLength} bytes (128 bits) to comply with OpenID Connect CIBA specification");
+            }
+            _requestIdLength = value;
+        }
+    }
 
+    private int _requestIdLength = 64;
+
+    /// <summary>
+    /// Minimum length for authentication request identifiers as required by CIBA specification (128 bits = 16 bytes).
+    /// </summary>
+    public const int MinimumRequestIdLength = 16;
+
+    /// <summary>
+    /// Specifies the token delivery modes supported by the server for backchannel authentication.
+    /// The CIBA specification defines three modes: poll, ping, and push.
+    /// </summary>
+    /// <remarks>
+    /// Default is poll mode only. Additional modes (ping, push) require implementation of notification mechanisms.
+    /// </remarks>
     public IEnumerable<string>? TokenDeliveryModesSupported { get; set; } = [BackchannelTokenDeliveryModes.Poll];
 
+    /// <summary>
+    /// Indicates whether the server supports the user_code parameter in backchannel authentication requests.
+    /// When enabled, clients may provide a user code that must be validated during authentication.
+    /// </summary>
+    /// <remarks>
+    /// This is an optional CIBA feature. When enabled, the UserCodeValidator will enforce user code presence
+    /// for clients configured to require it.
+    /// </remarks>
     public bool UserCodeParameterSupported { get; set; } = false;
 }
