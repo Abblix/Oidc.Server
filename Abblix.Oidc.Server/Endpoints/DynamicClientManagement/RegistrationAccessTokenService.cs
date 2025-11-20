@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;

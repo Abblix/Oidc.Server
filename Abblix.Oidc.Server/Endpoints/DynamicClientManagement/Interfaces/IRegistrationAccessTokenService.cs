@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Provides functionality to issue registration access tokens for managing registered clients.
