@@ -80,6 +80,6 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         if (subject != clientId || !audiences.Contains(clientId))
             return "The access token unauthorized";
 
-        return default;
+        return null;
     }
 }

@@ -47,6 +47,7 @@ public record TokenRequest
 		public const string Password = "password";
 		public const string CodeVerifier = "code_verifier";
 		public const string AuthenticationRequestId = "auth_req_id";
+		public const string DeviceCode = "device_code";
 	}
 
 	/// <summary>
@@ -60,9 +61,10 @@ public record TokenRequest
 		GrantTypes.RefreshToken,
 		GrantTypes.Password,
 		GrantTypes.Ciba,
+		GrantTypes.DeviceAuthorization,
 		GrantTypes.Implicit,
 		GrantTypes.ClientCredentials)]
-	public string GrantType { get; set; } = default!;
+	public string GrantType { get; set; } = null!;
 
 	/// <summary>
 	/// The authorization code received from the authorization server.
@@ -128,4 +130,11 @@ public record TokenRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.AuthenticationRequestId)]
 	public string? AuthenticationRequestId { get; set; }
+
+	/// <summary>
+	/// The device code used in the Device Authorization Grant (RFC 8628) flow.
+	/// This code is obtained from the device authorization endpoint and used to poll for tokens.
+	/// </summary>
+	[JsonPropertyName(Parameters.DeviceCode)]
+	public string? DeviceCode { get; set; }
 }

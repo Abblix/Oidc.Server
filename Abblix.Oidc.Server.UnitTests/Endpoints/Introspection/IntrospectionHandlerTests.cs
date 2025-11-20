@@ -63,7 +63,7 @@ public class IntrospectionHandlerTests
 
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(IntrospectionRequest request)
     {
-        var token = new Abblix.Jwt.JsonWebToken();
+        var token = new Jwt.JsonWebToken();
         return new ValidIntrospectionRequest(request, token);
     }
 

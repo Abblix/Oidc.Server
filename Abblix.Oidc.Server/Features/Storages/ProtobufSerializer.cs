@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 using Google.Protobuf;
 using AuthorizationRequest = Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationRequest;
@@ -35,17 +36,17 @@ using TokenInfo = Abblix.Oidc.Server.Features.Storages.Proto.TokenInfo;
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
-///     Provides functionality to serialize and deserialize objects to and from Protocol Buffer binary representations.
-///     Implements the <see cref="IBinarySerializer" /> interface using Google.Protobuf for efficient serialization.
+/// Provides functionality to serialize and deserialize objects to and from Protocol Buffer binary representations.
+/// Implements the <see cref="IBinarySerializer" /> interface using Google.Protobuf for efficient serialization.
 /// </summary>
 /// <remarks>
-///     This serializer supports only specific OIDC storage types that have protobuf definitions and mappers.
-///     Attempting to serialize unsupported types will throw InvalidOperationException.
+/// This serializer supports only specific OIDC storage types that have protobuf definitions and mappers.
+/// Attempting to serialize unsupported types will throw InvalidOperationException.
 /// </remarks>
 public class ProtobufSerializer : IBinarySerializer
 {
     /// <summary>
-    ///     Serializes an object to a binary representation using Protocol Buffers.
+    /// Serializes an object to a binary representation using Protocol Buffers.
     /// </summary>
     /// <typeparam name="T">The type of the object to serialize.</typeparam>
     /// <param name="obj">The object to serialize.</param>
@@ -53,6 +54,10 @@ public class ProtobufSerializer : IBinarySerializer
     /// <exception cref="InvalidOperationException">Thrown when the type is not supported for protobuf serialization.</exception>
     public byte[] Serialize<T>(T obj)
     {
+        // Handle primitive string type directly
+        if (obj is string str)
+            return System.Text.Encoding.UTF8.GetBytes(str);
+
         IMessage protoMessage = obj switch
         {
             Tokens.Revocation.JsonWebTokenStatus status => status.ToProto(),
@@ -63,6 +68,8 @@ public class ProtobufSerializer : IBinarySerializer
             Endpoints.Token.Interfaces.AuthorizedGrant authorizedGrant => authorizedGrant.ToProto(),
             Model.AuthorizationRequest authRequest => authRequest.ToProto(),
             BackChannelAuthenticationRequest bcRequest => bcRequest.ToProto(),
+            DeviceAuthorizationRequest deviceRequest => deviceRequest.ToProto(),
+            Proto.RateLimitState rateLimitState => rateLimitState,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +
@@ -73,7 +80,7 @@ public class ProtobufSerializer : IBinarySerializer
     }
 
     /// <summary>
-    ///     Deserializes a binary representation to an object using Protocol Buffers.
+    /// Deserializes a binary representation to an object using Protocol Buffers.
     /// </summary>
     /// <typeparam name="T">The type of the object to deserialize into.</typeparam>
     /// <param name="bytes">The binary representation to deserialize from.</param>
@@ -85,6 +92,10 @@ public class ProtobufSerializer : IBinarySerializer
             return default;
 
         var targetType = typeof(T);
+
+        // Handle primitive string type directly
+        if (targetType == typeof(string))
+            return (T)(object)System.Text.Encoding.UTF8.GetString(bytes);
 
         if (targetType == typeof(Tokens.Revocation.JsonWebTokenStatus))
         {
@@ -132,6 +143,18 @@ public class ProtobufSerializer : IBinarySerializer
         {
             var proto = Proto.BackChannelAuthenticationRequest.Parser.ParseFrom(bytes);
             return (T)(object)proto.FromProto();
+        }
+
+        if (targetType == typeof(DeviceAuthorizationRequest))
+        {
+            var proto = Proto.DeviceAuthorizationRequest.Parser.ParseFrom(bytes);
+            return (T)(object)proto.FromProto();
+        }
+
+        if (targetType == typeof(Proto.RateLimitState))
+        {
+            var proto = Proto.RateLimitState.Parser.ParseFrom(bytes);
+            return (T)(object)proto;
         }
 
         throw new InvalidOperationException(

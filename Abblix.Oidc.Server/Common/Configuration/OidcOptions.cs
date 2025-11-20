@@ -184,6 +184,12 @@ public record OidcOptions
 	public BackChannelAuthenticationOptions BackChannelAuthentication { get; set; } = new();
 
 	/// <summary>
+	/// Configuration options for the Device Authorization Grant (RFC 8628),
+	/// used for devices with limited input capabilities.
+	/// </summary>
+	public DeviceAuthorizationOptions? DeviceAuthorization { get; set; }
+
+	/// <summary>
 	/// Specifies the length of session identifiers used by the OIDC server.
 	/// The length determines the uniqueness and security of the session identifiers.
 	/// </summary>

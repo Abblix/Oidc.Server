@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -252,7 +253,6 @@ public sealed class AuthenticationController : ControllerBase
         return await formatter.FormatResponseAsync(mappedAuthenticationRequest, response);
     }
 
-    /*
     /// <summary>
     /// Handles the device authorization endpoint for getting user authorization on limited-input devices.
     /// </summary>
@@ -263,8 +263,16 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpPost(Path.DeviceAuthorization)]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    public Task<ActionResult> DeviceAuthorizationAsync()
+    [EnabledBy(OidcEndpoints.DeviceAuthorization)]
+    public async Task<ActionResult> DeviceAuthorizationAsync(
+        [FromServices] IDeviceAuthorizationHandler handler,
+        [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
+        [FromForm] ClientRequest clientRequest)
     {
-        throw new NotImplementedException();
-    }*/
+        var mappedDeviceAuthorizationRequest = deviceAuthorizationRequest.Map();
+        var mappedClientRequest = clientRequest.Map();
+        var response = await handler.HandleAsync(mappedDeviceAuthorizationRequest, mappedClientRequest);
+        return await formatter.FormatResponseAsync(mappedDeviceAuthorizationRequest, response);
+    }
 }

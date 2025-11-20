@@ -120,7 +120,7 @@ public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthoriz
             (code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
             (code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
             (code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
-            _ => (false, default, default!)
+            _ => (false, default, null!)
         };
 
         return result;

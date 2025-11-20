@@ -70,6 +70,8 @@ public class ConfigurationResponseFormatter(
 
 			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
 
+			DeviceAuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.DeviceAuthorizationAsync), OidcEndpoints.DeviceAuthorization),
+
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
 			BackChannelLogoutSupported = response.BackChannelLogoutSupported,

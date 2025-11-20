@@ -179,7 +179,7 @@ public class ScopeManagerTests
         Assert.True(manager.TryGet(Scopes.OpenId, out var retrieved));
         // Should be the standard scope, not the custom one
         Assert.Equal(StandardScopes.OpenId.ClaimTypes, retrieved.ClaimTypes);
-        Assert.NotEqual(new[] { "custom_claim" }, retrieved.ClaimTypes);
+        Assert.NotEqual(["custom_claim"], retrieved.ClaimTypes);
     }
 
     /// <summary>

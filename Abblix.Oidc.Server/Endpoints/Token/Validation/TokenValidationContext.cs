@@ -48,7 +48,7 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
     /// This object is essential for ensuring that the grant is valid and for extracting any additional information
     /// needed for token generation.
     /// </summary>
-    public AuthorizedGrant AuthorizedGrant { get; set; } = default!;
+    public AuthorizedGrant AuthorizedGrant { get; set; } = null!;
 
     /// <summary>
     /// Defines the scope of access requested or authorized. This array of scope definitions helps in determining

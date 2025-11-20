@@ -219,7 +219,7 @@ public class ScopeManagerExtensionsTests
     {
         // Arrange
         var scopes = new[] { Scopes.OpenId };
-        var resources = System.Array.Empty<ResourceDefinition>();
+        var resources = Array.Empty<ResourceDefinition>();
 
         // Act
         var result = _scopeManager.Validate(scopes, resources, out var definitions, out var error);

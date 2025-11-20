@@ -67,7 +67,7 @@ public class TokenRequestValidatorTests
             "session_123",
             DateTimeOffset.UtcNow,
             "local"),
-        new Abblix.Oidc.Server.Common.AuthorizationContext(
+        new AuthorizationContext(
             "client_123",
             [],
             null));

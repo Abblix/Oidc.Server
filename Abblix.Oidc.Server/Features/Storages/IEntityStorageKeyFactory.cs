@@ -55,4 +55,32 @@ public interface IEntityStorageKeyFactory
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
     string BackChannelAuthenticationRequestKey(string requestId);
+
+    /// <summary>
+    /// Generates a storage key for a device authorization request by device code.
+    /// </summary>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for the device authorization request.</returns>
+    string DeviceAuthorizationRequestKey(string deviceCode);
+
+    /// <summary>
+    /// Generates a storage key for mapping a user code to its device code.
+    /// </summary>
+    /// <param name="userCode">The user-friendly verification code.</param>
+    /// <returns>A formatted storage key for the user code mapping.</returns>
+    string DeviceAuthorizationUserCodeKey(string userCode);
+
+    /// <summary>
+    /// Generates a storage key for rate limiting user code verification attempts.
+    /// </summary>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for the user code rate limit state.</returns>
+    string UserCodeRateLimitKey(string userCode);
+
+    /// <summary>
+    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// </summary>
+    /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
+    /// <returns>A formatted storage key for the IP rate limit state.</returns>
+    string IpRateLimitKey(string clientIdentifier);
 }
