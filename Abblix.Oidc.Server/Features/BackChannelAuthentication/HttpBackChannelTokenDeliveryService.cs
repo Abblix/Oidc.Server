@@ -21,9 +21,9 @@
 // info@abblix.com
 
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -60,7 +60,7 @@ public class HttpBackChannelTokenDeliveryService(
                 AuthenticationRequestId = authenticationRequestId,
                 AccessToken = tokenResponse.AccessToken.EncodedJwt,
                 TokenType = tokenResponse.TokenType,
-                ExpiresIn = (int)tokenResponse.ExpiresIn.TotalSeconds,
+                ExpiresIn = tokenResponse.ExpiresIn,
                 IdToken = tokenResponse.IdToken?.EncodedJwt,
                 RefreshToken = tokenResponse.RefreshToken?.EncodedJwt,
             };
@@ -98,48 +98,5 @@ public class HttpBackChannelTokenDeliveryService(
                 clientNotificationEndpoint,
                 authenticationRequestId);
         }
-    }
-
-    /// <summary>
-    /// Represents the token payload sent to the client in push mode.
-    /// </summary>
-    private record BackChannelTokenPushRequest
-    {
-        /// <summary>
-        /// The authentication request identifier.
-        /// </summary>
-        [JsonPropertyName("auth_req_id")]
-        public required string AuthenticationRequestId { get; init; }
-
-        /// <summary>
-        /// The access token issued by the authorization server.
-        /// </summary>
-        [JsonPropertyName("access_token")]
-        public required string AccessToken { get; init; }
-
-        /// <summary>
-        /// The type of the token issued (typically "Bearer").
-        /// </summary>
-        [JsonPropertyName("token_type")]
-        public required string TokenType { get; init; }
-
-        /// <summary>
-        /// The lifetime in seconds of the access token.
-        /// </summary>
-        [JsonPropertyName("expires_in")]
-        public required int ExpiresIn { get; init; }
-
-        /// <summary>
-        /// The ID token containing authentication information and validation hashes.
-        /// Required in push mode per CIBA specification.
-        /// </summary>
-        [JsonPropertyName("id_token")]
-        public string? IdToken { get; init; }
-
-        /// <summary>
-        /// The refresh token, if issued.
-        /// </summary>
-        [JsonPropertyName("refresh_token")]
-        public string? RefreshToken { get; init; }
     }
 }
