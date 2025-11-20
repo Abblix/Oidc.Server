@@ -107,4 +107,14 @@ public record BackChannelAuthenticationOptions
     /// for clients configured to require it.
     /// </remarks>
     public bool UserCodeParameterSupported { get; set; } = false;
+
+    /// <summary>
+    /// Specifies the lifetime for HTTP client handlers used in ping mode notifications.
+    /// This controls how long HttpClient instances are pooled before being recreated.
+    /// </summary>
+    /// <remarks>
+    /// Default is 5 minutes. Shorter lifetimes help with DNS changes and connection pool refresh,
+    /// but may impact performance. Longer lifetimes reduce overhead but may cause stale connections.
+    /// </remarks>
+    public TimeSpan NotificationHttpClientHandlerLifetime { get; set; } = TimeSpan.FromMinutes(5);
 }

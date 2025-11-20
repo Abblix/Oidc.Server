@@ -89,7 +89,10 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task AuthenticatedRequest_ShouldReturnGrantAndRemoveFromStorage()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -359,7 +362,10 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task AuthenticatedRequest_ShouldRemoveFromStorageOnlyOnce()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -494,5 +500,155 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that in poll mode, authenticated requests are removed from storage immediately
+    /// after successful token retrieval, as per CIBA spec for poll mode behavior.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PollMode_RemovesFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that in ping mode, authenticated requests are NOT removed from storage
+    /// after token retrieval. This allows clients to retrieve tokens after receiving the ping notification,
+    /// and supports potential retry scenarios.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PingMode_DoesNotRemoveFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that in push mode (future implementation), authenticated requests are NOT removed
+    /// from storage, similar to ping mode behavior.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PushMode_DoesNotRemoveFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that when BackChannelTokenDeliveryMode is null (default/unspecified),
+    /// the handler does not remove from storage, treating it conservatively.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_NullDeliveryMode_DoesNotRemoveFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = null,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }

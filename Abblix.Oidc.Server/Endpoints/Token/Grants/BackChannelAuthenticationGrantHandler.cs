@@ -82,9 +82,14 @@ public class BackChannelAuthenticationGrantHandler(
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         switch (authenticationRequest)
         {
-            // If the user has been authenticated, remove the request and return the authorized grant
+            // If the user has been authenticated, return the authorized grant
             case { Status: BackChannelAuthenticationStatus.Authenticated, AuthorizedGrant: { } authorizedGrant }:
-                await storage.RemoveAsync(request.AuthenticationRequestId);
+                // In poll mode, remove immediately after token retrieval
+                // In ping mode, keep until client retrieves tokens (allows single notification, multiple retrievals)
+                if (clientInfo.BackChannelTokenDeliveryMode == BackchannelTokenDeliveryModes.Poll)
+                {
+                    await storage.RemoveAsync(request.AuthenticationRequestId);
+                }
                 return authorizedGrant;
 
             // If the request is not found or has expired, return an error indicating token expiration

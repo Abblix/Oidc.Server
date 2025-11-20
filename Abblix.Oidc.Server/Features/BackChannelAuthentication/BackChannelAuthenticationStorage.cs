@@ -67,8 +67,30 @@ public class BackChannelAuthenticationStorage(
 	/// otherwise, null.
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId)
-		=> storage.GetAsync<BackChannelAuthenticationRequest>(
-			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId), true);
+	{
+		return storage.GetAsync<BackChannelAuthenticationRequest>(
+			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
+			true);
+	}
+
+	/// <summary>
+	/// Updates an existing backchannel authentication request in storage.
+	/// Used in ping mode to update request status when user completes authentication.
+	/// </summary>
+	/// <param name="requestId">The unique identifier of the authentication request to update.</param>
+	/// <param name="request">The updated authentication request data.</param>
+	/// <param name="expiresIn">The duration after which the request expires.</param>
+	/// <returns>A task that completes when the request is updated in storage.</returns>
+	public Task UpdateAsync(
+		string requestId,
+		BackChannelAuthenticationRequest request,
+		TimeSpan expiresIn)
+	{
+		return storage.SetAsync(
+			keyFactory.BackChannelAuthenticationRequestKey(requestId),
+			request,
+			new() { AbsoluteExpirationRelativeToNow = expiresIn });
+	}
 
 	/// <summary>
 	/// Removes a backchannel authentication request from storage using its unique identifier.

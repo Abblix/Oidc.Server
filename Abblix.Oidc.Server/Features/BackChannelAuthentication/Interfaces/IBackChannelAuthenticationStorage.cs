@@ -51,6 +51,19 @@ public interface IBackChannelAuthenticationStorage
 	Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId);
 
 	/// <summary>
+	/// Updates an existing backchannel authentication request in storage.
+	/// Used in ping mode to update request status when user completes authentication.
+	/// </summary>
+	/// <param name="requestId">The unique identifier of the authentication request to update.</param>
+	/// <param name="request">The updated authentication request data.</param>
+	/// <param name="expiresIn">The duration after which the request expires.</param>
+	/// <returns>A task that completes when the request is updated in storage.</returns>
+	Task UpdateAsync(
+		string requestId,
+		BackChannelAuthenticationRequest request,
+		TimeSpan expiresIn);
+
+	/// <summary>
 	/// Removes a backchannel authentication request from the storage system using its unique identifier.
 	/// This method allows for cleanup of expired or completed authentication requests.
 	/// </summary>

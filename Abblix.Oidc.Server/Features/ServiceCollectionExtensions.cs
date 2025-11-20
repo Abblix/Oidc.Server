@@ -50,6 +50,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features;
@@ -427,6 +428,19 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
         services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        services.TryAddSingleton<IBackChannelNotificationService, HttpBackChannelNotificationService>();
+        services.TryAddSingleton<BackChannelAuthenticationNotifier>();
+
+        // Register HTTP client for ping mode notifications with configurable handler lifetime
+        // Use configuration callback to get handler lifetime from OidcOptions
+        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpBackChannelNotificationService))
+            .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
+            {
+                httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
+            });
+
+        services.AddHttpClient(nameof(HttpBackChannelNotificationService));
+
         return services;
     }
 

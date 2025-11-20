@@ -47,4 +47,16 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant)
     /// Defaults to Pending, reflecting that the request has not yet been resolved.
     /// </summary>
     public BackChannelAuthenticationStatus Status { get; set; } = BackChannelAuthenticationStatus.Pending;
+
+    /// <summary>
+    /// The client notification endpoint for ping mode.
+    /// Populated from client configuration when ping mode is used.
+    /// </summary>
+    public Uri? ClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The client notification token for ping mode.
+    /// Provided by the client in the authentication request for secure notification delivery.
+    /// </summary>
+    public string? ClientNotificationToken { get; set; }
 }

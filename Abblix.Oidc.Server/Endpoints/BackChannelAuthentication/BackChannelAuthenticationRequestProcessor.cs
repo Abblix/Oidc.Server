@@ -99,13 +99,21 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
-		var authenticationRequestId = await storage.StoreAsync(
-			new BackChannelAuthenticationRequest(authorizedGrant)
-			{
-				Status = BackChannelAuthenticationStatus.Pending,
-				NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
-			},
-			request.ExpiresIn);
+		// Create authentication request with ping mode notification details if applicable
+		var backChannelRequest = new BackChannelAuthenticationRequest(authorizedGrant)
+		{
+			Status = BackChannelAuthenticationStatus.Pending,
+			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
+		};
+
+		// Store notification details for ping mode
+		if (request.ClientInfo.BackChannelTokenDeliveryMode == BackchannelTokenDeliveryModes.Ping)
+		{
+			backChannelRequest.ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint;
+			backChannelRequest.ClientNotificationToken = request.Model.ClientNotificationToken;
+		}
+
+		var authenticationRequestId = await storage.StoreAsync(backChannelRequest, request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{
