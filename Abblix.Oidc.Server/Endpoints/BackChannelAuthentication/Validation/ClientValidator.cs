@@ -60,6 +60,14 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
         }
 
+        if (string.IsNullOrEmpty(clientInfo.BackChannelTokenDeliveryMode))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidClient,
+                "The client is not properly configured for backchannel authentication. " +
+                "A token delivery mode (poll, ping, or push) must be specified.");
+        }
+
         context.ClientInfo = clientInfo;
         return null;
     }

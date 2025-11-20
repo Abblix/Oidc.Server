@@ -58,6 +58,19 @@ public record BackChannelAuthenticationOptions
     public bool UseLongPolling { get; set; } = false;
 
     /// <summary>
+    /// Specifies the maximum time a long-polling request will wait for authentication status changes.
+    /// This timeout balances responsiveness (shorter timeout) vs server load (longer timeout).
+    /// Default is 30 seconds.
+    /// </summary>
+    /// <remarks>
+    /// When a client polls for tokens while authentication is pending and long-polling is enabled,
+    /// the server holds the connection open for up to this duration. If authentication completes
+    /// during this window, the response is returned immediately. Otherwise, authorization_pending
+    /// is returned after the timeout.
+    /// </remarks>
+    public TimeSpan LongPollingTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Specifies the length of authentication request identifiers used by the OIDC server.
     /// This value ensures that each backchannel authentication request is uniquely identified.
     /// Per CIBA specification, the auth_req_id MUST have a minimum entropy of 128 bits (16 bytes).
@@ -107,4 +120,14 @@ public record BackChannelAuthenticationOptions
     /// for clients configured to require it.
     /// </remarks>
     public bool UserCodeParameterSupported { get; set; } = false;
+
+    /// <summary>
+    /// Specifies the lifetime for HTTP client handlers used in ping mode notifications.
+    /// This controls how long HttpClient instances are pooled before being recreated.
+    /// </summary>
+    /// <remarks>
+    /// Default is 5 minutes. Shorter lifetimes help with DNS changes and connection pool refresh,
+    /// but may impact performance. Longer lifetimes reduce overhead but may cause stale connections.
+    /// </remarks>
+    public TimeSpan NotificationHttpClientHandlerLifetime { get; set; } = TimeSpan.FromMinutes(5);
 }

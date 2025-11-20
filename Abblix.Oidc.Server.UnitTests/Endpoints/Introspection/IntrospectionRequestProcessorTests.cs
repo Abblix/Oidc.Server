@@ -116,7 +116,7 @@ public class IntrospectionRequestProcessorTests
     {
         // Arrange
         var request = CreateIntrospectionRequest();
-        var validRequest = CreateValidIntrospectionRequest(request, null);
+        var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -135,7 +135,7 @@ public class IntrospectionRequestProcessorTests
     {
         // Arrange
         var request = CreateIntrospectionRequest();
-        var validRequest = CreateValidIntrospectionRequest(request, null);
+        var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -332,7 +332,7 @@ public class IntrospectionRequestProcessorTests
     {
         // Arrange
         var request = CreateIntrospectionRequest();
-        var validRequest = CreateValidIntrospectionRequest(request, null);
+        var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);

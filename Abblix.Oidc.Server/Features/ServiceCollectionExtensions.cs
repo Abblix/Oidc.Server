@@ -23,10 +23,13 @@
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -38,11 +41,11 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -50,6 +53,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features;
@@ -427,6 +431,54 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
         services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        services.TryAddSingleton<IBackChannelNotificationService, HttpBackChannelNotificationService>();
+        services.TryAddSingleton<IBackChannelTokenDeliveryService, HttpBackChannelTokenDeliveryService>();
+
+        // Register mode-specific notifiers as keyed services
+        services.TryAddKeyedSingleton<AuthenticationNotifier, PollModeNotifier>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedSingleton<AuthenticationNotifier, PingModeNotifier>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedSingleton<AuthenticationNotifier, PushModeNotifier>(BackchannelTokenDeliveryModes.Push);
+
+        // Register composite notifier that automatically selects the appropriate mode-specific notifier
+        services.TryAddSingleton<IBackChannelAuthenticationNotifier, BackChannelAuthenticationNotifier>();
+
+        // Register mode-specific grant processors as keyed services
+        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PingModeGrantProcessor>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PushModeGrantProcessor>(BackchannelTokenDeliveryModes.Push);
+
+        // Register long-polling status notifier if long-polling is enabled
+        // This service is optional - if not registered, long-polling will be disabled
+        services.TryAddSingleton<IBackChannelAuthenticationStatusNotifier>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<OidcOptions>>();
+            if (options.Value.BackChannelAuthentication.UseLongPolling)
+            {
+                var logger = sp.GetRequiredService<ILogger<InMemoryBackChannelAuthenticationStatusNotifier>>();
+                return new InMemoryBackChannelAuthenticationStatusNotifier(logger);
+            }
+            return null!;
+        });
+
+        // Register HTTP client for ping mode notifications with configurable handler lifetime
+        // Use configuration callback to get handler lifetime from OidcOptions
+        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpBackChannelNotificationService))
+            .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
+            {
+                httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
+            });
+
+        services.AddHttpClient(nameof(HttpBackChannelNotificationService));
+
+        // Register HTTP client for push mode token delivery with same configurable handler lifetime
+        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpBackChannelTokenDeliveryService))
+            .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
+            {
+                httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
+            });
+
+        services.AddHttpClient(nameof(HttpBackChannelTokenDeliveryService));
+
         return services;
     }
 

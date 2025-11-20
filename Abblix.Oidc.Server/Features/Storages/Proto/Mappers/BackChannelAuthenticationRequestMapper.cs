@@ -38,10 +38,11 @@ internal static class BackChannelAuthenticationRequestMapper
         {
             AuthorizedGrant = source.AuthorizedGrant.ToProto(),
             Status = ToProtoStatus(source.Status),
+            ExpiresAt = source.ExpiresAt.ToTimestamp(),
         };
 
         if (source.NextPollAt.HasValue)
-            proto.NextPollAt = Timestamp.FromDateTimeOffset(source.NextPollAt.Value);
+            proto.NextPollAt = source.NextPollAt.Value.ToTimestamp();
 
         return proto;
     }
@@ -52,9 +53,10 @@ internal static class BackChannelAuthenticationRequestMapper
     public static BackChannelAuthentication.BackChannelAuthenticationRequest FromProto(this BackChannelAuthenticationRequest source)
     {
         return new BackChannelAuthentication.BackChannelAuthenticationRequest(
-            source.AuthorizedGrant.FromProto())
+            source.AuthorizedGrant.FromProto(),
+            source.ExpiresAt.ToDateTimeOffset())
         {
-            NextPollAt = source.NextPollAt != null ? source.NextPollAt.ToDateTimeOffset() : null,
+            NextPollAt = source.NextPollAt?.ToDateTimeOffset(),
             Status = source.Status.FromProtoStatus(),
         };
     }

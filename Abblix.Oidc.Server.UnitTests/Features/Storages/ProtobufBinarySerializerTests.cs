@@ -297,7 +297,7 @@ public class ProtobufSerializerTests
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
         var context = new AuthorizationContext("client-123", new[] { "openid" }, null);
         var grant = new AuthorizedGrant(session, context);
-        var bcRequest = new BackChannelAuthenticationRequest(grant)
+        var bcRequest = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             NextPollAt = DateTimeOffset.UtcNow.AddSeconds(30),
             Status = status,

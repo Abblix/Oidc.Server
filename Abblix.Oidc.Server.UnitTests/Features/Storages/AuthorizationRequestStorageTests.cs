@@ -451,7 +451,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(expectedRequest);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(requestUri, false);
+        var result = await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         Assert.NotNull(result);
@@ -476,7 +476,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync((AuthorizationRequest?)null);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(requestUri, false);
+        var result = await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         Assert.Null(result);
@@ -501,7 +501,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri, false);
+        await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         _storage.Verify(
@@ -562,7 +562,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri, false);
+        await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         Assert.False(capturedShouldRemove);
@@ -587,7 +587,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri, false);
+        await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         _storage.Verify(
@@ -626,8 +626,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(uri1, false);
-        var result2 = await _requestStorage.TryGetAsync(uri2, false);
+        var result1 = await _requestStorage.TryGetAsync(uri1);
+        var result2 = await _requestStorage.TryGetAsync(uri2);
 
         // Assert
         Assert.NotEqual(uri1.OriginalString, uri2.OriginalString);
@@ -668,7 +668,7 @@ public class AuthorizationRequestStorageTests
 
         // Act
         var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri, false);
+        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -732,9 +732,9 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(requestUri, false);
-        var result2 = await _requestStorage.TryGetAsync(requestUri, false);
-        var result3 = await _requestStorage.TryGetAsync(requestUri, false);
+        var result1 = await _requestStorage.TryGetAsync(requestUri);
+        var result2 = await _requestStorage.TryGetAsync(requestUri);
+        var result3 = await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         Assert.Same(request, result1);
@@ -828,8 +828,8 @@ public class AuthorizationRequestStorageTests
         // Act
         var store1 = await _requestStorage.StoreAsync(request1, expiresIn);
         var store2 = await _requestStorage.StoreAsync(request2, expiresIn);
-        var get1 = await _requestStorage.TryGetAsync(store1.RequestUri, false);
-        var get2 = await _requestStorage.TryGetAsync(store2.RequestUri, false);
+        var get1 = await _requestStorage.TryGetAsync(store1.RequestUri);
+        var get2 = await _requestStorage.TryGetAsync(store2.RequestUri);
 
         // Assert
         Assert.Same(request1, get1);
@@ -865,8 +865,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(uri1, false);
-        var result2 = await _requestStorage.TryGetAsync(uri2, false);
+        var result1 = await _requestStorage.TryGetAsync(uri1);
+        var result2 = await _requestStorage.TryGetAsync(uri2);
 
         // Assert
         Assert.Same(request1, result1);
@@ -909,9 +909,9 @@ public class AuthorizationRequestStorageTests
 
         // Act
         await _requestStorage.StoreAsync(request1, expiresIn);
-        var getResult1 = await _requestStorage.TryGetAsync(requestUri, false);
+        var getResult1 = await _requestStorage.TryGetAsync(requestUri);
         await _requestStorage.StoreAsync(request2, expiresIn);
-        var getResult2 = await _requestStorage.TryGetAsync(requestUri, false);
+        var getResult2 = await _requestStorage.TryGetAsync(requestUri);
 
         // Assert
         Assert.Same(request1, getResult1);
@@ -958,7 +958,7 @@ public class AuthorizationRequestStorageTests
 
         // Act
         var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri, false);
+        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -1001,7 +1001,7 @@ public class AuthorizationRequestStorageTests
 
         // Act
         var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri, false);
+        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -1109,8 +1109,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var urnResult = await _requestStorage.TryGetAsync(urnUri, false);
-        var httpsResult = await _requestStorage.TryGetAsync(httpsUri, false);
+        var urnResult = await _requestStorage.TryGetAsync(urnUri);
+        var httpsResult = await _requestStorage.TryGetAsync(httpsUri);
 
         // Assert
         Assert.Same(request, urnResult);
@@ -1137,7 +1137,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(complexUri, false);
+        var result = await _requestStorage.TryGetAsync(complexUri);
 
         // Assert
         Assert.Same(request, result);

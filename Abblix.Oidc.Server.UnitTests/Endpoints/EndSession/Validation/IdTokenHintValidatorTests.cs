@@ -73,7 +73,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithValidIdTokenAndMatchingClientId_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext("valid_id_token", "client_123");
+        var context = CreateContext("valid_id_token");
         var idToken = CreateValidIdToken("client_123");
 
         _jwtValidator
@@ -176,7 +176,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithMismatchedClientId_ShouldReturnError()
     {
         // Arrange
-        var context = CreateContext("valid_id_token", "client_123");
+        var context = CreateContext("valid_id_token");
         var idToken = CreateValidIdToken("different_client");
 
         _jwtValidator
@@ -202,7 +202,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithInvalidIdToken_ShouldReturnError()
     {
         // Arrange
-        var context = CreateContext("invalid_id_token", "client_123");
+        var context = CreateContext("invalid_id_token");
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Token is malformed");
 
         _jwtValidator
@@ -228,7 +228,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithoutIdTokenHint_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext(idTokenHint: null, "client_123");
+        var context = CreateContext(idTokenHint: null);
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -246,7 +246,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithEmptyIdTokenHint_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext(idTokenHint: "", "client_123");
+        var context = CreateContext(idTokenHint: "");
 
         // Act
         var error = await _validator.ValidateAsync(context);
@@ -264,7 +264,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_ShouldValidateWithoutLifetimeCheck()
     {
         // Arrange
-        var context = CreateContext("id_token", "client_123");
+        var context = CreateContext("id_token");
         var idToken = CreateValidIdToken("client_123");
 
         ValidationOptions? capturedOptions = null;
@@ -289,7 +289,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldSetIdTokenInContext()
     {
         // Arrange
-        var context = CreateContext("id_token", "client_123");
+        var context = CreateContext("id_token");
         var idToken = CreateValidIdToken("client_123");
 
         _jwtValidator
@@ -338,7 +338,7 @@ public class IdTokenHintValidatorTests
     public async Task ValidateAsync_WithMultipleAudiences_ShouldFindMatchingClientId()
     {
         // Arrange
-        var context = CreateContext("id_token", "client_123");
+        var context = CreateContext("id_token");
         var idToken = CreateValidIdToken("client_456", "client_123", "client_789");
 
         _jwtValidator

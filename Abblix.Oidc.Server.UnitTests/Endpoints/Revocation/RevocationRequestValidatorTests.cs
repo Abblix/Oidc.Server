@@ -91,9 +91,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -185,7 +185,7 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
         var token = CreateValidJsonWebToken("different_client");
 
@@ -217,9 +217,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         var callOrder = new System.Collections.Generic.List<string>();
 
@@ -275,9 +275,9 @@ public class RevocationRequestValidatorTests
         // Arrange
         var token = "specific_token_value_123";
         var revocationRequest = CreateRevocationRequest(token);
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var jwt = CreateValidJsonWebToken("client_123");
+        var jwt = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -303,9 +303,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -332,9 +332,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -361,9 +361,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
