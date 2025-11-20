@@ -91,9 +91,9 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -183,7 +183,7 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
         var token = CreateValidJsonWebToken("different_client");
 
@@ -215,9 +215,9 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         var callOrder = new System.Collections.Generic.List<string>();
 
@@ -273,9 +273,9 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var token = "specific_token_value_123";
         var introspectionRequest = CreateIntrospectionRequest(token);
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var jwt = CreateValidJsonWebToken("client_123");
+        var jwt = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -301,9 +301,9 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -330,9 +330,9 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -359,9 +359,9 @@ public class IntrospectionRequestValidatorTests
     {
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
-        var clientRequest = CreateClientRequest("client_123");
+        var clientRequest = CreateClientRequest();
         var clientInfo = new ClientInfo("client_123");
-        var token = CreateValidJsonWebToken("client_123");
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))

@@ -21,20 +21,27 @@
 // info@abblix.com
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
 using IBackChannelAuthenticationStorage = Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces.IBackChannelAuthenticationStorage;
+using IBackChannelAuthenticationStatusNotifier = Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces.IBackChannelAuthenticationStatusNotifier;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -61,10 +68,61 @@ public class BackChannelAuthenticationGrantHandlerTests
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
 
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = false,
+            }
+        });
+
+        var serviceProvider = CreateMockServiceProvider(_storage.Object);
+
         _handler = new BackChannelAuthenticationGrantHandler(
             _storage.Object,
             _parameterValidator.Object,
-            timeProvider.Object);
+            timeProvider.Object,
+            options,
+            serviceProvider);
+    }
+
+    private static IServiceProvider CreateMockServiceProvider(IBackChannelAuthenticationStorage storage)
+    {
+        return new TestServiceProvider(storage);
+    }
+
+    private class TestServiceProvider(IBackChannelAuthenticationStorage storage) : IKeyedServiceProvider
+    {
+        private readonly IBackChannelAuthenticationGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
+        private readonly IBackChannelAuthenticationGrantProcessor _pingProcessor = new PingModeGrantProcessor();
+        private readonly IBackChannelAuthenticationGrantProcessor _pushProcessor = new PushModeGrantProcessor();
+
+        public object? GetKeyedService(Type serviceType, object? serviceKey)
+        {
+            if (serviceType != typeof(IBackChannelAuthenticationGrantProcessor))
+                return null;
+
+            return serviceKey switch
+            {
+                BackchannelTokenDeliveryModes.Poll => _pollProcessor,
+                BackchannelTokenDeliveryModes.Ping => _pingProcessor,
+                BackchannelTokenDeliveryModes.Push => _pushProcessor,
+                null => _pingProcessor, // Default to ping mode (conservative - doesn't remove) for null
+                "" => _pingProcessor, // Default to ping mode for empty string
+                _ => null
+            };
+        }
+
+        public object GetRequiredKeyedService(Type serviceType, object? serviceKey)
+        {
+            return GetKeyedService(serviceType, serviceKey)
+                ?? throw new InvalidOperationException($"Service {serviceType} with key {serviceKey} not found");
+        }
+
+        public object? GetService(Type serviceType)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -89,7 +147,10 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task AuthenticatedRequest_ShouldReturnGrantAndRemoveFromStorage()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -99,7 +160,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -165,7 +226,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null)); // Original client
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending  // Changed to Pending
         };
@@ -202,7 +263,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -238,7 +299,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = null // No rate limiting
@@ -276,7 +337,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -310,7 +371,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Denied
         };
@@ -343,7 +404,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
         _parameterValidator.Verify(
@@ -359,7 +420,10 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task AuthenticatedRequest_ShouldRemoveFromStorageOnlyOnce()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -369,7 +433,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -403,7 +467,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -439,7 +503,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, sessionId, authTime, "backchannel"),
             new AuthorizationContext(ClientId, scope, null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -480,7 +544,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -494,5 +558,524 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that in poll mode, authenticated requests are removed from storage immediately
+    /// after successful token retrieval, as per CIBA spec for poll mode behavior.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PollMode_RemovesFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that in ping mode, authenticated requests are NOT removed from storage
+    /// after token retrieval. This allows clients to retrieve tokens after receiving the ping notification,
+    /// and supports potential retry scenarios.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PingMode_DoesNotRemoveFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that push mode clients are rejected when attempting to poll the token endpoint.
+    /// Per CIBA specification section 10.3, push mode clients receive tokens via push delivery
+    /// and must not poll the token endpoint.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_PushMode_ReturnsInvalidGrantError()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that when BackChannelTokenDeliveryMode is null (default/unspecified),
+    /// the handler does not remove from storage, treating it conservatively.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_NullDeliveryMode_DoesNotRemoveFromStorage()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = null,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that when long-polling is enabled and status changes during wait,
+    /// the handler returns tokens immediately without the full polling interval delay.
+    /// </summary>
+    [Fact]
+    public async Task LongPolling_StatusChangeDuringWait_ReturnsTokensImmediately()
+    {
+        // Arrange
+        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
+        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+
+        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = true,
+                LongPollingTimeout = TimeSpan.FromSeconds(30),
+            }
+        });
+
+        var serviceProvider = CreateMockServiceProvider(storage.Object);
+
+        var handler = new BackChannelAuthenticationGrantHandler(
+            storage.Object,
+            parameterValidator.Object,
+            timeProvider.Object,
+            options,
+            serviceProvider,
+            statusNotifier.Object);
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending
+        };
+
+        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        // First call returns pending, second call (after status change) returns authenticated
+        storage.SetupSequence(s => s.TryGetAsync(AuthReqId))
+            .ReturnsAsync(pendingRequest)
+            .ReturnsAsync(authenticatedRequest);
+
+        // Simulate immediate status change notification (authenticated within 100ms)
+        statusNotifier
+            .Setup(n => n.WaitForStatusChangeAsync(
+                AuthReqId,
+                TimeSpan.FromSeconds(30),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant);
+        Assert.Equal(UserId, grant.AuthSession.Subject);
+
+        // Verify status notifier was called with correct timeout
+        statusNotifier.Verify(
+            n => n.WaitForStatusChangeAsync(AuthReqId, TimeSpan.FromSeconds(30), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // Verify storage was checked twice: initial pending check, then re-check after notification
+        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Exactly(2));
+
+        // Verify storage removal in poll mode
+        storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that when long-polling is enabled but timeout occurs before status change,
+    /// the handler returns authorization_pending error.
+    /// </summary>
+    [Fact]
+    public async Task LongPolling_TimeoutBeforeStatusChange_ReturnsAuthorizationPending()
+    {
+        // Arrange
+        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
+        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+
+        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = true,
+                LongPollingTimeout = TimeSpan.FromSeconds(30),
+            }
+        });
+
+        var serviceProvider = CreateMockServiceProvider(storage.Object);
+
+        var handler = new BackChannelAuthenticationGrantHandler(
+            storage.Object,
+            parameterValidator.Object,
+            timeProvider.Object,
+            options,
+            serviceProvider,
+            statusNotifier.Object);
+
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending
+        };
+
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+
+        // Simulate timeout (no status change within 30 seconds)
+        statusNotifier
+            .Setup(n => n.WaitForStatusChangeAsync(
+                AuthReqId,
+                TimeSpan.FromSeconds(30),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+        Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+
+        // Verify storage was only checked once (initial check, no re-check after timeout)
+        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that when long-polling is disabled (UseLongPolling=false),
+    /// the handler immediately returns authorization_pending without waiting.
+    /// </summary>
+    [Fact]
+    public async Task ShortPolling_PendingRequest_ReturnsImmediately()
+    {
+        // Arrange - handler from constructor has UseLongPolling=false
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+
+        // Verify storage was only checked once (no waiting, immediate return)
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that when status notifier is null (long-polling not configured),
+    /// the handler behaves as short-polling even if UseLongPolling=true.
+    /// </summary>
+    [Fact]
+    public async Task LongPolling_NullStatusNotifier_BehavesAsShortPolling()
+    {
+        // Arrange
+        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
+        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = true, // Enabled but notifier is null
+                LongPollingTimeout = TimeSpan.FromSeconds(30),
+            }
+        });
+
+        var serviceProvider = CreateMockServiceProvider(storage.Object);
+
+        var handler = new BackChannelAuthenticationGrantHandler(
+            storage.Object,
+            parameterValidator.Object,
+            timeProvider.Object,
+            options,
+            serviceProvider); // Status notifier is null
+
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending
+        };
+
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+
+        // Verify storage was only checked once (no waiting despite UseLongPolling=true)
+        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that long-polling respects the configured timeout value from options.
+    /// </summary>
+    [Fact]
+    public async Task LongPolling_UsesConfiguredTimeout()
+    {
+        // Arrange
+        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
+        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+
+        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+
+        var customTimeout = TimeSpan.FromSeconds(45);
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = true,
+                LongPollingTimeout = customTimeout,
+            }
+        });
+
+        var serviceProvider = CreateMockServiceProvider(storage.Object);
+
+        var handler = new BackChannelAuthenticationGrantHandler(
+            storage.Object,
+            parameterValidator.Object,
+            timeProvider.Object,
+            options,
+            serviceProvider,
+            statusNotifier.Object);
+
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending
+        };
+
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+
+        statusNotifier
+            .Setup(n => n.WaitForStatusChangeAsync(
+                AuthReqId,
+                customTimeout,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert - verify the custom timeout was used
+        statusNotifier.Verify(
+            n => n.WaitForStatusChangeAsync(AuthReqId, customTimeout, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that push mode clients are rejected when they attempt to poll the token endpoint.
+    /// Per CIBA specification, push mode clients receive tokens via push delivery and must not poll.
+    /// </summary>
+    [Fact]
+    public async Task PushModeClient_AttemptsToPoll_ReturnsInvalidGrantError()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        _parameterValidator
+            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authenticatedRequest);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("must not poll", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+
+        // Verify storage was checked but not removed (push mode clients shouldn't access token endpoint)
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }

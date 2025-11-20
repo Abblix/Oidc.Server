@@ -116,7 +116,7 @@ public class RevocationRequestProcessorTests
     {
         // Arrange
         var request = CreateRevocationRequest();
-        var validRequest = CreateValidRevocationRequest(request, null);
+        var validRequest = CreateValidRevocationRequest(request);
         var now = DateTimeOffset.UtcNow;
 
         _clock.Setup(c => c.GetUtcNow()).Returns(now);
@@ -369,7 +369,7 @@ public class RevocationRequestProcessorTests
     {
         // Arrange
         var request = CreateRevocationRequest();
-        var validRequest = CreateValidRevocationRequest(request, null);
+        var validRequest = CreateValidRevocationRequest(request);
         var now = DateTimeOffset.UtcNow;
 
         _clock.Setup(c => c.GetUtcNow()).Returns(now);

@@ -31,7 +31,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
-using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
@@ -99,13 +98,19 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
-		var authenticationRequestId = await storage.StoreAsync(
-			new BackChannelAuthenticationRequest(authorizedGrant)
-			{
-				Status = BackChannelAuthenticationStatus.Pending,
-				NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
-			},
-			request.ExpiresIn);
+		// Store authentication request with notification endpoint and token (used by ping and push modes)
+		var expiresAt = timeProvider.GetUtcNow() + request.ExpiresIn;
+		var backChannelRequest = new Features.BackChannelAuthentication.BackChannelAuthenticationRequest(
+			authorizedGrant,
+			expiresAt)
+		{
+			Status = BackChannelAuthenticationStatus.Pending,
+			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
+			ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint,
+			ClientNotificationToken = request.Model.ClientNotificationToken,
+		};
+
+		var authenticationRequestId = await storage.StoreAsync(backChannelRequest, request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{

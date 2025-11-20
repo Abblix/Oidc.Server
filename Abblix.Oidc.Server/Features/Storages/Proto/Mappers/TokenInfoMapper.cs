@@ -37,7 +37,7 @@ internal static class TokenInfoMapper
         return new TokenInfo
         {
             JwtId = source.JwtId,
-            ExpiresAt = Timestamp.FromDateTimeOffset(source.ExpiresAt),
+            ExpiresAt = source.ExpiresAt.ToTimestamp(),
         };
     }
 

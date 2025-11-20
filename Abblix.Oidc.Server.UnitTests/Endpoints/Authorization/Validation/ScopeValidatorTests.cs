@@ -166,7 +166,6 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.AuthorizationCode,
             offlineAccessAllowed: true);
 
         // Act
@@ -232,7 +231,6 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.AuthorizationCode,
             offlineAccessAllowed: false);
 
         // Act
@@ -255,9 +253,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.AuthorizationCode,
-            offlineAccessAllowed: null);
+            [Scopes.OpenId, Scopes.OfflineAccess]);
 
         // Act
         var result = await _validator.ValidateAsync(context);

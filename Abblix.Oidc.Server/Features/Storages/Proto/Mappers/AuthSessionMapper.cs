@@ -39,7 +39,7 @@ internal static class AuthSessionMapper
         {
             Subject = source.Subject,
             SessionId = source.SessionId,
-            AuthenticationTime = Timestamp.FromDateTimeOffset(source.AuthenticationTime),
+            AuthenticationTime = source.AuthenticationTime.ToTimestamp(),
             IdentityProvider = source.IdentityProvider ?? string.Empty,
         };
 

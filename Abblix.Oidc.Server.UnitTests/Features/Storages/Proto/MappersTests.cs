@@ -426,7 +426,7 @@ public class MappersTests
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
         var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant) { Status = status };
+        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)) { Status = status };
 
         // Act
         var proto = request.ToProto();
@@ -444,7 +444,7 @@ public class MappersTests
         var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
         var nextPoll = DateTimeOffset.UtcNow.AddSeconds(45);
-        var request = new BackChannelAuthenticationRequest(grant)
+        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             NextPollAt = nextPoll,
             Status = BackChannelAuthenticationStatus.Pending,
@@ -469,7 +469,7 @@ public class MappersTests
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
         var context = new AuthorizationContext("client-123", ["openid"], null);
         var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant); // NextPollAt is null
+        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)); // NextPollAt is null
 
         // Act
         var proto = request.ToProto();

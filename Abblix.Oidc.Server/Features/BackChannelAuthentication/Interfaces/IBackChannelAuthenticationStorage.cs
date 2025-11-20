@@ -51,6 +51,19 @@ public interface IBackChannelAuthenticationStorage
 	Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId);
 
 	/// <summary>
+	/// Updates an existing backchannel authentication request in storage.
+	/// Used in ping mode to update request status when user completes authentication.
+	/// </summary>
+	/// <param name="requestId">The unique identifier of the authentication request to update.</param>
+	/// <param name="request">The updated authentication request data.</param>
+	/// <param name="expiresIn">The duration after which the request expires.</param>
+	/// <returns>A task that completes when the request is updated in storage.</returns>
+	Task UpdateAsync(
+		string requestId,
+		BackChannelAuthenticationRequest request,
+		TimeSpan expiresIn);
+
+	/// <summary>
 	/// Removes a backchannel authentication request from the storage system using its unique identifier.
 	/// This method allows for cleanup of expired or completed authentication requests.
 	/// </summary>
@@ -59,4 +72,16 @@ public interface IBackChannelAuthenticationStorage
 	/// A task that completes when the request is removed from storage.
 	/// </returns>
 	Task RemoveAsync(string authenticationRequestId);
+
+	/// <summary>
+	/// Atomically retrieves and removes a backchannel authentication request from storage.
+	/// This operation prevents race conditions where multiple concurrent requests could retrieve the same
+	/// authentication request before it's removed (poll mode double-retrieval vulnerability).
+	/// </summary>
+	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
+	/// <returns>
+	/// A task that returns the authentication request if it existed and was successfully removed;
+	/// otherwise, null if the request was not found or already removed.
+	/// </returns>
+	Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId);
 }

@@ -38,9 +38,7 @@ public static class DistributedCacheExtensions
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
 	///   <item><term>Step 1:</term> Get the value from cache</item>
-	///   <item><term>Step 2:</term> Write a unique lock token to "lock:{key}"</item>
-	///   <item><term>Step 3:</term> Remove the value from cache</item>
-	///   <item><term>Step 4:</term> Read back the lock token and verify it matches ours</item>
+	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
 	/// </list>
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
@@ -54,8 +52,9 @@ public static class DistributedCacheExtensions
 	/// cleaning it up (after step 4).
 	/// </para>
 	/// <para>
-	/// <strong>Performance:</strong> This operation performs 4 cache operations instead of 1, so it has higher
-	/// latency than native atomic operations. However, it works with any IDistributedCache implementation.
+	/// <strong>Performance:</strong> This operation performs 5 cache operations (1 get + 4 from TryRemoveAsync),
+	/// so it has higher latency than native atomic operations. However, it works with any IDistributedCache
+	/// implementation.
 	/// </para>
 	/// </remarks>
 	/// <param name="cache">The distributed cache instance.</param>
@@ -100,9 +99,10 @@ public static class DistributedCacheExtensions
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
-	///   <item><term>Step 1:</term> Write a unique lock token to "lock:{key}"</item>
+	///   <item><term>Step 1:</term> Write a unique lock token to fully-qualified lock key</item>
 	///   <item><term>Step 2:</term> Remove the value from cache</item>
 	///   <item><term>Step 3:</term> Read back the lock token and verify it matches ours</item>
+	///   <item><term>Step 4:</term> Clean up the lock key</item>
 	/// </list>
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
@@ -137,9 +137,10 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
-		// Write our unique lock token
 		// Use fully qualified type name to avoid collisions with application keys
-		var lockKey = $"Abblix.Utils.DistributedCacheExtensions:TryRemoveAsync:{key}";
+		var lockKey = $"{nameof(Abblix)}.{nameof(Utils)}.{nameof(DistributedCacheExtensions)}:{nameof(TryRemoveAsync)}:{key}";
+
+		// Write our unique lock token
 		var ourLockToken = Guid.NewGuid().ToByteArray();
 		await cache.SetAsync(
 			lockKey,

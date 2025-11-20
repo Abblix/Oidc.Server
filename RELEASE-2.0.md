@@ -124,6 +124,51 @@ The original enum values could overlap when combined using bitwise operations, p
 
 ## New Features
 
+### CIBA Ping and Push Modes - Complete Delivery Mode Implementation
+
+**What It Enables:**
+
+Version 2.0 completes the Client-Initiated Backchannel Authentication (CIBA) implementation by adding ping mode status notification infrastructure and push mode token delivery, providing all three CIBA delivery modes (poll, ping, and push).
+
+**Key Components:**
+
+- **Long-Polling Support**: Configurable long-polling for token endpoint in poll mode
+  - Holds polling requests until authentication completes or timeout expires (default: 30 seconds)
+  - Dramatically reduces server load by eliminating rapid repeated polling
+  - Cuts latency by returning immediately when authentication completes
+  - Optional feature controlled by `BackChannelAuthenticationOptions.UseLongPolling`
+
+- **Status Notification**: `IBackChannelAuthenticationStatusNotifier` interface with `InMemoryBackChannelAuthenticationStatusNotifier` implementation
+  - Enables real-time notification when authentication requests complete
+  - Powers long-polling functionality without repeatedly querying storage
+  - TaskCompletionSource-based async notification mechanism
+  - Thread-safe concurrent dictionary for managing multiple pending requests
+
+- **Token Delivery**: `IBackChannelTokenDeliveryService` interface with `HttpBackChannelTokenDeliveryService` implementation
+  - Abstraction for delivering tokens in push mode
+  - HTTP POST-based delivery to client notification endpoints
+  - Secure token transmission with client notification tokens
+
+- **Atomic Cache Operations**: `DistributedCacheExtensions.TryGetAndRemoveAsync()`
+  - 4-step last-write-wins protocol prevents race conditions
+  - Works across Redis, SQL Server, and in-memory cache implementations
+  - Comprehensive test coverage including 100-thread concurrency scenarios
+
+- **Strategy Pattern Refactoring**: Separate grant processors for poll/ping/push modes via keyed DI
+  - Eliminates conditional branching in grant handlers
+  - Makes adding new delivery modes straightforward
+  - Unified `BackChannelAuthenticationRequest` model with required `ExpiresAt`
+
+**Why This Matters:**
+
+CIBA's advanced delivery modes are critical for financial services and IoT scenarios where immediate notification is required when authentication completes.
+
+- **Long-polling** (available in poll mode) holds requests for up to 30 seconds instead of immediately returning "authorization_pending", dramatically reducing both server load and response latency for slow authentication scenarios
+- **Ping mode** enables efficient notification by telling clients at their callback endpoint the moment authentication completes, so they know exactly when to request tokens
+- **Push mode** goes further by delivering tokens directly to the client notification endpoint, eliminating the need for clients to make a separate token request at all
+
+These delivery modes are essential for real-time authentication scenarios where delays are unacceptable, such as payment authorization, IoT device provisioning, or mobile banking authentication.
+
 ### Client Credentials JWT Authentication (client_secret_jwt)
 
 **What It Does:**
