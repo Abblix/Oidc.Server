@@ -43,12 +43,14 @@ public class UserCodeGenerator(IOptions<OidcOptions> options) : IUserCodeGenerat
         var length = deviceAuthOptions.UserCodeLength;
         var alphabet = deviceAuthOptions.UserCodeAlphabet;
 
-        var randomBytes = RandomNumberGenerator.GetBytes(length);
         var chars = new char[length];
 
         for (var i = 0; i < length; i++)
         {
-            chars[i] = alphabet[randomBytes[i] % alphabet.Length];
+            // Use GetInt32 for uniform distribution without modulo bias
+            // RFC 8628 Section 6.1: User codes MUST contain only characters from a predefined character set
+            // with uniform random distribution for security
+            chars[i] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
         }
 
         return new string(chars);

@@ -69,6 +69,7 @@ public class ProtobufSerializer : IBinarySerializer
             Model.AuthorizationRequest authRequest => authRequest.ToProto(),
             BackChannelAuthenticationRequest bcRequest => bcRequest.ToProto(),
             DeviceAuthorizationRequest deviceRequest => deviceRequest.ToProto(),
+            Proto.RateLimitState rateLimitState => rateLimitState,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +
@@ -148,6 +149,12 @@ public class ProtobufSerializer : IBinarySerializer
         {
             var proto = Proto.DeviceAuthorizationRequest.Parser.ParseFrom(bytes);
             return (T)(object)proto.FromProto();
+        }
+
+        if (targetType == typeof(Proto.RateLimitState))
+        {
+            var proto = Proto.RateLimitState.Parser.ParseFrom(bytes);
+            return (T)(object)proto;
         }
 
         throw new InvalidOperationException(

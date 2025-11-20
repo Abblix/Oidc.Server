@@ -24,8 +24,11 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
 /// Represents the result of a user code verification attempt.
+/// This is a discriminated union with three concrete implementations.
 /// </summary>
+#pragma warning disable S2094 // Classes should not be empty
 public abstract record UserCodeVerificationResult;
+#pragma warning restore S2094
 
 /// <summary>
 /// Indicates that the user code was successfully verified and the request is pending authorization.
@@ -41,9 +44,9 @@ public record ValidUserCode(
 /// <summary>
 /// Indicates that the user code was not found or has expired.
 /// </summary>
-public record InvalidUserCode() : UserCodeVerificationResult;
+public record InvalidUserCode : UserCodeVerificationResult;
 
 /// <summary>
 /// Indicates that the user code has already been used (approved or denied).
 /// </summary>
-public record UserCodeAlreadyUsed() : UserCodeVerificationResult;
+public record UserCodeAlreadyUsed : UserCodeVerificationResult;

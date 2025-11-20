@@ -64,7 +64,7 @@ public record TokenRequest
 		GrantTypes.DeviceAuthorization,
 		GrantTypes.Implicit,
 		GrantTypes.ClientCredentials)]
-	public string GrantType { get; set; } = default!;
+	public string GrantType { get; set; } = null!;
 
 	/// <summary>
 	/// The authorization code received from the authorization server.

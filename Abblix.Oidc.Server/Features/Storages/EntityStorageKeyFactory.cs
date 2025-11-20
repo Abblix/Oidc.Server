@@ -75,4 +75,20 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <returns>A formatted storage key for the user code mapping.</returns>
     public string DeviceAuthorizationUserCodeKey(string userCode)
         => $"Abblix.Oidc.Server:UserCode:{userCode}";
+
+    /// <summary>
+    /// Generates a storage key for rate limiting user code verification attempts.
+    /// </summary>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for the user code rate limit state.</returns>
+    public string UserCodeRateLimitKey(string userCode)
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}";
+
+    /// <summary>
+    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// </summary>
+    /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
+    /// <returns>A formatted storage key for the IP rate limit state.</returns>
+    public string IpRateLimitKey(string clientIdentifier)
+        => $"Abblix.Oidc.Server:RateLimit:IP:{clientIdentifier}";
 }

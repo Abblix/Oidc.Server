@@ -28,6 +28,7 @@
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.28.2" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

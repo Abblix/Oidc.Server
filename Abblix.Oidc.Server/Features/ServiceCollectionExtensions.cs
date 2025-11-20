@@ -444,6 +444,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDeviceCodeGenerator, DeviceCodeGenerator>();
         services.TryAddSingleton<IUserCodeGenerator, UserCodeGenerator>();
         services.TryAddSingleton<IDeviceAuthorizationStorage, DeviceAuthorizationStorage>();
+        services.TryAddSingleton<IUserCodeRateLimiter, UserCodeRateLimiter>();
         services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
         return services;
     }

@@ -69,4 +69,18 @@ public interface IEntityStorageKeyFactory
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>A formatted storage key for the user code mapping.</returns>
     string DeviceAuthorizationUserCodeKey(string userCode);
+
+    /// <summary>
+    /// Generates a storage key for rate limiting user code verification attempts.
+    /// </summary>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for the user code rate limit state.</returns>
+    string UserCodeRateLimitKey(string userCode);
+
+    /// <summary>
+    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// </summary>
+    /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
+    /// <returns>A formatted storage key for the IP rate limit state.</returns>
+    string IpRateLimitKey(string clientIdentifier);
 }

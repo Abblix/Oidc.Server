@@ -57,9 +57,55 @@ public record DeviceAuthorizationOptions
     /// </summary>
     public string UserCodeAlphabet { get; set; } = "0123456789";
 
+    private Uri? _verificationUri;
+
     /// <summary>
     /// The user-facing URI where users can enter their user code.
     /// This should be short and easy to remember as users will manually type it.
+    /// MUST use HTTPS for security per RFC 8628 Section 6.1.
     /// </summary>
-    public required Uri VerificationUri { get; set; }
+    public required Uri VerificationUri
+    {
+        get => _verificationUri!;
+        set
+        {
+            if (!string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "The verification_uri MUST use HTTPS for security per RFC 8628 Section 6.1",
+                    nameof(VerificationUri));
+            }
+            _verificationUri = value;
+        }
+    }
+
+    /// <summary>
+    /// The maximum number of failed user code verification attempts before exponential backoff is applied.
+    /// Recommended by RFC 8628 Section 5.2 to prevent brute force attacks.
+    /// </summary>
+    public int MaxFailuresBeforeBackoff { get; set; } = 3;
+
+    /// <summary>
+    /// The maximum number of failed user code verification attempts allowed from a single IP address
+    /// within a one-minute sliding window. Prevents distributed brute force attacks.
+    /// </summary>
+    public int MaxIpFailuresPerMinute { get; set; } = 10;
+
+    /// <summary>
+    /// The duration of the sliding window for per-IP rate limiting.
+    /// Failed attempts outside this window are not counted toward the rate limit.
+    /// </summary>
+    public TimeSpan RateLimitSlidingWindow { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// The maximum duration for exponential backoff blocking.
+    /// Prevents indefinite blocking even with many failed attempts.
+    /// </summary>
+    public TimeSpan MaxBackoffDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// The expiration time for IP rate limit state in storage.
+    /// Should be longer than RateLimitSlidingWindow to prevent premature cleanup.
+    /// </summary>
+    public TimeSpan IpRateLimitStateExpiration { get; set; } = TimeSpan.FromMinutes(2);
 }

@@ -71,4 +71,15 @@ public interface IDeviceAuthorizationStorage
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A task that completes when the request is removed from storage.</returns>
     Task RemoveAsync(string deviceCode);
+
+    /// <summary>
+    /// Atomically attempts to remove a device authorization request by its device code.
+    /// This operation is thread-safe and returns whether the removal was successful.
+    /// </summary>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
+    /// <returns>
+    /// A task that returns true if the request was found and removed; false otherwise.
+    /// </returns>
+    Task<bool> TryRemoveAsync(string deviceCode, string userCode);
 }

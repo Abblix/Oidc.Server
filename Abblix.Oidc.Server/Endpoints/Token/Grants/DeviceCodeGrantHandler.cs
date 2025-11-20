@@ -70,36 +70,48 @@ public class DeviceCodeGrantHandler(
 
         switch (deviceRequest)
         {
-            // User has authorized the device
-            case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
-                await storage.RemoveAsync(request.DeviceCode);
-                return authorizedGrant;
-
             // Device code not found or expired
             case null:
-                return new OidcError(
-                    ErrorCodes.ExpiredToken,
-                    "The device code has expired");
+                return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
             // Device code belongs to different client
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:
-                return new OidcError(
-                    ErrorCodes.InvalidGrant,
-                    "The device code was issued to another client");
+                return new OidcError(ErrorCodes.InvalidGrant, "The device code was issued to another client");
 
-            // Polling too fast - increase the interval per RFC 8628 Section 3.5
+            // User has authorized the device - atomically claim the authorization
+            case { Status: DeviceAuthorizationStatus.Authorized }
+                when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
+
+                // Use atomic get-and-remove to prevent race conditions where two concurrent requests
+                // could both retrieve the authorized grant. Per RFC 8628 Section 3.5, each device code
+                // MUST only be exchanged for tokens once.
+
+                return new OidcError(
+                    ErrorCodes.ExpiredToken,
+                    "The device code has expired or was already used");
+
+            // User has authorized the device - return the authorized grant
+            case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
+                return authorizedGrant;
+
+            // Authorization still pending - check polling rate
             case { Status: DeviceAuthorizationStatus.Pending, NextPollAt: { } nextPollAt }
                 when timeProvider.GetUtcNow() < nextPollAt:
+
+                // Polling too fast - increase the interval per RFC 8628 Section 3.5
                 deviceRequest.NextPollAt = nextPollAt + pollingInterval;
                 await storage.UpdateAsync(request.DeviceCode, deviceRequest);
+
                 return new OidcError(
                     ErrorCodes.SlowDown,
                     "Polling too frequently. Increase the interval between requests.");
 
             // Authorization still pending - update next poll time
             case { Status: DeviceAuthorizationStatus.Pending }:
+
                 deviceRequest.NextPollAt = timeProvider.GetUtcNow() + pollingInterval;
                 await storage.UpdateAsync(request.DeviceCode, deviceRequest);
+
                 return new OidcError(
                     ErrorCodes.AuthorizationPending,
                     "The authorization request is still pending. The user has not yet completed authorization.");

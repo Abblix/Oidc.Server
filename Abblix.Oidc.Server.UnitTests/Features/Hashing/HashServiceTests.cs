@@ -498,7 +498,7 @@ public class HashServiceTests
 
     private static int BitCount(byte b)
     {
-        int count = 0;
+        var count = 0;
         while (b != 0)
         {
             count += b & 1;

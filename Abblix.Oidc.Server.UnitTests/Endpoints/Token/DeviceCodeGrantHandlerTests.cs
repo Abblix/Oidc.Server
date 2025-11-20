@@ -122,7 +122,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -133,7 +133,46 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(UserId, grant.AuthSession.Subject);
         Assert.Equal(ClientId, grant.Context.ClientId);
 
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that when atomic removal fails (race condition - another concurrent request claimed the device code),
+    /// the handler returns an ExpiredToken error per RFC 8628 Section 3.5.
+    /// This prevents double-issuance of tokens for the same device code.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizedRequest_RaceCondition_ShouldReturnExpiredTokenError()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        _parameterValidator
+            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
+
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "device"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = expectedGrant
+        };
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+        Assert.Contains("already used", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+
+        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -379,7 +418,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
