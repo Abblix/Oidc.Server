@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔒 Security
 
+- Enhanced Device Authorization Grant with brute force protection and race condition prevention (7eaa064)
+  - **Rate Limiting**: Exponential backoff per user code (configurable, default: 3 failures); per-IP sliding window (default: 10/minute); Result<bool, TimeSpan> pattern for type-safe retry handling; configurable thresholds in DeviceAuthorizationOptions; protobuf-based distributed state storage; security event logging (RFC 8628 Section 5.2)
+  - **Atomic Operations**: Lock-based get-and-remove protocol prevents concurrent token requests from claiming the same device code, ensuring exactly one token issuance per code (RFC 8628 Section 3.5)
+
 - Enhanced SSRF (Server-Side Request Forgery) protection with multi-layered security approach (498253c)
   - Added DNS resolution validation before HTTP requests
   - Implemented IP-based blocking for private network ranges
