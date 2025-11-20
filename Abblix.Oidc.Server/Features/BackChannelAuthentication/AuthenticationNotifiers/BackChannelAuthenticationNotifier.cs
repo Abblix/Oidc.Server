@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -65,8 +66,9 @@ public class BackChannelAuthenticationNotifier(
         }
 
         // Resolve mode-specific notifier using keyed service
+        // Delivery mode is validated at backchannel authentication request time by ClientValidator
         var notifier = serviceProvider.GetRequiredKeyedService<AuthenticationNotifier>(
-            clientInfo.BackChannelTokenDeliveryMode);
+            clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode)));
 
         await notifier.NotifyAuthenticationCompleteAsync(
             authenticationRequestId,

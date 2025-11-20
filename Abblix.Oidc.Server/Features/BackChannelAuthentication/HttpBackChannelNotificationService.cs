@@ -94,7 +94,7 @@ public class HttpBackChannelNotificationService(
     /// <summary>
     /// Represents the notification payload sent to the client in ping mode.
     /// </summary>
-    private record BackChannelNotificationRequest
+    private sealed record BackChannelNotificationRequest
     {
         /// <summary>
         /// The authentication request identifier that is ready for token retrieval.

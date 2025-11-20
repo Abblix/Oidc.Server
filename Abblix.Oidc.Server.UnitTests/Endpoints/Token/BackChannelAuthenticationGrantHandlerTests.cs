@@ -83,8 +83,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             _parameterValidator.Object,
             timeProvider.Object,
             options,
-            serviceProvider,
-            null);
+            serviceProvider);
     }
 
     private static IServiceProvider CreateMockServiceProvider(IBackChannelAuthenticationStorage storage)
@@ -92,7 +91,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         return new TestServiceProvider(storage);
     }
 
-    private class TestServiceProvider(IBackChannelAuthenticationStorage storage) : IServiceProvider, IKeyedServiceProvider
+    private class TestServiceProvider(IBackChannelAuthenticationStorage storage) : IKeyedServiceProvider
     {
         private readonly IBackChannelAuthenticationGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
         private readonly IBackChannelAuthenticationGrantProcessor _pingProcessor = new PingModeGrantProcessor();
@@ -161,7 +160,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -227,7 +226,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null)); // Original client
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending  // Changed to Pending
         };
@@ -264,7 +263,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -300,7 +299,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = null // No rate limiting
@@ -338,7 +337,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -372,7 +371,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Denied
         };
@@ -405,7 +404,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
         _parameterValidator.Verify(
@@ -434,7 +433,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -468,7 +467,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -504,7 +503,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, sessionId, authTime, "backchannel"),
             new AuthorizationContext(ClientId, scope, null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -545,7 +544,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             NextPollAt = nextPollAt
@@ -582,7 +581,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -621,7 +620,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -659,7 +658,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -697,7 +696,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -760,12 +759,12 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
@@ -849,7 +848,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -894,7 +893,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -941,8 +940,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             parameterValidator.Object,
             timeProvider.Object,
             options,
-            serviceProvider,
-            null); // Status notifier is null
+            serviceProvider); // Status notifier is null
 
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
@@ -954,7 +952,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -1016,7 +1014,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var pendingRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending
         };
@@ -1060,7 +1058,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant)
+        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };

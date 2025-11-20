@@ -121,9 +121,9 @@ public class UserInfoRequestValidatorTests
         var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
-        var accessToken = CreateValidAccessToken("client_123");
+        var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
-        var authContext = CreateAuthContext("client_123");
+        var authContext = CreateAuthContext();
         var clientInfo = new ClientInfo("client_123");
 
         _jwtValidator
@@ -162,9 +162,9 @@ public class UserInfoRequestValidatorTests
         var userInfoRequest = CreateUserInfoRequest("valid_token_123");
         var clientRequest = CreateClientRequest();
 
-        var accessToken = CreateValidAccessToken("client_123");
+        var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
-        var authContext = CreateAuthContext("client_123");
+        var authContext = CreateAuthContext();
         var clientInfo = new ClientInfo("client_123");
 
         _jwtValidator
@@ -382,9 +382,9 @@ public class UserInfoRequestValidatorTests
         var userInfoRequest = CreateUserInfoRequest("token_123");
         var clientRequest = CreateClientRequest();
 
-        var accessToken = CreateValidAccessToken("client_123");
+        var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
-        var authContext = CreateAuthContext("client_123");
+        var authContext = CreateAuthContext();
         var clientInfo = new ClientInfo("client_123");
 
         ValidationOptions? capturedOptions = null;

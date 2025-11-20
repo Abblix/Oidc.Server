@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Utils;
@@ -30,7 +31,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// <summary>
 /// Handles CIBA poll mode token retrieval at the token endpoint.
 /// In poll mode, clients repeatedly poll until authentication completes.
-/// Tokens are removed from storage immediately after retrieval.
+/// Tokens are removed from storage immediately after retrieval to prevent duplicate issuance.
+/// Uses atomic try-remove operation to prevent race conditions.
 /// </summary>
 /// <param name="storage">Storage for backchannel authentication requests.</param>
 public class PollModeGrantProcessor(IBackChannelAuthenticationStorage storage)
@@ -43,9 +45,19 @@ public class PollModeGrantProcessor(IBackChannelAuthenticationStorage storage)
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // In poll mode, remove immediately after token retrieval per CIBA spec
-        await storage.RemoveAsync(authenticationRequestId);
+        // Atomically remove from storage to prevent race condition where concurrent requests
+        // could both retrieve the same grant before removal (duplicate token issuance vulnerability)
+        // If another request already removed it, this returns null
+        var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
 
-        return request.AuthorizedGrant;
+        if (removedRequest == null)
+        {
+            // Request was already retrieved by another concurrent request
+            return new OidcError(
+                ErrorCodes.InvalidGrant,
+                "The authentication request has already been used");
+        }
+
+        return removedRequest.AuthorizedGrant;
     }
 }

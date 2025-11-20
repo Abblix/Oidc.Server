@@ -34,7 +34,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// The authorized grant associated with this authentication request,
 /// containing details about the user's authorization context.
 /// </param>
-public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant)
+/// <param name="ExpiresAt">
+/// The absolute time when this backchannel authentication request expires.
+/// </param>
+public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, DateTimeOffset ExpiresAt)
 {
     /// <summary>
     /// Specifies the next time the client should poll for updates regarding the authentication request.

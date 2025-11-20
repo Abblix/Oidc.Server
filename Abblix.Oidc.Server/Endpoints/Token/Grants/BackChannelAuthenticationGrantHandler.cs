@@ -106,8 +106,9 @@ public class BackChannelAuthenticationGrantHandler(
         var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
 
         // Resolve mode-specific grant processor using keyed service
+        // Delivery mode is validated at backchannel authentication request time by ClientValidator
         var processor = serviceProvider.GetRequiredKeyedService<IBackChannelAuthenticationGrantProcessor>(
-            clientInfo.BackChannelTokenDeliveryMode);
+            clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode)));
 
         // Validate that the client is allowed to access the token endpoint for this mode
         var accessError = processor.ValidateTokenEndpointAccess();
@@ -119,16 +120,17 @@ public class BackChannelAuthenticationGrantHandler(
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
         {
-            // If the user has been authenticated, process mode-specific token retrieval
-            { Status: BackChannelAuthenticationStatus.Authenticated }
-                => await processor.ProcessAuthenticatedRequestAsync(request.AuthenticationRequestId, authenticationRequest),
-
             // If the request is not found or has expired, return an error indicating token expiration
             null => new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired"),
 
             // If the client making the request is not the same as the one that initiated the authentication
+            // This validation MUST occur before any status-specific processing for security
             { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId
                 => new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client"),
+
+            // If the user has been authenticated, process mode-specific token retrieval
+            { Status: BackChannelAuthenticationStatus.Authenticated }
+                => await processor.ProcessAuthenticatedRequestAsync(request.AuthenticationRequestId, authenticationRequest),
 
             // If the request is still pending and not yet time to poll again
             { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
@@ -137,8 +139,8 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user has not yet been authenticated and the request is still pending,
             // either wait for status change (long-polling) or return immediately (short-polling)
-            { Status: BackChannelAuthenticationStatus.Pending }
-                => await HandlePendingRequestAsync(request.AuthenticationRequestId, clientInfo),
+            { Status: BackChannelAuthenticationStatus.Pending } pendingRequest
+                => await HandlePendingRequestAsync(request.AuthenticationRequestId, pendingRequest, clientInfo),
 
             // If the user denied the authentication request, return an error indicating access is denied
             { Status: BackChannelAuthenticationStatus.Denied }
@@ -151,15 +153,44 @@ public class BackChannelAuthenticationGrantHandler(
 
     /// <summary>
     /// Handles pending authentication requests with optional long-polling support.
-    /// Attempts long-polling if enabled, otherwise returns authorization_pending immediately.
+    /// Updates NextPollAt to enforce rate limiting on subsequent polls, then attempts long-polling if enabled,
+    /// otherwise returns authorization_pending immediately.
     /// </summary>
+    /// <remarks>
+    /// Note: There is a benign race condition between TryGetAsync (line 106) and UpdateAsync where concurrent
+    /// poll requests could overwrite each other's NextPollAt updates. This is acceptable because:
+    /// 1. The rate limiting check (line 136) happens BEFORE this method is called
+    /// 2. Any concurrent update will set NextPollAt to approximately the same time (now + interval)
+    /// 3. The worst case is slightly inconsistent polling intervals, not security vulnerability
+    /// 4. Proper fix would require compare-and-swap or optimistic locking at storage layer
+    /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
+    /// <param name="authenticationRequest">The pending authentication request to update.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
     /// <returns>Either an authorized grant if authentication completed during long-polling, or authorization_pending error.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> HandlePendingRequestAsync(
         string authenticationRequestId,
+        Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticationRequest,
         ClientInfo clientInfo)
     {
+        // Calculate remaining time before expiration
+        var expiresIn = authenticationRequest.ExpiresAt - timeProvider.GetUtcNow();
+        if (expiresIn <= TimeSpan.Zero)
+        {
+            // Request has expired, remove it
+            await storage.RemoveAsync(authenticationRequestId);
+            return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
+        }
+
+        // Update NextPollAt to enforce rate limiting for the next poll
+        // This prevents clients from spamming polls after the initial interval expires
+        var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
+        authenticationRequest.NextPollAt = timeProvider.GetUtcNow() + pollingInterval;
+
+        // Update the request in storage with new NextPollAt
+        // Note: This update is not atomic with the read above, see method remarks
+        await storage.UpdateAsync(authenticationRequestId, authenticationRequest, expiresIn);
+
         if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null)
         {
             var result = await TryLongPollingAsync(authenticationRequestId, clientInfo);
@@ -215,6 +246,12 @@ public class BackChannelAuthenticationGrantHandler(
         string authenticationRequestId,
         ClientInfo clientInfo)
     {
+        // Validate client ownership before processing (security critical)
+        if (updatedRequest?.AuthorizedGrant.Context.ClientId != clientInfo.ClientId)
+        {
+            return new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client");
+        }
+
         // Resolve mode-specific grant processor
         var grantProcessor = serviceProvider.GetRequiredKeyedService<IBackChannelAuthenticationGrantProcessor>(
             clientInfo.BackChannelTokenDeliveryMode);

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -59,6 +60,8 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 
 	/// <summary>
 	/// Asynchronously retrieves an object from the distributed cache.
+	/// When removeOnRetrieval is true, uses atomic get-and-remove operation via
+	/// <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
 	/// </summary>
 	/// <typeparam name="T">The type of the object to retrieve.</typeparam>
 	/// <param name="key">The key associated with the object to retrieve.</param>
@@ -71,20 +74,11 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 		ArgumentNullException.ThrowIfNull(key);
 		token ??= CancellationToken.None;
 
-		var result = await cache.GetAsync(key, token.Value);
-		if (result == null)
-		{
-			return default;
-		}
+		var result = removeOnRetrieval
+			? await cache.TryGetAndRemoveAsync(key, cancellationToken: token.Value)
+			: await cache.GetAsync(key, token.Value);
 
-		var deserializedResult = serializer.Deserialize<T>(result);
-
-		if (removeOnRetrieval)
-		{
-			await cache.RemoveAsync(key, token.Value);
-		}
-
-		return deserializedResult;
+		return result != null ? serializer.Deserialize<T>(result) : default;
 	}
 
 	/// <summary>

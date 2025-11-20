@@ -47,7 +47,7 @@ public abstract class AuthenticationNotifier(
     /// Also notifies waiting long-polling requests to wake up and retrieve tokens.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id to update.</param>
-    /// <param name="request">The updated authentication request with Authenticated status.</param>
+    /// <param name="request">The authentication request to mark as authenticated.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     public async Task NotifyAuthenticationCompleteAsync(
         string authenticationRequestId,
@@ -65,6 +65,9 @@ public abstract class AuthenticationNotifier(
                 clientId);
             return;
         }
+
+        // Update status to Authenticated before handling delivery
+        request.Status = BackChannelAuthenticationStatus.Authenticated;
 
         await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
 

@@ -72,4 +72,16 @@ public interface IBackChannelAuthenticationStorage
 	/// A task that completes when the request is removed from storage.
 	/// </returns>
 	Task RemoveAsync(string authenticationRequestId);
+
+	/// <summary>
+	/// Atomically retrieves and removes a backchannel authentication request from storage.
+	/// This operation prevents race conditions where multiple concurrent requests could retrieve the same
+	/// authentication request before it's removed (poll mode double-retrieval vulnerability).
+	/// </summary>
+	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
+	/// <returns>
+	/// A task that returns the authentication request if it existed and was successfully removed;
+	/// otherwise, null if the request was not found or already removed.
+	/// </returns>
+	Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId);
 }

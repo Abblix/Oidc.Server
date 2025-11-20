@@ -102,4 +102,21 @@ public class BackChannelAuthenticationStorage(
 	/// </returns>
 	public Task RemoveAsync(string authenticationRequestId)
 		=> storage.RemoveAsync(keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId));
+
+	/// <summary>
+	/// Atomically retrieves and removes a backchannel authentication request from storage.
+	/// This prevents race conditions in poll mode where concurrent requests could both retrieve
+	/// the same authentication request before removal, leading to duplicate token issuance.
+	/// </summary>
+	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
+	/// <returns>
+	/// A task that returns the authentication request if it existed and was successfully removed;
+	/// otherwise, null if the request was not found or already removed by another concurrent request.
+	/// </returns>
+	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId)
+	{
+		return storage.GetAsync<BackChannelAuthenticationRequest>(
+			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
+			removeOnRetrieval: true);
+	}
 }

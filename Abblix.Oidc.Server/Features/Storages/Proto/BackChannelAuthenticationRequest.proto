@@ -27,4 +27,7 @@ message BackChannelAuthenticationRequest {
 
   // Current status of the authentication request
   BackChannelAuthenticationStatus status = 3;
+
+  // Absolute expiration time for this authentication request
+  google.protobuf.Timestamp expires_at = 4;
 }

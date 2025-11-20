@@ -78,7 +78,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -127,7 +127,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = null,
@@ -167,7 +167,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -207,7 +207,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = null,
@@ -247,7 +247,7 @@ public class AuthenticationNotifierTests
         var customExpiry = TimeSpan.FromMinutes(10);
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
         };
@@ -281,7 +281,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -323,7 +323,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -382,7 +382,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -430,7 +430,7 @@ public class AuthenticationNotifierTests
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
             ClientNotificationEndpoint = null,

@@ -90,7 +90,7 @@ public class ClientValidatorTests
     public async Task ValidateAsync_WithValidClientId_ShouldSucceed()
     {
         // Arrange
-        var context = CreateContext("client_123");
+        var context = CreateContext();
         var clientInfo = new ClientInfo("client_123");
 
         _clientInfoProvider

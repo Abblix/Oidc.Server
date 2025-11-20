@@ -99,7 +99,10 @@ public class BackChannelAuthenticationRequestProcessor(
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
 		// Store authentication request with notification endpoint and token (used by ping and push modes)
-		var backChannelRequest = new Features.BackChannelAuthentication.BackChannelAuthenticationRequest(authorizedGrant)
+		var expiresAt = timeProvider.GetUtcNow() + request.ExpiresIn;
+		var backChannelRequest = new Features.BackChannelAuthentication.BackChannelAuthenticationRequest(
+			authorizedGrant,
+			expiresAt)
 		{
 			Status = BackChannelAuthenticationStatus.Pending,
 			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,

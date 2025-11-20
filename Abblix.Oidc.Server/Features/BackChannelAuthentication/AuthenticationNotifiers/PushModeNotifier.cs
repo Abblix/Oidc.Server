@@ -120,8 +120,9 @@ public class PushModeNotifier(
                     authenticationRequestId,
                     error.Error);
 
-                request.Status = BackChannelAuthenticationStatus.Denied;
-                await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+                // Per CIBA spec 10.3.1, remove from storage after push attempt (success or failure)
+                // Push mode clients cannot poll, so storing denied status would orphan the request
+                await _storage.RemoveAsync(authenticationRequestId);
 
                 return null;
             });

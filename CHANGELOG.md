@@ -40,6 +40,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- **CIBA Ping and Push Mode Implementation**: Complete status notification and token delivery infrastructure for Client-Initiated Backchannel Authentication
+  - **Long-Polling Support**: Added configurable long-polling timeout for token endpoint
+    - Holds polling requests until authentication completes or timeout expires
+    - Reduces server load and latency compared to repeated short polls
+    - Configurable via `BackChannelAuthenticationOptions.LongPollingTimeout` (default: 30 seconds)
+  - **Ping Mode**: Added `IBackChannelAuthenticationStatusNotifier` interface for real-time status change notifications
+    - Implemented `InMemoryBackChannelAuthenticationStatusNotifier` with async notification support via TaskCompletionSource
+    - Enables efficient long-polling without repeatedly querying storage
+    - Server notifies client at callback endpoint when authentication completes
+  - **Push Mode**: Added `IBackChannelTokenDeliveryService` interface for token delivery abstraction
+    - Implemented `HttpBackChannelTokenDeliveryService` for direct token delivery to clients
+    - Server delivers tokens directly to client notification endpoint upon completion
+  - Extended `IBackChannelAuthenticationStorage` with `ExistsAsync` and `RemoveAsync` methods
+  - Strategy pattern implementation for delivery modes (poll/ping/push) via keyed DI
+
+- **Distributed Cache Utilities**: Added atomic get-and-remove operation for race condition prevention
+  - `DistributedCacheExtensions.TryGetAndRemoveAsync()` implements 4-step last-write-wins protocol
+  - Comprehensive test coverage including 100-thread concurrency scenarios
+  - Works with Redis, SQL Server, and in-memory distributed cache implementations
+
 - Implemented `client_secret_jwt` authentication method (#35, 6f4d240)
   - Full support for JWT-based client authentication per RFC 7523
 
@@ -57,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grant type discovery infrastructure (#33, 19d4b29)
 
 ### 🛠️ Improvements
+
+- **CIBA Refactoring**:
+  - Applied strategy pattern to delivery mode handling, eliminating conditional branching
+  - Unified `BackChannelAuthenticationRequest` with required `ExpiresAt` parameter
+  - Simplified storage interfaces with atomic operations
+  - Updated protobuf schema and mappers to use `.ToTimestamp()` extension method preference
+  - Removed redundant parameters from test helper methods across 13 test files
 
 - **Protocol Buffer Serialization**:
   - Implemented protobuf serialization for all OIDC storage types via `ProtobufSerializer`

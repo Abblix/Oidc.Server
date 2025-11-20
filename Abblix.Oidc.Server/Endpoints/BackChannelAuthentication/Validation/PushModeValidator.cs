@@ -22,37 +22,28 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
-/// Validates required parameters for CIBA ping mode authentication requests.
-/// Ensures that clients using ping mode have proper configuration and provide necessary tokens.
+/// Validates required parameters for CIBA push mode authentication requests.
+/// Ensures that clients using push mode have proper HTTPS endpoint configuration.
 /// </summary>
-public class PingModeValidator : IBackChannelAuthenticationContextValidator
+public class PushModeValidator : IBackChannelAuthenticationContextValidator
 {
     /// <summary>
-    /// Validates ping mode specific requirements: client_notification_token and
-    /// backchannel_client_notification_endpoint must be present.
+    /// Validates push mode specific requirements: backchannel_client_notification_endpoint must be
+    /// present and use HTTPS.
     /// </summary>
     /// <param name="context">The validation context containing request and client information.</param>
     /// <returns>An error if validation fails, null if successful.</returns>
     public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
     {
-        // Only validate if client is configured for ping mode
-        if (context.ClientInfo.BackChannelTokenDeliveryMode != BackchannelTokenDeliveryModes.Ping)
+        // Only validate if client is configured for push mode
+        if (context.ClientInfo.BackChannelTokenDeliveryMode != BackchannelTokenDeliveryModes.Push)
             return Task.FromResult<OidcError?>(null);
 
-        // Ping mode requires client_notification_token in the request
-        if (!context.Request.ClientNotificationToken.HasValue())
-        {
-            return Task.FromResult<OidcError?>(new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The client_notification_token parameter is required for ping mode"));
-        }
-
-        // Ping mode requires backchannel_client_notification_endpoint to be registered
+        // Push mode requires backchannel_client_notification_endpoint to be registered
         if (context.ClientInfo.BackChannelClientNotificationEndpoint == null)
         {
             return Task.FromResult<OidcError?>(new OidcError(
@@ -60,8 +51,8 @@ public class PingModeValidator : IBackChannelAuthenticationContextValidator
                 "The client is not configured with a backchannel_client_notification_endpoint"));
         }
 
-        // HTTPS enforcement per CIBA spec Section 10.2.1:
-        // "The Client Notification Endpoint MUST use HTTPS"
+        // HTTPS enforcement per CIBA spec Section 10.3.1:
+        // Push mode token delivery endpoint MUST use HTTPS for security
         if (!string.Equals(
             context.ClientInfo.BackChannelClientNotificationEndpoint.Scheme,
             Uri.UriSchemeHttps,
