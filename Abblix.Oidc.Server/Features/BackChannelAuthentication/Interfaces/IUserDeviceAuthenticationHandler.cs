@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
@@ -49,7 +50,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// public class MyUserDeviceAuthenticationHandler : IUserDeviceAuthenticationHandler
 /// {
 ///     private readonly IBackChannelAuthenticationStorage _storage;
-///     private readonly BackChannelAuthenticationNotifier _notifier;
+///     private readonly IBackChannelAuthenticationNotifier _notifier;
+///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
 ///
 ///     public async Task&lt;Result&lt;AuthSession, OidcError&gt;&gt; InitiateAuthenticationAsync(
@@ -77,7 +79,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // Create authenticated session
 ///         var authSession = new AuthSession(
 ///             userId,
-///             sessionId: Guid.NewGuid().ToString(),
+///             sessionId: _sessionIdGenerator.GenerateSessionId(),
 ///             authenticationTime: DateTimeOffset.UtcNow,
 ///             identityProvider: "local");
 ///
@@ -85,8 +87,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         storedRequest.Status = BackChannelAuthenticationStatus.Authenticated;
 ///         storedRequest.AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context);
 ///
-///         // Update storage and send ping notification if configured
-///         // This automatically sends notification for ping mode clients
+///         // Notify completion - automatically selects and delegates to the appropriate
+///         // mode-specific notifier (PollModeNotifier, PingModeNotifier, or PushModeNotifier)
 ///         await _notifier.NotifyAuthenticationCompleteAsync(
 ///             authReqId,
 ///             storedRequest,
@@ -105,12 +107,34 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// }
 /// </code>
 ///
-/// <para><strong>Key Points:</strong></para>
+/// <para><strong>Token Delivery Modes:</strong></para>
+/// <para>
+/// The <see cref="IBackChannelAuthenticationNotifier.NotifyAuthenticationCompleteAsync"/> method automatically handles
+/// mode-specific behavior based on the client's registered <c>backchannel_token_delivery_mode</c>:
+/// </para>
 /// <list type="bullet">
-///   <item><strong>Poll Mode:</strong> User polls token endpoint until authentication completes</item>
-///   <item><strong>Ping Mode:</strong> BackChannelAuthenticationNotifier automatically sends HTTP notification when you call NotifyAuthenticationCompleteAsync</item>
+///   <item>
+///     <strong>Poll Mode:</strong> Stores tokens in <see cref="IBackChannelAuthenticationStorage"/>.
+///     Client polls the token endpoint with <c>auth_req_id</c> until tokens are ready.
+///   </item>
+///   <item>
+///     <strong>Ping Mode:</strong> Stores tokens and sends HTTP POST notification via
+///     <see cref="IBackChannelNotificationService"/> to the client's <c>client_notification_endpoint</c>
+///     with the <c>auth_req_id</c>. Client then retrieves tokens from the token endpoint.
+///   </item>
+///   <item>
+///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
+///     them directly via <see cref="IBackChannelTokenDeliveryService"/> to the client's
+///     <c>client_notification_endpoint</c>. Tokens are removed from storage after successful delivery
+///     per CIBA specification section 10.3.1.
+///   </item>
+/// </list>
+///
+/// <para><strong>Additional Key Points:</strong></para>
+/// <list type="bullet">
 ///   <item><strong>Binding Message:</strong> Display request.Model.BindingMessage to user for transaction confirmation</item>
 ///   <item><strong>User Code:</strong> If request.Model.UserCode is present, require user to confirm it</item>
+///   <item><strong>Authentication:</strong> All notifications use Bearer token from <c>client_notification_token</c></item>
 /// </list>
 /// </remarks>
 public interface IUserDeviceAuthenticationHandler

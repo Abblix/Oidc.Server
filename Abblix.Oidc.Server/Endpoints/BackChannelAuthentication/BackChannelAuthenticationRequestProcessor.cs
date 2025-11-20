@@ -31,7 +31,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
-using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
@@ -99,19 +98,14 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
-		// Create authentication request with ping mode notification details if applicable
-		var backChannelRequest = new BackChannelAuthenticationRequest(authorizedGrant)
+		// Store authentication request with notification endpoint and token (used by ping and push modes)
+		var backChannelRequest = new Features.BackChannelAuthentication.BackChannelAuthenticationRequest(authorizedGrant)
 		{
 			Status = BackChannelAuthenticationStatus.Pending,
 			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
+			ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint,
+			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};
-
-		// Store notification details for ping mode
-		if (request.ClientInfo.BackChannelTokenDeliveryMode == BackchannelTokenDeliveryModes.Ping)
-		{
-			backChannelRequest.ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint;
-			backChannelRequest.ClientNotificationToken = request.Model.ClientNotificationToken;
-		}
 
 		var authenticationRequestId = await storage.StoreAsync(backChannelRequest, request.ExpiresIn);
 
