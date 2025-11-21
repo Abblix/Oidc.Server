@@ -286,15 +286,20 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Decorates a registered keyed service with a decorator implementation.
+    /// If no keyed service is found, falls back to decorating the non-keyed service
+    /// and registers the result as a keyed service.
     /// </summary>
     /// <typeparam name="TInterface">The service type to be decorated.</typeparam>
     /// <typeparam name="TDecorator">The decorator implementation type.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-    /// <param name="serviceKey">The service key to identify the specific service registration.</param>
+    /// <param name="serviceKey">The service key for the decorated service registration.</param>
     /// <param name="dependencies">The dependencies required by the decorator.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
     /// This method allows decoration of keyed services registered using the keyed service APIs.
+    /// If the keyed service is not found, it falls back to decorating the non-keyed service
+    /// and registers the decorator as a keyed service. This is useful when you want to create
+    /// a keyed variant of an existing non-keyed service with additional behavior.
     /// The decorator will wrap the existing implementation while preserving the service lifetime.
     /// </remarks>
     public static IServiceCollection DecorateKeyed<TInterface, TDecorator>(
@@ -306,18 +311,37 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(dependencies);
 
+        ServiceDescriptor? fallbackService = null;
+
+        // First, try to find existing keyed service
         for (var i = services.Count - 1; 0 <= i; i--)
         {
-            if (services[i].ServiceType != typeof(TInterface) ||
-                !Equals(services[i].ServiceKey, serviceKey))
-            {
+            if (services[i].ServiceType != typeof(TInterface))
                 continue;
+
+            if (Equals(services[i].ServiceKey, serviceKey))
+            {
+                services[i] = services[i].Decorate<TInterface, TDecorator>(serviceKey, dependencies);
+                return services;
             }
 
-            services[i] = services[i].Decorate<TInterface, TDecorator>(dependencies);
-            break;
+            if (services[i].ServiceKey == null)
+            {
+                fallbackService = services[i];
+            }
         }
-        return services;
+
+        // Fallback: find non-keyed service and create a keyed decorated version
+        if (fallbackService != null)
+        {
+            services.Add(fallbackService.Decorate<TInterface, TDecorator>(serviceKey, dependencies));
+            return services;
+        }
+
+        throw new InvalidOperationException(
+            $"No service of type {typeof(TInterface).FullName} " +
+            $"{(serviceKey != null ? $"with key '{serviceKey}' or without key " : "")}" +
+            "has been registered. Cannot decorate a service that does not exist.");
     }
 
     /// <summary>
@@ -326,15 +350,16 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TInterface">The service type being decorated.</typeparam>
     /// <typeparam name="TDecorator">The decorator type that implements the interface.</typeparam>
     /// <param name="serviceDescriptor">The original service descriptor to decorate.</param>
+    /// <param name="serviceKey">The service key for the decorated service. If null, uses the original service's key.</param>
     /// <param name="dependencies">Additional dependencies required by the decorator.</param>
     /// <returns>A new <see cref="ServiceDescriptor"/> with the decorated implementation.</returns>
     private static ServiceDescriptor Decorate<TInterface, TDecorator>(
-        this ServiceDescriptor serviceDescriptor, Dependency[] dependencies)
+        this ServiceDescriptor serviceDescriptor, object? serviceKey, Dependency[] dependencies)
         where TInterface : class where TDecorator : class, TInterface
     {
         return ServiceDescriptor.DescribeKeyed(
             serviceDescriptor.ServiceType,
-            serviceDescriptor.ServiceKey,
+            serviceKey,
             (serviceProvider, _) =>
             {
                 var instance = Dependency.Override((TInterface)serviceProvider.CreateService(serviceDescriptor));
@@ -380,9 +405,16 @@ public static class ServiceCollectionExtensions
     {
         return descriptor switch
         {
+            // Non-keyed service patterns
             { ImplementationInstance: { } instance } => instance,
             { ImplementationFactory: { } factory } => factory(serviceProvider),
             { ImplementationType: { } type } => ActivatorUtilities.GetServiceOrCreateInstance(serviceProvider, type),
+
+            // Keyed service patterns
+            { KeyedImplementationInstance: { } instance } => instance,
+            { KeyedImplementationFactory: { } factory } => factory(serviceProvider, descriptor.ServiceKey),
+            { KeyedImplementationType: { } type } => ActivatorUtilities.GetServiceOrCreateInstance(serviceProvider, type),
+
             _ => throw new InvalidOperationException($"Unable to create instance of {descriptor.ServiceType.FullName}")
         };
     }

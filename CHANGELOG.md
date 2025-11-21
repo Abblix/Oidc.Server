@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AuthorizationErrorResponse` → `AuthorizationError`
   - Similar pattern applied across all endpoint response types
 
+- **IRequestInfoProvider Interface Changes**: Added `RemoteIpAddress` property
+  - `IRequestInfoProvider.RemoteIpAddress` returns `System.Net.IPAddress?` for client IP logging
+  - Custom implementations must implement this new property
+
+- **JsonWebTokenHeader Changes**: Added `KeyId` property
+  - `JsonWebTokenHeader.KeyId` exposes the `kid` header claim for audit logging
+
 ### 🔒 Security
 
 - Enhanced Device Authorization Grant with brute force protection and race condition prevention (7eaa064)
@@ -36,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive logging for security events
   - Note: TOCTOU vulnerability exists between DNS validation and HTTP request
 
+- Applied SSRF protection to client JWKS fetching
+  - Updated `ClientKeysProvider` to use `ISecureHttpFetcher` instead of direct HTTP calls
+  - Consistent security approach across JWT Bearer and client authentication flows
+  - Enhanced error handling and logging for JWKS fetch operations
+
 - Hardened GitHub Actions workflow against supply chain attacks (f96372e)
   - Pinned all GitHub Actions to commit SHA instead of mutable version tags
   - Secured secret handling with environment variables instead of inline expansion
@@ -43,6 +55,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added explicit `AttributeUsage` to validation attributes (ac61f96)
 
 ### ✨ Features
+
+- **JWT Bearer Grant Type (RFC 7523)**: Full implementation of JWT Bearer grant type for token exchange scenarios
+  - **Configuration-Based Setup**: Added `JwtBearerOptions` to `OidcOptions` for declarative trusted issuer configuration
+  - **Trusted Issuer Management**: Configure external identity providers via `OidcOptions.JwtBearer.TrustedIssuers` collection
+  - **Automatic JWKS Fetching**: Default `JwtBearerIssuerProvider` automatically fetches signing keys from configured JWKS URIs
+  - **RFC 7523 Compliance**: Proper validation of issuer (iss), subject (sub), audience (aud), and expiration (exp) claims
+  - **Signature Verification**: Resolves signing keys from trusted issuers' JWKS endpoints for JWT signature validation
+  - **Audience Validation**: Ensures JWT audience matches the token endpoint URI where assertion is presented
+  - **Federation Support**: Enables service-to-service authentication, token exchange, and cross-domain SSO scenarios
+  - **Extensibility**: `IJwtBearerIssuerProvider` interface allows custom issuer validation strategies
+  - **Security Hardening**: Multiple attack prevention mechanisms
+    - Algorithm substitution attack prevention with configurable allowed algorithms (defaults to RS/ES/PS only, no HMAC or 'none')
+    - Token type (`typ` header) validation to prevent token confusion attacks
+    - Maximum JWT age (`MaxJwtAge`) validation with required `iat` claim to prevent stale token reuse
+    - Replay protection via `jti` claim tracking with configurable `RequireJti` option
+    - Maximum JWT size limit (`MaxJwtSize`) to prevent denial-of-service attacks
+    - Scope restriction per trusted issuer via `AllowedScopes` configuration
+    - Strict vs permissive audience validation modes via `StrictAudienceValidation` option
+  - **Enhanced Audit Logging**: Security-critical logging with client IP address and JWT key ID (`kid`)
+  - **Comprehensive Test Coverage**: 42 unit tests covering all RFC 7523 validation requirements and security scenarios
 
 - Implemented Device Authorization Grant (RFC 8628) for input-constrained devices (1e1ed21)
   - Complete OAuth 2.0 flow for smart TVs, streaming devices, game consoles, and IoT devices
@@ -54,6 +86,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Protocol Buffer serialization for device authorization state
   - Validation framework for client types, scopes, and resources per RFC 8628
   - Enhanced with rate limiting and atomic operations in commit 7eaa064 (see Security section)
+
+- **CIBA Ping and Push Mode Implementation**: Complete status notification and token delivery infrastructure for Client-Initiated Backchannel Authentication
+  - **Long-Polling Support**: Added configurable long-polling timeout for token endpoint
+    - Holds polling requests until authentication completes or timeout expires
+    - Reduces server load and latency compared to repeated short polls
+    - Configurable via `BackChannelAuthenticationOptions.LongPollingTimeout` (default: 30 seconds)
+  - **Ping Mode**: Added `IBackChannelAuthenticationStatusNotifier` interface for real-time status change notifications
+    - Implemented `InMemoryBackChannelAuthenticationStatusNotifier` with async notification support via TaskCompletionSource
+    - Enables efficient long-polling without repeatedly querying storage
+    - Server notifies client at callback endpoint when authentication completes
+  - **Push Mode**: Added `IBackChannelTokenDeliveryService` interface for token delivery abstraction
+    - Implemented `HttpBackChannelTokenDeliveryService` for direct token delivery to clients
+    - Server delivers tokens directly to client notification endpoint upon completion
+  - Extended `IBackChannelAuthenticationStorage` with `ExistsAsync` and `RemoveAsync` methods
+  - Strategy pattern implementation for delivery modes (poll/ping/push) via keyed DI
+
+- **Distributed Cache Utilities**: Added atomic get-and-remove operation for race condition prevention
+  - `DistributedCacheExtensions.TryGetAndRemoveAsync()` implements 4-step last-write-wins protocol
+  - Comprehensive test coverage including 100-thread concurrency scenarios
+  - Works with Redis, SQL Server, and in-memory distributed cache implementations
 
 - Implemented `client_secret_jwt` authentication method (#35, 6f4d240)
   - Full support for JWT-based client authentication per RFC 7523

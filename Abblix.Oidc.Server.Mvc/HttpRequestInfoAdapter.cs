@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -65,4 +66,10 @@ public class HttpRequestInfoAdapter(IHttpContextAccessor httpContextAccessor) : 
     /// The base path of the request.
     /// </summary>
     public string PathBase => Request.PathBase;
+
+    /// <summary>
+    /// The client's IP address from the current request.
+    /// Returns null if the connection information is not available.
+    /// </summary>
+    public IPAddress? RemoteIpAddress => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress;
 }

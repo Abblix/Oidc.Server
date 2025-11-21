@@ -506,6 +506,7 @@ public class DistributedCacheStorageTests
         var key = "test_key";
         var lockKey = $"Abblix.Utils.DistributedCacheExtensions:TryRemoveAsync:{key}";
         var serializedBytes = new byte[] { 1, 2, 3 };
+        byte[]? capturedLockToken = null;
 
         // Mock the atomic get-and-remove operation
         _cache
@@ -513,7 +514,6 @@ public class DistributedCacheStorageTests
             .ReturnsAsync(serializedBytes);
 
         // Mock lock operations for atomic removal
-        byte[]? capturedLockToken = null;
         _cache
             .Setup(c => c.SetAsync(
                 lockKey,
@@ -530,7 +530,7 @@ public class DistributedCacheStorageTests
 
         _cache
             .Setup(c => c.GetAsync(lockKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => capturedLockToken); // Return the same lock token to indicate success
+            .ReturnsAsync(() => capturedLockToken);
 
         _cache
             .Setup(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()))
@@ -775,7 +775,7 @@ public class DistributedCacheStorageTests
 
         _cache
             .Setup(c => c.GetAsync(lockKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => capturedLockToken); // Return the same lock token to indicate success
+            .ReturnsAsync(() => capturedLockToken);
 
         _cache
             .Setup(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()))

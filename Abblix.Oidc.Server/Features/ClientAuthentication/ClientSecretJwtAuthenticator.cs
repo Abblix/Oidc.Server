@@ -94,7 +94,7 @@ public class ClientSecretJwtAuthenticator(
     private sealed class ValidationContext
     {
         /// <summary>
-        /// Gets or sets the client information resolved during the validation process.
+        /// The client information resolved during the validation process.
         /// </summary>
         public ClientInfo? ClientInfo { get; set; }
     }

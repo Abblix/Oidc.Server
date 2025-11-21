@@ -287,7 +287,7 @@ public record ClientRegistrationRequest
     public bool? OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the URI for back-channel logout.
+    /// The URI for back-channel logout.
     /// </summary>
     /// <value>
     /// The URI for the back-channel logout, or <c>null</c> if not specified.
@@ -313,7 +313,7 @@ public record ClientRegistrationRequest
     public bool? BackChannelLogoutSessionRequired { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets the URI for front-channel logout.
+    /// The URI for front-channel logout.
     /// </summary>
     /// <value>
     /// The URI to be used for front-channel logout, or <c>null</c> if it is not specified.

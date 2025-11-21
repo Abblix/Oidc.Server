@@ -41,7 +41,7 @@ public record IntrospectionSuccess(bool Active, JsonObject? Claims)
     public bool Active { get; } = Active;
 
     /// <summary>
-    /// Gets or sets the claims associated with the token.
+    /// The claims associated with the token.
     /// </summary>
     public JsonObject? Claims { get; } = Claims;
 }

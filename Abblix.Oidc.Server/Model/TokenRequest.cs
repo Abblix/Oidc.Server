@@ -47,6 +47,7 @@ public record TokenRequest
 		public const string Password = "password";
 		public const string CodeVerifier = "code_verifier";
 		public const string AuthenticationRequestId = "auth_req_id";
+		public const string Assertion = "assertion";
 		public const string DeviceCode = "device_code";
 	}
 
@@ -63,8 +64,9 @@ public record TokenRequest
 		GrantTypes.Ciba,
 		GrantTypes.DeviceAuthorization,
 		GrantTypes.Implicit,
-		GrantTypes.ClientCredentials)]
-	public string GrantType { get; set; } = null!;
+		GrantTypes.ClientCredentials,
+		GrantTypes.JwtBearer)]
+	public string GrantType { get; set; } = default!;
 
 	/// <summary>
 	/// The authorization code received from the authorization server.
@@ -130,6 +132,13 @@ public record TokenRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.AuthenticationRequestId)]
 	public string? AuthenticationRequestId { get; set; }
+
+	/// <summary>
+	/// The JWT assertion used in the JWT Bearer grant type per RFC 7523.
+	/// This contains a signed JWT with claims about the resource owner and is used to request an access token.
+	/// </summary>
+	[JsonPropertyName(Parameters.Assertion)]
+	public string? Assertion { get; set; }
 
 	/// <summary>
 	/// The device code used in the Device Authorization Grant (RFC 8628) flow.

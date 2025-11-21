@@ -211,4 +211,10 @@ public record OidcOptions
 	/// enhancing security for certain sensitive operations.
 	/// </summary>
 	public bool RequireSignedRequestObject { get; set; } = false;
+
+	/// <summary>
+	/// Configuration options for JWT Bearer grant type (RFC 7523).
+	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
+	/// </summary>
+	public JwtBearerOptions JwtBearer { get; set; } = new();
 }

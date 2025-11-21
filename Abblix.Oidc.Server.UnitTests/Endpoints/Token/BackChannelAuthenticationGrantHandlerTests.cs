@@ -107,8 +107,6 @@ public class BackChannelAuthenticationGrantHandlerTests
                 BackchannelTokenDeliveryModes.Poll => _pollProcessor,
                 BackchannelTokenDeliveryModes.Ping => _pingProcessor,
                 BackchannelTokenDeliveryModes.Push => _pushProcessor,
-                null => _pingProcessor, // Default to ping mode (conservative - doesn't remove) for null
-                "" => _pingProcessor, // Default to ping mode for empty string
                 _ => null
             };
         }
@@ -166,7 +164,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -178,7 +176,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ClientId, grant.Context.ClientId);
 
         // Verify the request was removed from storage
-        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -189,7 +187,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task RequestNotFound_ShouldReturnExpiredTokenError()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -216,7 +214,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task WrongClient_PendingRequest_ShouldReturnInvalidGrantError()
     {
         // Arrange
-        var wrongClientInfo = new ClientInfo("different_client_456");
+        var wrongClientInfo = new ClientInfo("different_client_456") { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -251,7 +249,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task PendingRequest_PolledTooEarly_ShouldReturnSlowDownError()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -270,6 +268,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -289,7 +288,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task PendingRequest_NormalPoll_ShouldReturnAuthorizationPendingError()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -306,6 +305,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -325,7 +325,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task PendingRequest_AfterNextPollAt_ShouldReturnAuthorizationPendingError()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -344,6 +344,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -361,7 +362,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task DeniedRequest_ShouldReturnAccessDeniedError()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -395,7 +396,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task MissingAuthRequestId_ShouldCallParameterValidator()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = null };
 
         _parameterValidator
@@ -439,13 +440,13 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
-        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
     }
 
@@ -457,7 +458,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task PendingRequest_ShouldNotRemoveFromStorage()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -473,12 +474,13 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
-        // Assert - RemoveAsync should never be called
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        // Assert - TryRemoveAsync should never be called
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -489,7 +491,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task AuthenticatedRequest_ShouldPreserveGrantInformation()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -509,7 +511,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -532,7 +534,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task PendingRequest_ExactlyAtNextPollAt_ShouldReturnAuthorizationPending()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -551,6 +553,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -587,7 +590,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -595,7 +598,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -633,7 +636,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -672,44 +675,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
         Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
-    }
-
-    /// <summary>
-    /// Verifies that when BackChannelTokenDeliveryMode is null (default/unspecified),
-    /// the handler does not remove from storage, treating it conservatively.
-    /// </summary>
-    [Fact]
-    public async Task AuthenticatedRequest_NullDeliveryMode_DoesNotRemoveFromStorage()
-    {
-        // Arrange
-        var clientInfo = new ClientInfo(ClientId)
-        {
-            BackChannelTokenDeliveryMode = null,
-        };
-        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
-        var expectedGrant = new AuthorizedGrant(
-            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
-            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
-
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            Status = BackChannelAuthenticationStatus.Authenticated
-        };
-
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
-
-        // Assert
-        Assert.True(result.TryGetSuccess(out var grant));
-        Assert.NotNull(grant);
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -774,6 +740,8 @@ public class BackChannelAuthenticationGrantHandlerTests
             .ReturnsAsync(pendingRequest)
             .ReturnsAsync(authenticatedRequest);
 
+        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+
         // Simulate immediate status change notification (authenticated within 100ms)
         statusNotifier
             .Setup(n => n.WaitForStatusChangeAsync(
@@ -782,7 +750,7 @@ public class BackChannelAuthenticationGrantHandlerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        storage.Setup(s => s.RemoveAsync(AuthReqId)).Returns(Task.CompletedTask);
+        storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authenticatedRequest);
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -801,7 +769,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Exactly(2));
 
         // Verify storage removal in poll mode
-        storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+        storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -838,7 +806,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             serviceProvider,
             statusNotifier.Object);
 
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         parameterValidator
@@ -854,6 +822,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Simulate timeout (no status change within 30 seconds)
         statusNotifier
@@ -883,7 +852,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task ShortPolling_PendingRequest_ReturnsImmediately()
     {
         // Arrange - handler from constructor has UseLongPolling=false
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         _parameterValidator
@@ -899,6 +868,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -942,7 +912,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             options,
             serviceProvider); // Status notifier is null
 
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         parameterValidator
@@ -958,6 +928,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -1004,7 +975,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             serviceProvider,
             statusNotifier.Object);
 
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
         parameterValidator
@@ -1020,6 +991,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
 
         storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         statusNotifier
             .Setup(n => n.WaitForStatusChangeAsync(
@@ -1076,6 +1048,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Verify storage was checked but not removed (push mode clients shouldn't access token endpoint)
         _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }

@@ -72,7 +72,8 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = [GrantTypes.Ciba]
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
         _clientAuthenticator
@@ -98,7 +99,8 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Ciba, GrantTypes.RefreshToken]
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Ciba, GrantTypes.RefreshToken],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
         _clientAuthenticator
@@ -200,6 +202,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo("test-client")
         {
             AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
             ClientName = "Test Client"
         };
 
@@ -226,7 +229,8 @@ public class ClientValidatorTests
         var context = CreateContext();
         var clientInfo = new ClientInfo("test-client")
         {
-            AllowedGrantTypes = [GrantTypes.Ciba]
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
         ClientRequest? capturedRequest = null;
@@ -257,6 +261,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo("test-client")
         {
             AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
             ClientType = ClientType.Confidential
         };
 
