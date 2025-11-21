@@ -38,9 +38,7 @@ public static class DistributedCacheExtensions
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
 	///   <item><term>Step 1:</term> Get the value from cache</item>
-	///   <item><term>Step 2:</term> Write a unique lock token to "lock:{key}"</item>
-	///   <item><term>Step 3:</term> Remove the value from cache</item>
-	///   <item><term>Step 4:</term> Read back the lock token and verify it matches ours</item>
+	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
 	/// </list>
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
@@ -54,8 +52,9 @@ public static class DistributedCacheExtensions
 	/// cleaning it up (after step 4).
 	/// </para>
 	/// <para>
-	/// <strong>Performance:</strong> This operation performs 4 cache operations instead of 1, so it has higher
-	/// latency than native atomic operations. However, it works with any IDistributedCache implementation.
+	/// <strong>Performance:</strong> This operation performs 5 cache operations (1 get + 4 from TryRemoveAsync),
+	/// so it has higher latency than native atomic operations. However, it works with any IDistributedCache
+	/// implementation.
 	/// </para>
 	/// </remarks>
 	/// <param name="cache">The distributed cache instance.</param>
@@ -75,15 +74,73 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
-		// Step 1: Get the value (return null if not found)
+		// Get the value (return null if not found)
 		var valueData = await cache.GetAsync(key, cancellationToken);
 		if (valueData == null)
 		{
 			return null;
 		}
 
-		// Step 2: Write our unique lock token
-		var lockKey = $"lock:{key}";
+		if (!await cache.TryRemoveAsync(key, lockTimeout, cancellationToken))
+		{
+			// Another thread's lock overwrote ours - they won the race
+			return null;
+		}
+
+		// Our lock survived - we won the race, return the value
+		return valueData;
+	}
+
+	/// <summary>
+	/// Atomically attempts to remove a value from the distributed cache.
+	/// Uses a lock-based protocol to ensure atomic removal semantics, preventing race conditions
+	/// where multiple threads attempt to remove the same key concurrently.
+	/// </summary>
+	/// <remarks>
+	/// <para><strong>Atomicity Protocol:</strong></para>
+	/// <list type="number">
+	///   <item><term>Step 1:</term> Write a unique lock token to fully-qualified lock key</item>
+	///   <item><term>Step 2:</term> Remove the value from cache</item>
+	///   <item><term>Step 3:</term> Read back the lock token and verify it matches ours</item>
+	///   <item><term>Step 4:</term> Clean up the lock key</item>
+	/// </list>
+	/// <para>
+	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
+	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
+	/// and return false. This ensures exactly one thread successfully removes the value.
+	/// </para>
+	/// <para>
+	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without
+	/// retrieving it (unlike <see cref="TryGetAndRemoveAsync"/>). For example, in the Device Authorization
+	/// Grant flow when a user denies authorization, you only need confirmation that the request was removed,
+	/// not the request data itself.
+	/// </para>
+	/// <para>
+	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
+	/// to prevent orphaned locks if a process crashes between writing the lock token and cleaning it up.
+	/// </para>
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key of the value to remove.</param>
+	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>
+	/// A task that completes when the operation finishes, containing true if the value was successfully
+	/// removed by this thread; false if another thread won the race or the key didn't exist.
+	/// </returns>
+	public static async Task<bool> TryRemoveAsync(
+		this IDistributedCache cache,
+		string key,
+		TimeSpan? lockTimeout = null,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+
+		// Use fully qualified type name to avoid collisions with application keys
+		var lockKey = $"{nameof(Abblix)}.{nameof(Utils)}.{nameof(DistributedCacheExtensions)}:{nameof(TryRemoveAsync)}:{key}";
+
+		// Write our unique lock token
 		var ourLockToken = Guid.NewGuid().ToByteArray();
 		await cache.SetAsync(
 			lockKey,
@@ -91,19 +148,19 @@ public static class DistributedCacheExtensions
 			new () { AbsoluteExpirationRelativeToNow = lockTimeout ?? TimeSpan.FromSeconds(5) },
 			cancellationToken);
 
-		// Step 3: Remove the value
+		// Remove the value
 		await cache.RemoveAsync(key, cancellationToken);
 
-		// Step 4: Verify our lock token survived (last-write-wins check)
+		// Verify our lock token survived (last-write-wins check)
 		var survivingLockToken = await cache.GetAsync(lockKey, cancellationToken);
 		if (survivingLockToken == null || !ourLockToken.SequenceEqual(survivingLockToken))
 		{
 			// Another thread's lock overwrote ours - they won the race
-			return null;
+			return false;
 		}
 
 		// Our lock survived - we won the race, return the value
 		await cache.RemoveAsync(lockKey, cancellationToken); // Cleanup lock
-		return valueData;
+		return true;
 	}
 }

@@ -32,6 +32,9 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
@@ -250,6 +253,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
+            .AddSingleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
@@ -436,5 +440,29 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>()
             .AddSingleton<IBackChannelAuthenticationContextValidator, PingModeValidator>()
             .Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
+    }
+
+    /// <summary>
+    /// Configures services for handling Device Authorization Grant (RFC 8628) requests,
+    /// enabling devices with limited input capabilities to obtain user authorization.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddDeviceAuthorizationEndpoint(this IServiceCollection services)
+    {
+        return services
+            .AddDeviceAuthorizationContextValidators()
+            .AddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>()
+            .AddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>()
+            .AddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
+    }
+
+    public static IServiceCollection AddDeviceAuthorizationContextValidators(this IServiceCollection services)
+    {
+        return services
+            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>()
+            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>()
+            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>()
+            .Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();
     }
 }

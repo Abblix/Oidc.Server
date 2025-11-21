@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔒 Security
 
+- Enhanced Device Authorization Grant with brute force protection and race condition prevention (7eaa064)
+  - **Rate Limiting**: Exponential backoff per user code (configurable, default: 3 failures); per-IP sliding window (default: 10/minute); Result<bool, TimeSpan> pattern for type-safe retry handling; configurable thresholds in DeviceAuthorizationOptions; protobuf-based distributed state storage; security event logging (RFC 8628 Section 5.2)
+  - **Atomic Operations**: Lock-based get-and-remove protocol prevents concurrent token requests from claiming the same device code, ensuring exactly one token issuance per code (RFC 8628 Section 3.5)
+
 - Enhanced SSRF (Server-Side Request Forgery) protection with multi-layered security approach (498253c)
   - Added DNS resolution validation before HTTP requests
   - Implemented IP-based blocking for private network ranges
@@ -72,6 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced Audit Logging**: Security-critical logging with client IP address and JWT key ID (`kid`)
   - **Comprehensive Test Coverage**: 42 unit tests covering all RFC 7523 validation requirements and security scenarios
 
+- Implemented Device Authorization Grant (RFC 8628) for input-constrained devices (1e1ed21)
+  - Complete OAuth 2.0 flow for smart TVs, streaming devices, game consoles, and IoT devices
+  - Device authorization endpoint (`/device_authorization`) with device code and user code generation
+  - Token endpoint support for `urn:ietf:params:oauth:grant-type:device_code` grant type
+  - User code verification service with customizable authentication UI
+  - Status tracking: pending, authorized, denied, expired
+  - Configurable numeric and base-20 user code formats with adjustable length and expiration
+  - Protocol Buffer serialization for device authorization state
+  - Validation framework for client types, scopes, and resources per RFC 8628
+  - Enhanced with rate limiting and atomic operations in commit 7eaa064 (see Security section)
+
 - **CIBA Ping and Push Mode Implementation**: Complete status notification and token delivery infrastructure for Client-Initiated Backchannel Authentication
   - **Long-Polling Support**: Added configurable long-polling timeout for token endpoint
     - Holds polling requests until authentication completes or timeout expires
@@ -109,13 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grant type discovery infrastructure (#33, 19d4b29)
 
 ### 🛠️ Improvements
-
-- **CIBA Refactoring**:
-  - Applied strategy pattern to delivery mode handling, eliminating conditional branching
-  - Unified `BackChannelAuthenticationRequest` with required `ExpiresAt` parameter
-  - Simplified storage interfaces with atomic operations
-  - Updated protobuf schema and mappers to use `.ToTimestamp()` extension method preference
-  - Removed redundant parameters from test helper methods across 13 test files
 
 - **Protocol Buffer Serialization**:
   - Implemented protobuf serialization for all OIDC storage types via `ProtobufSerializer`

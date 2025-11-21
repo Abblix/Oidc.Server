@@ -168,7 +168,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, options, _) => capturedOptions = options)
+                (_, _, opts, _) => capturedOptions = opts)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -206,7 +206,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, options, _) => capturedOptions = options)
+                (_, _, opts, _) => capturedOptions = opts)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -242,7 +242,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, options, _) => capturedOptions = options)
+                (_, _, opts, _) => capturedOptions = opts)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -278,7 +278,7 @@ public class DistributedCacheStorageTests
                 It.IsAny<DistributedCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                (_, _, options, _) => capturedOptions = options)
+                (_, _, opts, _) => capturedOptions = opts)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -316,7 +316,7 @@ public class DistributedCacheStorageTests
         var key = "test_key";
         var value = CreateTestData();
         var options = CreateStorageOptions();
-        CancellationToken capturedToken = default;
+        var capturedToken = CancellationToken.None;
 
         _serializer
             .Setup(s => s.Serialize(value))
@@ -350,9 +350,9 @@ public class DistributedCacheStorageTests
         var key = "test_key";
         var value = CreateTestData();
         var options = CreateStorageOptions();
-        var cancellationTokenSource = new CancellationTokenSource();
+        using var cancellationTokenSource = new CancellationTokenSource();
         var expectedToken = cancellationTokenSource.Token;
-        CancellationToken capturedToken = default;
+        var capturedToken = CancellationToken.None;
 
         _serializer
             .Setup(s => s.Serialize(value))
@@ -504,18 +504,16 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "test_key";
-        var lockKey = $"lock:{key}";
+        var lockKey = $"Abblix.Utils.DistributedCacheExtensions:TryRemoveAsync:{key}";
         var serializedBytes = new byte[] { 1, 2, 3 };
         byte[]? capturedLockToken = null;
 
+        // Mock the atomic get-and-remove operation
         _cache
             .Setup(c => c.GetAsync(key, It.IsAny<CancellationToken>()))
             .ReturnsAsync(serializedBytes);
 
-        _serializer
-            .Setup(s => s.Deserialize<TestData>(serializedBytes))
-            .Returns(CreateTestData());
-
+        // Mock lock operations for atomic removal
         _cache
             .Setup(c => c.SetAsync(
                 lockKey,
@@ -538,11 +536,18 @@ public class DistributedCacheStorageTests
             .Setup(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        _serializer
+            .Setup(s => s.Deserialize<TestData>(serializedBytes))
+            .Returns(CreateTestData());
+
         // Act
         await _storage.GetAsync<TestData>(key, removeOnRetrieval: true);
 
-        // Assert
+        // Assert - verify atomic operations occurred
+        _cache.Verify(c => c.SetAsync(lockKey, It.IsAny<byte[]>(), It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(c => c.RemoveAsync(key, It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.GetAsync(lockKey, It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -565,9 +570,12 @@ public class DistributedCacheStorageTests
             .Returns(CreateTestData());
 
         // Act
-        await _storage.GetAsync<TestData>(key, removeOnRetrieval: false);
+        var result = await _storage.GetAsync<TestData>(key, removeOnRetrieval: false);
 
-        // Assert - MockBehavior.Strict ensures RemoveAsync is not called
+        // Assert
+        Assert.NotNull(result);
+        _cache.Verify(c => c.GetAsync(key, It.IsAny<CancellationToken>()), Times.Once);
+        // MockBehavior.Strict ensures RemoveAsync is not called
     }
 
     /// <summary>
@@ -590,8 +598,8 @@ public class DistributedCacheStorageTests
     public async Task GetAsync_WithNullToken_ShouldUseCancellationTokenNone()
     {
         // Arrange
-        var key = "test_key";
-        CancellationToken capturedToken = default;
+        const string key = "test_key";
+        var capturedToken = CancellationToken.None;
 
         _cache
             .Setup(c => c.GetAsync(key, It.IsAny<CancellationToken>()))
@@ -635,7 +643,7 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "test_key";
-        CancellationToken capturedToken = default;
+        var capturedToken = CancellationToken.None;
 
         _cache
             .Setup(c => c.RemoveAsync(key, It.IsAny<CancellationToken>()))
@@ -658,9 +666,9 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "test_key";
-        var cancellationTokenSource = new CancellationTokenSource();
+        using var cancellationTokenSource = new CancellationTokenSource();
         var expectedToken = cancellationTokenSource.Token;
-        CancellationToken capturedToken = default;
+        var capturedToken = CancellationToken.None;
 
         _cache
             .Setup(c => c.RemoveAsync(key, It.IsAny<CancellationToken>()))
@@ -724,11 +732,10 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "removal_key";
-        var lockKey = $"lock:{key}";
+        var lockKey = $"Abblix.Utils.DistributedCacheExtensions:TryRemoveAsync:{key}";
         var data = CreateTestData();
         var serializedBytes = new byte[] { 1, 2, 3 };
         var options = CreateStorageOptions();
-        byte[]? capturedLockToken = null;
 
         _serializer
             .Setup(s => s.Serialize(data))
@@ -750,6 +757,8 @@ public class DistributedCacheStorageTests
             .Setup(s => s.Deserialize<TestData>(serializedBytes))
             .Returns(data);
 
+        // Mock lock operations for atomic removal
+        byte[]? capturedLockToken = null;
         _cache
             .Setup(c => c.SetAsync(
                 lockKey,

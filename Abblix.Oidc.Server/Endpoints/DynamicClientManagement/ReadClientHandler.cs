@@ -41,12 +41,20 @@ public class ReadClientHandler(
     /// <summary>
     /// Processes a client configuration read request.
     /// </summary>
-    /// <param name="clientRequest">The authenticated client request with registration access credentials.</param>
-    /// <returns>Client configuration data or an error if validation fails.</returns>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(Model.ClientRequest clientRequest)
+    /// <param name="clientRequest">The client request containing details necessary for fetching the client information,
+    /// such as the client identifier.</param>
+    /// <returns>A task that results in a <see cref="ReadClientResponse"/>, which could be the requested client data or
+    /// an error response.</returns>
+    /// <exception cref="UnexpectedTypeException">Thrown if the validation result does not match expected types.
+    /// </exception>
+    /// <remarks>
+    /// This method serves as a critical part of dynamic client management, allowing for the secure retrieval of client
+    /// configurations. It ensures that only valid requests are processed, safeguarding against unauthorized access
+    /// to client information.
+    /// </remarks>
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await validator.ValidateAsync(clientRequest);
-
         return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

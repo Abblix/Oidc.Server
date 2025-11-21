@@ -75,6 +75,8 @@ public record ConfigurationResponse
         public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
         public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
         public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
+        // RFC 8628 Device Authorization Grant
+        public const string DeviceAuthorizationEndpoint = "device_authorization_endpoint";
         // RFC 8705 mTLS endpoint aliases
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
     }
@@ -321,6 +323,13 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
     public bool? BackChannelUserCodeParameterSupported { get; init; }
+
+    /// <summary>
+    /// The URL of the device authorization endpoint as defined in RFC 8628.
+    /// This endpoint is used to initiate the Device Authorization Grant flow.
+    /// </summary>
+    [JsonPropertyName(Parameters.DeviceAuthorizationEndpoint)]
+    public Uri? DeviceAuthorizationEndpoint { get; init; }
 
     /// <summary>
     /// RFC 8705: mTLS endpoint aliases block to advertise alternate endpoints served on an mTLS-bound host.

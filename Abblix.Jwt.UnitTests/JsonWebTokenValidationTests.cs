@@ -481,14 +481,14 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         token.Payload.IssuedAt = issuedAt;
         token.Payload.NotBefore = issuedAt;
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(1);
+        // Token expired 30 seconds ago, but should still validate due to clock skew tolerance
+        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-30);
 
         var jwt = await IssueToken(token, SigningKey);
 
-        await Task.Delay(100);
-
         var validator = new JsonWebTokenValidator();
         var parameters = CreateValidationParameters(SigningKey);
+        parameters.ClockSkew = TimeSpan.FromMinutes(5);
 
         var result = await validator.ValidateAsync(jwt, parameters);
 

@@ -36,7 +36,7 @@ public record BackChannelAuthenticationSuccess
     /// to poll the authorization server and check the status of the user's authentication.
     /// </summary>
     [JsonPropertyName(Parameters.AuthenticationRequestId)]
-    public string AuthenticationRequestId { get; set; } = default!;
+    public string AuthenticationRequestId { get; set; } = null!;
 
     /// <summary>
     /// Specifies the time period (in seconds) after which the backchannel authentication request expires.

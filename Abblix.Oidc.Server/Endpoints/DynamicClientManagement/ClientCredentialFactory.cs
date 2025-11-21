@@ -33,28 +33,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Coordinates credential generation by composing ID generation, secret generation, hashing, and expiration calculation.
 /// Uses SHA-512 for strong cryptographic hashing while maintaining configurable secret length and expiration policies.
 /// </summary>
-public class ClientCredentialFactory : IClientCredentialFactory
+public class ClientCredentialFactory(
+    IClientIdGenerator clientIdGenerator,
+    IClientSecretGenerator clientSecretGenerator,
+    IHashService hashService,
+    NewClientOptions options,
+    TimeProvider clock) : IClientCredentialFactory
 {
-    private readonly IClientIdGenerator _clientIdGenerator;
-    private readonly IClientSecretGenerator _clientSecretGenerator;
-    private readonly TimeProvider _clock;
-    private readonly IHashService _hashService;
-    private readonly NewClientOptions _options;
-
-    public ClientCredentialFactory(
-        IClientIdGenerator clientIdGenerator,
-        IClientSecretGenerator clientSecretGenerator,
-        IHashService hashService,
-        NewClientOptions options,
-        TimeProvider clock)
-    {
-        _clientIdGenerator = clientIdGenerator;
-        _clientSecretGenerator = clientSecretGenerator;
-        _hashService = hashService;
-        _options = options;
-        _clock = clock;
-    }
-
     /// <summary>
     /// Generates secrets conditionally based on authentication method to avoid unnecessary secret generation
     /// for public clients. Uses time-based expiration to enforce secret rotation policies.
@@ -68,7 +53,7 @@ public class ClientCredentialFactory : IClientCredentialFactory
     /// </returns>
     public ClientCredentials Create(string tokenEndpointAuthMethod, string? clientId = null)
     {
-        var finalClientId = clientId.HasValue() ? clientId : _clientIdGenerator.GenerateClientId();
+        var finalClientId = clientId.HasValue() ? clientId : clientIdGenerator.GenerateClientId();
 
         switch (tokenEndpointAuthMethod)
         {
@@ -76,10 +61,10 @@ public class ClientCredentialFactory : IClientCredentialFactory
             case ClientAuthenticationMethods.ClientSecretPost:
             case ClientAuthenticationMethods.ClientSecretJwt:
 
-                var plainSecret = _clientSecretGenerator.GenerateClientSecret(_options.ClientSecret.Length);
-                var hashedSecret = _hashService.Sha(HashAlgorithm.Sha512, plainSecret);
-                var issuedAt = _clock.GetUtcNow();
-                var expiresAt = issuedAt + _options.ClientSecret.ExpiresAfter;
+                var plainSecret = clientSecretGenerator.GenerateClientSecret(options.ClientSecret.Length);
+                var hashedSecret = hashService.Sha(HashAlgorithm.Sha512, plainSecret);
+                var issuedAt = clock.GetUtcNow();
+                var expiresAt = issuedAt + options.ClientSecret.ExpiresAfter;
 
                 return new ClientCredentials(finalClientId, plainSecret, hashedSecret, expiresAt);
 

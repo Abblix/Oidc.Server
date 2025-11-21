@@ -283,6 +283,34 @@ Financial APIs (PSD2, Open Banking), healthcare systems (FHIR), and government s
 
 The implementation supports common reverse proxy scenarios (nginx, Envoy, HAProxy) where TLS termination occurs at the edge, with certificate forwarding to backend services. Automatic mTLS endpoint discovery enables clients to discover dedicated mTLS endpoints per RFC 8705 requirements.
 
+### Device Authorization Grant (RFC 8628)
+
+**What It Does:**
+
+Implemented the Device Authorization Grant flow enabling OAuth 2.0 authorization for devices with limited input capabilities or no browser access, such as smart TVs, streaming devices, game consoles, and IoT devices. The implementation provides a complete flow where the device displays a user code, the user authorizes on a secondary device (phone/computer), and the device polls for token issuance.
+
+**Features:**
+- **Device Authorization Endpoint** - `/device_authorization` endpoint for initiating flows with device code and user code generation
+- **Device Code Grant Handler** - Token endpoint support for `urn:ietf:params:oauth:grant-type:device_code` grant type
+- **User Code Verification** - Service for validating user codes with customizable authentication UI
+- **Status Tracking** - Pending, authorized, denied, and expired states per RFC 8628
+- **Configurable Codes** - Support for numeric and base-20 user code formats with configurable length and expiration
+- **Protocol Buffer Storage** - Efficient serialization for device authorization state
+- **Rate Limiting** - Exponential backoff per user code (default: 3 failures) and per-IP sliding window (default: 10/minute)
+- **Atomic Operations** - Lock-based device code redemption preventing race conditions in concurrent token requests
+
+**Why This Matters:**
+
+Traditional OAuth flows assume devices have browsers and keyboards. Smart TVs, streaming devices, and IoT devices struggle with these assumptions - entering URLs and passwords with a TV remote is frustrating. Device Authorization Grant solves this by delegating authentication to a phone or computer where users can type comfortably.
+
+**Real-World Impact:**
+
+Streaming applications, smart home devices, and enterprise IoT solutions can now implement secure OAuth 2.0 flows without requiring browsers or complex input mechanisms. Users visit a simple URL on their phone, enter the code displayed on their TV, and authorize - the TV automatically receives tokens without requiring password entry on the device.
+
+**Security:**
+
+The implementation includes comprehensive brute force protection as recommended by RFC 8628 Section 5.2. Exponential backoff prevents automated user code guessing attacks. Per-IP rate limiting stops distributed attacks. Atomic device code redemption prevents race conditions where concurrent requests could claim the same authorization. All rate limiting state is stored in distributed cache with Protobuf serialization for multi-instance deployments.
+
 ### SSRF Protection Enhancement
 
 **What It Does:**

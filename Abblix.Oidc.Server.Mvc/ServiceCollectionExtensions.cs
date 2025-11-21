@@ -107,6 +107,7 @@ public static class ServiceCollectionExtensions
 			.AddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>()
 			.AddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>()
 			.AddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>()
+			.AddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>()
 
 			.AddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>()
 			.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>()

@@ -187,14 +187,14 @@ public class JsonWebKeySerializationTests
             KeyId = "rsa-key-1",
             Usage = "sig",
             Algorithm = "RS256",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD, 0xEF },
-            PrivateExponent = new byte[] { 0x12, 0x34, 0x56 },
-            FirstPrimeFactor = new byte[] { 0xAA },
-            SecondPrimeFactor = new byte[] { 0xBB },
-            FirstFactorCrtExponent = new byte[] { 0xCC },
-            SecondFactorCrtExponent = new byte[] { 0xDD },
-            FirstCrtCoefficient = new byte[] { 0xEE },
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD, 0xEF],
+            PrivateExponent = [0x12, 0x34, 0x56],
+            FirstPrimeFactor = [0xAA],
+            SecondPrimeFactor = [0xBB],
+            FirstFactorCrtExponent = [0xCC],
+            SecondFactorCrtExponent = [0xDD],
+            FirstCrtCoefficient = [0xEE],
         };
 
         // Act
@@ -229,9 +229,9 @@ public class JsonWebKeySerializationTests
             Usage = "sig",
             Algorithm = "ES256",
             Curve = "P-256",
-            X = new byte[] { 0x11, 0x22, 0x33 },
-            Y = new byte[] { 0x44, 0x55, 0x66 },
-            PrivateKey = new byte[] { 0x77, 0x88, 0x99 },
+            X = [0x11, 0x22, 0x33],
+            Y = [0x44, 0x55, 0x66],
+            PrivateKey = [0x77, 0x88, 0x99],
         };
 
         // Act
@@ -261,7 +261,7 @@ public class JsonWebKeySerializationTests
             KeyId = "oct-key-1",
             Usage = "sig",
             Algorithm = "HS256",
-            KeyValue = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD },
+            KeyValue = [0xAA, 0xBB, 0xCC, 0xDD],
         };
 
         // Act
@@ -287,11 +287,11 @@ public class JsonWebKeySerializationTests
         var key = new RsaJsonWebKey
         {
             KeyId = "rsa-key-1",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD },
-            PrivateExponent = new byte[] { 0x12, 0x34 },
-            FirstPrimeFactor = new byte[] { 0xAA },
-            SecondPrimeFactor = new byte[] { 0xBB },
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
+            PrivateExponent = [0x12, 0x34],
+            FirstPrimeFactor = [0xAA],
+            SecondPrimeFactor = [0xBB],
         };
 
         // Act
@@ -322,10 +322,10 @@ public class JsonWebKeySerializationTests
         var key = new RsaJsonWebKey
         {
             KeyId = "rsa-key-1",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD },
-            PrivateExponent = new byte[] { 0x12, 0x34 },
-            FirstPrimeFactor = new byte[] { 0xAA },
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
+            PrivateExponent = [0x12, 0x34],
+            FirstPrimeFactor = [0xAA],
         };
 
         // Act
@@ -351,9 +351,9 @@ public class JsonWebKeySerializationTests
         {
             KeyId = "ec-key-1",
             Curve = "P-256",
-            X = new byte[] { 0x11, 0x22 },
-            Y = new byte[] { 0x33, 0x44 },
-            PrivateKey = new byte[] { 0x55, 0x66 },
+            X = [0x11, 0x22],
+            Y = [0x33, 0x44],
+            PrivateKey = [0x55, 0x66],
         };
 
         // Act
@@ -381,7 +381,7 @@ public class JsonWebKeySerializationTests
         {
             KeyId = "oct-key-1",
             Algorithm = "HS256",
-            KeyValue = new byte[] { 0xAA, 0xBB, 0xCC },
+            KeyValue = [0xAA, 0xBB, 0xCC],
         };
 
         // Act
@@ -432,14 +432,14 @@ public class JsonWebKeySerializationTests
         var original = new RsaJsonWebKey
         {
             KeyId = "rsa-key-1",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD },
-            Certificates = new[]
-            {
-                new byte[] { 0x30, 0x82, 0x01, 0x0A }, // DER-encoded cert 1
-                new byte[] { 0x30, 0x82, 0x02, 0x0B }, // DER-encoded cert 2
-            },
-            Thumbprint = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD }, // SHA-1 thumbprint
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
+            Certificates =
+            [
+                [0x30, 0x82, 0x01, 0x0A], // DER-encoded cert 1
+                [0x30, 0x82, 0x02, 0x0B] // DER-encoded cert 2
+            ],
+            Thumbprint = [0xAA, 0xBB, 0xCC, 0xDD], // SHA-1 thumbprint
         };
 
         // Act
@@ -466,8 +466,8 @@ public class JsonWebKeySerializationTests
         var key = new RsaJsonWebKey
         {
             KeyId = "rsa-key-1",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD },
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
         };
 
         // Act - Serialize as concrete type, not base type
@@ -490,8 +490,8 @@ public class JsonWebKeySerializationTests
         var key = new RsaJsonWebKey
         {
             KeyId = "rsa-key-1",
-            Exponent = new byte[] { 1, 0, 1 },
-            Modulus = new byte[] { 0xAB, 0xCD },
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
         };
 
         // Act - Serialize through base type to trigger polymorphic behavior
@@ -514,8 +514,8 @@ public class JsonWebKeySerializationTests
         {
             KeyId = "ec-key-1",
             Curve = "P-256",
-            X = new byte[] { 0x11, 0x22 },
-            Y = new byte[] { 0x33, 0x44 },
+            X = [0x11, 0x22],
+            Y = [0x33, 0x44],
         };
 
         // Act - Serialize as concrete type
@@ -537,7 +537,7 @@ public class JsonWebKeySerializationTests
         var key = new OctetJsonWebKey
         {
             KeyId = "oct-key-1",
-            KeyValue = new byte[] { 0xAA, 0xBB, 0xCC },
+            KeyValue = [0xAA, 0xBB, 0xCC],
         };
 
         // Act - Serialize as concrete type

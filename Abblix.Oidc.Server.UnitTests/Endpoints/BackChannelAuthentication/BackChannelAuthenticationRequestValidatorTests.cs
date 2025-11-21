@@ -179,7 +179,7 @@ public class BackChannelAuthenticationRequestValidatorTests
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
 
-        var loginHintToken = new Abblix.Jwt.JsonWebToken();
+        var loginHintToken = new Jwt.JsonWebToken();
 
         _contextValidator
             .Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
@@ -218,7 +218,7 @@ public class BackChannelAuthenticationRequestValidatorTests
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
 
-        var idToken = new Abblix.Jwt.JsonWebToken();
+        var idToken = new Jwt.JsonWebToken();
 
         _contextValidator
             .Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
