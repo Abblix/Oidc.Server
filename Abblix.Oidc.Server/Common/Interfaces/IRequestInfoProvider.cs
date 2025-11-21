@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
+
 namespace Abblix.Oidc.Server.Common.Interfaces;
 
 /// <summary>
@@ -28,12 +30,12 @@ namespace Abblix.Oidc.Server.Common.Interfaces;
 public interface IRequestInfoProvider
 {
     /// <summary>
-    /// Gets the base URI of the application.
+    /// The base URI of the application.
     /// </summary>
     string ApplicationUri { get; }
 
     /// <summary>
-    /// Gets the request URI.
+    /// The request URI.
     /// </summary>
     string RequestUri { get; }
 
@@ -43,7 +45,13 @@ public interface IRequestInfoProvider
     bool IsHttps { get; }
 
     /// <summary>
-    /// Gets the base path of the request.
+    /// The base path of the request.
     /// </summary>
     string PathBase { get; }
+
+    /// <summary>
+    /// The client's IP address from the current request.
+    /// May be null if the IP address cannot be determined.
+    /// </summary>
+    IPAddress? RemoteIpAddress { get; }
 }

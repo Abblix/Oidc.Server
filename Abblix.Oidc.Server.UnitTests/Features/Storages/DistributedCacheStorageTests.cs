@@ -504,7 +504,9 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "test_key";
+        var lockKey = $"lock:{key}";
         var serializedBytes = new byte[] { 1, 2, 3 };
+        byte[]? capturedLockToken = null;
 
         _cache
             .Setup(c => c.GetAsync(key, It.IsAny<CancellationToken>()))
@@ -515,7 +517,25 @@ public class DistributedCacheStorageTests
             .Returns(CreateTestData());
 
         _cache
+            .Setup(c => c.SetAsync(
+                lockKey,
+                It.IsAny<byte[]>(),
+                It.IsAny<DistributedCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
+                (_, token, _, _) => capturedLockToken = token)
+            .Returns(Task.CompletedTask);
+
+        _cache
             .Setup(c => c.RemoveAsync(key, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _cache
+            .Setup(c => c.GetAsync(lockKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => capturedLockToken);
+
+        _cache
+            .Setup(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -704,9 +724,11 @@ public class DistributedCacheStorageTests
     {
         // Arrange
         var key = "removal_key";
+        var lockKey = $"lock:{key}";
         var data = CreateTestData();
         var serializedBytes = new byte[] { 1, 2, 3 };
         var options = CreateStorageOptions();
+        byte[]? capturedLockToken = null;
 
         _serializer
             .Setup(s => s.Serialize(data))
@@ -729,7 +751,25 @@ public class DistributedCacheStorageTests
             .Returns(data);
 
         _cache
+            .Setup(c => c.SetAsync(
+                lockKey,
+                It.IsAny<byte[]>(),
+                It.IsAny<DistributedCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
+                (_, token, _, _) => capturedLockToken = token)
+            .Returns(Task.CompletedTask);
+
+        _cache
             .Setup(c => c.RemoveAsync(key, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _cache
+            .Setup(c => c.GetAsync(lockKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => capturedLockToken);
+
+        _cache
+            .Setup(c => c.RemoveAsync(lockKey, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         // Act

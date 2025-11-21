@@ -47,6 +47,7 @@ public record TokenRequest
 		public const string Password = "password";
 		public const string CodeVerifier = "code_verifier";
 		public const string AuthenticationRequestId = "auth_req_id";
+		public const string Assertion = "assertion";
 	}
 
 	/// <summary>
@@ -61,7 +62,9 @@ public record TokenRequest
 		GrantTypes.Password,
 		GrantTypes.Ciba,
 		GrantTypes.Implicit,
-		GrantTypes.ClientCredentials)]
+		GrantTypes.ClientCredentials,
+		GrantTypes.JwtBearer,
+		GrantTypes.DeviceAuthorization)]
 	public string GrantType { get; set; } = default!;
 
 	/// <summary>
@@ -128,4 +131,11 @@ public record TokenRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.AuthenticationRequestId)]
 	public string? AuthenticationRequestId { get; set; }
+
+	/// <summary>
+	/// The JWT assertion used in the JWT Bearer grant type per RFC 7523.
+	/// This contains a signed JWT with claims about the resource owner and is used to request an access token.
+	/// </summary>
+	[JsonPropertyName(Parameters.Assertion)]
+	public string? Assertion { get; set; }
 }

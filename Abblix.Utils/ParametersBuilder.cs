@@ -42,7 +42,7 @@ public class ParametersBuilder
 	private readonly NameValueCollection _values;
 
 	/// <summary>
-	/// Gets or sets the value associated with the specified parameter name.
+	/// The value associated with the specified parameter name.
 	/// </summary>
 	/// <param name="name">The name of the parameter to get or set.</param>
 	/// <returns>The value associated with the specified name.</returns>

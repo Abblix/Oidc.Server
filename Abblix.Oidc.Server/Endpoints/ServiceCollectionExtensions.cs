@@ -54,6 +54,8 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -238,11 +240,18 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationGrants(this IServiceCollection services)
     {
+        services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
+        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+
+        services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
+            JwtBearerIssuerProvider.SecureHttpFetcherKey);
+
         return services
             .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
             .AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>()
+            .AddSingleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
             .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
     }

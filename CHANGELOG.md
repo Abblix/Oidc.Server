@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AuthorizationErrorResponse` → `AuthorizationError`
   - Similar pattern applied across all endpoint response types
 
+- **IRequestInfoProvider Interface Changes**: Added `RemoteIpAddress` property
+  - `IRequestInfoProvider.RemoteIpAddress` returns `System.Net.IPAddress?` for client IP logging
+  - Custom implementations must implement this new property
+
+- **JsonWebTokenHeader Changes**: Added `KeyId` property
+  - `JsonWebTokenHeader.KeyId` exposes the `kid` header claim for audit logging
+
 ### 🔒 Security
 
 - Enhanced SSRF (Server-Side Request Forgery) protection with multi-layered security approach (498253c)
@@ -32,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive logging for security events
   - Note: TOCTOU vulnerability exists between DNS validation and HTTP request
 
+- Applied SSRF protection to client JWKS fetching
+  - Updated `ClientKeysProvider` to use `ISecureHttpFetcher` instead of direct HTTP calls
+  - Consistent security approach across JWT Bearer and client authentication flows
+  - Enhanced error handling and logging for JWKS fetch operations
+
 - Hardened GitHub Actions workflow against supply chain attacks (f96372e)
   - Pinned all GitHub Actions to commit SHA instead of mutable version tags
   - Secured secret handling with environment variables instead of inline expansion
@@ -39,6 +51,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added explicit `AttributeUsage` to validation attributes (ac61f96)
 
 ### ✨ Features
+
+- **JWT Bearer Grant Type (RFC 7523)**: Full implementation of JWT Bearer grant type for token exchange scenarios
+  - **Configuration-Based Setup**: Added `JwtBearerOptions` to `OidcOptions` for declarative trusted issuer configuration
+  - **Trusted Issuer Management**: Configure external identity providers via `OidcOptions.JwtBearer.TrustedIssuers` collection
+  - **Automatic JWKS Fetching**: Default `JwtBearerIssuerProvider` automatically fetches signing keys from configured JWKS URIs
+  - **RFC 7523 Compliance**: Proper validation of issuer (iss), subject (sub), audience (aud), and expiration (exp) claims
+  - **Signature Verification**: Resolves signing keys from trusted issuers' JWKS endpoints for JWT signature validation
+  - **Audience Validation**: Ensures JWT audience matches the token endpoint URI where assertion is presented
+  - **Federation Support**: Enables service-to-service authentication, token exchange, and cross-domain SSO scenarios
+  - **Extensibility**: `IJwtBearerIssuerProvider` interface allows custom issuer validation strategies
+  - **Security Hardening**: Multiple attack prevention mechanisms
+    - Algorithm substitution attack prevention with configurable allowed algorithms (defaults to RS/ES/PS only, no HMAC or 'none')
+    - Token type (`typ` header) validation to prevent token confusion attacks
+    - Maximum JWT age (`MaxJwtAge`) validation with required `iat` claim to prevent stale token reuse
+    - Replay protection via `jti` claim tracking with configurable `RequireJti` option
+    - Maximum JWT size limit (`MaxJwtSize`) to prevent denial-of-service attacks
+    - Scope restriction per trusted issuer via `AllowedScopes` configuration
+    - Strict vs permissive audience validation modes via `StrictAudienceValidation` option
+  - **Enhanced Audit Logging**: Security-critical logging with client IP address and JWT key ID (`kid`)
+  - **Comprehensive Test Coverage**: 42 unit tests covering all RFC 7523 validation requirements and security scenarios
 
 - **CIBA Ping and Push Mode Implementation**: Complete status notification and token delivery infrastructure for Client-Initiated Backchannel Authentication
   - **Long-Polling Support**: Added configurable long-polling timeout for token endpoint

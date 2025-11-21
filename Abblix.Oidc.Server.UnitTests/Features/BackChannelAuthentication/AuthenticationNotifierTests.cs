@@ -402,7 +402,7 @@ public class AuthenticationNotifierTests
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
 
-        _storage.Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+        _storage.Setup(s => s.RemoveAsync(AuthReqId))
             .Returns(Task.CompletedTask);
 
         var notifier = CreatePushModeNotifier();
@@ -416,7 +416,7 @@ public class AuthenticationNotifierTests
             s => s.DeliverTokensAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TokenIssued>()),
             Times.Never);
         _storage.Verify(
-            s => s.UpdateAsync(AuthReqId, It.Is<BackChannelAuthenticationRequest>(r => r.Status == BackChannelAuthenticationStatus.Denied), _expiresIn),
+            s => s.RemoveAsync(AuthReqId),
             Times.Once);
     }
 

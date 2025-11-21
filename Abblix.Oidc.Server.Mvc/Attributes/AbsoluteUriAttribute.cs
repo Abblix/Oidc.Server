@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 public sealed class AbsoluteUriAttribute : ValidationAttribute
 {
 	/// <summary>
-	/// Gets or sets the URI scheme that the URI must use, such as "http" or "https".
+	/// The URI scheme that the URI must use, such as "http" or "https".
 	/// If not set, any absolute URI scheme is considered valid.
 	/// </summary>
 	public string? RequireScheme { get; set; }

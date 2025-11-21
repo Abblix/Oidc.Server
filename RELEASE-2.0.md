@@ -122,6 +122,22 @@ Response formatters updated to accept Result types instead of abstract response 
 
 The original enum values could overlap when combined using bitwise operations, potentially enabling unintended endpoints or disabling intended ones. This bug could allow unauthorized access to administrative endpoints or accidentally expose functionality that should remain disabled. The corrected flag values ensure that endpoint configurations work exactly as specified, with no unintended side effects.
 
+### IRequestInfoProvider Interface Changes
+
+**What Changed:**
+
+Added a new property to the request info provider interface that returns the client's IP address. This enables security audit logging to include the source IP address of incoming requests.
+
+**Migration Impact:**
+
+Custom implementations of this interface must add the new property. The built-in ASP.NET Core adapter has been updated to return the remote IP address from the HTTP connection.
+
+### JsonWebTokenHeader Changes
+
+**What Changed:**
+
+Added a property to the JWT header class that exposes the key ID claim, enabling audit logs to record which signing key was used to sign incoming JWT assertions.
+
 ## New Features
 
 ### CIBA Ping and Push Modes - Complete Delivery Mode Implementation
@@ -168,6 +184,40 @@ CIBA's advanced delivery modes are critical for financial services and IoT scena
 - **Push mode** goes further by delivering tokens directly to the client notification endpoint, eliminating the need for clients to make a separate token request at all
 
 These delivery modes are essential for real-time authentication scenarios where delays are unacceptable, such as payment authorization, IoT device provisioning, or mobile banking authentication.
+
+### JWT Bearer Grant Type (RFC 7523)
+
+**What It Does:**
+
+Full implementation of JWT Bearer grant type for token exchange scenarios, allowing clients to exchange a JWT assertion from a trusted identity provider for an access token at this authorization server. This grant type is specified in RFC 7523 and enables service-to-service authentication, token exchange between federated identity providers, and cross-domain SSO scenarios.
+
+**Features:**
+- **Configuration-Based Setup**: Declarative trusted issuer configuration via `OidcOptions.JwtBearer.TrustedIssuers`
+- **Automatic JWKS Fetching**: Default `JwtBearerIssuerProvider` automatically fetches signing keys from configured JWKS URIs
+- **RFC 7523 Compliance**: Proper validation of issuer (iss), subject (sub), audience (aud), and expiration (exp) claims
+- **Security Hardening**: Multiple attack prevention mechanisms:
+  - Algorithm substitution attack prevention with configurable allowed algorithms (defaults to RS/ES/PS only, no HMAC or 'none')
+  - Token type (`typ` header) validation to prevent token confusion attacks
+  - Maximum JWT age (`MaxJwtAge`) validation with required `iat` claim to prevent stale token reuse
+  - Replay protection via `jti` claim tracking with configurable `RequireJti` option
+  - Maximum JWT size limit (`MaxJwtSize`) to prevent denial-of-service attacks
+  - Scope restriction per trusted issuer via `AllowedScopes` configuration
+  - Strict vs permissive audience validation modes via `StrictAudienceValidation` option
+- **Enhanced Audit Logging**: Security-critical logging includes client IP address and JWT key ID (`kid`)
+- **Extensibility**: `IJwtBearerIssuerProvider` interface allows custom issuer validation strategies
+
+**Why This Matters:**
+
+Federation scenarios are increasingly common in enterprise environments where organizations need to accept tokens from external identity providers while maintaining security controls. The JWT Bearer grant type enables:
+- **Service-to-service authentication** with pre-existing trust relationships between organizations
+- **Token exchange** between federated identity providers without exposing user credentials
+- **Cross-domain SSO** where users authenticated by one organization need access to another's resources
+
+The comprehensive security hardening prevents common JWT-based attacks including algorithm confusion (CVE-2015-9235), token confusion, replay attacks, and denial-of-service through oversized tokens.
+
+**Real-World Impact:**
+
+Organizations can now integrate with external identity providers (Azure AD, Okta, Auth0, Google) using standard JWT Bearer assertions, enabling B2B federation scenarios. The security controls ensure that even if trusted issuers are compromised, the attack surface is limited through algorithm restrictions, age limits, and replay protection.
 
 ### Client Credentials JWT Authentication (client_secret_jwt)
 
