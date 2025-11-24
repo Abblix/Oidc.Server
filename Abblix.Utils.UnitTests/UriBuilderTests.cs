@@ -704,7 +704,7 @@ public class UriBuilderTests
 
         var result = builder.Uri;
 
-        Assert.Contains("name=José+García", result.ToString());
+        Assert.Contains("name=Jos%C3%A9+Garc%C3%ADa", result.ToString());
     }
 
     #endregion

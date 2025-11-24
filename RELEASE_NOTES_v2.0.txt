@@ -1,0 +1,32 @@
+Release v2.0
+
+## 🚀 Features
+- **Result Pattern Migration** - Simplified codebase by eliminating abstract response type hierarchy and boilerplate
+- **mTLS Client Authentication (RFC 8705)** - Self-signed and PKI/CA validation with certificate-bound tokens
+- **JWT Bearer Grant Type (RFC 7523)** - Service-to-service authentication using signed JWTs for secure API-to-API communication
+- **Device Authorization Grant (RFC 8628)** - OAuth flow for input-constrained devices (smart TVs, IoT, CLI tools)
+- **CIBA Ping/Push Modes & Long-Polling** - Complete delivery mode implementation with token delivery service and long-polling support
+- **client_secret_jwt Authentication** - JWT-based client authentication per OIDC Core spec
+- **SSRF Protection** - Multi-layered defense with DNS validation and IP blocking
+
+## 🛠 Fixes
+- **Session Accumulation** - Fixed distributed cache memory leak
+- **ECDSA Certificate Support** - Fixed hardcoded RSA-only handling in JWK conversion
+
+## ✏️ Improvements
+- **Protocol Buffer serialization** - 40-60% smaller storage footprint with faster processing
+- **Comprehensive test coverage** - 50,000+ lines of tests across all OAuth 2.0/OIDC flows
+- **.NET 8/9/10 support** - Dropped .NET 6/7, targeting modern LTS versions
+
+## 🔄 Breaking Changes
+- Dropped .NET 6 and .NET 7 support
+- Now requires .NET 8+ (supports .NET 8, 9, and 10)
+- Handler return types changed from abstract response types to Result<TSuccess, TFailure>
+- All response types renamed to remove 'Response' suffix (e.g., TokenIssuedResponse → TokenIssued)
+
+## 📖 Documentation
+- Migration guide: https://github.com/Abblix/Oidc.Server/blob/master/MIGRATION-2.0.md
+- Full changelog: https://github.com/Abblix/Oidc.Server/blob/master/CHANGELOG.md
+
+## 🔗 Links
+Full Changelog: https://github.com/Abblix/Oidc.Server/compare/v1.6.0...v2.0
