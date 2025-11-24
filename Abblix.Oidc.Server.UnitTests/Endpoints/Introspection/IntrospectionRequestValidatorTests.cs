@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -66,7 +67,7 @@ public class IntrospectionRequestValidatorTests
         };
     }
 
-    private static ClientRequest CreateClientRequest(string clientId = "client_123")
+    private static ClientRequest CreateClientRequest(string clientId = TestConstants.DefaultClientId)
     {
         return new ClientRequest
         {
@@ -74,7 +75,7 @@ public class IntrospectionRequestValidatorTests
         };
     }
 
-    private static JsonWebToken CreateValidJsonWebToken(string clientId = "client_123")
+    private static JsonWebToken CreateValidJsonWebToken(string clientId = TestConstants.DefaultClientId)
     {
         var token = new JsonWebToken();
         token.Payload.ClientId = clientId;
@@ -92,7 +93,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
@@ -150,7 +151,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var validationError = new JwtValidationError(
             JwtError.InvalidToken,
             "Token is expired");
@@ -184,7 +185,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken("different_client");
 
         _clientAuthenticator
@@ -216,7 +217,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken();
 
         var callOrder = new System.Collections.Generic.List<string>();
@@ -274,7 +275,7 @@ public class IntrospectionRequestValidatorTests
         var token = "specific_token_value_123";
         var introspectionRequest = CreateIntrospectionRequest(token);
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var jwt = CreateValidJsonWebToken();
 
         _clientAuthenticator
@@ -302,7 +303,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
@@ -331,7 +332,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
@@ -360,7 +361,7 @@ public class IntrospectionRequestValidatorTests
         // Arrange
         var introspectionRequest = CreateIntrospectionRequest();
         var clientRequest = CreateClientRequest();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator

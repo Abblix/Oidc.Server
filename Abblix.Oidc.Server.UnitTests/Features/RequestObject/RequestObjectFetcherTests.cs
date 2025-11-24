@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -105,7 +106,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", "state123");
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, "state123");
 
         // Act
         var result = await fetcher.FetchAsync(request, null);
@@ -124,7 +125,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
 
         // Act
         var result = await fetcher.FetchAsync(request, string.Empty);
@@ -143,15 +144,15 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var originalRequest = new TestRequest("client1", "https://example.com/callback", null);
+        var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1", ["state"] = "newstate" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId, ["state"] = "newstate" };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
             Payload = new JsonWebTokenPayload(payload)
         };
-        var boundRequest = new TestRequest("client1", "https://example.com/callback", "newstate");
+        var boundRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, "newstate");
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
@@ -179,7 +180,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var originalRequest = new TestRequest("client1", "https://example.com/callback", null);
+        var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
         var payload = new JsonObject { ["invalid"] = "data" };
         var token = new JsonWebToken
@@ -214,7 +215,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "invalid.jwt.token";
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Invalid JWT format");
 
@@ -241,9 +242,9 @@ public class RequestObjectFetcherTests
         // Arrange
         _oidcOptions.RequireSignedRequestObject = true;
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -279,9 +280,9 @@ public class RequestObjectFetcherTests
         // Arrange
         _oidcOptions.RequireSignedRequestObject = false;
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -316,9 +317,9 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -350,9 +351,9 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -383,12 +384,12 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request1 = new TestRequest("client1", "https://example.com/callback1", null);
-        var request2 = new TestRequest("client2", "https://example.com/callback2", null);
+        var request1 = new TestRequest(TestConstants.DefaultClientId, "https://example.com/callback1", null);
+        var request2 = new TestRequest(TestConstants.AlternativeClientId, "https://example.com/callback2", null);
         var jwt1 = "jwt1";
         var jwt2 = "jwt2";
-        var payload1 = new JsonObject { ["client_id"] = "client1" };
-        var payload2 = new JsonObject { ["client_id"] = "client2" };
+        var payload1 = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload2 = new JsonObject { ["client_id"] = TestConstants.AlternativeClientId };
         var token1 = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -432,7 +433,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.expired.signature";
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Token has expired");
 
@@ -457,7 +458,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.payload.badsignature";
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
 
@@ -482,11 +483,11 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var originalRequest = new TestRequest("client1", "https://example.com/callback", null);
+        var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.complex.signature";
         var payload = new JsonObject
         {
-            ["client_id"] = "client1",
+            ["client_id"] = TestConstants.DefaultClientId,
             ["redirect_uri"] = "https://new.example.com/callback",
             ["state"] = "complex_state_123",
             ["nonce"] = "nonce_value",
@@ -497,7 +498,7 @@ public class RequestObjectFetcherTests
             Header = new JsonWebTokenHeader(new JsonObject()),
             Payload = new JsonWebTokenPayload(payload)
         };
-        var boundRequest = new TestRequest("client1", "https://new.example.com/callback", "complex_state_123");
+        var boundRequest = new TestRequest(TestConstants.DefaultClientId, "https://new.example.com/callback", "complex_state_123");
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
@@ -525,9 +526,9 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -560,7 +561,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "this.is.not.a.valid.jwt.structure";
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Malformed JWT");
 
@@ -585,7 +586,7 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new TestRequest("client1", "https://example.com/callback", null);
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
         var jwt = "eyJhbGciOiJub25lIn0.e30."; // JWT with empty payload
         var payload = new JsonObject();
         var token = new JsonWebToken
@@ -619,15 +620,15 @@ public class RequestObjectFetcherTests
     {
         // Arrange
         var fetcher = CreateFetcher();
-        var request = new { ClientId = "client1", Scope = "openid" };
+        var request = new { ClientId = TestConstants.DefaultClientId, Scope = TestConstants.DefaultScope };
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = "client1" };
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
             Payload = new JsonWebTokenPayload(payload)
         };
-        var boundRequest = new { ClientId = "client1", Scope = "openid profile" };
+        var boundRequest = new { ClientId = TestConstants.DefaultClientId, Scope = "openid profile" };
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))

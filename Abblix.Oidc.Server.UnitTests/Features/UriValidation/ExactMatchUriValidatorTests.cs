@@ -22,6 +22,7 @@
 
 using System;
 using Abblix.Oidc.Server.Features.UriValidation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.UriValidation;
@@ -40,7 +41,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_ValidUri_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var result = validator.IsValid(validUri);
@@ -55,7 +56,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_DifferentUri_ReturnsFalse()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("https://example.com/different");
@@ -71,7 +72,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithQueryString_Default_ReturnsFalse()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("https://example.com/callback?param=value");
@@ -87,7 +88,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithFragment_Default_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("https://example.com/callback#fragment");
@@ -103,7 +104,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithQueryString_IgnoreEnabled_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri, ignoreQueryAndFragment: true);
 
         var testUri = new Uri("https://example.com/callback?param=value");
@@ -119,7 +120,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithFragment_IgnoreEnabled_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri, ignoreQueryAndFragment: true);
 
         var testUri = new Uri("https://example.com/callback#fragment");
@@ -135,7 +136,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithQueryAndFragment_IgnoreEnabled_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri, ignoreQueryAndFragment: true);
 
         var testUri = new Uri("https://example.com/callback?param=value#fragment");
@@ -151,7 +152,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_DifferentScheme_ReturnsFalse()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("http://example.com/callback");
@@ -167,7 +168,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_DifferentHost_ReturnsFalse()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("https://different.com/callback");
@@ -199,7 +200,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_DifferentPath_ReturnsFalse()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri);
 
         var testUri = new Uri("https://example.com/callback/sub");
@@ -269,7 +270,7 @@ public class ExactMatchUriValidatorTests
     [Fact]
     public void ExactMatch_WithComplexQueryString_IgnoreEnabled_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new ExactMatchUriValidator(validUri, ignoreQueryAndFragment: true);
 
         var testUri = new Uri("https://example.com/callback?param1=value1&param2=value2&param3=value%20with%20spaces");

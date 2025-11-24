@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -53,12 +54,12 @@ public class TokenRequestValidatorTests
     {
         GrantType = GrantTypes.AuthorizationCode,
         Code = "auth_code_123",
-        RedirectUri = new Uri("https://client.example.com/callback"),
+        RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
     };
 
     private static ClientRequest CreateClientRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
     };
 
     private static AuthorizedGrant CreateAuthorizedGrant() => new(
@@ -68,7 +69,7 @@ public class TokenRequestValidatorTests
             DateTimeOffset.UtcNow,
             "local"),
         new AuthorizationContext(
-            "client_123",
+            TestConstants.DefaultClientId,
             [],
             null));
 
@@ -87,7 +88,7 @@ public class TokenRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
             .Callback<TokenValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -146,7 +147,7 @@ public class TokenRequestValidatorTests
             .Callback<TokenValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -177,7 +178,7 @@ public class TokenRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
             .Callback<TokenValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -211,7 +212,7 @@ public class TokenRequestValidatorTests
             .Callback<TokenValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -244,7 +245,7 @@ public class TokenRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
             .Callback<TokenValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -305,7 +306,7 @@ public class TokenRequestValidatorTests
             .Callback<TokenValidationContext>(ctx =>
             {
                 capturedContexts.Add(ctx);
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -333,7 +334,7 @@ public class TokenRequestValidatorTests
         {
             GrantType = GrantTypes.AuthorizationCode,
             Code = "auth_code_123",
-            RedirectUri = new Uri("https://client.example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
         };
 
         var refreshTokenRequest = new TokenRequest
@@ -348,7 +349,7 @@ public class TokenRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
             .Callback<TokenValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -387,7 +388,7 @@ public class TokenRequestValidatorTests
             .Callback<TokenValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
                 ctx.Scope = [];
                 ctx.Resources = [];

@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -74,7 +75,7 @@ public class TokenRequestProcessorTests
 
     private static AuthorizedGrant CreateAuthorizedGrant(string[] scopes) => new(
         CreateAuthSession(),
-        new AuthorizationContext("client_123", scopes, null));
+        new AuthorizationContext(TestConstants.DefaultClientId, scopes, null));
 
     private static ValidTokenRequest CreateValidTokenRequest(string[] scopes)
     {
@@ -83,7 +84,7 @@ public class TokenRequestProcessorTests
         return new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo("client_123"),
+            new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
     }
@@ -110,7 +111,7 @@ public class TokenRequestProcessorTests
         // Arrange
         var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", [], null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -149,7 +150,7 @@ public class TokenRequestProcessorTests
         var request = CreateValidTokenRequest(scopes);
         var accessToken = CreateAccessToken();
         var idToken = CreateIdToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -201,7 +202,7 @@ public class TokenRequestProcessorTests
         var request = CreateValidTokenRequest(scopes);
         var accessToken = CreateAccessToken();
         var refreshToken = CreateRefreshToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -250,7 +251,7 @@ public class TokenRequestProcessorTests
         var accessToken = CreateAccessToken();
         var refreshToken = CreateRefreshToken();
         var idToken = CreateIdToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -302,7 +303,7 @@ public class TokenRequestProcessorTests
         var scopes = new[] { "api.read" };
         var request = CreateValidTokenRequest(scopes);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -335,7 +336,7 @@ public class TokenRequestProcessorTests
         var scopes = new[] { "api.read" };
         var request = CreateValidTokenRequest(scopes);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -367,7 +368,7 @@ public class TokenRequestProcessorTests
         // Arrange
         var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", [], null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -398,7 +399,7 @@ public class TokenRequestProcessorTests
         // Arrange
         var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", [], null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -429,7 +430,7 @@ public class TokenRequestProcessorTests
         // Arrange
         var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", [], null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -461,7 +462,7 @@ public class TokenRequestProcessorTests
         // Arrange
         var request = CreateValidTokenRequest([]);
         var accessToken = CreateAccessToken();
-        var authContext = new AuthorizationContext("client_123", [], null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
@@ -497,7 +498,7 @@ public class TokenRequestProcessorTests
         var scopes = new[] { Scopes.OfflineAccess };
         var existingRefreshToken = new Jwt.JsonWebToken();
         var authSession = CreateAuthSession();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(
             authSession,
             authContext,
@@ -507,7 +508,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             refreshTokenGrant,
-            new ClientInfo("client_123"),
+            new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
 
@@ -560,7 +561,7 @@ public class TokenRequestProcessorTests
         var request = CreateValidTokenRequest(scopes);
         var accessToken = CreateAccessToken();
         var idToken = CreateIdToken();
-        var authContext = new AuthorizationContext("client_123", scopes, null);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
