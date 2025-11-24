@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -566,7 +567,7 @@ public class ClientSecretBasicAuthenticatorTests
             [
                 new ClientSecret
                 {
-                    Sha512Hash = SHA512.HashData(Encoding.ASCII.GetBytes(secret))
+                    Sha512Hash = TestSecretHasher.HashSecret(secret)
                 }
             ]
         };

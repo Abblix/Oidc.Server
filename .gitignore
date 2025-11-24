@@ -374,3 +374,4 @@ FodyWeavers.xsd
 # Development configuration
 **/CLAUDE.md
 .claude/
+TEST_*.md
