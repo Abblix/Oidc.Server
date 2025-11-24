@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Tokens;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.LogoutNotification;
 
@@ -51,7 +52,7 @@ public class BackChannelLogoutNotifierTests
 
     private static ClientInfo CreateClientInfo(BackChannelLogoutOptions? backChannelLogout)
     {
-        var clientInfo = new ClientInfo("test_client")
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             BackChannelLogout = backChannelLogout
         };

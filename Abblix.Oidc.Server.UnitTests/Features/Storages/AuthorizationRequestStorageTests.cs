@@ -71,7 +71,7 @@ public class AuthorizationRequestStorageTests
             ClientId = TestConstants.DefaultClientId,
             ResponseType = ["code"],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
         };
     }
 
@@ -86,7 +86,7 @@ public class AuthorizationRequestStorageTests
             ClientId = "client_456",
             ResponseType = ["code", "id_token"],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = ["openid", "profile", "email", "offline_access"],
+            Scope = [TestConstants.DefaultScope, "profile", "email", "offline_access"],
             State = "state_xyz",
             ResponseMode = "form_post",
             Nonce = "nonce_abc",

@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.LogoutNotification;
 
@@ -44,7 +45,7 @@ public class FrontChannelLogoutNotifierTests
 
     private static ClientInfo CreateClientInfo(FrontChannelLogoutOptions? frontChannelLogout)
     {
-        var clientInfo = new ClientInfo("test_client")
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             FrontChannelLogout = frontChannelLogout
         };
@@ -226,7 +227,7 @@ public class FrontChannelLogoutNotifierTests
             () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
 
         Assert.Contains("requires session id", exception.Message);
-        Assert.Contains("test_client", exception.Message);
+        Assert.Contains(TestConstants.DefaultClientId, exception.Message);
     }
 
     /// <summary>

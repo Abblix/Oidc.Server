@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication;
 
@@ -58,7 +59,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHint = "user@example.com"
         };
 
@@ -70,7 +71,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             {
                 ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
-                ctx.Scope = [new ScopeDefinition("openid", Array.Empty<string>())];
+                ctx.Scope = [new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>())];
                 ctx.Resources = [];
             }))
             .ReturnsAsync((OidcError?)null);
@@ -98,7 +99,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"]
+            Scope = [TestConstants.DefaultScope]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -127,7 +128,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid", "profile"],
+            Scope = [TestConstants.DefaultScope, "profile"],
             LoginHint = "user@example.com",
             BindingMessage = "Test message"
         };
@@ -173,7 +174,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHintToken = "jwt-token"
         };
 
@@ -212,7 +213,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             IdTokenHint = "id-token"
         };
 
@@ -251,7 +252,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid", "profile", "email"],
+            Scope = [TestConstants.DefaultScope, "profile", "email"],
             LoginHint = "user@example.com"
         };
 
@@ -259,7 +260,7 @@ public class BackChannelAuthenticationRequestValidatorTests
 
         var scopeDefinitions = new[]
         {
-            new ScopeDefinition("openid", Array.Empty<string>()),
+            new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()),
             new ScopeDefinition("profile", new[] { "name", "given_name", "family_name" }),
             new ScopeDefinition("email", new[] { "email", "email_verified" })
         };
@@ -281,7 +282,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Equal(3, validRequest.Scope.Length);
-        Assert.Equal("openid", validRequest.Scope[0].Scope);
+        Assert.Equal(TestConstants.DefaultScope, validRequest.Scope[0].Scope);
         Assert.Equal("profile", validRequest.Scope[1].Scope);
         Assert.Equal("email", validRequest.Scope[2].Scope);
     }
@@ -296,7 +297,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHint = "user@example.com",
             Resources = [new Uri("https://api1.example.com"), new Uri("https://api2.example.com")]
         };
@@ -305,8 +306,8 @@ public class BackChannelAuthenticationRequestValidatorTests
 
         var resourceDefinitions = new[]
         {
-            new ResourceDefinition(new Uri("https://api1.example.com"), new ScopeDefinition("openid", Array.Empty<string>())),
-            new ResourceDefinition(new Uri("https://api2.example.com"), new ScopeDefinition("openid", Array.Empty<string>()))
+            new ResourceDefinition(new Uri("https://api1.example.com"), new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>())),
+            new ResourceDefinition(new Uri("https://api2.example.com"), new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()))
         };
 
         _contextValidator
@@ -340,7 +341,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHint = "user@example.com",
             RequestedExpiry = TimeSpan.FromSeconds(300) // 5 minutes
         };
@@ -376,7 +377,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHint = "user@example.com"
         };
 
@@ -410,7 +411,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"]
+            Scope = [TestConstants.DefaultScope]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };

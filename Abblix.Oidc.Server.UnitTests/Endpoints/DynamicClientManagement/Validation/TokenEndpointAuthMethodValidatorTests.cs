@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -50,7 +51,7 @@ public class TokenEndpointAuthMethodValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri("https://example.com/callback")],
+            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
             TokenEndpointAuthMethod = tokenEndpointAuthMethod!
         };
 

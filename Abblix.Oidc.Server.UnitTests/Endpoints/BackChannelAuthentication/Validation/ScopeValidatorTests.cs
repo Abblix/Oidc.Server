@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -54,7 +55,7 @@ public class ScopeValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = scopes ?? ["openid"]
+            Scope = scopes ?? [TestConstants.DefaultScope]
         };
 
         var clientRequest = new ClientRequest { ClientId = "test-client" };
@@ -79,17 +80,17 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithValidOpenIdScope_ShouldReturnNull()
     {
         // Arrange
-        var openidDefinition = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
             }));
 
-        var context = CreateContext(scopes: ["openid"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -109,7 +110,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            scopes: ["openid", "offline_access"],
+            scopes: [TestConstants.DefaultScope, "offline_access"],
             offlineAccessAllowed: false);
 
         // Act
@@ -129,11 +130,11 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithOfflineAccessAllowed_ShouldReturnNull()
     {
         // Arrange
-        var openidDefinition = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
         var offlineAccessDefinition = new ScopeDefinition("offline_access", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
@@ -149,7 +150,7 @@ public class ScopeValidatorTests
             }));
 
         var context = CreateContext(
-            scopes: ["openid", "offline_access"],
+            scopes: [TestConstants.DefaultScope, "offline_access"],
             offlineAccessAllowed: true);
 
         // Act
@@ -196,12 +197,12 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithMultipleValidScopes_ShouldReturnNull()
     {
         // Arrange
-        var openidDef = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
         var profileDef = new ScopeDefinition("profile", Array.Empty<string>());
         var emailDef = new ScopeDefinition("email", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -224,7 +225,7 @@ public class ScopeValidatorTests
                 return true;
             }));
 
-        var context = CreateContext(scopes: ["openid", "profile", "email"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, "profile", "email"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -243,7 +244,7 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithScopeFromResource_ShouldReturnNull()
     {
         // Arrange
-        var openidDef = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
         var resourceScopeDef = new ScopeDefinition("api:read", Array.Empty<string>());
 
         var resourceDefinition = new ResourceDefinition(
@@ -251,7 +252,7 @@ public class ScopeValidatorTests
             resourceScopeDef);
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -267,7 +268,7 @@ public class ScopeValidatorTests
             }));
 
         var context = CreateContext(
-            scopes: ["openid", "api:read"],
+            scopes: [TestConstants.DefaultScope, "api:read"],
             resources: [resourceDefinition]);
 
         // Act
@@ -287,17 +288,17 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldSetScopeOnContext()
     {
         // Arrange
-        var openidDefinition = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
             }));
 
-        var context = CreateContext(scopes: ["openid"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
         await _validator.ValidateAsync(context);
@@ -305,7 +306,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(context.Scope);
         Assert.Single(context.Scope);
-        Assert.Equal("openid", context.Scope[0].Scope);
+        Assert.Equal(TestConstants.DefaultScope, context.Scope[0].Scope);
     }
 
     /// <summary>
@@ -316,10 +317,10 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithMixedScopes_ShouldFailAtFirstUnknown()
     {
         // Arrange
-        var openidDef = new ScopeDefinition("openid", Array.Empty<string>());
+        var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -334,7 +335,7 @@ public class ScopeValidatorTests
                 return false;
             }));
 
-        var context = CreateContext(scopes: ["openid", "unknown", "profile"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", "profile"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -353,7 +354,7 @@ public class ScopeValidatorTests
     {
         // Arrange - No scope manager setup, should fail on offline_access check first
         var context = CreateContext(
-            scopes: ["openid", "offline_access"],
+            scopes: [TestConstants.DefaultScope, "offline_access"],
             offlineAccessAllowed: false);
 
         // Act

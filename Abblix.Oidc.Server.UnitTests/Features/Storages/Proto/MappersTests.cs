@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Model;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages.Proto;
 
@@ -202,7 +203,7 @@ public class MappersTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            ["openid", "profile"],
+            [TestConstants.DefaultScope, "profile"],
             null)
         {
             RedirectUri = new Uri("https://example.com/callback?state=xyz"),
@@ -231,7 +232,7 @@ public class MappersTests
     public void AuthorizationContextMapper_ToProto_HandlesPkce()
     {
         // Arrange
-        var context = new AuthorizationContext("client-123", ["openid"], null)
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
         {
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             CodeChallengeMethod = "S256",
@@ -257,7 +258,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
@@ -286,7 +287,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context); // No IssuedTokens
 
         // Act
@@ -305,7 +306,7 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             UiLocales =
             [
                 new CultureInfo("en-US"),
@@ -339,7 +340,7 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             MaxAge = TimeSpan.FromMinutes(30),
         };
 
@@ -360,14 +361,14 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = ["openid", "profile", "email"],
+            Scope = [TestConstants.DefaultScope, "profile", "email"],
             Claims = new RequestedClaims
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
             },
             ResponseType = ["code", "id_token"],
             ClientId = "client-123",
-            RedirectUri = new Uri("https://example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             State = "state-xyz",
             ResponseMode = "form_post",
             Nonce = "nonce-abc",
@@ -392,7 +393,7 @@ public class MappersTests
         Assert.NotNull(proto.Claims);
         Assert.Equal(2, proto.ResponseType.Count);
         Assert.Equal("client-123", proto.ClientId);
-        Assert.Equal("https://example.com/callback", proto.RedirectUri);
+        Assert.Equal(TestConstants.DefaultRedirectUri, proto.RedirectUri);
         Assert.Equal("state-xyz", proto.State);
         Assert.Equal("form_post", proto.ResponseMode);
         Assert.Equal("nonce-abc", proto.Nonce);
@@ -423,7 +424,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
         var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)) { Status = status };
 
@@ -440,7 +441,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
         var nextPoll = DateTimeOffset.UtcNow.AddSeconds(45);
         var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
@@ -466,7 +467,7 @@ public class MappersTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
         var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)); // NextPollAt is null
 

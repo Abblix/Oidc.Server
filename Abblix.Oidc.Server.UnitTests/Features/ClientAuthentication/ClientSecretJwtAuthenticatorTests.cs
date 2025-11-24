@@ -37,6 +37,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -48,7 +49,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// </summary>
 public class ClientSecretJwtAuthenticatorTests
 {
-    private const string ClientId = "test_client";
+    private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
     private const string RequestUri = "https://auth.example.com/token";
 

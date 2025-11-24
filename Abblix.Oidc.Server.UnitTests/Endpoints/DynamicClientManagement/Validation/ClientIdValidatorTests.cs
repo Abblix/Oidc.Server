@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -53,7 +54,7 @@ public class ClientIdValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri("https://example.com/callback")],
+            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
             ClientId = clientId
         };
 

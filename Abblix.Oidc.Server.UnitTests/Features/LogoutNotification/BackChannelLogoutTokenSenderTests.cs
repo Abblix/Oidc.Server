@@ -35,6 +35,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.LogoutNotification;
 
@@ -63,7 +64,7 @@ public class BackChannelLogoutTokenSenderTests
     private static ClientInfo CreateClientInfo(Uri? backChannelLogoutUri = null)
     {
         var uri = backChannelLogoutUri ?? new Uri("https://client.example.com/backchannel_logout");
-        return new ClientInfo("test_client")
+        return new ClientInfo(TestConstants.DefaultClientId)
         {
             BackChannelLogout = new BackChannelLogoutOptions(uri, RequiresSessionId: true)
         };
@@ -248,7 +249,7 @@ public class BackChannelLogoutTokenSenderTests
     {
         // Arrange
         var sender = CreateSender();
-        var clientInfo = new ClientInfo("test_client") { BackChannelLogout = null };
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId) { BackChannelLogout = null };
         var logoutToken = CreateLogoutToken();
 
         // Act & Assert

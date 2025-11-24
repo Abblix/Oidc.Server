@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -42,7 +43,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             LoginHint = "user@example.com"
         };
 

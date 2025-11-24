@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
@@ -501,7 +502,7 @@ public class AuthServiceJwtFormatterTests
                 Subject = "user123",
                 Issuer = "https://auth.example.com",
                 Audiences = ["https://api.example.com"],
-                Scope = ["openid", "profile", "email"],
+                Scope = [TestConstants.DefaultScope, "profile", "email"],
                 IssuedAt = DateTimeOffset.UtcNow,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
             }

@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -51,7 +52,7 @@ public class ResourceValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = scopes ?? ["openid"],
+            Scope = scopes ?? [TestConstants.DefaultScope],
             Resources = resources
         };
 
@@ -108,7 +109,7 @@ public class ResourceValidatorTests
         var resourceUri = new Uri("https://api.example.com");
         var resourceDefinition = new ResourceDefinition(
             resourceUri,
-            new ScopeDefinition("openid", Array.Empty<string>()));
+            new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
             .Setup(rm => rm.TryGet(resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
@@ -212,8 +213,8 @@ public class ResourceValidatorTests
         var resource1 = new Uri("https://api1.example.com");
         var resource2 = new Uri("https://api2.example.com");
 
-        var definition1 = new ResourceDefinition(resource1, new ScopeDefinition("openid", Array.Empty<string>()));
-        var definition2 = new ResourceDefinition(resource2, new ScopeDefinition("openid", Array.Empty<string>()));
+        var definition1 = new ResourceDefinition(resource1, new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
+        var definition2 = new ResourceDefinition(resource2, new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
             .Setup(rm => rm.TryGet(resource1, out It.Ref<ResourceDefinition?>.IsAny))
@@ -253,7 +254,7 @@ public class ResourceValidatorTests
         var resourceUri = new Uri("https://api.example.com");
         var resourceDefinition = new ResourceDefinition(
             resourceUri,
-            new ScopeDefinition("openid", Array.Empty<string>()),
+            new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()),
             new ScopeDefinition("profile", Array.Empty<string>()),
             new ScopeDefinition("email", Array.Empty<string>()));
 
@@ -267,7 +268,7 @@ public class ResourceValidatorTests
 
         var context = CreateContext(
             resources: [resourceUri],
-            scopes: ["openid", "profile"]);
+            scopes: [TestConstants.DefaultScope, "profile"]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -288,7 +289,7 @@ public class ResourceValidatorTests
     {
         // Arrange
         var resourceUri = new Uri("https://api.example.com");
-        var resourceDefinition = new ResourceDefinition(resourceUri, new ScopeDefinition("openid", Array.Empty<string>()));
+        var resourceDefinition = new ResourceDefinition(resourceUri, new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
             .Setup(rm => rm.TryGet(resourceUri, out It.Ref<ResourceDefinition?>.IsAny))

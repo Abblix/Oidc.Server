@@ -75,7 +75,7 @@ public class UserInfoRequestProcessorTests
 
         var authContext = new Abblix.Oidc.Server.Common.AuthorizationContext(
             TestConstants.DefaultClientId,
-            ["openid", "profile", "email"],
+            [TestConstants.DefaultScope, "profile", "email"],
             null);
 
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -355,7 +355,7 @@ public class UserInfoRequestProcessorTests
 
         // Assert
         Assert.NotNull(capturedScopes);
-        Assert.Equal(["openid", "profile", "email"], capturedScopes);
+        Assert.Equal([TestConstants.DefaultScope, "profile", "email"], capturedScopes);
     }
 
     /// <summary>

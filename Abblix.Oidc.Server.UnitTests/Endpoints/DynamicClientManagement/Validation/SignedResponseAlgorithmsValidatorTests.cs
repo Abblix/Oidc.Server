@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -52,7 +53,7 @@ public class SignedResponseAlgorithmsValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri("https://example.com/callback")],
+            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
             IdTokenSignedResponseAlg = idTokenSignedResponseAlg,
             UserInfoSignedResponseAlg = userInfoSignedResponseAlg
         };

@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -66,7 +67,7 @@ public class UserCodeValidatorTests
 
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = ["openid"],
+            Scope = [TestConstants.DefaultScope],
             UserCode = userCode
         };
 

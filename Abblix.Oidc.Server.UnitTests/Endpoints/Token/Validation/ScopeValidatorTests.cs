@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
@@ -137,15 +138,15 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_ShouldPassCorrectParametersToScopeManager()
     {
         // Arrange
-        var scopes = new[] { "openid", "profile", "email" };
+        var scopes = new[] { TestConstants.DefaultScope, "profile", "email" };
         var context = CreateContext(scope: scopes);
-        SetupScopeManagerForScopes("openid", "profile", "email");
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile", "email");
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
-        _scopeManager.Verify(m => m.TryGet("openid", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
         _scopeManager.Verify(m => m.TryGet("profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
         _scopeManager.Verify(m => m.TryGet("email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
     }
@@ -158,15 +159,15 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldSetScopeInContext()
     {
         // Arrange
-        var context = CreateContext(scope: ["openid", "profile"]);
-        SetupScopeManagerForScopes("openid", "profile");
+        var context = CreateContext(scope: [TestConstants.DefaultScope, "profile"]);
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile");
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
         Assert.Equal(2, context.Scope.Length);
-        Assert.Contains(context.Scope, s => s.Scope == "openid");
+        Assert.Contains(context.Scope, s => s.Scope == TestConstants.DefaultScope);
         Assert.Contains(context.Scope, s => s.Scope == "profile");
     }
 
@@ -220,7 +221,7 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithMultipleScopes_ShouldValidateAll()
     {
         // Arrange
-        var scopes = new[] { "openid", "profile", "email", "address", "phone" };
+        var scopes = new[] { TestConstants.DefaultScope, "profile", "email", "address", "phone" };
         var context = CreateContext(scope: scopes);
         SetupScopeManagerForScopes(scopes);
 

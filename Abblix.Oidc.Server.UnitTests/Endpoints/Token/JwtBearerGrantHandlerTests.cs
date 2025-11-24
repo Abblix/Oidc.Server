@@ -36,6 +36,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -302,7 +303,7 @@ public class JwtBearerGrantHandlerTests
 		var jwt = CreateValidJwt();
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		var clientInfo = new ClientInfo(ClientId);
-		var requestedScopes = new[] { "openid", "profile", "email" };
+		var requestedScopes = new[] { TestConstants.DefaultScope, "profile", "email" };
 		var tokenRequest = new TokenRequest
 		{
 			GrantType = GrantTypes.JwtBearer,

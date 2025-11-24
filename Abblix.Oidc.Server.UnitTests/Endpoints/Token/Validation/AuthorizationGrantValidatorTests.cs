@@ -84,7 +84,7 @@ public class AuthorizationGrantValidatorTests
 
         var authContext = new AuthorizationContext(
             clientId: TestConstants.DefaultClientId,
-            scope: ["openid"],
+            scope: [TestConstants.DefaultScope],
             requestedClaims: null)
         {
             RedirectUri = redirectUri,

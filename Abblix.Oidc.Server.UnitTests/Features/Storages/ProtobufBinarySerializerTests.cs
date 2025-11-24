@@ -37,6 +37,7 @@ using JsonWebTokenStatus = Abblix.Oidc.Server.Features.Tokens.Revocation.JsonWeb
 using RequestedClaimDetails = Abblix.Oidc.Server.Model.RequestedClaimDetails;
 using RequestedClaims = Abblix.Oidc.Server.Model.RequestedClaims;
 using TokenInfo = Abblix.Oidc.Server.Endpoints.Token.Interfaces.TokenInfo;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
@@ -157,14 +158,14 @@ public class ProtobufSerializerTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            ["openid", "profile", "email"],
+            [TestConstants.DefaultScope, "profile", "email"],
             new RequestedClaims
             {
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
             })
         {
             X509CertificateSha256Thumbprint = "abc123def456",
-            RedirectUri = new Uri("https://example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = "S256",
@@ -194,7 +195,7 @@ public class ProtobufSerializerTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
@@ -223,10 +224,10 @@ public class ProtobufSerializerTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = ["openid", "profile", "email"],
+            Scope = [TestConstants.DefaultScope, "profile", "email"],
             ResponseType = ["code"],
             ClientId = "client-123",
-            RedirectUri = new Uri("https://example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             State = "state-xyz",
             ResponseMode = "query",
             Nonce = "nonce-abc",
@@ -289,7 +290,7 @@ public class ProtobufSerializerTests
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", ["openid"], null);
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
         var bcRequest = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
