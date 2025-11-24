@@ -44,7 +44,7 @@ public class LicenseCollection : ICollectionFixture<LicenseFixture>
 /// Automatically enables all premium features for testing via reflection by setting a
 /// permissive License instance in the LicenseManager's static field.
 /// </remarks>
-public class LicenseFixture : IDisposable
+public class LicenseFixture
 {
     /// <summary>
     /// Initializes the license fixture by setting up a permissive license with all features enabled.
@@ -71,15 +71,5 @@ public class LicenseFixture : IDisposable
 
         clientLimitProperty?.SetValue(freeLicense, null);
         issuerLimitProperty?.SetValue(freeLicense, null);
-    }
-
-    /// <summary>
-    /// Cleanup method called by xUnit after all tests in the collection have run.
-    /// Currently no cleanup is needed as license state is global for test run.
-    /// </summary>
-    public void Dispose()
-    {
-        // License cleanup not required - state is acceptable for entire test run
-        GC.SuppressFinalize(this);
     }
 }
