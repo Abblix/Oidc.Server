@@ -22,7 +22,6 @@
 
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;

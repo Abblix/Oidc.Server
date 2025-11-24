@@ -21,9 +21,10 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Abblix.Oidc.Server.Features.Licensing;
-using Moq;
+using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -37,20 +38,17 @@ public class LicenseCollection : ICollectionFixture<LicenseFixture>
 }
 
 /// <summary>
-/// xUnit fixture that configures a mock license for all OIDC Server features.
+/// xUnit fixture that configures a test license for all OIDC Server features.
 /// This eliminates the need for duplicated license setup code in individual tests.
 /// </summary>
 /// <remarks>
-/// Automatically enables all premium features for testing:
-/// - BackChannelAuthentication (CIBA)
-/// - DeviceAuthorization (RFC 8628)
-/// - DynamicClientManagement (RFC 7591/7592)
-/// - PushedAuthorizationRequests (PAR - RFC 9126)
+/// Automatically enables all premium features for testing via reflection by setting a
+/// permissive License instance in the LicenseManager's static field.
 /// </remarks>
 public class LicenseFixture : IDisposable
 {
     /// <summary>
-    /// Initializes the license fixture by setting up a mock license with all features enabled.
+    /// Initializes the license fixture by setting up a permissive license with all features enabled.
     /// Uses reflection to access the internal LicenseManager state.
     /// </summary>
     public LicenseFixture()
@@ -66,17 +64,23 @@ public class LicenseFixture : IDisposable
                 "The internal implementation may have changed.");
         }
 
-        var mockLicense = new Mock<ILicense>();
-        mockLicense.Setup(l => l.IsValid).Returns(true);
-        mockLicense.Setup(l => l.Features).Returns(new[]
+        // Create a permissive license for testing with all features enabled
+        var testLicense = new License
         {
-            "BackChannelAuthentication",
-            "DeviceAuthorization",
-            "DynamicClientManagement",
-            "PushedAuthorizationRequests",
-        });
+            ValidIssuers = new HashSet<string>
+            {
+                "https://abblix.com",
+                "https://auth.example.com",
+                TestConstants.DefaultIssuer,
+            },
+            ClientLimit = null,  // No limit
+            IssuerLimit = null,  // No limit
+            NotBefore = DateTimeOffset.UtcNow.AddYears(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddYears(10),
+            GracePeriod = null,
+        };
 
-        licenseField.SetValue(null, mockLicense.Object);
+        licenseField.SetValue(null, testLicense);
     }
 
     /// <summary>
