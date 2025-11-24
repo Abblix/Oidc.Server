@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Moq;
 using Xunit;
@@ -59,7 +60,7 @@ public class UserInfoHandlerTests
 
     private static ClientRequest CreateClientRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
     };
 
     private static ValidUserInfoRequest CreateValidUserInfoRequest(UserInfoRequest request)
@@ -71,11 +72,11 @@ public class UserInfoHandlerTests
             "local");
 
         var authContext = new AuthorizationContext(
-            "client_123",
+            TestConstants.DefaultClientId,
             ["openid", "profile"],
             null);
 
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         return new ValidUserInfoRequest(request, authSession, authContext, clientInfo);
     }
@@ -91,7 +92,7 @@ public class UserInfoHandlerTests
 
         return new UserInfoFoundResponse(
             user,
-            new ClientInfo("client_123"),
+            new ClientInfo(TestConstants.DefaultClientId),
             "https://issuer.example.com");
     }
 

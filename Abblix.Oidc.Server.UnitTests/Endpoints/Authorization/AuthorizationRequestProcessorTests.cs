@@ -37,6 +37,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -83,16 +84,16 @@ public class AuthorizationRequestProcessorTests
     {
         var authRequest = new AuthorizationRequest
         {
-            ClientId = "client_123",
+            ClientId = TestConstants.DefaultClientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
-            RedirectUri = new Uri("https://client.example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,
             AcrValues = acrValues,
         };
 
-        var clientInfo = new ClientInfo("client_123")
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
         };
@@ -714,16 +715,16 @@ public class AuthorizationRequestProcessorTests
 
         var authRequest = new AuthorizationRequest
         {
-            ClientId = "client_123",
+            ClientId = TestConstants.DefaultClientId,
             ResponseType = [ResponseTypes.Code],
-            RedirectUri = new Uri("https://client.example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             Scope = [Scopes.OpenId, "email"],
             Nonce = nonce,
             CodeChallenge = codeChallenge,
             CodeChallengeMethod = codeChallengeMethod,
         };
 
-        var clientInfo = new ClientInfo("client_123")
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
         };
@@ -771,7 +772,7 @@ public class AuthorizationRequestProcessorTests
         // Assert
         Assert.NotNull(capturedGrant);
         var authContext = capturedGrant.Context;
-        Assert.Equal("client_123", authContext.ClientId);
+        Assert.Equal(TestConstants.DefaultClientId, authContext.ClientId);
         Assert.Equal(grantedScopes.Select(s => s.Scope).ToArray(), authContext.Scope);
         Assert.Equal(grantedResources.Select(r => r.Resource).ToArray(), authContext.Resources);
         Assert.Equal(nonce, authContext.Nonce);

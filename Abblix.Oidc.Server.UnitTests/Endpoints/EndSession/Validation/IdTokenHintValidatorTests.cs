@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -48,7 +49,7 @@ public class IdTokenHintValidatorTests
 
     private static EndSessionValidationContext CreateContext(
         string? idTokenHint = "id_token_hint_value",
-        string? clientId = "client_123")
+        string? clientId = TestConstants.DefaultClientId)
     {
         var request = new EndSessionRequest
         {
@@ -74,7 +75,7 @@ public class IdTokenHintValidatorTests
     {
         // Arrange
         var context = CreateContext("valid_id_token");
-        var idToken = CreateValidIdToken("client_123");
+        var idToken = CreateValidIdToken(TestConstants.DefaultClientId);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -265,7 +266,7 @@ public class IdTokenHintValidatorTests
     {
         // Arrange
         var context = CreateContext("id_token");
-        var idToken = CreateValidIdToken("client_123");
+        var idToken = CreateValidIdToken(TestConstants.DefaultClientId);
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
@@ -290,7 +291,7 @@ public class IdTokenHintValidatorTests
     {
         // Arrange
         var context = CreateContext("id_token");
-        var idToken = CreateValidIdToken("client_123");
+        var idToken = CreateValidIdToken(TestConstants.DefaultClientId);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -314,7 +315,7 @@ public class IdTokenHintValidatorTests
     {
         // Arrange
         var context = CreateContext("id_token", "Client_123");
-        var idToken = CreateValidIdToken("client_123");
+        var idToken = CreateValidIdToken(TestConstants.DefaultClientId);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -339,7 +340,7 @@ public class IdTokenHintValidatorTests
     {
         // Arrange
         var context = CreateContext("id_token");
-        var idToken = CreateValidIdToken("client_456", "client_123", "client_789");
+        var idToken = CreateValidIdToken("client_456", TestConstants.DefaultClientId, "client_789");
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(

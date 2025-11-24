@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Moq;
 using Xunit;
@@ -57,7 +58,7 @@ public class AuthorizationHandlerTests
 
     private static AuthorizationRequest CreateRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
         ResponseType = [ResponseTypes.Code],
         RedirectUri = new Uri("https://client.example.com/callback"),
         Scope = [Scopes.OpenId],
@@ -75,7 +76,7 @@ public class AuthorizationHandlerTests
         var fetchedRequest = CreateRequest();
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
-            ClientInfo = new ClientInfo("client_123"),
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);
         var processedResponse = new AuthorizationError(request, ErrorCodes.ConsentRequired, "",
@@ -187,7 +188,7 @@ public class AuthorizationHandlerTests
         var originalRequest = CreateRequest();
         var fetchedRequest = new AuthorizationRequest
         {
-            ClientId = "client_123",
+            ClientId = TestConstants.DefaultClientId,
             ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
@@ -195,7 +196,7 @@ public class AuthorizationHandlerTests
         };
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
-            ClientInfo = new ClientInfo("client_123"),
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);
         var processedResponse = new AuthorizationError(fetchedRequest, ErrorCodes.ConsentRequired, "",
@@ -307,7 +308,7 @@ public class AuthorizationHandlerTests
         var fetchedRequest = CreateRequest();
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
-            ClientInfo = new ClientInfo("client_123"),
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);
         var processedResponse = new AuthorizationError(request, ErrorCodes.ConsentRequired, "",

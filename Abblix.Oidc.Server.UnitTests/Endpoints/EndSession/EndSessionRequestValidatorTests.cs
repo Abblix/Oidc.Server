@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -71,8 +72,8 @@ public class EndSessionRequestValidatorTests
     public async Task ValidateAsync_WithValidRequest_ShouldReturnValidEndSessionRequest()
     {
         // Arrange
-        var endSessionRequest = CreateEndSessionRequest(clientId: "client_123");
-        var clientInfo = new ClientInfo("client_123");
+        var endSessionRequest = CreateEndSessionRequest(clientId: TestConstants.DefaultClientId);
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _contextValidator
             .Setup(v => v.ValidateAsync(It.Is<EndSessionValidationContext>(c => c.Request == endSessionRequest)))
@@ -277,8 +278,8 @@ public class EndSessionRequestValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldReturnCompleteValidRequest()
     {
         // Arrange
-        var endSessionRequest = CreateEndSessionRequest(clientId: "client_123");
-        var clientInfo = new ClientInfo("client_123");
+        var endSessionRequest = CreateEndSessionRequest(clientId: TestConstants.DefaultClientId);
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _contextValidator
             .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))

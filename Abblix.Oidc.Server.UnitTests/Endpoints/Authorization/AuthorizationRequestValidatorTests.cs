@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -50,9 +51,9 @@ public class AuthorizationRequestValidatorTests
 
     private static AuthorizationRequest CreateRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
         ResponseType = [ResponseTypes.Code],
-        RedirectUri = new Uri("https://client.example.com/callback"),
+        RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
         Scope = [Scopes.OpenId],
     };
 
@@ -69,7 +70,7 @@ public class AuthorizationRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
             .Callback<AuthorizationValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -126,7 +127,7 @@ public class AuthorizationRequestValidatorTests
             .Callback<AuthorizationValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -152,7 +153,7 @@ public class AuthorizationRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
             .Callback<AuthorizationValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -183,7 +184,7 @@ public class AuthorizationRequestValidatorTests
             .Callback<AuthorizationValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -212,7 +213,7 @@ public class AuthorizationRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
             .Callback<AuthorizationValidationContext>(ctx =>
             {
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -271,7 +272,7 @@ public class AuthorizationRequestValidatorTests
             .Callback<AuthorizationValidationContext>(ctx =>
             {
                 capturedContexts.Add(ctx);
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
@@ -297,7 +298,7 @@ public class AuthorizationRequestValidatorTests
         {
             ClientId = "client_1",
             ResponseType = [ResponseTypes.Code],
-            RedirectUri = new Uri("https://client1.example.com/callback"),
+            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             Scope = [Scopes.OpenId],
         };
 
@@ -348,7 +349,7 @@ public class AuthorizationRequestValidatorTests
             .Callback<AuthorizationValidationContext>(ctx =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("client_123");
+                ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
             })
             .ReturnsAsync((AuthorizationRequestValidationError?)null);

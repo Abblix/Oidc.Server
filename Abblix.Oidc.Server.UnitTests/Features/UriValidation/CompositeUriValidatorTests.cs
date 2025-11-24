@@ -22,6 +22,7 @@
 
 using System;
 using Abblix.Oidc.Server.Features.UriValidation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.UriValidation;
@@ -40,7 +41,7 @@ public class CompositeUriValidatorTests
     [Fact]
     public void Composite_WithSingleValidator_MatchingUri_ReturnsTrue()
     {
-        var validUri = new Uri("https://example.com/callback");
+        var validUri = new Uri(TestConstants.DefaultRedirectUri);
         var validator = new CompositeUriValidator(new ExactMatchUriValidator(validUri));
 
         var result = validator.IsValid(validUri);
@@ -150,12 +151,12 @@ public class CompositeUriValidatorTests
     public void Composite_WithDifferentSchemes_MatchesCorrectly()
     {
         var validator = new CompositeUriValidator(
-            new ExactMatchUriValidator(new Uri("https://example.com/callback")),
+            new ExactMatchUriValidator(new Uri(TestConstants.DefaultRedirectUri)),
             new ExactMatchUriValidator(new Uri("http://example.com/callback")),
             new ExactMatchUriValidator(new Uri("custom://example.com/callback"))
         );
 
-        Assert.True(validator.IsValid(new Uri("https://example.com/callback")));
+        Assert.True(validator.IsValid(new Uri(TestConstants.DefaultRedirectUri)));
         Assert.True(validator.IsValid(new Uri("http://example.com/callback")));
         Assert.True(validator.IsValid(new Uri("custom://example.com/callback")));
         Assert.False(validator.IsValid(new Uri("ftp://example.com/callback")));
@@ -187,7 +188,7 @@ public class CompositeUriValidatorTests
     {
         var validator = new CompositeUriValidator(Array.Empty<IUriValidator>());
 
-        var testUri = new Uri("https://example.com/callback");
+        var testUri = new Uri(TestConstants.DefaultRedirectUri);
         var result = validator.IsValid(testUri);
 
         Assert.False(result);
@@ -202,11 +203,11 @@ public class CompositeUriValidatorTests
     {
         var validator = new CompositeUriValidator(
             new ExactMatchUriValidator(new Uri("http://localhost:3000/callback")),
-            new ExactMatchUriValidator(new Uri("https://example.com/callback"))
+            new ExactMatchUriValidator(new Uri(TestConstants.DefaultRedirectUri))
         );
 
         Assert.True(validator.IsValid(new Uri("http://localhost:3000/callback")));
-        Assert.True(validator.IsValid(new Uri("https://example.com/callback")));
+        Assert.True(validator.IsValid(new Uri(TestConstants.DefaultRedirectUri)));
         Assert.False(validator.IsValid(new Uri("http://localhost:3001/callback")));
     }
 }

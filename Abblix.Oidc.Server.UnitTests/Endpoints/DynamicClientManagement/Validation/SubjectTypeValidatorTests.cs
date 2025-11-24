@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -75,7 +76,7 @@ public class SubjectTypeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri("https://example.com/callback")],
+            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
             subjectType: SubjectTypes.Public);
 
         // Act
@@ -196,7 +197,7 @@ public class SubjectTypeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri("https://example.com/callback")],
+            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: new Uri("http://example.com/sector.json"));
 
@@ -230,7 +231,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
 
         var context = CreateContext(
-            redirectUris: [new Uri("https://example.com/callback")],
+            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
@@ -263,7 +264,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
 
         var context = CreateContext(
-            redirectUris: [new Uri("https://example.com/callback")],
+            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
@@ -292,7 +293,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Failure(fetchError));
 
         var context = CreateContext(
-            redirectUris: [new Uri("https://example.com/callback")],
+            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 

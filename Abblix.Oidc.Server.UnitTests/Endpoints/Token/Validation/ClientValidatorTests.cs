@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -60,9 +61,9 @@ public class ClientValidatorTests
     public async Task ValidateAsync_WithSuccessfulAuthentication_ShouldSucceed()
     {
         // Arrange
-        var clientRequest = new ClientRequest { ClientId = "client_123" };
+        var clientRequest = new ClientRequest { ClientId = TestConstants.DefaultClientId };
         var context = CreateContext(clientRequest);
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -108,9 +109,9 @@ public class ClientValidatorTests
     public async Task ValidateAsync_ShouldPassClientRequestToAuthenticator()
     {
         // Arrange
-        var clientRequest = new ClientRequest { ClientId = "client_123", ClientSecret = "secret" };
+        var clientRequest = new ClientRequest { ClientId = TestConstants.DefaultClientId, ClientSecret = TestConstants.DefaultClientSecret };
         var context = CreateContext(clientRequest);
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(clientRequest))
@@ -132,7 +133,7 @@ public class ClientValidatorTests
     {
         // Arrange
         var context = CreateContext();
-        var clientInfo = new ClientInfo("client_123") { ClientName = "Test Client" };
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId) { ClientName = "Test Client" };
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -143,7 +144,7 @@ public class ClientValidatorTests
 
         // Assert
         Assert.Same(clientInfo, context.ClientInfo);
-        Assert.Equal("client_123", context.ClientInfo.ClientId);
+        Assert.Equal(TestConstants.DefaultClientId, context.ClientInfo.ClientId);
         Assert.Equal("Test Client", context.ClientInfo.ClientName);
     }
 
@@ -156,7 +157,7 @@ public class ClientValidatorTests
     {
         // Arrange
         var context = CreateContext();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -203,7 +204,7 @@ public class ClientValidatorTests
     {
         // Arrange
         var clientRequest1 = new ClientRequest { ClientId = "client1" };
-        var clientRequest2 = new ClientRequest { ClientId = "client2", ClientSecret = "secret" };
+        var clientRequest2 = new ClientRequest { ClientId = "client2", ClientSecret = TestConstants.DefaultClientSecret };
         var context1 = CreateContext(clientRequest1);
         var context2 = CreateContext(clientRequest2);
         var clientInfo1 = new ClientInfo("client1");

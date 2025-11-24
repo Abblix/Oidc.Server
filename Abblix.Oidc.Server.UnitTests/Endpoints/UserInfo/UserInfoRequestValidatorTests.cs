@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -81,7 +80,7 @@ public class UserInfoRequestValidatorTests
         };
     }
 
-    private static JsonWebToken CreateValidAccessToken(string clientId = "client_123")
+    private static JsonWebToken CreateValidAccessToken(string clientId = TestConstants.DefaultClientId)
     {
         var token = new JsonWebToken();
         token.Header.Type = JwtTypes.AccessToken;
@@ -100,11 +99,11 @@ public class UserInfoRequestValidatorTests
             IdentityProvider: "local");
     }
 
-    private static AuthorizationContext CreateAuthContext(string clientId = "client_123")
+    private static AuthorizationContext CreateAuthContext(string clientId = TestConstants.DefaultClientId)
     {
         return new AuthorizationContext(
             clientId: clientId,
-            scope: ["openid", "profile"],
+            scope: [TestConstants.DefaultScope, "profile"],
             requestedClaims: null);
     }
 
@@ -123,7 +122,7 @@ public class UserInfoRequestValidatorTests
         var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
         var authContext = CreateAuthContext();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -136,7 +135,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_123"))
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -164,7 +163,7 @@ public class UserInfoRequestValidatorTests
         var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
         var authContext = CreateAuthContext();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -177,7 +176,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_123"))
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -384,7 +383,7 @@ public class UserInfoRequestValidatorTests
         var accessToken = CreateValidAccessToken();
         var authSession = CreateAuthSession();
         var authContext = CreateAuthContext();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
@@ -397,7 +396,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_123"))
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act

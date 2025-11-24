@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
@@ -37,7 +38,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 /// </summary>
 public class PkceValidatorTests
 {
-    private const string ClientId = "client_123";
+    private const string ClientId = TestConstants.DefaultClientId;
     private const string CodeChallengeS256 = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     private const string CodeChallengePlain = "test_code_verifier_plain";
 

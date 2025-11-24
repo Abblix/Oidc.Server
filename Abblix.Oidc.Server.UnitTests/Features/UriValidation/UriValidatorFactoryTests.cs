@@ -22,6 +22,7 @@
 
 using System;
 using Abblix.Oidc.Server.Features.UriValidation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.UriValidation;
@@ -40,7 +41,7 @@ public class UriValidatorFactoryTests
     [Fact]
     public void Create_WithSingleUri_ReturnsExactMatchValidator()
     {
-        var uri = new Uri("https://example.com/callback");
+        var uri = new Uri(TestConstants.DefaultRedirectUri);
 
         var validator = UriValidatorFactory.Create(uri);
 
@@ -72,7 +73,7 @@ public class UriValidatorFactoryTests
     [Fact]
     public void Create_WithIgnoreQueryAndFragment_ValidatorIgnoresQueryAndFragment()
     {
-        var baseUri = new Uri("https://example.com/callback");
+        var baseUri = new Uri(TestConstants.DefaultRedirectUri);
         var uriWithQuery = new Uri("https://example.com/callback?param=value");
 
         var validator = UriValidatorFactory.Create(ignoreQueryAndFragment: true, baseUri);
@@ -88,7 +89,7 @@ public class UriValidatorFactoryTests
     [Fact]
     public void Create_WithoutIgnoreQueryAndFragment_ValidatorDoesNotIgnore()
     {
-        var baseUri = new Uri("https://example.com/callback");
+        var baseUri = new Uri(TestConstants.DefaultRedirectUri);
         var uriWithQuery = new Uri("https://example.com/callback?param=value");
 
         var validator = UriValidatorFactory.Create(ignoreQueryAndFragment: false, baseUri);
@@ -160,7 +161,7 @@ public class UriValidatorFactoryTests
     public void Create_WithLocalhostAndProduction_ValidatesBoth()
     {
         var localhost = new Uri("http://localhost:3000/callback");
-        var production = new Uri("https://example.com/callback");
+        var production = new Uri(TestConstants.DefaultRedirectUri);
 
         var validator = UriValidatorFactory.Create(localhost, production);
 
