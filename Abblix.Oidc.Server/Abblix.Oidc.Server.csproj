@@ -16,12 +16,12 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>v2.0.0: BREAKING CHANGE - Migrated to Result&lt;TSuccess, TFailure&gt; pattern. Dropped .NET 6 and .NET 7 support (now targets .NET 8, .NET 9, and .NET 10). All response types renamed to remove 'Response' suffix. Migration guide: https://github.com/Abblix/Oidc.Server/blob/master/MIGRATION-2.0.md | Changelog: https://github.com/Abblix/Oidc.Server/blob/master/CHANGELOG.md</PackageReleaseNotes>
+        <PackageReleaseNotes>v2.0: Major release with mTLS authentication (RFC 8705), JWT Bearer grants (RFC 7523), Device Authorization (RFC 8628), CIBA Ping/Push modes &amp; Long-Polling, and Result pattern migration. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/blob/master/CHANGELOG.md</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>
         <FileVersion>2.0.0.0</FileVersion>
-        <PackageVersion>2.0.0</PackageVersion>
+        <PackageVersion>2.0</PackageVersion>
     </PropertyGroup>
 
     <ItemGroup>
