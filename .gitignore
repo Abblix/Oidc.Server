@@ -5,6 +5,7 @@
 
 # User-specific files
 testing*.md
+TEST_*.md
 *.rsuser
 *.suo
 *.user
