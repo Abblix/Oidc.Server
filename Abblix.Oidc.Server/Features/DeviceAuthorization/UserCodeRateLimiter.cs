@@ -63,6 +63,7 @@ public class UserCodeRateLimiter(
             if (now < blockedUntil)
             {
                 var retryAfter = blockedUntil - now;
+
                 logger.LogWarning(
                     "User code {UserCode} is rate limited until {BlockedUntil}. " +
                     "Failed attempts: {FailureCount}",
@@ -76,7 +77,7 @@ public class UserCodeRateLimiter(
         var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
         var ipAttempts = await storage.GetAsync<RateLimitState>(ipKey, removeOnRetrieval: false);
 
-        if (ipAttempts != null && ipAttempts.FailureCount >= deviceAuthOptions.MaxIpFailuresPerMinute)
+        if (ipAttempts != null && deviceAuthOptions.MaxIpFailuresPerMinute <= ipAttempts.FailureCount)
         {
             var firstFailure = ipAttempts.FirstFailureAt.ToDateTimeOffset();
             var retryAfter = deviceAuthOptions.RateLimitSlidingWindow - (now - firstFailure);
@@ -130,30 +131,30 @@ public class UserCodeRateLimiter(
         var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
         var ipState = await storage.GetAsync<RateLimitState>(ipKey, removeOnRetrieval: false);
 
-        if (ipState == null || now - ipState.FirstFailureAt.ToDateTimeOffset() > deviceAuthOptions.RateLimitSlidingWindow)
+        if (ipState == null || ipState.FirstFailureAt.ToDateTimeOffset() + deviceAuthOptions.RateLimitSlidingWindow < now)
         {
             // Start new sliding window
             ipState = new RateLimitState
             {
-                FirstFailureAt = Timestamp.FromDateTimeOffset(now),
+                FirstFailureAt = now.ToTimestamp(),
                 FailureCount = 1,
-                LastFailureAt = Timestamp.FromDateTimeOffset(now)
+                LastFailureAt = now.ToTimestamp(),
             };
         }
         else
         {
             ipState.FailureCount++;
-            ipState.LastFailureAt = Timestamp.FromDateTimeOffset(now);
+            ipState.LastFailureAt = now.ToTimestamp();
         }
 
         await storage.SetAsync(
             ipKey,
             ipState,
-            new StorageOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.IpRateLimitStateExpiration });
+            new () { AbsoluteExpirationRelativeToNow = deviceAuthOptions.IpRateLimitStateExpiration });
 
         // Security event logging for monitoring
-        if (userCodeState.FailureCount >= deviceAuthOptions.MaxFailuresBeforeBackoff ||
-            ipState.FailureCount >= deviceAuthOptions.MaxIpFailuresPerMinute)
+        if (deviceAuthOptions.MaxFailuresBeforeBackoff <= userCodeState.FailureCount ||
+            deviceAuthOptions.MaxIpFailuresPerMinute <= ipState.FailureCount)
         {
             logger.LogWarning(
                 "Potential brute force attack detected. UserCode: {UserCode}, " +

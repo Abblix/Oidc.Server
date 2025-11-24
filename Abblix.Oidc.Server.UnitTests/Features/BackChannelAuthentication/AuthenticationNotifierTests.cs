@@ -335,7 +335,7 @@ public class AuthenticationNotifierTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
         };
 
-        var jwt = new Abblix.Jwt.JsonWebToken();
+        var jwt = new Jwt.JsonWebToken();
         var tokenIssued = new TokenIssued(
             new EncodedJsonWebToken(jwt, "access_token_jwt"),
             TokenTypes.Bearer,
