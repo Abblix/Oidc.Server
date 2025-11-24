@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -73,11 +74,11 @@ public class UserInfoRequestProcessorTests
             "local");
 
         var authContext = new Abblix.Oidc.Server.Common.AuthorizationContext(
-            "client_123",
+            TestConstants.DefaultClientId,
             ["openid", "profile", "email"],
             null);
 
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         return new ValidUserInfoRequest(request, authSession, authContext, clientInfo);
     }
@@ -287,7 +288,7 @@ public class UserInfoRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Same(validRequest.ClientInfo, response.ClientInfo);
-        Assert.Equal("client_123", response.ClientInfo.ClientId);
+        Assert.Equal(TestConstants.DefaultClientId, response.ClientInfo.ClientId);
     }
 
     /// <summary>

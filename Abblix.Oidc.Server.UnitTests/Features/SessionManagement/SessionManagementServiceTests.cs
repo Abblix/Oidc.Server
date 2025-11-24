@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using static System.Web.HttpUtility;
@@ -47,7 +48,7 @@ public class SessionManagementServiceTests
     private const string CookieName = "TestSessionCookie";
     private const string CookieDomain = "example.com";
     private const string SameSiteValue = "None";
-    private const string ClientId = "client_123";
+    private const string ClientId = TestConstants.DefaultClientId;
     private const string SessionId = "session_abc456";
     private const string PathBase = "/auth";
     private const string RedirectUriString = "https://client.example.com/callback";

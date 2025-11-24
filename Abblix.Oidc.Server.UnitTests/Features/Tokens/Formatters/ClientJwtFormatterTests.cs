@@ -27,6 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -40,7 +41,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 /// </summary>
 public class ClientJwtFormatterTests
 {
-    private const string ClientId = "client_123";
+    private const string ClientId = TestConstants.DefaultClientId;
     private const string EncodedJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature";
 
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator;

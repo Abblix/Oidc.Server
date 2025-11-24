@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -58,7 +59,7 @@ public class RevocationHandlerTests
 
     private static ClientRequest CreateClientRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
     };
 
     private static ValidRevocationRequest CreateValidRevocationRequest(RevocationRequest request)

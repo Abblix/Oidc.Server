@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -86,7 +87,7 @@ public class EndSessionRequestProcessorTests
         ClientInfo? clientInfo = null)
     {
         request ??= CreateEndSessionRequest();
-        clientInfo ??= new ClientInfo("client_123");
+        clientInfo ??= new ClientInfo(TestConstants.DefaultClientId);
         return new ValidEndSessionRequest(request, clientInfo);
     }
 

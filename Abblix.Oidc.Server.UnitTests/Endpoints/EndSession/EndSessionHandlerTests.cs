@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -61,7 +62,7 @@ public class EndSessionHandlerTests
 
     private static ValidEndSessionRequest CreateValidEndSessionRequest(EndSessionRequest request)
     {
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         return new ValidEndSessionRequest(request, clientInfo);
     }
 

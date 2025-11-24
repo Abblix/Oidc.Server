@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -45,7 +46,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 /// </summary>
 public class LogoutTokenServiceTests
 {
-    private const string ClientId = "client_123";
+    private const string ClientId = TestConstants.DefaultClientId;
     private const string SubjectId = "user_456";
     private const string SessionId = "session_789";
     private const string Issuer = "https://auth.example.com";

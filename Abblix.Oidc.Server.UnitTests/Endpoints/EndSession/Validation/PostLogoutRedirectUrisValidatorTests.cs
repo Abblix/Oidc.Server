@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -65,7 +66,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
     private static ClientInfo CreateClientInfo(params string[] postLogoutRedirectUris)
     {
-        return new ("client_123")
+        return new (TestConstants.DefaultClientId)
         {
             PostLogoutRedirectUris = postLogoutRedirectUris.Select(uri => new Uri(uri)).ToArray(),
         };

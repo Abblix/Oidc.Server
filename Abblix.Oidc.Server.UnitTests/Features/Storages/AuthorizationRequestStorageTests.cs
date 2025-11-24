@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -67,7 +68,7 @@ public class AuthorizationRequestStorageTests
     {
         return new AuthorizationRequest
         {
-            ClientId = "client_123",
+            ClientId = TestConstants.DefaultClientId,
             ResponseType = ["code"],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = ["openid"],

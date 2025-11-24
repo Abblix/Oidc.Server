@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -64,7 +65,7 @@ public class AuthorizationGrantValidatorTests
         var clientRequest = new ClientRequest();
         var context = new TokenValidationContext(tokenRequest, clientRequest);
 
-        var clientInfo = new ClientInfo("client_123")
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             AllowedGrantTypes = allowedGrantTypes ?? [grantType],
         };
@@ -82,7 +83,7 @@ public class AuthorizationGrantValidatorTests
             IdentityProvider: "local");
 
         var authContext = new AuthorizationContext(
-            clientId: "client_123",
+            clientId: TestConstants.DefaultClientId,
             scope: ["openid"],
             requestedClaims: null)
         {

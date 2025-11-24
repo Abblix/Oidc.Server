@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -41,7 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 /// </summary>
 public class ClientJwtValidatorTests
 {
-    private const string ValidClientId = "client_123";
+    private const string ValidClientId = TestConstants.DefaultClientId;
     private const string AnotherClientId = "client_456";
     private const string RequestUri = "https://auth.example.com/token";
     private const string ValidJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRfMTIzIn0.signature";

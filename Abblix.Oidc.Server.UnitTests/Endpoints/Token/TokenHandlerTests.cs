@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -61,7 +62,7 @@ public class TokenHandlerTests
 
     private static ClientRequest CreateClientRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
     };
 
     private static ValidTokenRequest CreateValidTokenRequest(TokenRequest tokenRequest) => new(
@@ -73,10 +74,10 @@ public class TokenHandlerTests
                 DateTimeOffset.UtcNow,
                 "local"),
             new AuthorizationContext(
-                "client_123",
+                TestConstants.DefaultClientId,
                 [],
                 null)),
-        new ClientInfo("client_123"),
+        new ClientInfo(TestConstants.DefaultClientId),
         [],
         []);
 

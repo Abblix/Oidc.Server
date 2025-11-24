@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -50,7 +51,7 @@ public class ClientValidatorTests
         _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
-    private static EndSessionValidationContext CreateContext(string? clientId = "client_123")
+    private static EndSessionValidationContext CreateContext(string? clientId = TestConstants.DefaultClientId)
     {
         var request = new EndSessionRequest
         {
@@ -90,10 +91,10 @@ public class ClientValidatorTests
     {
         // Arrange
         var context = CreateContext();
-        var clientInfo = new ClientInfo("client_123");
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_123"))
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -234,11 +235,11 @@ public class ClientValidatorTests
     public async Task ValidateAsync_ShouldMatchClientIdCaseSensitive()
     {
         // Arrange
-        var context = CreateContext("Client_123");
-        var clientInfo = new ClientInfo("Client_123");
+        var context = CreateContext(TestConstants.DefaultClientId);
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("Client_123"))
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -246,7 +247,7 @@ public class ClientValidatorTests
 
         // Assert
         Assert.Null(error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync("Client_123"), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestConstants.DefaultClientId), Times.Once);
     }
 
 }

@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -70,7 +71,7 @@ public class AuthorizationCodeServiceTests
             IdentityProvider: "local");
 
         var context = new AuthorizationContext(
-            clientId: "client_123",
+            clientId: TestConstants.DefaultClientId,
             scope: [],
             requestedClaims: null);
 

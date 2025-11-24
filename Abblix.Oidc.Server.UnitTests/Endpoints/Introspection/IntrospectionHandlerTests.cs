@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -58,7 +59,7 @@ public class IntrospectionHandlerTests
 
     private static ClientRequest CreateClientRequest() => new()
     {
-        ClientId = "client_123",
+        ClientId = TestConstants.DefaultClientId,
     };
 
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(IntrospectionRequest request)
