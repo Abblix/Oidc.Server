@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -36,6 +37,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// as defined in RFC 6749 section 2.3.1.
 /// Tests cover credential extraction from request body, validation, and various error conditions.
 /// </summary>
+[Collection("License")]
 public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<ClientSecretPostAuthenticator>
 {
     protected override string ExpectedAuthenticationMethod => ClientAuthenticationMethods.ClientSecretPost;
@@ -44,8 +46,6 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
         Mock<IClientInfoProvider> clientInfoProvider,
         TimeProvider? timeProvider = null)
     {
-        LicenseTestHelper.StartTest();
-
         var logger = new Mock<ILogger<ClientSecretPostAuthenticator>>();
         var hashService = new HashService();
 

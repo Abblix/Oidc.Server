@@ -42,6 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 /// Unit tests for <see cref="UserInfoRequestValidator"/> verifying user info request
 /// validation per OIDC Core specification.
 /// </summary>
+[Collection("License")]
 public class UserInfoRequestValidatorTests
 {
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
@@ -49,10 +50,8 @@ public class UserInfoRequestValidatorTests
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly UserInfoRequestValidator _validator;
 
-    public UserInfoRequestValidatorTests()
+    public UserInfoRequestValidatorTests(TestInfrastructure.LicenseFixture fixture)
     {
-        LicenseTestHelper.StartTest();
-
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);

@@ -36,16 +36,15 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession.Validation;
 /// Unit tests for <see cref="ClientValidator"/> verifying client validation
 /// for end-session requests per OIDC Session Management specification.
 /// </summary>
+[Collection("License")]
 public class ClientValidatorTests
 {
     private readonly Mock<ILogger<ClientValidator>> _logger;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly ClientValidator _validator;
 
-    public ClientValidatorTests()
+    public ClientValidatorTests(TestInfrastructure.LicenseFixture fixture)
     {
-        LicenseTestHelper.StartTest();
-
         _logger = new Mock<ILogger<ClientValidator>>();
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object);

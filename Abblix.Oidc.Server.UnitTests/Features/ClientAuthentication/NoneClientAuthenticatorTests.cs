@@ -38,10 +38,16 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// Tests cover public client authentication without secrets, validation of client types,
 /// and various error conditions.
 /// </summary>
+[Collection("License")]
 public class NoneClientAuthenticatorTests
 {
     private const string PublicClientId = "public_client_123";
     private const string ConfidentialClientId = "confidential_client_456";
+
+    public NoneClientAuthenticatorTests(TestInfrastructure.LicenseFixture fixture)
+    {
+        // Fixture auto-configures license
+    }
 
     /// <summary>
     /// Verifies that a valid public client with only client_id successfully authenticates.
@@ -237,8 +243,6 @@ public class NoneClientAuthenticatorTests
     /// <returns>A tuple containing the authenticator instance and the mock objects.</returns>
     private (NoneClientAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
-        LicenseTestHelper.StartTest();
-
         var logger = new Mock<ILogger<NoneClientAuthenticator>>();
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
 

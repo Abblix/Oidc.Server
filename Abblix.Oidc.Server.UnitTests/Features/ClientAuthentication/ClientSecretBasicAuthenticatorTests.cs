@@ -41,6 +41,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// Tests cover credential extraction from Authorization header with Basic scheme, Base64 decoding, validation,
 /// and various error conditions.
 /// </summary>
+[Collection("License")]
 public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<ClientSecretBasicAuthenticator>
 {
     protected override string ExpectedAuthenticationMethod => ClientAuthenticationMethods.ClientSecretBasic;
@@ -49,8 +50,6 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         Mock<IClientInfoProvider> clientInfoProvider,
         TimeProvider? timeProvider = null)
     {
-        LicenseTestHelper.StartTest();
-
         var logger = new Mock<ILogger<ClientSecretBasicAuthenticator>>();
         var hashService = new HashService();
 

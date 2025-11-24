@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using Abblix.Oidc.Server.Features.Licensing;
 using Xunit;
@@ -53,34 +52,25 @@ public class LicenseFixture : IDisposable
     /// </summary>
     public LicenseFixture()
     {
-        var licenseManagerType = typeof(LicenseManager);
-        var licenseField = licenseManagerType.GetField("_license",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        var licenseCheckerType = typeof(LicenseChecker);
 
-        if (licenseField == null)
+        var freeLicenseField = licenseCheckerType.GetField("FreeLicense", BindingFlags.NonPublic | BindingFlags.Static);
+        var freeLicense = freeLicenseField?.GetValue(null);
+
+        if (freeLicense == null)
         {
             throw new InvalidOperationException(
-                "Could not find LicenseManager._license field. " +
+                "Could not find LicenseChecker.FreeLicense field. " +
                 "The internal implementation may have changed.");
         }
 
-        // Create a permissive license for testing with all features enabled
-        var testLicense = new License
-        {
-            ValidIssuers = new HashSet<string>
-            {
-                "https://abblix.com",
-                "https://auth.example.com",
-                TestConstants.DefaultIssuer,
-            },
-            ClientLimit = null,  // No limit
-            IssuerLimit = null,  // No limit
-            NotBefore = DateTimeOffset.UtcNow.AddYears(-1),
-            ExpiresAt = DateTimeOffset.UtcNow.AddYears(10),
-            GracePeriod = null,
-        };
+        // Modify FreeLicense to have no limits (same as LicenseTestHelper.StartTest())
+        var licenseType = freeLicense.GetType();
+        var clientLimitProperty = licenseType.GetProperty("ClientLimit");
+        var issuerLimitProperty = licenseType.GetProperty("IssuerLimit");
 
-        licenseField.SetValue(null, testLicense);
+        clientLimitProperty?.SetValue(freeLicense, null);
+        issuerLimitProperty?.SetValue(freeLicense, null);
     }
 
     /// <summary>
