@@ -24,7 +24,6 @@ using System;
 using System.Linq;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure.Builders;
 

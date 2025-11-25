@@ -58,14 +58,11 @@ The library also supports Dependency Injection through the standard .NET DI cont
 - **client_secret_jwt**: Standards-compliant JWT-based client authentication method
 - **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
 - **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
+- **Device Authorization Grant**: RFC 8628 support for devices with limited input capabilities
 
 🔒 **Security Enhancements**
 - **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
 - **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
-
-✨ **Quality Improvements**
-- **Test Coverage**: 50,000+ lines of new tests across all OAuth 2.0/OIDC flows
-- **Primary Constructors**: Migrated 74 classes to C# 12 syntax, reducing ~900 lines of boilerplate
 
 📋 **[Read the full release notes](RELEASE-2.0.md)** for detailed explanations of all changes and their impact.
 ⚠️ **Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.

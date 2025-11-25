@@ -29,24 +29,3 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 #pragma warning disable S2094 // Classes should not be empty
 public abstract record UserCodeVerificationResult;
 #pragma warning restore S2094
-
-/// <summary>
-/// Indicates that the user code was successfully verified and the request is pending authorization.
-/// </summary>
-/// <param name="ClientId">The client identifier that initiated the device authorization request.</param>
-/// <param name="Scope">The requested scopes for the authorization.</param>
-/// <param name="Resources">The requested resources (RFC 8707) for the authorization.</param>
-public record ValidUserCode(
-    string ClientId,
-    string[] Scope,
-    Uri[]? Resources) : UserCodeVerificationResult;
-
-/// <summary>
-/// Indicates that the user code was not found or has expired.
-/// </summary>
-public record InvalidUserCode : UserCodeVerificationResult;
-
-/// <summary>
-/// Indicates that the user code has already been used (approved or denied).
-/// </summary>
-public record UserCodeAlreadyUsed : UserCodeVerificationResult;

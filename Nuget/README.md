@@ -2,13 +2,23 @@
 
 **Abblix OIDC Server** is a robust .NET library that implements the OpenID Connect protocol on the server side. It is designed to meet high standards of flexibility, reusability, and reliability, using well-known software design patterns such as modular and hexagonal architectures. These patterns ensure that different parts of the library can work independently, improving the library's modularity, testability, and maintainability. The library also supports Dependency Injection using the standard .NET DI container, which aids in better organization and management of code. Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms to simplify the integration of OpenID Connect into your services.
 
-## What's New in Version 1.6.0
+## What's New in Version 2.0.0
 
-**Performance Enhancements**: Significant improvements to Base32 encoding operations, resulting in better overall system performance for token generation and validation processes.
+🚨 **BREAKING CHANGES**
+- **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for compiler-enforced explicit error handling and functional programming style
+- **Framework Updates**: Dropped .NET 6 & 7 (EOL) - now targets .NET 8 (LTS), .NET 9 (STS), and .NET 10 (LTS - released Nov 2025, supported until Nov 2028)
 
-**Enhanced Session Management**: Added comprehensive Authentication Method Reference (AMR) support for better tracking and validation of authentication methods used during user sessions.
+🆕 **New Features**
+- **client_secret_jwt**: Standards-compliant JWT-based client authentication method
+- **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
+- **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
+- **Device Authorization Grant**: RFC 8628 support for devices with limited input capabilities
 
-This release maintains full backward compatibility with no breaking changes.
+🔒 **Security Enhancements**
+- **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
+- **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
+
+⚠️ **Migration Required**: This is a major version update with breaking changes. Review your code for Result pattern usage and update error handling accordingly.
 
 ## NuGet Packages Description
 
