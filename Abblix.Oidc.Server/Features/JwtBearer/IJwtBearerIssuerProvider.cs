@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 
-namespace Abblix.Oidc.Server.Features.Issuer;
+namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Provides comprehensive JWT Bearer grant type (RFC 7523) functionality including issuer management,

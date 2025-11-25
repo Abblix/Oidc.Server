@@ -27,7 +27,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Features.Issuer;
+namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Default implementation of <see cref="IJwtBearerIssuerProvider"/> that loads trusted issuers

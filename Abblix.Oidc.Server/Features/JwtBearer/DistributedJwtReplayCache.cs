@@ -25,7 +25,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Features.Issuer;
+namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Distributed cache implementation of <see cref="IJwtReplayCache"/> for JWT replay protection.

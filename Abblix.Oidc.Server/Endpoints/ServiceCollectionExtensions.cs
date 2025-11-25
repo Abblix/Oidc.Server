@@ -58,6 +58,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -182,11 +183,17 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenEndpoint(this IServiceCollection services)
     {
         services
-            .AddAuthorizationGrants()
+            .AddJwtBearerGrant()
+            .AddAuthorizationCodeGrant()
+            .AddRefreshTokenGrant()
+            .AddClientCredentialsGrant()
+            // BackChannelAuthenticationGrantHandler and DeviceCodeGrantHandler are registered
+            // in AddBackChannelAuthentication() and AddDeviceAuthorization() respectively
+            // AddAuthorizationGrants() is called in AddOidcCore() after all handlers are registered
             .AddTokenContextValidators();
 
          services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
-         
+
          services.TryAddScoped<ITokenHandler, TokenHandler>();
          services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
@@ -235,27 +242,68 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds services for validating and processing revocation requests. This capability is essential for OAuth 2.0
-    /// compliance, enabling clients to revoke access or refresh tokens when they are no longer needed or
-    /// if a security issue arises, thus minimizing the potential for unauthorized use of tokens.
+    /// Registers services required for JWT Bearer grant type, including JWT Bearer issuer provider,
+    /// JWT replay prevention cache, and keyed caching decorator for JWKS fetching.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddJwtBearerGrant(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
+        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+
+        // Register keyed caching decorator for JWT Bearer JWKS fetching
+        // DecorateKeyed will find the non-keyed ISecureHttpFetcher and create a keyed decorated version
+        services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
+            JwtBearerIssuerProvider.SecureHttpFetcherKey);
+
+        services.AddSingleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the authorization code grant handler for OAuth 2.0 authorization code flow.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddAuthorizationCodeGrant(this IServiceCollection services)
+    {
+        services.AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the refresh token grant handler for OAuth 2.0 refresh token flow.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddRefreshTokenGrant(this IServiceCollection services)
+    {
+        services.AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the client credentials grant handler for OAuth 2.0 client credentials flow.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddClientCredentialsGrant(this IServiceCollection services)
+    {
+        services.AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>();
+        return services;
+    }
+
+    /// <summary>
+    /// Composes all registered authorization grant handlers into a composite handler and registers it as the grant type informer.
+    /// This method should be called after all individual grant handlers have been registered.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationGrants(this IServiceCollection services)
     {
-        services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
-        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
-
-        services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
-            JwtBearerIssuerProvider.SecureHttpFetcherKey);
-
         return services
-            .AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>()
-            .AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>()
-            .AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>()
-            .AddSingleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>()
-            .AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>()
-            .AddSingleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>()
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
             .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
     }

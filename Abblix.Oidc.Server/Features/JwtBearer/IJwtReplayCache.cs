@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.Issuer;
+namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Provides JWT replay protection by tracking JWT IDs (jti claims) that have been used.
