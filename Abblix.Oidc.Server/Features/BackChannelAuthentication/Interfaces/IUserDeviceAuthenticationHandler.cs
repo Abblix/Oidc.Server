@@ -109,7 +109,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///
 /// <para><strong>Token Delivery Modes:</strong></para>
 /// <para>
-/// The <see cref="IAuthenticationNotifier.NotifyAsync"/> method automatically handles
+/// The <see cref="IAuthenticationCompletionHandler.CompleteAsync"/> method automatically handles
 /// mode-specific behavior based on the client's registered <c>backchannel_token_delivery_mode</c>:
 /// </para>
 /// <list type="bullet">

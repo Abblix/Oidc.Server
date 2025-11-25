@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
@@ -425,7 +426,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Configures services for handling back-channel authentication requests, enabling secure server-to-server
-    /// authentication flows.
+    /// authentication flows and registers the CIBA grant handler.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
@@ -436,13 +437,13 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IBackChannelRequestStorage, BackChannelRequestStorage>();
         services.TryAddSingleton<INotificationDeliveryService, HttpNotificationDeliveryService>();
 
-        // Register mode-specific notifiers as keyed services
-        services.TryAddKeyedSingleton<IAuthenticationNotifier, PollModeNotifier>(BackchannelTokenDeliveryModes.Poll);
-        services.TryAddKeyedSingleton<IAuthenticationNotifier, PingModeNotifier>(BackchannelTokenDeliveryModes.Ping);
-        services.TryAddKeyedSingleton<IAuthenticationNotifier, PushModeNotifier>(BackchannelTokenDeliveryModes.Push);
+        // Register mode-specific completion handlers as keyed services (scoped to allow scoped dependencies)
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PollModeCompletionHandler>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PingModeCompletionHandler>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PushModeCompletionHandler>(BackchannelTokenDeliveryModes.Push);
 
-        // Register composite notifier that automatically selects the appropriate mode-specific notifier
-        services.TryAddSingleton<IAuthenticationNotifier, NotificationRouter>();
+        // Register router that automatically selects the appropriate mode-specific handler
+        services.TryAddSingleton<IAuthenticationCompletionHandler, AuthenticationCompletionRouter>();
 
         // Register mode-specific grant processors as keyed services
         services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
@@ -472,6 +473,9 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpClient(nameof(HttpNotificationDeliveryService));
 
+        // Register CIBA grant handler
+        services.AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>();
+
         return services;
     }
 
@@ -488,6 +492,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDeviceAuthorizationStorage, DeviceAuthorizationStorage>();
         services.TryAddSingleton<IUserCodeRateLimiter, UserCodeRateLimiter>();
         services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
+
+        // Register Device Authorization grant handler
+        services.AddSingleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>();
+
         return services;
     }
 

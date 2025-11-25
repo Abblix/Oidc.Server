@@ -28,55 +28,43 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
 /// <summary>
-/// Abstract base class for CIBA authentication completion notification handlers.
-/// Provides common functionality for client lookup, validation, and status notification.
-/// Derived classes implement specific token delivery modes (poll, ping, push).
+/// Abstract base class for CIBA authentication completion handlers.
+/// Provides common functionality for validation, status management, and delivery orchestration.
+/// Derived classes implement specific token delivery modes (poll, ping, push) per CIBA specification.
 /// </summary>
-/// <param name="logger">Logger for tracking notification events.</param>
-/// <param name="storage">Storage for authentication requests.</param>
-/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
-public abstract class AuthenticationNotifier(
-    ILogger<AuthenticationNotifier> logger,
-    IBackChannelRequestStorage storage,
-    IClientInfoProvider clientInfoProvider,
-    IBackChannelLongPollingService? statusNotifier): IAuthenticationNotifier
+/// <param name="logger">Logger for tracking completion events and errors.</param>
+/// <param name="storage">Storage for persisting authentication request state.</param>
+public abstract class AuthenticationCompletionHandler(
+    ILogger<AuthenticationCompletionHandler> logger,
+    IBackChannelRequestStorage storage)
 {
     /// <summary>
-    /// Updates authentication request status to Authenticated and handles token delivery based on the delivery mode.
-    /// Also notifies waiting long-polling requests to wake up and retrieve tokens.
+    /// Completes the authentication process by marking the request as authenticated and delegating
+    /// to the mode-specific delivery implementation.
     /// </summary>
-    /// <param name="authenticationRequestId">The auth_req_id to update.</param>
+    /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
     /// <param name="request">The authentication request to mark as authenticated.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
-    public async Task NotifyAsync(
+    /// <param name="clientInfo">Client information including delivery mode configuration.</param>
+    /// <param name="expiresIn">How long the authenticated request remains valid.</param>
+    /// <returns>A task representing the asynchronous authentication completion operation.</returns>
+    /// <remarks>
+    /// This method:
+    /// <list type="number">
+    ///   <item>Sets the request status to Authenticated</item>
+    ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
+    /// </list>
+    /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
+    /// </remarks>
+    public async Task CompleteAuthenticationAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
+        ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
-        var clientId = request.AuthorizedGrant.Context.ClientId;
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
-
-        if (clientInfo == null)
-        {
-            logger.LogError(
-                "Client not found for auth_req_id: {AuthReqId}, ClientId: {ClientId}",
-                authenticationRequestId,
-                clientId);
-            return;
-        }
-
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
         await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
-
-        if (statusNotifier != null)
-        {
-            await statusNotifier.NotifyStatusChangeAsync(
-                authenticationRequestId,
-                request.Status);
-        }
     }
 
     /// <summary>
@@ -134,7 +122,7 @@ public abstract class AuthenticationNotifier(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authentication request to mark as denied.</param>
     /// <param name="expiresIn">How long the denied status remains in storage for client polling.</param>
-    protected async Task SetRequestAsDeniedAsync(
+    protected async Task DenyRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)

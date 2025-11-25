@@ -36,20 +36,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
-/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 /// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
-public class PushModeNotifier(
-    ILogger<AuthenticationNotifier> logger,
+public class PushModeCompletionHandler(
+    ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
-    IClientInfoProvider clientInfoProvider,
-    IBackChannelLongPollingService? statusNotifier,
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor)
-    : AuthenticationNotifier(logger, storage, clientInfoProvider, statusNotifier)
+    : AuthenticationCompletionHandler(logger, storage)
 {
-    private readonly ILogger<AuthenticationNotifier> _logger = logger;
+    private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
@@ -73,7 +69,7 @@ public class PushModeNotifier(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            await SetRequestAsDeniedAsync(authenticationRequestId, request, expiresIn);
+            await DenyRequestAsync(authenticationRequestId, request, expiresIn);
             return;
         }
 
@@ -81,7 +77,7 @@ public class PushModeNotifier(
             "Generating and delivering tokens via CIBA push mode for auth_req_id: {AuthReqId}",
             authenticationRequestId);
 
-        var tokenRequest = new Model.TokenRequest
+        var tokenRequest = new TokenRequest
         {
             GrantType = GrantTypes.Ciba,
             AuthenticationRequestId = authenticationRequestId,

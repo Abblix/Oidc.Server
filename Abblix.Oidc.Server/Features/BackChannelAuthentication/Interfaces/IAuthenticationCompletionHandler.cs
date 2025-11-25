@@ -23,28 +23,28 @@
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
 /// <summary>
-/// Routes CIBA authentication completion notifications to the appropriate delivery mode handler
+/// Handles CIBA authentication completion by routing to the appropriate delivery mode handler
 /// (poll, ping, or push) based on the client's configured backchannel_token_delivery_mode.
 /// </summary>
-public interface IAuthenticationNotifier
+public interface IAuthenticationCompletionHandler
 {
     /// <summary>
-    /// Notifies that user authentication has completed and handles token delivery according to
+    /// Completes the authentication process and handles token delivery according to
     /// the client's configured delivery mode.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
     /// <param name="request">The authentication request with Authenticated status and authorized grant.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
-    /// <returns>A task representing the asynchronous notification operation.</returns>
+    /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
     /// This method automatically:
     /// <list type="bullet">
     ///   <item>Retrieves client information to determine the delivery mode</item>
-    ///   <item>Selects the appropriate notifier (PollModeNotifier, PingModeNotifier, or PushModeNotifier)</item>
+    ///   <item>Selects the appropriate handler (PollModeCompletionHandler, PingModeCompletionHandler, or PushModeCompletionHandler)</item>
     ///   <item>Delegates to the mode-specific implementation for token delivery</item>
     /// </list>
     /// </remarks>
-    Task NotifyAsync(
+    Task CompleteAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn);

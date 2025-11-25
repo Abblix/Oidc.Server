@@ -29,26 +29,26 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
 /// <summary>
-/// Composite notifier that automatically selects and delegates to the appropriate mode-specific notifier
-/// (PollModeNotifier, PingModeNotifier, or PushModeNotifier) based on the client's configured
+/// Routes CIBA authentication completion to the appropriate mode-specific handler
+/// (PollModeCompletionHandler, PingModeCompletionHandler, or PushModeCompletionHandler) based on the client's configured
 /// backchannel_token_delivery_mode.
 /// </summary>
-/// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="logger">Logger for tracking completion events.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="serviceProvider">Service provider for resolving mode-specific notifiers using keyed services.</param>
-public class NotificationRouter(
-    ILogger<NotificationRouter> logger,
+/// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
+public class AuthenticationCompletionRouter(
+    ILogger<AuthenticationCompletionRouter> logger,
     IClientInfoProvider clientInfoProvider,
-    IServiceProvider serviceProvider) : IAuthenticationNotifier
+    IServiceProvider serviceProvider) : IAuthenticationCompletionHandler
 {
     /// <summary>
-    /// Updates authentication request status to Authenticated and handles token delivery based on the
-    /// client's configured delivery mode. Automatically selects the appropriate notifier implementation.
+    /// Completes the authentication process and handles token delivery based on the
+    /// client's configured delivery mode. Automatically selects the appropriate handler implementation.
     /// </summary>
-    /// <param name="authenticationRequestId">The auth_req_id to update.</param>
-    /// <param name="request">The updated authentication request with Authenticated status.</param>
+    /// <param name="authenticationRequestId">The auth_req_id to complete.</param>
+    /// <param name="request">The authentication request to mark as completed.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
-    public async Task NotifyAsync(
+    public async Task CompleteAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
@@ -66,7 +66,7 @@ public class NotificationRouter(
         }
 
         var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
-        var notifier = serviceProvider.GetRequiredKeyedService<AuthenticationNotifier>(deliveryMode);
-        await notifier.NotifyAsync(authenticationRequestId, request, expiresIn);
+        var handler = serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode);
+        await handler.CompleteAuthenticationAsync(authenticationRequestId, request, clientInfo, expiresIn);
     }
 }

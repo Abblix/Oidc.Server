@@ -71,8 +71,10 @@ public static class ServiceCollectionExtensions
 			.AddOptions<OidcOptions>()
 			.Configure(configureOptions).Services
 			.AddCommonServices()
+            .AddSecureHttpFetch() // Must be before AddEndpoints() so DecorateKeyed can find it
             .AddEndpoints()
-            .AddFeatures();
+            .AddFeatures()
+            .AddAuthorizationGrants(); // Compose grant handlers AFTER all handlers are registered
 	}
 
 	/// <summary>
@@ -114,7 +116,8 @@ public static class ServiceCollectionExtensions
 			.AddUserInfo()
 			.AddRequestObject()
 			.AddBackChannelAuthentication()
-			.AddSecureHttpFetch();
+			.AddDeviceAuthorization();
+			// AddSecureHttpFetch() moved to AddOidcCore() to run before AddEndpoints()
 	}
 
 	/// <summary>
