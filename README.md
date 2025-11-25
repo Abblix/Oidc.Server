@@ -146,7 +146,7 @@ We appreciate your support and look forward to making our product even better wi
 
 ## 📃 License
 
-This product is distributed under a proprietary license. You can review the full license agreement at the following link: [Standard License Agreement for Abblix OIDC Server](https://resources.abblix.com/docs/eng/standard-license-agreement-abblix-oidc-server.pdf).
+This product is distributed under a proprietary license. See📋[License Agreement](LICENSE.md) for details.
 
 For non-commercial use, this product is available for free.
 
