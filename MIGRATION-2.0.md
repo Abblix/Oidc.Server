@@ -430,10 +430,10 @@ Assert.NotNull(success);
 
 ## Need Help?
 
-- 📖 [Documentation](https://docs.abblix.com/)
-- 💬 [GitHub Discussions](https://github.com/Abblix/Oidc.Server/discussions)
-- 🐛 [Report Issues](https://github.com/Abblix/Oidc.Server/issues)
-- 📧 [Email Support](mailto:info@abblix.com)
+- [Documentation](https://docs.abblix.com/)
+- [GitHub Discussions](https://github.com/Abblix/Oidc.Server/discussions)
+- [Report Issues](https://github.com/Abblix/Oidc.Server/issues)
+- [Email Support](mailto:info@abblix.com)
 
 ---
 
