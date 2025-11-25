@@ -4,21 +4,24 @@
 
 ## What's New in Version 2.0.0
 
-🚨 **BREAKING CHANGES**
+⚡ **Breaking Changes**
 - **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for compiler-enforced explicit error handling and functional programming style
 - **Framework Updates**: Dropped .NET 6 & 7 (EOL) - now targets .NET 8 (LTS), .NET 9 (STS), and .NET 10 (LTS - released Nov 2025, supported until Nov 2028)
 
-🆕 **New Features**
-- **client_secret_jwt**: Standards-compliant JWT-based client authentication method
-- **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
-- **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
-- **Device Authorization Grant**: RFC 8628 support for devices with limited input capabilities
+🚀 **Features**
+- **mTLS Client Authentication (RFC 8705)**: Self-signed and PKI/CA validation with certificate-bound tokens
+- **JWT Bearer Grant Type (RFC 7523)**: Service-to-service authentication using signed JWTs for secure API-to-API communication
+- **Device Authorization Grant (RFC 8628)**: OAuth flow for input-constrained devices (smart TVs, IoT, CLI tools)
+- **CIBA Ping/Push Modes & Long-Polling**: Complete delivery mode implementation with ping notifications, push token delivery, and long-polling support
+- **client_secret_jwt Authentication**: JWT-based client authentication per OIDC Core spec
+- **SSRF Protection**: Multi-layered defense with DNS validation and IP blocking
+- **Protocol Buffer Serialization**: 40-60% smaller storage footprint with faster processing
 
-🔒 **Security Enhancements**
-- **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
-- **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
+🛠 **Fixes**
+- **Session Accumulation**: Fixed distributed cache memory leak
+- **ECDSA Certificate Support**: Added support for ECDSA certificates
 
-⚠️ **Migration Required**: This is a major version update with breaking changes. Review your code for Result pattern usage and update error handling accordingly.
+> **Migration Required**: This is a major version update with breaking changes. Review your code for Result pattern usage and update error handling accordingly.
 
 ## NuGet Packages Description
 
