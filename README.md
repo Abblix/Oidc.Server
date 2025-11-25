@@ -8,11 +8,10 @@
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
-[![tests](https://img.shields.io/badge/tests-1677%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
+[![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
-[![ChatGPT](https://img.shields.io/badge/ChatGPT-available-brightgreen.svg?logo=data:image/svg%2bxml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+T3BlbkFJPC90aXRsZT48cGF0aCBmaWxsPSIjRkZGRkZGIiBkPSJNMjIuMjgxOSA5LjgyMTFhNS45ODQ3IDUuOTg0NyAwIDAgMC0uNTE1Ny00LjkxMDggNi4wNDYyIDYuMDQ2MiAwIDAgMC02LjUwOTgtMi45QTYuMDY1MSA2LjA2NTEgMCAwIDAgNC45ODA3IDQuMTgxOGE1Ljk4NDcgNS45ODQ3IDAgMCAwLTMuOTk3NyAyLjkgNi4wNDYyIDYuMDQ2MiAwIDAgMCAuNzQyNyA3LjA5NjYgNS45OCA1Ljk4IDAgMCAwIC41MTEgNC45MTA3IDYuMDUxIDYuMDUxIDAgMCAwIDYuNTE0NiAyLjkwMDFBNS45ODQ3IDUuOTg0NyAwIDAgMCAxMy4yNTk5IDI0YTYuMDU1NyA2LjA1NTcgMCAwIDAgNS43NzE4LTQuMjA1OCA1Ljk4OTQgNS45ODk0IDAgMCAwIDMuOTk3Ny0yLjkwMDEgNi4wNTU3IDYuMDU1NyAwIDAgMC0uNzQ3NS03LjA3Mjl6bS05LjAyMiAxMi42MDgxYTQuNDc1NSA0LjQ3NTUgMCAwIDEtMi44NzY0LTEuMDQwOGwuMTQxOS0uMDgwNCA0Ljc3ODMtMi43NTgyYS43OTQ4Ljc5NDggMCAwIDAgLjM5MjctLjY4MTN2LTYuNzM2OWwyLjAyIDEuMTY4NmEuMDcxLjA3MSAwIDAgMSAuMDM4LjA1MnY1LjU4MjZhNC41MDQgNC41MDQgMCAwIDEtNC40OTQ1IDQuNDk0NHptLTkuNjYwNy00LjEyNTRhNC40NzA4IDQuNDcwOCAwIDAgMS0uNTM0Ni0zLjAxMzdsLjE0Mi4wODUyIDQuNzgzIDIuNzU4MmEuNzcxMi43NzEyIDAgMCAwIC43ODA2IDBsNS44NDI4LTMuMzY4NXYyLjMzMjRhLjA4MDQuMDgwNCAwIDAgMS0uMDMzMi4wNjE1TDkuNzQgMTkuOTUwMmE0LjQ5OTIgNC40OTkyIDAgMCAxLTYuMTQwOC0xLjY0NjR6TTIuMzQwOCA3Ljg5NTZhNC40ODUgNC40ODUgMCAwIDEgMi4zNjU1LTEuOTcyOFYxMS42YS43NjY0Ljc2NjQgMCAwIDAgLjM4NzkuNjc2NWw1LjgxNDQgMy4zNTQzLTIuMDIwMSAxLjE2ODVhLjA3NTcuMDc1NyAwIDAgMS0uMDcxIDBsLTQuODMwMy0yLjc4NjVBNC41MDQgNC41MDQgMCAwIDEgMi4zNDA4IDcuODcyem0xNi41OTYzIDMuODU1OEwxMy4xMDM4IDguMzY0IDE1LjExOTIgNy4yYS4wNzU3LjA3NTcgMCAwIDEgLjA3MSAwbDQuODMwMyAyLjc5MTNhNC40OTQ0IDQuNDk0NCAwIDAgMS0uNjc2NSA4LjEwNDJ2LTUuNjc3MmEuNzkuNzkgMCAwIDAtLjQwNy0uNjY3em0yLjAxMDctMy4wMjMxbC0uMTQyLS4wODUyLTQuNzczNS0yLjc4MThhLjc3NTkuNzc1OSAwIDAgMC0uNzg1NCAwTDkuNDA5IDkuMjI5N1Y2Ljg5NzRhLjA2NjIuMDY2MiAwIDAgMSAuMDI4NC0uMDYxNWw0LjgzMDMtMi43ODY2YTQuNDk5MiA0LjQ5OTIgMCAwIDEgNi42ODAyIDQuNjZ6TTguMzA2NSAxMi44NjNsLTIuMDItMS4xNjM4YS4wODA0LjA4MDQgMCAwIDEtLjAzOC0uMDU2N1Y2LjA3NDJhNC40OTkyIDQuNDk5MiAwIDAgMSA3LjM3NTctMy40NTM3bC0uMTQyLjA4MDVMOC43MDQgNS40NTlhLjc5NDguNzk0OCAwIDAgMC0uMzkyNy42ODEzem0xLjA5NzYtMi4zNjU0bDIuNjAyLTEuNDk5OCAyLjYwNjkgMS40OTk4djIuOTk5NGwtMi41OTc0IDEuNDk5Ny0yLjYwNjctMS40OTk3WiIvPjwvc3ZnPg==)](https://chatgpt.com/g/g-1icXaNyOR-abblix-oidc-server-helper)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
 [![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
 
@@ -50,22 +49,24 @@ The library also supports Dependency Injection through the standard .NET DI cont
 
 ### Version 2.0.0 (Latest)
 
-🚨 **BREAKING CHANGES**
+⚡ **Breaking Changes**
 - **Result Pattern Migration**: Migrated to `Result<TSuccess, TFailure>` pattern for compiler-enforced explicit error handling and functional programming style
 - **Framework Updates**: Dropped .NET 6 & 7 (EOL) - now targets .NET 8 (LTS), .NET 9 (STS), and .NET 10 (LTS - released Nov 2025, supported until Nov 2028)
 
-🆕 **New Features**
-- **client_secret_jwt**: Standards-compliant JWT-based client authentication method
-- **Endpoint Configuration**: Attribute-based system for enabling/disabling endpoints
-- **Grant Type Discovery**: Complete dynamic grant type reporting infrastructure
-- **Device Authorization Grant**: RFC 8628 support for devices with limited input capabilities
+🚀 **Features**
+- **mTLS Client Authentication (RFC 8705)**: Self-signed and PKI/CA validation with certificate-bound tokens
+- **JWT Bearer Grant Type (RFC 7523)**: Service-to-service authentication using signed JWTs for secure API-to-API communication
+- **Device Authorization Grant (RFC 8628)**: OAuth flow for input-constrained devices (smart TVs, IoT, CLI tools)
+- **CIBA Ping/Push Modes & Long-Polling**: Complete delivery mode implementation with ping notifications, push token delivery, and long-polling support
+- **client_secret_jwt Authentication**: JWT-based client authentication per OIDC Core spec
+- **SSRF Protection**: Multi-layered defense with DNS validation and IP blocking
+- **Protocol Buffer Serialization**: 40-60% smaller storage footprint with faster processing
 
-🔒 **Security Enhancements**
-- **SSRF Protection**: Configurable multi-layered protection with DNS rebinding prevention, IP blocking, scheme restrictions, and comprehensive logging
-- **Enhanced Validation**: Type-safe JSON Web Key hierarchy with compile-time safety
+🛠 **Fixes**
+- **Session Accumulation**: Fixed distributed cache memory leak
+- **ECDSA Certificate Support**: Added support for ECDSA certificates
 
-📋 **[Read the full release notes](RELEASE-2.0.md)** for detailed explanations of all changes and their impact.
-⚠️ **Migration Required**: See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed upgrade guide.
+> **Migration Note**: This release contains breaking changes. See 📋[Migration Guide](MIGRATION-2.0.md).
 
 ## 🎓 Certification
 
@@ -124,29 +125,13 @@ dotnet restore
 dotnet build
 
 ```
-## 📚 Documentation 
+## 📚 Documentation
 
 ### Getting Started
 Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
 
 To better understand the Abblix OIDC Server product, we recommend visiting our [Documentation](https://docs.abblix.com/docs) site. There, you will find useful information about the product and the OpenID Connect standard.
-
-### Abblix OIDC Server Helper
-
-The [**Abblix OIDC Server Helper**](https://chat.openai.com/g/g-1icXaNyOR-abblix-oidc-server-helper) is a specialized ChatGPT [![Abblix OIDC Server Helper](https://resources.abblix.com/imgs/svg/openai-black-15x15.svg)](https://chat.openai.com/g/g-1icXaNyOR-abblix-oidc-server-helper) designed to assist users and developers working with the Abblix OIDC Server. This tool is equipped with comprehensive documentation and various supporting documents, enabling it to provide precise and detailed assistance on a range of topics. Here are the key areas it can help with:
-
-- **Integration**: Guidance on how to integrate the Abblix OIDC Server with your .NET project.
-- **Configuration**: Best practices and settings for configuring the server.
-- **Technical Support**: Troubleshooting common issues and implementing features.
-- **Licensing and Pricing**: Detailed information on different licensing plans and costs.
-- **Features and Benefits**: Overview of the server's features and their advantages.
-- **Security and Compliance**: Ensuring your implementation is secure and compliant with standards.
-- **Extending and Customizing**: Guidelines for extending the functionality of the server.
-
-and much more.
-
-This tool is ideal for both new users and experienced developers seeking specific technical details or support.
 
 ## 🤝 Feedback and Contributions
 
@@ -156,19 +141,6 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 > Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. Your insights help us make the Abblix OIDC Server library more robust and user-friendly.
 
 Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
-
-### Contributing Code
-
-**Before submitting pull requests, please review our [C# Code Style Guide](https://github.com/Abblix/Docs/blob/main/wiki/code-style.md).**
-
-Key requirements for contributors:
-- Follow Microsoft/.NET coding conventions
-- Use modern C# features (records, pattern matching, nullable types)
-- Comprehensive XML documentation on all public APIs
-- No defensive programming - let errors surface
-- No magic numbers - use named constants
-- Comments explain WHY, not WHAT
-- Write unit tests following AAA pattern
 
 We appreciate your support and look forward to making our product even better with your help!
 
