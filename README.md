@@ -61,10 +61,7 @@ The library also supports Dependency Injection through the standard .NET DI cont
 - **client_secret_jwt Authentication**: JWT-based client authentication per OIDC Core spec
 - **SSRF Protection**: Multi-layered defense with DNS validation and IP blocking
 - **Protocol Buffer Serialization**: 40-60% smaller storage footprint with faster processing
-
-🛠 **Fixes**
-- **Session Accumulation**: Fixed distributed cache memory leak
-- **ECDSA Certificate Support**: Added support for ECDSA certificates
+- **ECDSA Certificate Support**: Enables compliance with modern security standards that mandate or prefer elliptic curve cryptography
 
 > **Migration Note**: This release contains breaking changes. See 📋[Migration Guide](MIGRATION-2.0.md).
 

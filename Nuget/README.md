@@ -16,10 +16,7 @@
 - **client_secret_jwt Authentication**: JWT-based client authentication per OIDC Core spec
 - **SSRF Protection**: Multi-layered defense with DNS validation and IP blocking
 - **Protocol Buffer Serialization**: 40-60% smaller storage footprint with faster processing
-
-🛠 **Fixes**
-- **Session Accumulation**: Fixed distributed cache memory leak
-- **ECDSA Certificate Support**: Added support for ECDSA certificates
+- **ECDSA Certificate Support**: Enables compliance with modern security standards that mandate or prefer elliptic curve cryptography
 
 > **Migration Required**: This is a major version update with breaking changes. Review your code for Result pattern usage and update error handling accordingly.
 
