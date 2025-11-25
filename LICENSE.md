@@ -1,6 +1,6 @@
 # License Agreement
 
-**Effective Date:** Novemver 18, 2025
+**Effective Date:** November 18, 2025
 
 This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership ("Copyright Holder") for the OIDC Server ("Software").
 
