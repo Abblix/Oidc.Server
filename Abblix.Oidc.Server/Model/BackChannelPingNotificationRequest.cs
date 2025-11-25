@@ -20,28 +20,24 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
-using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
+namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Handles CIBA ping mode token retrieval at the token endpoint.
-/// In ping mode, the server sends a notification to the client, then the client retrieves tokens.
-/// Tokens remain in storage after retrieval (allows multiple retrievals after single notification).
+/// Represents the notification payload sent to the client in ping mode.
 /// </summary>
-public class PingModeGrantProcessor : IBackChannelGrantProcessor
+public sealed record BackChannelPingNotificationRequest : IBackChannelNotificationRequest
 {
-    // Ping mode clients are allowed to poll the token endpoint
-    public OidcError? ValidateTokenEndpointAccess() => null;
+    /// <summary>
+    /// The authentication request identifier that is ready for token retrieval.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthReqId)]
+    public required string AuthenticationRequestId { get; init; }
 
-    public Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
-        BackChannelAuthenticationRequest request)
+    public static class Parameters
     {
-        // In ping mode, keep tokens in storage (allows single notification, multiple retrievals)
-        return Task.FromResult<Result<AuthorizedGrant, OidcError>>(request.AuthorizedGrant);
+        public const string AuthReqId = "auth_req_id";
     }
 }

@@ -27,6 +27,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -35,25 +36,25 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
 
 /// <summary>
-/// Unit tests for <see cref="HttpBackChannelNotificationService"/> verifying CIBA ping mode
+/// Unit tests for <see cref="HttpNotificationDeliveryService"/> verifying CIBA ping mode
 /// HTTP notification functionality as defined in the OpenID Connect CIBA specification Section 10.2.
 /// Tests cover successful notifications, error handling, authentication, and payload validation.
 /// </summary>
-public class HttpBackChannelNotificationServiceTests
+public class HttpNotificationDeliveryServiceTests
 {
     private const string AuthReqId = "auth_req_abc123";
     private const string ClientNotificationToken = "bearer_token_xyz";
     private readonly Uri _clientNotificationEndpoint = new("https://client.example.com/ciba/notify");
 
     private readonly Mock<IHttpClientFactory> _httpClientFactory;
-    private readonly Mock<ILogger<HttpBackChannelNotificationService>> _logger;
-    private readonly HttpBackChannelNotificationService _service;
+    private readonly Mock<ILogger<HttpNotificationDeliveryService>> _logger;
+    private readonly HttpNotificationDeliveryService _service;
 
-    public HttpBackChannelNotificationServiceTests()
+    public HttpNotificationDeliveryServiceTests()
     {
         _httpClientFactory = new Mock<IHttpClientFactory>(MockBehavior.Strict);
-        _logger = new Mock<ILogger<HttpBackChannelNotificationService>>(MockBehavior.Loose);
-        _service = new HttpBackChannelNotificationService(_httpClientFactory.Object, _logger.Object);
+        _logger = new Mock<ILogger<HttpNotificationDeliveryService>>(MockBehavior.Loose);
+        _service = new HttpNotificationDeliveryService(_httpClientFactory.Object, _logger.Object);
     }
 
     /// <summary>
@@ -75,11 +76,12 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
-        // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+// Act
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         Assert.NotNull(capturedRequest);
@@ -90,8 +92,8 @@ public class HttpBackChannelNotificationServiceTests
 
         // Verify payload
         var content = await capturedRequest.Content!.ReadAsStringAsync();
-        var payload = JsonSerializer.Deserialize<JsonElement>(content);
-        Assert.Equal(AuthReqId, payload.GetProperty("authenticationRequestId").GetString());
+        var deserializedPayload = JsonSerializer.Deserialize<JsonElement>(content);
+        Assert.Equal(AuthReqId, deserializedPayload.GetProperty("auth_req_id").GetString());
     }
 
     /// <summary>
@@ -111,11 +113,12 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.NoContent));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         _logger.Verify(
@@ -146,11 +149,12 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.BadRequest));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act & Assert (should not throw)
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         _logger.Verify(
             l => l.Log(
@@ -181,11 +185,12 @@ public class HttpBackChannelNotificationServiceTests
             .ThrowsAsync(expectedException);
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act & Assert (should not throw)
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         _logger.Verify(
             l => l.Log(
@@ -216,11 +221,12 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         Assert.NotNull(capturedRequest);
@@ -246,15 +252,16 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         _httpClientFactory.Verify(
-            f => f.CreateClient(nameof(HttpBackChannelNotificationService)),
+            f => f.CreateClient(nameof(HttpNotificationDeliveryService)),
             Times.Once);
     }
 
@@ -278,16 +285,17 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         Assert.NotNull(capturedContent);
-        var payload = JsonSerializer.Deserialize<JsonElement>(capturedContent);
-        Assert.True(payload.TryGetProperty("authenticationRequestId", out var authReqIdProperty));
+        var deserializedPayload = JsonSerializer.Deserialize<JsonElement>(capturedContent);
+        Assert.True(deserializedPayload.TryGetProperty("auth_req_id", out var authReqIdProperty));
         Assert.Equal(AuthReqId, authReqIdProperty.GetString());
     }
 
@@ -309,11 +317,12 @@ public class HttpBackChannelNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpBackChannelNotificationService)))
+        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
             .Returns(httpClient);
 
         // Act
-        await _service.NotifyAsync(_clientNotificationEndpoint, ClientNotificationToken, AuthReqId);
+        var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
+        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
         Assert.NotNull(capturedRequest?.Content);

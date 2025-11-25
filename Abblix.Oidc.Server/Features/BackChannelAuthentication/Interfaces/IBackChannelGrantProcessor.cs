@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// Defines mode-specific processing logic for handling authenticated CIBA requests at the token endpoint.
 /// Different delivery modes (poll, ping, push) have different requirements for token retrieval.
 /// </summary>
-public interface IBackChannelAuthenticationGrantProcessor
+public interface IBackChannelGrantProcessor
 {
     /// <summary>
     /// Validates that a token request is allowed for this delivery mode.

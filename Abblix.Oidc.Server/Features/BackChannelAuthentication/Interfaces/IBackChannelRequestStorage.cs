@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// Defines the contract for a storage system responsible for persisting and retrieving
 /// backchannel authentication requests in the context of Client-Initiated Backchannel Authentication (CIBA).
 /// </summary>
-public interface IBackChannelAuthenticationStorage
+public interface IBackChannelRequestStorage
 {
 	/// <summary>
 	/// Asynchronously stores a backchannel authentication request in the storage system.
@@ -62,16 +62,6 @@ public interface IBackChannelAuthenticationStorage
 		string requestId,
 		BackChannelAuthenticationRequest request,
 		TimeSpan expiresIn);
-
-	/// <summary>
-	/// Removes a backchannel authentication request from the storage system using its unique identifier.
-	/// This method allows for cleanup of expired or completed authentication requests.
-	/// </summary>
-	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
-	/// <returns>
-	/// A task that completes when the request is removed from storage.
-	/// </returns>
-	Task RemoveAsync(string authenticationRequestId);
 
 	/// <summary>
 	/// Atomically retrieves and removes a backchannel authentication request from storage.

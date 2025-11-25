@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -37,19 +38,19 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
-/// <param name="tokenDeliveryService">Service for delivering tokens to client endpoint.</param>
+/// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
 public class PushModeNotifier(
     ILogger<AuthenticationNotifier> logger,
-    IBackChannelAuthenticationStorage storage,
+    IBackChannelRequestStorage storage,
     IClientInfoProvider clientInfoProvider,
-    IBackChannelAuthenticationStatusNotifier? statusNotifier,
-    IBackChannelTokenDeliveryService tokenDeliveryService,
+    IBackChannelLongPollingService? statusNotifier,
+    INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor)
     : AuthenticationNotifier(logger, storage, clientInfoProvider, statusNotifier)
 {
     private readonly ILogger<AuthenticationNotifier> _logger = logger;
-    private readonly IBackChannelAuthenticationStorage _storage = storage;
+    private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
@@ -98,14 +99,24 @@ public class PushModeNotifier(
         await tokenResult.MatchAsync<object?>(
             async tokens =>
             {
-                await tokenDeliveryService.DeliverTokensAsync(
+                var payload = new BackChannelPushNotificationRequest
+                {
+                    AuthenticationRequestId = authenticationRequestId,
+                    AccessToken = tokens.AccessToken.EncodedJwt,
+                    TokenType = tokens.TokenType,
+                    ExpiresIn = tokens.ExpiresIn,
+                    IdToken = tokens.IdToken?.EncodedJwt,
+                    RefreshToken = tokens.RefreshToken?.EncodedJwt,
+                };
+
+                await notificationService.SendAsync(
                     request.ClientNotificationEndpoint,
                     request.ClientNotificationToken,
-                    authenticationRequestId,
-                    tokens);
+                    payload,
+                    BackchannelTokenDeliveryModes.Push);
 
                 // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes)
-                await _storage.RemoveAsync(authenticationRequestId);
+                await _storage.TryRemoveAsync(authenticationRequestId);
 
                 _logger.LogInformation(
                     "Tokens delivered via CIBA push mode for auth_req_id: {AuthReqId}",
@@ -122,7 +133,7 @@ public class PushModeNotifier(
 
                 // Per CIBA spec 10.3.1, remove from storage after push attempt (success or failure)
                 // Push mode clients cannot poll, so storing denied status would orphan the request
-                await _storage.RemoveAsync(authenticationRequestId);
+                await _storage.TryRemoveAsync(authenticationRequestId);
 
                 return null;
             });

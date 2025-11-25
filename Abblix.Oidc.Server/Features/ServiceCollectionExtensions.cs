@@ -433,54 +433,44 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
-        services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
-        services.TryAddSingleton<IBackChannelNotificationService, HttpBackChannelNotificationService>();
-        services.TryAddSingleton<IBackChannelTokenDeliveryService, HttpBackChannelTokenDeliveryService>();
+        services.TryAddSingleton<IBackChannelRequestStorage, BackChannelRequestStorage>();
+        services.TryAddSingleton<INotificationDeliveryService, HttpNotificationDeliveryService>();
 
         // Register mode-specific notifiers as keyed services
-        services.TryAddKeyedSingleton<AuthenticationNotifier, PollModeNotifier>(BackchannelTokenDeliveryModes.Poll);
-        services.TryAddKeyedSingleton<AuthenticationNotifier, PingModeNotifier>(BackchannelTokenDeliveryModes.Ping);
-        services.TryAddKeyedSingleton<AuthenticationNotifier, PushModeNotifier>(BackchannelTokenDeliveryModes.Push);
+        services.TryAddKeyedSingleton<IAuthenticationNotifier, PollModeNotifier>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedSingleton<IAuthenticationNotifier, PingModeNotifier>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedSingleton<IAuthenticationNotifier, PushModeNotifier>(BackchannelTokenDeliveryModes.Push);
 
         // Register composite notifier that automatically selects the appropriate mode-specific notifier
-        services.TryAddSingleton<IBackChannelAuthenticationNotifier, BackChannelAuthenticationNotifier>();
+        services.TryAddSingleton<IAuthenticationNotifier, NotificationRouter>();
 
         // Register mode-specific grant processors as keyed services
-        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
-        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PingModeGrantProcessor>(BackchannelTokenDeliveryModes.Ping);
-        services.TryAddKeyedSingleton<IBackChannelAuthenticationGrantProcessor, PushModeGrantProcessor>(BackchannelTokenDeliveryModes.Push);
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PingModeGrantProcessor>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PushModeGrantProcessor>(BackchannelTokenDeliveryModes.Push);
 
         // Register long-polling status notifier if long-polling is enabled
         // This service is optional - if not registered, long-polling will be disabled
-        services.TryAddSingleton<IBackChannelAuthenticationStatusNotifier>(sp =>
+        services.TryAddSingleton<IBackChannelLongPollingService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<OidcOptions>>();
             if (options.Value.BackChannelAuthentication.UseLongPolling)
             {
-                var logger = sp.GetRequiredService<ILogger<InMemoryBackChannelAuthenticationStatusNotifier>>();
-                return new InMemoryBackChannelAuthenticationStatusNotifier(logger);
+                var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
+                return new InMemoryLongPollingService(logger);
             }
             return null!;
         });
 
-        // Register HTTP client for ping mode notifications with configurable handler lifetime
+        // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime
         // Use configuration callback to get handler lifetime from OidcOptions
-        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpBackChannelNotificationService))
+        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpNotificationDeliveryService))
             .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
             {
                 httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
             });
 
-        services.AddHttpClient(nameof(HttpBackChannelNotificationService));
-
-        // Register HTTP client for push mode token delivery with same configurable handler lifetime
-        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpBackChannelTokenDeliveryService))
-            .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
-            {
-                httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
-            });
-
-        services.AddHttpClient(nameof(HttpBackChannelTokenDeliveryService));
+        services.AddHttpClient(nameof(HttpNotificationDeliveryService));
 
         return services;
     }

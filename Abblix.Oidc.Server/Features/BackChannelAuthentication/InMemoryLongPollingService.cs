@@ -49,37 +49,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// <para><strong>For Multi-Server Deployments:</strong></para>
 /// <para>
 /// Use a distributed implementation based on Redis Pub/Sub, SignalR backplane, or message queue.
-/// Example with Redis:
 /// </para>
-/// <code>
-/// public class RedisBackChannelAuthenticationStatusNotifier : IBackChannelAuthenticationStatusNotifier
-/// {
-///     private readonly IConnectionMultiplexer _redis;
-///
-///     public async Task&lt;bool&gt; WaitForStatusChangeAsync(string authReqId, TimeSpan timeout, CancellationToken ct)
-///     {
-///         var subscriber = _redis.GetSubscriber();
-///         var tcs = new TaskCompletionSource&lt;bool&gt;();
-///
-///         await subscriber.SubscribeAsync($"ciba:{authReqId}", (channel, value) =&gt; tcs.TrySetResult(true));
-///
-///         var timeoutTask = Task.Delay(timeout, ct);
-///         var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-///
-///         return completedTask == tcs.Task;
-///     }
-///
-///     public Task NotifyStatusChangeAsync(string authReqId, BackChannelAuthenticationStatus status)
-///     {
-///         var subscriber = _redis.GetSubscriber();
-///         return subscriber.PublishAsync($"ciba:{authReqId}", status.ToString());
-///     }
-/// }
-/// </code>
 /// </remarks>
-public class InMemoryBackChannelAuthenticationStatusNotifier(
-    ILogger<InMemoryBackChannelAuthenticationStatusNotifier> logger)
-    : IBackChannelAuthenticationStatusNotifier
+public class InMemoryLongPollingService(
+    ILogger<InMemoryLongPollingService> logger)
+    : IBackChannelLongPollingService
 {
     /// <summary>
     /// Dictionary mapping auth_req_id to list of waiting TaskCompletionSource objects.
@@ -141,7 +115,7 @@ public class InMemoryBackChannelAuthenticationStatusNotifier(
         {
             // Cleanup: Remove this waiter (don't need to signal it anymore)
             // Note: If bag is empty after removal, it will be cleaned up on next NotifyStatusChangeAsync
-            tcs.TrySetCanceled();
+            tcs.TrySetCanceled(cancellationToken);
         }
     }
 

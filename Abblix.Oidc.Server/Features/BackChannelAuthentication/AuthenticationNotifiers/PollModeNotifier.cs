@@ -36,13 +36,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 public class PollModeNotifier(
     ILogger<AuthenticationNotifier> logger,
-    IBackChannelAuthenticationStorage storage,
+    IBackChannelRequestStorage storage,
     IClientInfoProvider clientInfoProvider,
-    IBackChannelAuthenticationStatusNotifier? statusNotifier)
+    IBackChannelLongPollingService? statusNotifier)
     : AuthenticationNotifier(logger, storage, clientInfoProvider, statusNotifier)
 {
     private readonly ILogger<AuthenticationNotifier> _logger = logger;
-    private readonly IBackChannelAuthenticationStorage _storage = storage;
+    private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.

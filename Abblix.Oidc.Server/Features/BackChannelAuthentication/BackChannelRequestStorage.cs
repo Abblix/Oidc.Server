@@ -32,10 +32,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// <param name="storage">The storage system used for persisting authentication requests.</param>
 /// <param name="authenticationRequestIdGenerator">Generator for creating unique authentication request IDs.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
-public class BackChannelAuthenticationStorage(
+public class BackChannelRequestStorage(
 	IEntityStorage storage,
 	IAuthenticationRequestIdGenerator authenticationRequestIdGenerator,
-	IEntityStorageKeyFactory keyFactory) : IBackChannelAuthenticationStorage
+	IEntityStorageKeyFactory keyFactory) : IBackChannelRequestStorage
 {
 	/// <summary>
 	/// Asynchronously stores a backchannel authentication request and generates a unique identifier for it.
@@ -91,17 +91,6 @@ public class BackChannelAuthenticationStorage(
 			request,
 			new() { AbsoluteExpirationRelativeToNow = expiresIn });
 	}
-
-	/// <summary>
-	/// Removes a backchannel authentication request from storage using its unique identifier.
-	/// This method allows for cleaning up expired or completed authentication requests.
-	/// </summary>
-	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
-	/// <returns>
-	/// A task that completes when the request is removed from storage.
-	/// </returns>
-	public Task RemoveAsync(string authenticationRequestId)
-		=> storage.RemoveAsync(keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId));
 
 	/// <summary>
 	/// Atomically retrieves and removes a backchannel authentication request from storage.

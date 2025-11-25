@@ -38,9 +38,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 public abstract class AuthenticationNotifier(
     ILogger<AuthenticationNotifier> logger,
-    IBackChannelAuthenticationStorage storage,
+    IBackChannelRequestStorage storage,
     IClientInfoProvider clientInfoProvider,
-    IBackChannelAuthenticationStatusNotifier? statusNotifier)
+    IBackChannelLongPollingService? statusNotifier): IAuthenticationNotifier
 {
     /// <summary>
     /// Updates authentication request status to Authenticated and handles token delivery based on the delivery mode.
@@ -49,7 +49,7 @@ public abstract class AuthenticationNotifier(
     /// <param name="authenticationRequestId">The auth_req_id to update.</param>
     /// <param name="request">The authentication request to mark as authenticated.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
-    public async Task NotifyAuthenticationCompleteAsync(
+    public async Task NotifyAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)

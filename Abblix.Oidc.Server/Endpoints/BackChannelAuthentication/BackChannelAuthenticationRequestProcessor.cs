@@ -49,7 +49,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// <param name="userDeviceAuthenticationHandler">Handler for initiating authentication on the user's device.</param>
 /// <param name="timeProvider">Time provider for managing authentication request expiration.</param>
 public class BackChannelAuthenticationRequestProcessor(
-	IBackChannelAuthenticationStorage storage,
+	IBackChannelRequestStorage storage,
 	IOptionsSnapshot<OidcOptions> options,
 	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
 	TimeProvider timeProvider) : IBackChannelAuthenticationRequestProcessor

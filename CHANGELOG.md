@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JsonWebTokenHeader Changes**: Added `KeyId` property
   - `JsonWebTokenHeader.KeyId` exposes the `kid` header claim for audit logging
 
+- **CIBA Interface Renaming**: Renamed CIBA notification interfaces for improved clarity
+  - `IBackChannelAuthenticationNotifier` → `IBackChannelDeliveryModeRouter` (routes to appropriate delivery mode handler)
+  - `IBackChannelAuthenticationStatusNotifier` → `IBackChannelLongPollingNotifier` (long-polling signaling infrastructure)
+  - `IBackChannelNotificationService` → `IBackChannelPingNotifier` (HTTP ping notifications)
+  - Corresponding implementation classes renamed: `InMemoryBackChannelAuthenticationStatusNotifier` → `InMemoryBackChannelLongPollingNotifier`, `HttpBackChannelNotificationService` → `HttpBackChannelPingNotifier`
+
 ### 🔒 Security
 
 - Enhanced Device Authorization Grant with brute force protection and race condition prevention (7eaa064)
@@ -92,15 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Holds polling requests until authentication completes or timeout expires
     - Reduces server load and latency compared to repeated short polls
     - Configurable via `BackChannelAuthenticationOptions.LongPollingTimeout` (default: 30 seconds)
-  - **Ping Mode**: Added `IBackChannelAuthenticationStatusNotifier` interface for real-time status change notifications
-    - Implemented `InMemoryBackChannelAuthenticationStatusNotifier` with async notification support via TaskCompletionSource
+  - **Ping Mode**: Added `IBackChannelLongPollingNotifier` interface for real-time status change notifications
+    - Implemented `InMemoryBackChannelLongPollingNotifier` with async notification support via TaskCompletionSource
     - Enables efficient long-polling without repeatedly querying storage
-    - Server notifies client at callback endpoint when authentication completes
+    - Server notifies client at callback endpoint when authentication completes via `IBackChannelPingNotifier`
   - **Push Mode**: Added `IBackChannelTokenDeliveryService` interface for token delivery abstraction
     - Implemented `HttpBackChannelTokenDeliveryService` for direct token delivery to clients
     - Server delivers tokens directly to client notification endpoint upon completion
-  - Extended `IBackChannelAuthenticationStorage` with `ExistsAsync` and `RemoveAsync` methods
-  - Strategy pattern implementation for delivery modes (poll/ping/push) via keyed DI
+  - Extended `IBackChannelAuthenticationStorage` with `UpdateAsync` and `TryRemoveAsync` methods for atomic operations
+  - Strategy pattern implementation for delivery modes (poll/ping/push) via keyed DI with `IBackChannelDeliveryModeRouter`
 
 - **Distributed Cache Utilities**: Added atomic get-and-remove operation for race condition prevention
   - `DistributedCacheExtensions.TryGetAndRemoveAsync()` implements 4-step last-write-wins protocol

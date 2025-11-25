@@ -23,9 +23,8 @@
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
 /// <summary>
-/// Provides a mechanism for notifying waiting long-polling requests when backchannel authentication
-/// status changes. This enables efficient implementation of CIBA long-polling mode where token requests
-/// are held open until authentication completes or timeout occurs.
+/// Provides signaling infrastructure for CIBA poll mode long-polling, allowing token endpoint requests
+/// to wait for authentication completion rather than immediately returning authorization_pending.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -52,16 +51,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// <code>
 /// // 1. Client requests token (status = Pending)
 /// // 2. Server holds connection and waits
-/// var statusChange = await statusNotifier.WaitForStatusChangeAsync(authReqId, timeout, cancellationToken);
+/// var statusChange = await longPollingSignaler.WaitForStatusChangeAsync(authReqId, timeout, cancellationToken);
 ///
 /// // 3. Meanwhile: User authenticates on device
-/// // 4. BackChannelAuthenticationNotifier signals change
-/// await statusNotifier.NotifyStatusChangeAsync(authReqId, BackChannelAuthenticationStatus.Authenticated);
+/// // 4. BackChannelDeliveryModeRouter signals change
+/// await longPollingSignaler.NotifyStatusChangeAsync(authReqId, BackChannelAuthenticationStatus.Authenticated);
 ///
 /// // 5. Waiting request wakes up, checks storage, returns tokens
 /// </code>
 /// </remarks>
-public interface IBackChannelAuthenticationStatusNotifier
+public interface IBackChannelLongPollingService
 {
     /// <summary>
     /// Waits for a status change notification for the specified authentication request.

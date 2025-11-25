@@ -36,10 +36,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific notifiers using keyed services.</param>
-public class BackChannelAuthenticationNotifier(
-    ILogger<BackChannelAuthenticationNotifier> logger,
+public class NotificationRouter(
+    ILogger<NotificationRouter> logger,
     IClientInfoProvider clientInfoProvider,
-    IServiceProvider serviceProvider) : IBackChannelAuthenticationNotifier
+    IServiceProvider serviceProvider) : IAuthenticationNotifier
 {
     /// <summary>
     /// Updates authentication request status to Authenticated and handles token delivery based on the
@@ -48,7 +48,7 @@ public class BackChannelAuthenticationNotifier(
     /// <param name="authenticationRequestId">The auth_req_id to update.</param>
     /// <param name="request">The updated authentication request with Authenticated status.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
-    public async Task NotifyAuthenticationCompleteAsync(
+    public async Task NotifyAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
@@ -65,14 +65,8 @@ public class BackChannelAuthenticationNotifier(
             return;
         }
 
-        // Resolve mode-specific notifier using keyed service
-        // Delivery mode is validated at backchannel authentication request time by ClientValidator
-        var notifier = serviceProvider.GetRequiredKeyedService<AuthenticationNotifier>(
-            clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode)));
-
-        await notifier.NotifyAuthenticationCompleteAsync(
-            authenticationRequestId,
-            request,
-            expiresIn);
+        var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
+        var notifier = serviceProvider.GetRequiredKeyedService<AuthenticationNotifier>(deliveryMode);
+        await notifier.NotifyAsync(authenticationRequestId, request, expiresIn);
     }
 }

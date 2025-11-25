@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// In push mode, tokens are delivered directly to the client's notification endpoint.
 /// Push mode clients should NEVER poll the token endpoint - this is an error.
 /// </summary>
-public class PushModeGrantProcessor : IBackChannelAuthenticationGrantProcessor
+public class PushModeGrantProcessor : IBackChannelGrantProcessor
 {
     // Push mode clients should never poll the token endpoint
     public OidcError ValidateTokenEndpointAccess() => new(

@@ -50,7 +50,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// public class MyUserDeviceAuthenticationHandler : IUserDeviceAuthenticationHandler
 /// {
 ///     private readonly IBackChannelAuthenticationStorage _storage;
-///     private readonly IBackChannelAuthenticationNotifier _notifier;
+///     private readonly IBackChannelDeliveryModeRouter _notifier;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
 ///
@@ -109,12 +109,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///
 /// <para><strong>Token Delivery Modes:</strong></para>
 /// <para>
-/// The <see cref="IBackChannelAuthenticationNotifier.NotifyAuthenticationCompleteAsync"/> method automatically handles
+/// The <see cref="IAuthenticationNotifier.NotifyAsync"/> method automatically handles
 /// mode-specific behavior based on the client's registered <c>backchannel_token_delivery_mode</c>:
 /// </para>
 /// <list type="bullet">
 ///   <item>
-///     <strong>Poll Mode:</strong> Stores tokens in <see cref="IBackChannelAuthenticationStorage"/>.
+///     <strong>Poll Mode:</strong> Stores tokens in <see cref="IBackChannelRequestStorage"/>.
 ///     Client polls the token endpoint with <c>auth_req_id</c> until tokens are ready.
 ///   </item>
 ///   <item>
@@ -124,7 +124,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   </item>
 ///   <item>
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
-///     them directly via <see cref="IBackChannelTokenDeliveryService"/> to the client's
+///     them directly via <see cref="IBackChannelPushService"/> to the client's
 ///     <c>client_notification_endpoint</c>. Tokens are removed from storage after successful delivery
 ///     per CIBA specification section 10.3.1.
 ///   </item>

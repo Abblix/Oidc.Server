@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -51,12 +51,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 /// <param name="httpContextAccessor">Accessor for HTTP context to retrieve cancellation token.</param>
 public class BackChannelAuthenticationGrantHandler(
-    IBackChannelAuthenticationStorage storage,
+    IBackChannelRequestStorage storage,
     IParameterValidator parameterValidator,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
-    IBackChannelAuthenticationStatusNotifier? statusNotifier = null,
+    IBackChannelLongPollingService? statusNotifier = null,
     IHttpContextAccessor? httpContextAccessor = null) : IAuthorizationGrantHandler
 {
     /// <summary>
@@ -107,7 +107,7 @@ public class BackChannelAuthenticationGrantHandler(
 
         // Resolve mode-specific grant processor using keyed service
         // Delivery mode is validated at backchannel authentication request time by ClientValidator
-        var processor = serviceProvider.GetRequiredKeyedService<IBackChannelAuthenticationGrantProcessor>(
+        var processor = serviceProvider.GetRequiredKeyedService<IBackChannelGrantProcessor>(
             clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode)));
 
         // Validate that the client is allowed to access the token endpoint for this mode
@@ -178,7 +178,7 @@ public class BackChannelAuthenticationGrantHandler(
         if (expiresIn <= TimeSpan.Zero)
         {
             // Request has expired, remove it
-            await storage.RemoveAsync(authenticationRequestId);
+            await storage.TryRemoveAsync(authenticationRequestId);
             return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
         }
 
@@ -253,7 +253,7 @@ public class BackChannelAuthenticationGrantHandler(
         }
 
         // Resolve mode-specific grant processor
-        var grantProcessor = serviceProvider.GetRequiredKeyedService<IBackChannelAuthenticationGrantProcessor>(
+        var grantProcessor = serviceProvider.GetRequiredKeyedService<IBackChannelGrantProcessor>(
             clientInfo.BackChannelTokenDeliveryMode);
 
         switch (updatedRequest)

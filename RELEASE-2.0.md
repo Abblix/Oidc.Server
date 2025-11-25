@@ -154,7 +154,7 @@ Version 2.0 completes the Client-Initiated Backchannel Authentication (CIBA) imp
   - Cuts latency by returning immediately when authentication completes
   - Optional feature controlled by `BackChannelAuthenticationOptions.UseLongPolling`
 
-- **Status Notification**: `IBackChannelAuthenticationStatusNotifier` interface with `InMemoryBackChannelAuthenticationStatusNotifier` implementation
+- **Status Notification**: Interface for real-time status notifications
   - Enables real-time notification when authentication requests complete
   - Powers long-polling functionality without repeatedly querying storage
   - TaskCompletionSource-based async notification mechanism

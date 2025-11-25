@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -50,9 +51,8 @@ public class AuthenticationNotifierTests
     private const string NotificationToken = "bearer_token_xyz";
     private readonly Uri _notificationEndpoint = new("https://client.example.com/ciba/notify");
 
-    private readonly Mock<IBackChannelAuthenticationStorage> _storage = new(MockBehavior.Strict);
-    private readonly Mock<IBackChannelNotificationService> _notificationService = new(MockBehavior.Strict);
-    private readonly Mock<IBackChannelTokenDeliveryService> _tokenDeliveryService = new(MockBehavior.Strict);
+    private readonly Mock<IBackChannelRequestStorage> _storage = new(MockBehavior.Strict);
+    private readonly Mock<INotificationDeliveryService> _notificationService = new(MockBehavior.Strict);
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
     private readonly Mock<ILogger<AuthenticationNotifier>> _logger = new(MockBehavior.Loose);
@@ -66,7 +66,7 @@ public class AuthenticationNotifierTests
 
     private PushModeNotifier CreatePushModeNotifier() =>
         new(_logger.Object, _storage.Object, _clientInfoProvider.Object, null,
-            _tokenDeliveryService.Object, _tokenRequestProcessor.Object);
+            _notificationService.Object, _tokenRequestProcessor.Object);
 
     /// <summary>
     /// Verifies that when a ping mode request is completed, both storage update
@@ -90,7 +90,7 @@ public class AuthenticationNotifierTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
         };
 
-        var callOrder = new System.Collections.Generic.List<string>();
+        var callOrder = new List<string>();
 
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
@@ -99,18 +99,18 @@ public class AuthenticationNotifierTests
             .Callback(() => callOrder.Add("update"))
             .Returns(Task.CompletedTask);
 
-        _notificationService.Setup(n => n.NotifyAsync(_notificationEndpoint, NotificationToken, AuthReqId))
+        _notificationService.Setup(n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping))
             .Callback(() => callOrder.Add("notify"))
             .Returns(Task.CompletedTask);
 
         var notifier = CreatePingModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
-        _notificationService.Verify(n => n.NotifyAsync(_notificationEndpoint, NotificationToken, AuthReqId), Times.Once);
+        _notificationService.Verify(n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping), Times.Once);
 
         Assert.Equal(2, callOrder.Count);
         Assert.Equal("update", callOrder[0]);
@@ -148,12 +148,12 @@ public class AuthenticationNotifierTests
         var notifier = CreatePollModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
         _notificationService.Verify(
-            n => n.NotifyAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>()),
+            n => n.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
     }
 
@@ -188,12 +188,12 @@ public class AuthenticationNotifierTests
         var notifier = CreatePingModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
         _notificationService.Verify(
-            n => n.NotifyAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>()),
+            n => n.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
     }
 
@@ -228,12 +228,12 @@ public class AuthenticationNotifierTests
         var notifier = CreatePingModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
         _notificationService.Verify(
-            n => n.NotifyAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>()),
+            n => n.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
     }
 
@@ -266,7 +266,7 @@ public class AuthenticationNotifierTests
         var notifier = CreatePollModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, customExpiry);
+        await notifier.NotifyAsync(AuthReqId, request, customExpiry);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, customExpiry), Times.Once);
@@ -299,17 +299,17 @@ public class AuthenticationNotifierTests
         _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
-        _notificationService.Setup(n => n.NotifyAsync(_notificationEndpoint, NotificationToken, AuthReqId))
+        _notificationService.Setup(n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping))
             .Returns(Task.CompletedTask);
 
         var notifier = CreatePingModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _notificationService.Verify(
-            n => n.NotifyAsync(_notificationEndpoint, NotificationToken, AuthReqId),
+            n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping),
             Times.Once);
     }
 
@@ -348,27 +348,27 @@ public class AuthenticationNotifierTests
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
 
-        _tokenDeliveryService.Setup(s => s.DeliverTokensAsync(
+        _notificationService.Setup(s => s.SendAsync(
                 _notificationEndpoint,
                 NotificationToken,
-                AuthReqId,
-                tokenIssued))
+                It.IsAny<IBackChannelNotificationRequest>(),
+                BackchannelTokenDeliveryModes.Push))
             .Returns(Task.CompletedTask);
 
-        _storage.Setup(s => s.RemoveAsync(AuthReqId))
-            .Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId))
+            .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var notifier = CreatePushModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
-        _tokenDeliveryService.Verify(
-            s => s.DeliverTokensAsync(_notificationEndpoint, NotificationToken, AuthReqId, tokenIssued),
+        _notificationService.Verify(
+            s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
             Times.Once);
-        _storage.Verify(s => s.RemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _storage.Verify(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()), Times.Never);
     }
 
@@ -402,21 +402,21 @@ public class AuthenticationNotifierTests
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
 
-        _storage.Setup(s => s.RemoveAsync(AuthReqId))
-            .Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId))
+            .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var notifier = CreatePushModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
-        _tokenDeliveryService.Verify(
-            s => s.DeliverTokensAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TokenIssued>()),
+        _notificationService.Verify(
+            s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
         _storage.Verify(
-            s => s.RemoveAsync(AuthReqId),
+            s => s.TryRemoveAsync(AuthReqId),
             Times.Once);
     }
 
@@ -451,14 +451,14 @@ public class AuthenticationNotifierTests
         var notifier = CreatePingModeNotifier();
 
         // Act
-        await notifier.NotifyAuthenticationCompleteAsync(AuthReqId, request, _expiresIn);
+        await notifier.NotifyAsync(AuthReqId, request, _expiresIn);
 
         // Assert
         _storage.Verify(
             s => s.UpdateAsync(AuthReqId, It.Is<BackChannelAuthenticationRequest>(r => r.Status == BackChannelAuthenticationStatus.Denied), _expiresIn),
             Times.Once);
-        _tokenDeliveryService.Verify(
-            s => s.DeliverTokensAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TokenIssued>()),
+        _notificationService.Verify(
+            s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
     }

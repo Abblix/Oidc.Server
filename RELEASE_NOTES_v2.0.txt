@@ -1,32 +1,51 @@
-Release v2.0
-
 ## 🚀 Features
-- **Result Pattern Migration** - Simplified codebase by eliminating abstract response type hierarchy and boilerplate
-- **mTLS Client Authentication (RFC 8705)** - Self-signed and PKI/CA validation with certificate-bound tokens
-- **JWT Bearer Grant Type (RFC 7523)** - Service-to-service authentication using signed JWTs for secure API-to-API communication
-- **Device Authorization Grant (RFC 8628)** - OAuth flow for input-constrained devices (smart TVs, IoT, CLI tools)
-- **CIBA Ping/Push Modes & Long-Polling** - Complete delivery mode implementation with token delivery service and long-polling support
-- **client_secret_jwt Authentication** - JWT-based client authentication per OIDC Core spec
-- **SSRF Protection** - Multi-layered defense with DNS validation and IP blocking
+- Result Pattern Migration - Simplified codebase by eliminating many abstract response type hierarchies and boilerplate code ([#34](https://github.com/Abblix/Oidc.Server/pull/34))
+- mTLS Client Authentication (RFC 8705) - Self-signed and PKI/CA validation with certificate-bound tokens
+- JWT Bearer Grant Type (RFC 7523) - Service-to-service authentication using signed JWTs for secure API-to-API communication ([#38](https://github.com/Abblix/Oidc.Server/pull/38))
+- Device Authorization Grant (RFC 8628) - OAuth flow for input-constrained devices (smart TVs, IoT, CLI tools) ([#37](https://github.com/Abblix/Oidc.Server/pull/37))
+- CIBA Ping/Push Modes & Long-Polling - Complete delivery mode implementation with ping notifications, push token delivery, and long-polling support
+([#36](https://github.com/Abblix/Oidc.Server/pull/36))
+- client_secret_jwt Authentication - JWT-based client authentication per OIDC Core spec ([#35](https://github.com/Abblix/Oidc.Server/pull/35))
+- SSRF Protection - Multi-layered defense with DNS validation and IP blocking
+- Protocol Buffer serialization - 40-60% smaller storage footprint with faster processing
 
 ## 🛠 Fixes
-- **Session Accumulation** - Fixed distributed cache memory leak
-- **ECDSA Certificate Support** - Fixed hardcoded RSA-only handling in JWK conversion
+- Session Accumulation - Fixed distributed cache memory leak ([#32](https://github.com/Abblix/Oidc.Server/pull/32))
+- ECDSA Certificate Support - Added support for ECDSA certificates
 
-## ✏️ Improvements
-- **Protocol Buffer serialization** - 40-60% smaller storage footprint with faster processing
-- **Comprehensive test coverage** - 50,000+ lines of tests across all OAuth 2.0/OIDC flows
-- **.NET 8/9/10 support** - Dropped .NET 6/7, targeting modern LTS versions
+## Detailed Description
 
-## 🔄 Breaking Changes
-- Dropped .NET 6 and .NET 7 support
-- Now requires .NET 8+ (supports .NET 8, 9, and 10)
-- Handler return types changed from abstract response types to Result<TSuccess, TFailure>
-- All response types renamed to remove 'Response' suffix (e.g., TokenIssuedResponse → TokenIssued)
+Result Pattern
+- Replaced inheritance-based response type hierarchy with `Result<TSuccess, TFailure>` pattern, eliminating abstract base types and dozens of boilerplate response classes. The pattern enforces explicit error handling at compile time while dramatically reducing code complexity - less boilerplate, clearer intent, and easier maintenance.
 
-## 📖 Documentation
-- Migration guide: https://github.com/Abblix/Oidc.Server/blob/master/MIGRATION-2.0.md
-- Full changelog: https://github.com/Abblix/Oidc.Server/blob/master/CHANGELOG.md
+mTLS Client Authentication (RFC 8705)
+- Implements mutual TLS with two authentication methods: self_signed_tls_client_auth (JWKS public key matching) and tls_client_auth (Subject DN/SAN validation). Certificate-bound tokens prevent token theft - even stolen access tokens can't be used without the matching client certificate.
 
-## 🔗 Links
-Full Changelog: https://github.com/Abblix/Oidc.Server/compare/v1.6.0...v2.0
+JWT Bearer Grant Type (RFC 7523)
+- Enables secure service-to-service authentication where client applications use signed JWTs to obtain access tokens. Critical for microservices architectures, API gateways, and machine-to-machine communication without user interaction. Supports both client assertions and JWT authorization grants with comprehensive security hardening including algorithm validation, replay protection, and maximum
+JWT age enforcement.
+
+Device Authorization Grant (RFC 8628)
+- Implements OAuth 2.0 flow for devices with limited input capabilities or no browser. Users authenticate on a secondary device (phone/computer) while the primary device polls for authorization. Essential
+for smart TVs, IoT devices, CLI tools, and gaming consoles. Includes brute force protection with exponential backoff and per-IP rate limiting.
+
+CIBA Ping/Push Modes & Long-Polling
+- Completes the CIBA implementation by adding ping mode, push mode, and long-polling support. Ping mode notifies clients at their callback endpoint when authentication completes. Push mode delivers tokens directly to client notification endpoints. Long-polling (30-second configurable timeout) holds polling requests until authentication completes, dramatically reducing server load and response latency.
+
+Protocol Buffer Serialization
+- Binary serialization alternative with 40-60% smaller size and faster processing. Reduces Redis/cache memory consumption and network bandwidth in distributed deployments. Opt-in via DI configuration with full backward compatibility.
+
+SSRF Protection
+- Multi-layered Server-Side Request Forgery protection blocks private IP ranges (RFC 1918, RFC 4193), localhost, and prevents DNS rebinding attacks. Protects authorization servers from attackers exploiting dynamic discovery to probe internal infrastructure or access cloud metadata endpoints.
+
+## ✅ Why It Matters
+- Result pattern simplifies codebase maintenance and reduces bugs from complex type hierarchies
+- Certificate-based authentication enables regulatory compliance (PSD2, Open Banking, FAPI) without custom infrastructure
+- JWT Bearer grants enable zero-touch service-to-service authentication for microservices
+- Device flow supports modern IoT and smart device ecosystems without compromising security
+- CIBA ping/push modes and long-polling enable real-time notifications and efficient token delivery
+- SSRF protection defends against internal infrastructure probing and metadata exposure
+- Performance improvements reduce operational costs in high-traffic deployments
+
+## What's Changed
+Full Changelog: [v1.6.0...v2.0](https://github.com/Abblix/Oidc.Server/compare/v1.6.0...v2.0)

@@ -40,8 +40,6 @@ using Moq;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
-using IBackChannelAuthenticationStorage = Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces.IBackChannelAuthenticationStorage;
-using IBackChannelAuthenticationStatusNotifier = Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces.IBackChannelAuthenticationStatusNotifier;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -56,14 +54,14 @@ public class BackChannelAuthenticationGrantHandlerTests
     private const string AuthReqId = "auth_req_abc123";
     private const string UserId = "user_456";
 
-    private readonly Mock<IBackChannelAuthenticationStorage> _storage;
+    private readonly Mock<IBackChannelRequestStorage> _storage;
     private readonly Mock<IParameterValidator> _parameterValidator;
     private readonly BackChannelAuthenticationGrantHandler _handler;
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     public BackChannelAuthenticationGrantHandlerTests()
     {
-        _storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
@@ -86,20 +84,20 @@ public class BackChannelAuthenticationGrantHandlerTests
             serviceProvider);
     }
 
-    private static IServiceProvider CreateMockServiceProvider(IBackChannelAuthenticationStorage storage)
+    private static IServiceProvider CreateMockServiceProvider(IBackChannelRequestStorage storage)
     {
         return new TestServiceProvider(storage);
     }
 
-    private class TestServiceProvider(IBackChannelAuthenticationStorage storage) : IKeyedServiceProvider
+    private class TestServiceProvider(IBackChannelRequestStorage storage) : IKeyedServiceProvider
     {
-        private readonly IBackChannelAuthenticationGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
-        private readonly IBackChannelAuthenticationGrantProcessor _pingProcessor = new PingModeGrantProcessor();
-        private readonly IBackChannelAuthenticationGrantProcessor _pushProcessor = new PushModeGrantProcessor();
+        private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
+        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor();
+        private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
         {
-            if (serviceType != typeof(IBackChannelAuthenticationGrantProcessor))
+            if (serviceType != typeof(IBackChannelGrantProcessor))
                 return null;
 
             return serviceKey switch
@@ -686,12 +684,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task LongPolling_StatusChangeDuringWait_ReturnsTokensImmediately()
     {
         // Arrange
-        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
 
-        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+        var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
         var options = Options.Create(new OidcOptions
         {
@@ -780,12 +778,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task LongPolling_TimeoutBeforeStatusChange_ReturnsAuthorizationPending()
     {
         // Arrange
-        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
 
-        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+        var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
         var options = Options.Create(new OidcOptions
         {
@@ -889,7 +887,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task LongPolling_NullStatusNotifier_BehavesAsShortPolling()
     {
         // Arrange
-        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
@@ -948,12 +946,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     public async Task LongPolling_UsesConfiguredTimeout()
     {
         // Arrange
-        var storage = new Mock<IBackChannelAuthenticationStorage>(MockBehavior.Strict);
+        var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
         timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
 
-        var statusNotifier = new Mock<IBackChannelAuthenticationStatusNotifier>(MockBehavior.Strict);
+        var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
         var customTimeout = TimeSpan.FromSeconds(45);
         var options = Options.Create(new OidcOptions

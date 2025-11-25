@@ -35,8 +35,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// Uses atomic try-remove operation to prevent race conditions.
 /// </summary>
 /// <param name="storage">Storage for backchannel authentication requests.</param>
-public class PollModeGrantProcessor(IBackChannelAuthenticationStorage storage)
-    : IBackChannelAuthenticationGrantProcessor
+public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
+    : IBackChannelGrantProcessor
 {
     // Poll mode clients are allowed to poll the token endpoint
     public OidcError? ValidateTokenEndpointAccess() => null;

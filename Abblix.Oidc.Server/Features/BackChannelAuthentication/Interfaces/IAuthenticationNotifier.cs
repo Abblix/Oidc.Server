@@ -23,26 +23,29 @@
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
 /// <summary>
-/// Provides notification services for CIBA ping mode, enabling the authorization server to notify
-/// clients when user authentication is complete.
+/// Routes CIBA authentication completion notifications to the appropriate delivery mode handler
+/// (poll, ping, or push) based on the client's configured backchannel_token_delivery_mode.
 /// </summary>
-/// <remarks>
-/// In CIBA ping mode, the authorization server sends an HTTP POST notification to the client's
-/// registered notification endpoint when the user completes authentication, allowing the client
-/// to retrieve tokens without continuous polling.
-/// </remarks>
-public interface IBackChannelNotificationService
+public interface IAuthenticationNotifier
 {
     /// <summary>
-    /// Sends a notification to the client's registered endpoint informing them that the user
-    /// has completed authentication and tokens are ready for retrieval.
+    /// Notifies that user authentication has completed and handles token delivery according to
+    /// the client's configured delivery mode.
     /// </summary>
-    /// <param name="clientNotificationEndpoint">The client's registered notification endpoint URL.</param>
-    /// <param name="clientNotificationToken">Bearer token for authenticating the notification request.</param>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
+    /// <param name="request">The authentication request with Authenticated status and authorized grant.</param>
+    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     /// <returns>A task representing the asynchronous notification operation.</returns>
+    /// <remarks>
+    /// This method automatically:
+    /// <list type="bullet">
+    ///   <item>Retrieves client information to determine the delivery mode</item>
+    ///   <item>Selects the appropriate notifier (PollModeNotifier, PingModeNotifier, or PushModeNotifier)</item>
+    ///   <item>Delegates to the mode-specific implementation for token delivery</item>
+    /// </list>
+    /// </remarks>
     Task NotifyAsync(
-        Uri clientNotificationEndpoint,
-        string clientNotificationToken,
-        string authenticationRequestId);
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn);
 }

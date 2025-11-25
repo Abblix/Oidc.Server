@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -39,14 +40,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="notificationService">Service for sending ping notifications.</param>
 public class PingModeNotifier(
     ILogger<AuthenticationNotifier> logger,
-    IBackChannelAuthenticationStorage storage,
+    IBackChannelRequestStorage storage,
     IClientInfoProvider clientInfoProvider,
-    IBackChannelAuthenticationStatusNotifier? statusNotifier,
-    IBackChannelNotificationService notificationService)
+    IBackChannelLongPollingService? statusNotifier,
+    INotificationDeliveryService notificationService)
     : AuthenticationNotifier(logger, storage, clientInfoProvider, statusNotifier)
 {
     private readonly ILogger<AuthenticationNotifier> _logger = logger;
-    private readonly IBackChannelAuthenticationStorage _storage = storage;
+    private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
     /// Handles ping mode token delivery by storing tokens and sending a notification to the client.
@@ -79,9 +80,15 @@ public class PingModeNotifier(
             "Sending ping notification for auth_req_id: {AuthReqId}",
             authenticationRequestId);
 
-        await notificationService.NotifyAsync(
+        var payload = new BackChannelPingNotificationRequest
+        {
+            AuthenticationRequestId = authenticationRequestId,
+        };
+
+        await notificationService.SendAsync(
             request.ClientNotificationEndpoint,
             request.ClientNotificationToken,
-            authenticationRequestId);
+            payload,
+            BackchannelTokenDeliveryModes.Ping);
     }
 }
