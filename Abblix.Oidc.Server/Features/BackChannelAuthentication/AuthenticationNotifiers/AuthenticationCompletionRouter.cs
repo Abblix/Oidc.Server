@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -41,6 +42,20 @@ public class AuthenticationCompletionRouter(
     IClientInfoProvider clientInfoProvider,
     IServiceProvider serviceProvider) : IAuthenticationCompletionHandler
 {
+    private static readonly string[] AllDeliveryModes =
+    [
+        BackchannelTokenDeliveryModes.Poll,
+        BackchannelTokenDeliveryModes.Ping,
+        BackchannelTokenDeliveryModes.Push,
+    ];
+
+    /// <summary>
+    /// Gets the list of supported token delivery modes by checking which handlers are registered in DI.
+    /// This ensures the discovery document accurately reflects available functionality.
+    /// </summary>
+    public IEnumerable<string> TokenDeliveryModesSupported => AllDeliveryModes.Where(
+        mode => serviceProvider.GetKeyedService<AuthenticationCompletionHandler>(mode) != null);
+
     /// <summary>
     /// Completes the authentication process and handles token delivery based on the
     /// client's configured delivery mode. Automatically selects the appropriate handler implementation.

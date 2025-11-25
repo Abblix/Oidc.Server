@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -36,6 +38,8 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// Handles OpenID Connect discovery configuration requests by building metadata response.
 /// Returns framework-agnostic discovery metadata without endpoint URLs.
 /// </summary>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+	Justification = "Configuration handler legitimately requires multiple specialized metadata providers to assemble comprehensive OIDC discovery document")]
 public sealed class ConfigurationHandler(
 	IOptionsSnapshot<OidcOptions> options,
 	IIssuerProvider issuerProvider,
@@ -43,7 +47,8 @@ public sealed class ConfigurationHandler(
 	IClientAuthenticator clientAuthenticator,
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IScopesAndClaimsProvider scopesAndClaims,
-	IJwtAlgorithmsProvider jwtAlgorithms) : IConfigurationHandler
+	IJwtAlgorithmsProvider jwtAlgorithms,
+	IAuthenticationCompletionHandler cibaCompletionHandler) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
@@ -83,7 +88,7 @@ public sealed class ConfigurationHandler(
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 
 		BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
-		BackChannelTokenDeliveryModesSupported = options.Value.BackChannelAuthentication.TokenDeliveryModesSupported,
+		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler.TokenDeliveryModesSupported,
 		BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 	});
 }

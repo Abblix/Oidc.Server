@@ -29,6 +29,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 public interface IAuthenticationCompletionHandler
 {
     /// <summary>
+    /// Spported token delivery modes based on registered handlers.
+    /// This is used to populate the discovery document's backchannel_token_delivery_modes_supported field.
+    /// </summary>
+    IEnumerable<string> TokenDeliveryModesSupported { get; }
+
+    /// <summary>
     /// Completes the authentication process and handles token delivery according to
     /// the client's configured delivery mode.
     /// </summary>

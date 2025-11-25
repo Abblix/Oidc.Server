@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Constants;
-
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -70,6 +68,8 @@ public record BackChannelAuthenticationOptions
     /// </remarks>
     public TimeSpan LongPollingTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
+    private int _requestIdLength = 64;
+
     /// <summary>
     /// Specifies the length of authentication request identifiers used by the OIDC server.
     /// This value ensures that each backchannel authentication request is uniquely identified.
@@ -82,7 +82,7 @@ public record BackChannelAuthenticationOptions
     public int RequestIdLength
     {
         get => _requestIdLength;
-        set
+        init
         {
             if (value < MinimumRequestIdLength)
             {
@@ -91,25 +91,15 @@ public record BackChannelAuthenticationOptions
                     value,
                     $"RequestIdLength must be at least {MinimumRequestIdLength} bytes (128 bits) to comply with OpenID Connect CIBA specification");
             }
+
             _requestIdLength = value;
         }
     }
-
-    private int _requestIdLength = 64;
 
     /// <summary>
     /// Minimum length for authentication request identifiers as required by CIBA specification (128 bits = 16 bytes).
     /// </summary>
     public const int MinimumRequestIdLength = 16;
-
-    /// <summary>
-    /// Specifies the token delivery modes supported by the server for backchannel authentication.
-    /// The CIBA specification defines three modes: poll, ping, and push.
-    /// </summary>
-    /// <remarks>
-    /// Default is poll mode only. Additional modes (ping, push) require implementation of notification mechanisms.
-    /// </remarks>
-    public IEnumerable<string>? TokenDeliveryModesSupported { get; set; } = [BackchannelTokenDeliveryModes.Poll];
 
     /// <summary>
     /// Indicates whether the server supports the user_code parameter in backchannel authentication requests.
