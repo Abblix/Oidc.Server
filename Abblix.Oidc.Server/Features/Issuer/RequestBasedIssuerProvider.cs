@@ -29,22 +29,11 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// This approach allows the issuer identifier to reflect the actual request's context,
 /// accommodating scenarios like varying host names or different environments.
 /// </summary>
-internal class RequestBasedIssuerProvider : IIssuerProvider
+internal class RequestBasedIssuerProvider(IRequestInfoProvider requestInfoProvider) : IIssuerProvider
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="RequestBasedIssuerProvider"/> class.
-	/// </summary>
-	/// <param name="requestInfoProvider">The provider that supplies information about the current HTTP request.</param>
-	public RequestBasedIssuerProvider(IRequestInfoProvider requestInfoProvider)
-	{
-		_requestInfoProvider = requestInfoProvider;
-	}
-
-	private readonly IRequestInfoProvider _requestInfoProvider;
-
 	/// <summary>
 	/// Retrieves the issuer identifier based on the current HTTP request.
 	/// </summary>
 	/// <returns>The issuer identifier, constructed from the request's context.</returns>
-	public string GetIssuer() => _requestInfoProvider.ApplicationUri;
+	public string GetIssuer() => requestInfoProvider.ApplicationUri;
 }

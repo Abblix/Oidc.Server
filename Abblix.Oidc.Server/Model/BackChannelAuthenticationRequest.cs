@@ -39,7 +39,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [JsonPropertyName(Parameters.Scope)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
-    public string[] Scope { get; init; } = Array.Empty<string>();
+    public string[] Scope { get; init; } = [];
 
     /// <summary>
     /// A token issued by the client that the authorization server uses to notify the client about the result
@@ -55,7 +55,7 @@ public record BackChannelAuthenticationRequest
     /// such as multifactor authentication or biometric verification.
     /// </summary>
     [JsonPropertyName(Parameters.AcrValues)]
-    public List<string>? AcrValues { get; init; }
+    public string[]? AcrValues { get; init; }
 
     /// <summary>
     /// A token used to pass a hint about the login identifier to the authorization server.

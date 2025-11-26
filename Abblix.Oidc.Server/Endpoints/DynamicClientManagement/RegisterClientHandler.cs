@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -30,34 +32,21 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// This class validates and processes incoming client registration requests, issuing client identifiers and
 /// client secrets as appropriate.
 /// </summary>
-public class RegisterClientHandler : IRegisterClientHandler
+/// <param name="validator">The validator responsible for ensuring that client registration requests meet
+/// the required criteria.</param>
+/// <param name="processor">The processor responsible for the actual registration of the client,
+/// generating client identifiers and secrets.</param>
+public class RegisterClientHandler(
+    IRegisterClientRequestValidator validator,
+    IRegisterClientRequestProcessor processor) : IRegisterClientHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RegisterClientHandler"/> class with the specified validator
-    /// and processor.
-    /// </summary>
-    /// <param name="validator">The validator responsible for ensuring that client registration requests meet
-    /// the required criteria.</param>
-    /// <param name="processor">The processor responsible for the actual registration of the client,
-    /// generating client identifiers and secrets.</param>
-    public RegisterClientHandler(
-        IRegisterClientRequestValidator validator,
-        IRegisterClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IRegisterClientRequestValidator _validator;
-    private readonly IRegisterClientRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a client registration request, validating the request and processing it to register
     /// the client.
     /// </summary>
     /// <param name="clientRegistrationRequest">The client registration request containing the necessary information
     /// for registering a new client.</param>
-    /// <returns>A task that results in a <see cref="ClientRegistrationResponse"/>, encapsulating the outcome of
+    /// <returns>A task that results in a Result containing the outcome of
     /// the registration process.
     /// This could be a successful response with client details or an error response indicating the reasons for failure.
     /// </returns>
@@ -68,19 +57,9 @@ public class RegisterClientHandler : IRegisterClientHandler
     /// with the authorization server without direct administrative intervention. It supports the OpenID Connect
     /// Dynamic Client Registration specification, ensuring compliance and interoperability.
     /// </remarks>
-
-    public async Task<ClientRegistrationResponse> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
+    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRegistrationRequest);
-
-        return validationResult switch
-        {
-            ValidClientRegistrationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRegistrationValidationError { Error: var error, ErrorDescription: var description }
-                => new ClientRegistrationErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
+        var validationResult = await validator.ValidateAsync(clientRegistrationRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

@@ -33,16 +33,22 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// Represents an authorization request that has passed validation, encapsulating all necessary information
 /// resolved during its validation.
 /// </summary>
-public record ValidAuthorizationRequest : AuthorizationRequestValidationResult
+public record ValidAuthorizationRequest
 {
 	public ValidAuthorizationRequest(AuthorizationValidationContext context)
-		: base(context.ResponseMode)
 	{
+		ResponseMode = context.ResponseMode;
 		Model = context.Request;
 		ClientInfo = context.ClientInfo;
 		Scope = context.Scope;
 		Resources = context.Resources;
 	}
+
+	/// <summary>
+	/// The response mode to be used for delivering the authorization response.
+	/// </summary>
+	public string ResponseMode { get; init; }
+
 	/// <summary>
 	/// The original or recovered request model that was validated.
 	/// </summary>

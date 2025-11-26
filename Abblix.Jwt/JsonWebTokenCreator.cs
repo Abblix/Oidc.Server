@@ -48,7 +48,7 @@ public sealed class JsonWebTokenCreator : IJsonWebTokenCreator
     /// <param name="jwt">The JsonWebToken object containing the payload of the JWT.</param>
     /// <param name="signingKey">The signing key as a JsonWebKey to sign the JWT.</param>
     /// <param name="encryptingKey">Optional encrypting key as a JsonWebKey to encrypt the JWT.</param>
-    /// <returns>A Task that represents the asynchronous operation and yields the JWT as a string.</returns>
+    /// <returns>A task that returns the JWT as a string.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the specified date time values cause an overflow.</exception>
     /// <remarks>
     /// The method configures a <see cref="SecurityTokenDescriptor"/> based on the provided JWT, signing key, and encrypting key.

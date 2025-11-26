@@ -20,38 +20,26 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles requests for reading client configurations from the authorization server.
-/// Validates and processes requests to retrieve information about registered clients.
+/// Handles client configuration retrieval requests in OAuth 2.0 Dynamic Client Registration protocol.
+/// Coordinates validation and processing to securely fetch registered client information.
 /// </summary>
-public class ReadClientHandler : IReadClientHandler
+/// <param name="validator">Validates client authentication and authorization for configuration access.</param>
+/// <param name="processor">Retrieves and formats client configuration data.</param>
+public class ReadClientHandler(
+    IClientRequestValidator validator,
+    IReadClientRequestProcessor processor) : IReadClientHandler
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ReadClientHandler"/> class with specified validator and processor
-    /// services.
-    /// </summary>
-    /// <param name="validator">The service used to validate client information requests.</param>
-    /// <param name="processor">The service responsible for processing valid client information requests and retrieving
-    /// client data.</param>
-    public ReadClientHandler(
-        IClientRequestValidator validator,
-        IReadClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IClientRequestValidator _validator;
-    private readonly IReadClientRequestProcessor _processor;
-
-    /// <summary>
-    /// Asynchronously handles a request to read client information, validating the request and processing it to return
-    /// the requested client data.
+    /// Processes a client configuration read request.
     /// </summary>
     /// <param name="clientRequest">The client request containing details necessary for fetching the client information,
     /// such as the client identifier.</param>
@@ -64,18 +52,9 @@ public class ReadClientHandler : IReadClientHandler
     /// configurations. It ensures that only valid requests are processed, safeguarding against unauthorized access
     /// to client information.
     /// </remarks>
-    public async Task<ReadClientResponse> HandleAsync(Model.ClientRequest clientRequest)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRequest);
-
-        return validationResult switch
-        {
-            ValidClientRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new ReadClientErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        var validationResult = await validator.ValidateAsync(clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

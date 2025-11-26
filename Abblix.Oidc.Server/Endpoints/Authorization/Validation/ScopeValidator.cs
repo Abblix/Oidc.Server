@@ -32,15 +32,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// configuration and the OAuth flow type in use. It ensures that only allowed scopes
 /// are requested, enhancing security and compliance with the defined authorization policies.
 /// </summary>
-public class ScopeValidator : SyncAuthorizationContextValidatorBase
+/// <param name="scopeManager">The scope manager used to validate scopes.</param>
+public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationContextValidatorBase
 {
-	public ScopeValidator(IScopeManager scopeManager)
-	{
-		_scopeManager = scopeManager;
-	}
-
-	private readonly IScopeManager _scopeManager;
-
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
 	/// with the client's allowed scopes and the OAuth flow type. For instance, it validates if offline access is
@@ -62,7 +56,7 @@ public class ScopeValidator : SyncAuthorizationContextValidatorBase
 				    return context.InvalidScope("This client is not allowed to request for offline access");
 	    }
 
-		if (!_scopeManager.Validate(
+		if (!scopeManager.Validate(
 			    context.Request.Scope,
 			    context.Resources,
 			    out var scopeDefinitions,

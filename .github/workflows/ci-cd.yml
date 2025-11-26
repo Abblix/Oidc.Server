@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4.2.2
       - name: Bump version and push tag
         id: set_version
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: mathieudutour/github-tag-action@d28fa2ccfbd16e871a4bdf35e11b3ad1bd56c0c1 # v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch # Automatically bump a patch version
@@ -53,4 +53,6 @@ jobs:
           name: nuget-packages
           path: nupkg
       - name: Push to NuGet
-        run: dotnet nuget push "**/*.nupkg" -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push "**/*.nupkg" -k "$NUGET_API_KEY" -s https://api.nuget.org/v3/index.json --skip-duplicate

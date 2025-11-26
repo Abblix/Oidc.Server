@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -30,29 +31,19 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching
 /// Adapter class that implements <see cref="IBackChannelAuthenticationRequestFetcher"/> to delegate the
 /// fetching and processing of request objects to an instance of <see cref="IRequestObjectFetcher"/>.
 /// </summary>
-public class RequestObjectFetchAdapter : IBackChannelAuthenticationRequestFetcher
+/// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
+/// the JWT request object.</param>
+public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IBackChannelAuthenticationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestObjectFetchAdapter"/> class.
-    /// </summary>
-    /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
-    /// the JWT request object.</param>
-    public RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher)
-    {
-        _requestObjectFetcher = requestObjectFetcher;
-    }
-
-    private readonly IRequestObjectFetcher _requestObjectFetcher;
-
     /// <summary>
     /// Fetches and processes the backchannel authentication request by delegating to the request object fetcher.
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation.
-    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest}"/>
+    /// A task that returns a BackChannelAuthenticationRequest or error.
+    /// The task result contains a <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/>
     /// that either represents a successfully processed request or an error indicating issues with the JWT validation.
     /// </returns>
-    public Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
-        => _requestObjectFetcher.FetchAsync(request, request.Request);
+    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
+        => requestObjectFetcher.FetchAsync(request, request.Request);
 }

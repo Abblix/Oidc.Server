@@ -21,9 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -32,20 +31,8 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching
 /// It iterates through each fetcher to process a backchannel authentication request, allowing for a flexible and
 /// extensible mechanism to fetch and validate requests from different sources or formats.
 /// </summary>
-public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
+public class CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] fetchers) : IBackChannelAuthenticationRequestFetcher
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CompositeRequestFetcher"/> class with an array of fetchers.
-    /// </summary>
-    /// <param name="fetchers">An array of <see cref="IBackChannelAuthenticationRequestFetcher"/> instances
-    /// that will be used to fetch and validate the backchannel authentication request.</param>
-    public CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] fetchers)
-    {
-        _fetchers = fetchers;
-    }
-
-    private readonly IBackChannelAuthenticationRequestFetcher[] _fetchers;
-
     /// <summary>
     /// Iterates through the configured fetchers to process the backchannel authentication request.
     /// Each fetcher in the array has the opportunity to handle the request. If a fetcher returns a fault,
@@ -53,25 +40,17 @@ public class CompositeRequestFetcher : IBackChannelAuthenticationRequestFetcher
     /// If all fetchers succeed, the method returns the final successful result.
     /// </summary>
     /// <param name="request">The backchannel authentication request to be processed.</param>
-    /// <returns>A <see cref="FetchResult"/> that represents the outcome of the fetching process.
-    /// It could be a success, fault, or an unexpected type error if the result is not handled correctly.</returns>
-    public async Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request)
+    /// <returns>A <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/> that represents the outcome of the fetching process.</returns>
+    public async Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
     {
-        foreach (var fetcher in _fetchers)
+        foreach (var fetcher in fetchers)
         {
             var result = await fetcher.FetchAsync(request);
-            switch (result)
+            if (result.TryGetFailure(out var error))
             {
-                case Result<BackChannelAuthenticationRequest>.Success(var success):
-                    request = success;
-                    continue;
-
-                case Result<BackChannelAuthenticationRequest>.Error error:
-                    return error;
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
+                return error;
             }
+            request = result.GetSuccess();
         }
 
         return request;

@@ -21,11 +21,13 @@
 // info@abblix.com
 
 using System.Net.Mime;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Mvc.Attributes;
+using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Cors;
@@ -65,6 +67,7 @@ public class TokenController : ControllerBase
     //[Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.Token)]
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
         [FromServices] ITokenResponseFormatter formatter,
@@ -95,6 +98,7 @@ public class TokenController : ControllerBase
     [HttpPost(Path.Revocation)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.Revocation)]
     public async Task<ActionResult> RevocationAsync(
         [FromServices] IRevocationHandler handler,
         [FromServices] IRevocationResponseFormatter formatter,
@@ -127,6 +131,7 @@ public class TokenController : ControllerBase
     /// </remarks>
     [HttpPost(Path.Introspection)]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    [EnabledBy(OidcEndpoints.Introspection)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter formatter,

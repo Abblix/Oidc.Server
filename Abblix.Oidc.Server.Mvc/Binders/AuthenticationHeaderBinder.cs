@@ -85,25 +85,15 @@ public class AuthenticationHeaderBinder : ModelBinderBase
     /// <summary>
     /// Provides values from HTTP headers.
     /// </summary>
-    private class HeaderValueProvider : IValueProvider
+    /// <param name="headers">The HTTP header dictionary to provide values from.</param>
+    private class HeaderValueProvider(IHeaderDictionary headers) : IValueProvider
     {
-        private readonly IHeaderDictionary _headers;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="HeaderValueProvider"/> class.
-        /// </summary>
-        /// <param name="headers">The HTTP header dictionary to provide values from.</param>
-        public HeaderValueProvider(IHeaderDictionary headers)
-        {
-            _headers = headers;
-        }
-
         /// <inheritdoc />
         public bool ContainsPrefix(string prefix)
-            => _headers.ContainsKey(prefix);
+            => headers.ContainsKey(prefix);
 
         /// <inheritdoc />
         public ValueProviderResult GetValue(string key)
-            => _headers.TryGetValue(key, out var values) ? new ValueProviderResult(values) : ValueProviderResult.None;
+            => headers.TryGetValue(key, out var values) ? new ValueProviderResult(values) : ValueProviderResult.None;
     }
 }

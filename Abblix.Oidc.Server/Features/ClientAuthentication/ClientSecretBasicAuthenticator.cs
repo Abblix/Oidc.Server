@@ -33,24 +33,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// Implements an authentication of a client request by HTTP 'Authorization' header using the 'Basic' scheme.
 /// This authentication method follows the standards outlined in RFC 7617.
 /// </summary>
-public class ClientSecretBasicAuthenticator : ClientSecretAuthenticator, IClientAuthenticator
+public class ClientSecretBasicAuthenticator(
+	ILogger<ClientSecretBasicAuthenticator> logger,
+	IClientInfoProvider clientInfoProvider,
+	TimeProvider clock,
+	IHashService hashService)
+	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="ClientSecretBasicAuthenticator"/> class.
-	/// </summary>
-	/// <param name="logger">Logger for logging authentication-related information and errors.</param>
-	/// <param name="clientInfoProvider">The provider for client information retrieval.</param>
-	/// <param name="clock">The clock instance for time-related operations.</param>
-	/// <param name="hashService">The client secret hasher for verifying client secrets.</param>
-	public ClientSecretBasicAuthenticator(
-		ILogger<ClientSecretBasicAuthenticator> logger,
-		IClientInfoProvider clientInfoProvider,
-		TimeProvider clock,
-		IHashService hashService)
-		: base(logger, clientInfoProvider, clock, hashService)
-	{
-	}
-
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.
 	/// This indicates that the authenticator handles client authentication using the Basic Authentication scheme,

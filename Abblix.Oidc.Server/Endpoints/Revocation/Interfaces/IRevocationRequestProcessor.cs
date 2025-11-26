@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 
 /// <summary>
@@ -38,6 +41,9 @@ public interface IRevocationRequestProcessor
 	/// This method is responsible for handling the request to revoke a token, ensuring that the token and any associated tokens are invalidated.
 	/// </summary>
 	/// <param name="request">The valid revocation request to be processed. It contains the token that needs to be revoked along with any relevant information.</param>
-	/// <returns>A task representing the asynchronous operation, which upon completion will return a <see cref="RevocationResponse"/> indicating the outcome of the revocation process.</returns>
-	Task<RevocationResponse> ProcessAsync(ValidRevocationRequest request);
+	/// <returns>
+	/// A task representing the asynchronous operation, which upon completion will return a <see cref="Result{TSuccess, TFailure}"/>
+	/// containing either <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
+	/// </returns>
+	Task<Result<TokenRevoked, OidcError>> ProcessAsync(ValidRevocationRequest request);
 }

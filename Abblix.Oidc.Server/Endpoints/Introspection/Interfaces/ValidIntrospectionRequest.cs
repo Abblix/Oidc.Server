@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// <summary>
 /// Represents a valid introspection request result.
 /// </summary>
-public record ValidIntrospectionRequest : IntrospectionRequestValidationResult
+public record ValidIntrospectionRequest
 {
 	/// <summary>
 	/// Initializes a new instance of the <see cref="ValidIntrospectionRequest"/> class.

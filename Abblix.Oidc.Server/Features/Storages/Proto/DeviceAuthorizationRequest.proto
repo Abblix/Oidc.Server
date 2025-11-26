@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+import "Features/Storages/Proto/AuthorizedGrant.proto";
+
+// Status of a device authorization request
+enum DeviceAuthorizationStatus {
+  // Request is pending user action
+  DEVICE_PENDING = 0;
+
+  // User has denied the request
+  DEVICE_DENIED = 1;
+
+  // Request has been successfully authorized
+  DEVICE_AUTHORIZED = 2;
+}
+
+// Represents a device authorization request (RFC 8628)
+message DeviceAuthorizationRequest {
+  // The client identifier that initiated the request
+  string client_id = 1;
+
+  // The requested scopes
+  repeated string scope = 2;
+
+  // The requested resources (RFC 8707)
+  repeated string resources = 3;
+
+  // The user-friendly code displayed to the user
+  string user_code = 4;
+
+  // Next time the client should poll for updates
+  optional google.protobuf.Timestamp next_poll_at = 5;
+
+  // Current status of the authorization request
+  DeviceAuthorizationStatus status = 6;
+
+  // The authorized grant (set when user authorizes)
+  optional AuthorizedGrant authorized_grant = 7;
+}

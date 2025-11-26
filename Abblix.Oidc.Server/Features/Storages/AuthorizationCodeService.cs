@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -30,26 +32,15 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// Provides services for managing the lifecycle of OAuth 2.0 authorization codes. This service generates, stores,
 /// validates, and deletes authorization codes as part of the authorization code grant flow.
 /// </summary>
-public class AuthorizationCodeService : IAuthorizationCodeService
+/// <param name="authorizationCodeGenerator">The generator that creates unique authorization codes.</param>
+/// <param name="storage">The storage mechanism for persisting and retrieving authorization codes and their
+/// associated data.</param>
+/// <param name="keyFactory">The factory for generating standardized storage keys.</param>
+public class AuthorizationCodeService(
+	IAuthorizationCodeGenerator authorizationCodeGenerator,
+	IEntityStorage storage,
+	IEntityStorageKeyFactory keyFactory) : IAuthorizationCodeService
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthorizationCodeService"/> class,
-	/// configuring it with the necessary elements for authorization code generation and storage.
-	/// </summary>
-	/// <param name="authorizationCodeGenerator">The generator that creates unique authorization codes.</param>
-	/// <param name="storage">The storage mechanism for persisting and retrieving authorization codes and their
-	/// associated data.</param>
-	public AuthorizationCodeService(
-		IAuthorizationCodeGenerator authorizationCodeGenerator,
-		IEntityStorage storage)
-	{
-		_authorizationCodeGenerator = authorizationCodeGenerator;
-		_storage = storage;
-	}
-
-	private readonly IAuthorizationCodeGenerator _authorizationCodeGenerator;
-	private readonly IEntityStorage _storage;
-
 	/// <summary>
 	/// Generates a unique authorization code for a given authorization grant result and client information.
 	/// The client subsequently uses this code to request an access token.
@@ -62,12 +53,12 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 		AuthorizedGrant authorizedGrant,
 		TimeSpan authorizationCodeExpiresIn)
 	{
-		var authorizationCode = _authorizationCodeGenerator.GenerateAuthorizationCode();
+		var authorizationCode = authorizationCodeGenerator.GenerateAuthorizationCode();
 
-		await _storage.SetAsync(
-			ToKeyString(authorizationCode),
+		await storage.SetAsync(
+			keyFactory.AuthorizedGrantKey(authorizationCode),
 			authorizedGrant,
-			new StorageOptions { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn });
+			new () { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn });
 
 		return authorizationCode;
 	}
@@ -76,14 +67,14 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 	/// Validates and processes an authorization code, ensuring it is correct and has not expired or been used previously.
 	/// </summary>
 	/// <param name="authorizationCode">The authorization code to validate and process.</param>
-	/// <returns>A task that resolves to a <see cref="GrantAuthorizationResult"/>, which indicates the outcome of
+	/// <returns>A task that resolves to a <see cref="Result{AuthorizedGrant, AuthError}"/>, which indicates the outcome of
 	/// the authorization attempt and contains any tokens issued.</returns>
-	public async Task<GrantAuthorizationResult> AuthorizeByCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode)
 	{
-		var result = await _storage.GetAsync<AuthorizedGrant>(ToKeyString(authorizationCode), false);
+		var result = await storage.GetAsync<AuthorizedGrant>(keyFactory.AuthorizedGrantKey(authorizationCode), false);
 		if (result == null)
 		{
-			return new InvalidGrantResult(ErrorCodes.InvalidGrant, "Authorization code is invalid");
+			return new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid");
 		}
 
 		return result;
@@ -95,7 +86,7 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 	/// <param name="authorizationCode">The authorization code to remove.</param>
 	/// <returns>A task representing the asynchronous operation to remove the code.</returns>
 	public Task RemoveAuthorizationCodeAsync(string authorizationCode)
-		=> _storage.RemoveAsync(ToKeyString(authorizationCode));
+		=> storage.RemoveAsync(keyFactory.AuthorizedGrantKey(authorizationCode));
 
 	/// <summary>
 	/// Updates the authorization grant result based on a specific authorization code and client information.
@@ -111,17 +102,10 @@ public class AuthorizationCodeService : IAuthorizationCodeService
 		AuthorizedGrant authorizedGrant,
 		TimeSpan authorizationCodeExpiresIn)
 	{
-		return _storage.SetAsync(
-			ToKeyString(authorizationCode),
+		return storage.SetAsync(
+			keyFactory.AuthorizedGrantKey(authorizationCode),
 			authorizedGrant,
-			new StorageOptions { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn }
+			new () { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn }
 		);
 	}
-
-	/// <summary>
-	/// Converts an authorization code into a standardized key string for use in storage.
-	/// </summary>
-	/// <param name="authorizationCode">The authorization code to convert.</param>
-	/// <returns>A string that represents the standardized key for the authorization code.</returns>
-	private static string ToKeyString(string authorizationCode) => $"{nameof(authorizationCode)}:{authorizationCode}";
 }

@@ -40,38 +40,18 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// flows. It checks the authenticity of the JWT issuer, audience, and cryptographic signatures to ensure that
 /// only valid and authorized clients can interact with the authentication service.
 /// </remarks>
-public class ClientJwtValidator: IClientJwtValidator
+/// <param name="logger">The logger used for recording validation activities and outcomes.</param>
+/// <param name="requestInfoProvider">Provides information about the current request, including the request URI.</param>
+/// <param name="tokenValidator">The service used to perform core JWT validation.</param>
+/// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
+/// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
+public class ClientJwtValidator(
+    ILogger<ClientJwtValidator> logger,
+    IRequestInfoProvider requestInfoProvider,
+    IJsonWebTokenValidator tokenValidator,
+    IClientInfoProvider clientInfoProvider,
+    IClientKeysProvider clientJwksProvider): IClientJwtValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientJwtValidator"/> class.
-    /// </summary>
-    /// <param name="logger">The logger used for recording validation activities and outcomes.</param>
-    /// <param name="requestInfoProvider">Provides information about the current request, including the request URI.
-    /// </param>
-    /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
-    /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
-    /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.
-    /// </param>
-    public ClientJwtValidator(
-        ILogger<ClientJwtValidator> logger,
-        IRequestInfoProvider requestInfoProvider,
-        IJsonWebTokenValidator tokenValidator,
-        IClientInfoProvider clientInfoProvider,
-        IClientKeysProvider clientJwksProvider)
-    {
-        _logger = logger;
-        _clientInfoProvider = clientInfoProvider;
-        _clientJwksProvider = clientJwksProvider;
-        _requestInfoProvider = requestInfoProvider;
-        _tokenValidator = tokenValidator;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IRequestInfoProvider _requestInfoProvider;
-    private readonly IJsonWebTokenValidator _tokenValidator;
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly IClientKeysProvider _clientJwksProvider;
-
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
     /// and cryptographic signatures. This method is used in scenarios such as private JWT client authentication
@@ -80,14 +60,14 @@ public class ClientJwtValidator: IClientJwtValidator
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
-    /// A task representing the asynchronous operation. The task result is a tuple containing the validation result
-    /// and the associated client information if the issuer is validated.
+    /// A task that returns a Result containing either a ValidJsonWebToken on success,
+    /// or a JwtValidationError on failure.
     /// </returns>
-    public async Task<(JwtValidationResult, ClientInfo?)> ValidateAsync(
+    public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         string jwt,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var result = await _tokenValidator.ValidateAsync(
+        var result = await tokenValidator.ValidateAsync(
             jwt,
             new ValidationParameters
             {
@@ -97,7 +77,7 @@ public class ClientJwtValidator: IClientJwtValidator
                 ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
             });
 
-        return (result, ClientInfo);
+        return result.MapSuccess(token => new ValidJsonWebToken(token, ClientInfo.NotNull(nameof(ClientInfo))));
     }
 
     /// <summary>
@@ -109,15 +89,14 @@ public class ClientJwtValidator: IClientJwtValidator
     /// Validates the audience by checking if it matches the request URI.
     /// </summary>
     /// <param name="audiences">The collection of audiences to validate against the request URI.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result indicates whether
-    /// the audience is valid.</returns>
+    /// <returns>A task that returns whether the audience is valid.</returns>
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
-        var requestUri = _requestInfoProvider.RequestUri;
+        var requestUri = requestInfoProvider.RequestUri;
         var result = audiences.Contains(requestUri);
         if (!result)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Audience validation failed, token audiences: {@Audiences}, actual requestUri: {RequestUri}",
                 audiences, requestUri);
         }
@@ -131,7 +110,7 @@ public class ClientJwtValidator: IClientJwtValidator
     /// </summary>
     /// <param name="issuer">The issuer value to validate.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result indicates whether the issuer is valid
+    /// A task that returns whether the issuer is valid
     /// and corresponds to an authorized client.
     /// </returns>
     /// <exception cref="InvalidOperationException">Thrown if attempting to validate a different issuer than the one
@@ -150,8 +129,8 @@ public class ClientJwtValidator: IClientJwtValidator
                     $"Trying to validate issuer {issuer}, but already has info about client {clientId}");
 
             // Case where client information is not yet known; attempt to find the client by issuer.
-            case null:
-                ClientInfo = await _clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
+            default:
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
 
                 // If the client is found but does not use the expected authentication method, validation fails.
                 return ClientInfo != null;
@@ -171,7 +150,7 @@ public class ClientJwtValidator: IClientJwtValidator
             yield break;
 
         var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
-        await foreach (var key in _clientJwksProvider.GetSigningKeys(clientInfo))
+        await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo))
             yield return key;
     }
 }

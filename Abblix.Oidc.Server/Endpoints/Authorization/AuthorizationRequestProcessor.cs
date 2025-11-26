@@ -42,43 +42,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response to an authorization request based on the request's parameters and the current state
 /// of the user's session.
 /// </summary>
-public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
+public class AuthorizationRequestProcessor(
+	IAuthSessionService authSessionService,
+	IUserConsentsProvider consentsProvider,
+	IAuthorizationCodeService authorizationCodeService,
+	IAccessTokenService accessTokenService,
+	IIdentityTokenService identityTokenService,
+	TimeProvider clock) : IAuthorizationRequestProcessor
 {
-	/// <summary>
-	/// Constructor that initializes the required services for handling authorization requests.
-	/// These services collectively enable the class to handle key parts of the OAuth2/OpenID Connect flow,
-	/// such as authenticating users, managing user consent, issuing tokens, and handling authorization codes.
-	/// </summary>
-	/// <param name="authSessionService">Handles user authentication sessions.</param>
-	/// <param name="consentsProvider">Manages the storage and retrieval of user consent data.</param>
-	/// <param name="authorizationCodeService">Generates and validates authorization codes during
-	/// the authorization process.</param>
-	/// <param name="accessTokenService">Issues access tokens upon successful authorization.</param>
-	/// <param name="identityTokenService">Generates ID tokens for user identity verification in OIDC.</param>
-	/// <param name="clock">Facilitates time-based logic (e.g., token expiration, session timeouts).</param>
-	public AuthorizationRequestProcessor(
-		IAuthSessionService authSessionService,
-		IUserConsentsProvider consentsProvider,
-		IAuthorizationCodeService authorizationCodeService,
-		IAccessTokenService accessTokenService,
-		IIdentityTokenService identityTokenService,
-		TimeProvider clock)
-	{
-		_authSessionService = authSessionService;
-		_consentsProvider = consentsProvider;
-		_authorizationCodeService = authorizationCodeService;
-		_accessTokenService = accessTokenService;
-		_identityTokenService = identityTokenService;
-		_clock = clock;
-	}
-
-	private readonly IAccessTokenService _accessTokenService;
-	private readonly IAuthorizationCodeService _authorizationCodeService;
-	private readonly IAuthSessionService _authSessionService;
-	private readonly IUserConsentsProvider _consentsProvider;
-	private readonly IIdentityTokenService _identityTokenService;
-	private readonly TimeProvider _clock;
-
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
 	/// the need for user consent, and generating appropriate tokens. This method serves as the central logic for
@@ -144,7 +115,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 
 		// Retrieve user consents (i.e., permissions granted for requested scopes/resources).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
-		var userConsents = await _consentsProvider.GetUserConsentsAsync(request, authSession);
+		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
 		// If consent for required scopes or resources is still pending, handle consent requirements.
 		if (userConsents.Pending is { Scopes.Length: > 0 } or { Resources.Length: > 0 })
@@ -186,7 +157,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		if (!authSession.AffectedClientIds.Contains(clientId))
 		{
 			authSession.AffectedClientIds.Add(clientId);
-			await _authSessionService.SignInAsync(authSession);
+			await authSessionService.SignInAsync(authSession);
 		}
 
 		// Initialize a successful authentication result.
@@ -200,7 +171,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		var codeRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Code);
 		if (codeRequired)
 		{
-			result.Code = await _authorizationCodeService.GenerateAuthorizationCodeAsync(
+			result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
 				new AuthorizedGrant(authSession, authContext),
 				request.ClientInfo.AuthorizationCodeExpiresIn);
 		}
@@ -210,7 +181,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		if (tokenRequired)
 		{
 			result.TokenType = TokenTypes.Bearer;
-			result.AccessToken = await _accessTokenService.CreateAccessTokenAsync(
+			result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
 				authSession,
 				authContext,
 				request.ClientInfo);
@@ -220,7 +191,7 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 		var idTokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.IdToken);
 		if (idTokenRequired)
 		{
-			result.IdToken = await _identityTokenService.CreateIdentityTokenAsync(
+			result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
 				authSession,
 				authContext,
 				request.ClientInfo,
@@ -241,13 +212,13 @@ public class AuthorizationRequestProcessor : IAuthorizationRequestProcessor
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
 	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
 	{
-		var authSessions = _authSessionService.GetAvailableAuthSessions();
+		var authSessions = authSessionService.GetAvailableAuthSessions();
 
 		// Filter sessions based on the maximum allowable authentication age, if specified.
 		if (model.MaxAge.HasValue)
 		{
 			// skip all sessions older than max_age value
-			var minAuthenticationTime = _clock.GetUtcNow() - model.MaxAge;
+			var minAuthenticationTime = clock.GetUtcNow() - model.MaxAge;
 			authSessions = authSessions
 				.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}

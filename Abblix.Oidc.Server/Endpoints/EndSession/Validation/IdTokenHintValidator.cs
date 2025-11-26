@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -33,67 +32,51 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// Validates the ID token hint in the context of an end-session request.
 /// This validator checks if the ID token hint provided in the request is valid and matches the expected audience (client).
 /// </summary>
-public class IdTokenHintValidator : IEndSessionContextValidator
+/// <param name="jwtValidator">The JWT validator used to validate ID tokens.</param>
+public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="IdTokenHintValidator"/> class.
-    /// </summary>
-    /// <param name="jwtValidator">The JWT validator used to validate ID tokens.</param>
-    public IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator)
-    {
-        _jwtValidator = jwtValidator;
-    }
-
-    private readonly IAuthServiceJwtValidator _jwtValidator;
-
     /// <summary>
     /// Validates the ID token hint.
     /// </summary>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>An error if validation fails, null if successful.</returns>
-    public async Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         var request = context.Request;
 
         if (request.IdTokenHint.HasValue())
         {
-            var result = await _jwtValidator.ValidateAsync(
+            var result = await jwtValidator.ValidateAsync(
                 request.IdTokenHint,
                 ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
-            switch (result)
+            if (!result.TryGetSuccess(out var idToken))
             {
-                case ValidJsonWebToken { Token: var idToken, Token.Payload.Audiences: var audiences }:
-                    if (!request.ClientId.HasValue())
-                    {
-                        try
-                        {
-                            context.ClientId = audiences.Single();
-                        }
-                        catch (Exception)
-                        {
-                            return new EndSessionRequestValidationError(
-                                ErrorCodes.InvalidRequest,
-                                "The audience in the id token hint is missing or have multiple values.");
-                        }
-                    }
-                    else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
-                    {
-                        return new EndSessionRequestValidationError(
-                            ErrorCodes.InvalidRequest,
-                            "The id token hint contains token issued for the client other than specified");
-                    }
-
-                    context.IdToken = idToken;
-                    break;
-
-                case JwtValidationError:
-                    return new EndSessionRequestValidationError(ErrorCodes.InvalidRequest,
-                        "The id token hint contains invalid token");
-
-                default:
-                    throw new UnexpectedTypeException(nameof(result), result.GetType());
+                return new OidcError(ErrorCodes.InvalidRequest, "The id token hint contains invalid token");
             }
+
+            var audiences = idToken.Payload.Audiences;
+            if (!request.ClientId.HasValue())
+            {
+                try
+                {
+                    context.ClientId = audiences.Single();
+                }
+                catch (Exception)
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequest,
+                        "The audience in the id token hint is missing or have multiple values.");
+                }
+            }
+            else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
+            {
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "The id token hint contains token issued for the client other than specified");
+            }
+
+            context.IdToken = idToken;
         }
 
         return null;

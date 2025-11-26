@@ -20,9 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
 
@@ -39,29 +42,16 @@ public class TokenResponseFormatter : ITokenResponseFormatter
     /// <param name="request">The token request.</param>
     /// <param name="response">The response from the token endpoint.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted token response.
+    /// A task that returns the formatted token response.
     /// </returns>
     public Task<ActionResult<TokenResponse>> FormatResponseAsync(
         TokenRequest request,
-        Endpoints.Token.Interfaces.TokenResponse response)
+        Result<TokenIssued, OidcError> response)
     {
-        return Task.FromResult(FormatResponse(response));
-    }
-
-    /// <summary>
-    /// Formats the response from the token endpoint.
-    /// </summary>
-    /// <param name="response">The response from the token endpoint.</param>
-    /// <returns>
-    /// The formatted token response as an <see cref="ActionResult{TValue}"/>.
-    /// </returns>
-    private static ActionResult<TokenResponse> FormatResponse(Endpoints.Token.Interfaces.TokenResponse response)
-    {
-        switch (response)
-        {
-            case TokenIssuedResponse success:
-                //TODO: append headers 'Cache-Control: no-store' and 'Pragma: no-cache' to response - as requires https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse
-                return new TokenResponse
+        return Task.FromResult(response.Match(
+            onSuccess: success =>
+            {
+                var tokenResponse = new TokenResponse
                 {
                     AccessToken = success.AccessToken.EncodedJwt,
                     TokenType = success.TokenType,
@@ -69,14 +59,13 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     ExpiresIn = success.ExpiresIn,
 
                     RefreshToken = success.RefreshToken?.EncodedJwt,
+                    Scope = success.Scope.ToArray(),
                     IdToken = success.IdToken?.EncodedJwt,
                 };
 
-            case TokenErrorResponse { Error: var error, ErrorDescription: var description }:
-                return new BadRequestObjectResult(new ErrorResponse(error, description));
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(response));
-        }
+                return new ActionResult<TokenResponse>(
+                    new OkObjectResult(tokenResponse).WithNoCacheHeaders());
+            },
+            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 }

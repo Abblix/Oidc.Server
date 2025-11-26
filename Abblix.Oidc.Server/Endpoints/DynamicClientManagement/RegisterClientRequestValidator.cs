@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -30,32 +32,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Provides validation for client registration requests to ensure they meet the system's criteria for client
 /// registrations. Utilizes an underlying context validator for comprehensive evaluation of request parameters.
 /// </summary>
-public class RegisterClientRequestValidator : IRegisterClientRequestValidator
+/// <param name="validator">An implementation of <see cref="IClientRegistrationContextValidator"/> used to assess
+/// the validity of registration requests based on predefined criteria and the system's registration policies.</param>
+public class RegisterClientRequestValidator(IClientRegistrationContextValidator validator) : IRegisterClientRequestValidator
 {
-    /// <summary>
-    /// Instantiates a new <see cref="RegisterClientRequestValidator"/> with a specific context validator for
-    /// evaluating client registration requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="IClientRegistrationContextValidator"/> used to assess
-    /// the validity of registration requests based on predefined criteria and the system's registration policies.
-    /// </param>
-    public RegisterClientRequestValidator(IClientRegistrationContextValidator validator)
-    {
-        _validator = validator;
-    }
-
-    private readonly IClientRegistrationContextValidator _validator;
-
     /// <summary>
     /// Asynchronously validates a client registration request against the system's registration policies and criteria.
     /// </summary>
     /// <param name="request">The <see cref="ClientRegistrationRequest"/> containing the details of the client seeking
     /// registration.</param>
     /// <returns>
-    /// A <see cref="Task"/> that when completed will yield a <see cref="ClientRegistrationRequestValidationResult"/>,
-    /// which may either indicate a successful validation through a <see cref="ValidClientRegistrationRequest"/>
-    /// instance or detail any issues encountered during validation as a
-    /// <see cref="ClientRegistrationRequestValidationResult"/>.
+    /// A task that returns a <see cref="Result{ValidClientRegistrationRequest, AuthError}"/>,
+    /// containing either a <see cref="ValidClientRegistrationRequest"/> on success or a <see cref="OidcError"/>
+    /// detailing any validation issues.
     /// </returns>
     /// <remarks>
     /// This method orchestrates the validation process by creating a validation context from the provided request
@@ -63,10 +52,15 @@ public class RegisterClientRequestValidator : IRegisterClientRequestValidator
     /// conditions are considered valid, thus maintaining the integrity and security of the client registration process.
     /// </remarks>
 
-    public async Task<ClientRegistrationRequestValidationResult> ValidateAsync(ClientRegistrationRequest request)
+    public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
-        ClientRegistrationRequestValidationResult? error = await _validator.ValidateAsync(context);
-        return error ?? new ValidClientRegistrationRequest(request, context.SectorIdentifier);
+        var error = await validator.ValidateAsync(context);
+        if (error != null)
+        {
+            return error;
+        }
+
+        return new ValidClientRegistrationRequest(request, context.SectorIdentifier);
     }
 }

@@ -32,21 +32,12 @@ namespace Abblix.Jwt;
 /// such as issuer, subject, expiration time, and more can be included, as well as additional claims as needed.
 /// This class provides a convenient way to work with the payload, allowing for easy access and modification of claims.
 /// </remarks>
-public class JsonWebTokenPayload
+public class JsonWebTokenPayload(JsonObject json)
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="JsonWebTokenPayload"/> class with the specified JSON object.
-	/// </summary>
-	/// <param name="json">The <see cref="JsonObject"/> representing the JWT payload.</param>
-    public JsonWebTokenPayload(JsonObject json)
-    {
-        Json = json;
-    }
-
 	/// <summary>
 	/// The underlying JSON object representing the JWT payload.
 	/// </summary>
-    public JsonObject Json { get; }
+	public JsonObject Json { get; } = json;
 
 	/// <summary>
 	/// Indexer to get or set claim values in the payload using the claim name.
@@ -113,7 +104,7 @@ public class JsonWebTokenPayload
 	}
 
 	/// <summary>
-	/// Gets or sets the subject of the JWT.
+	/// The subject of the JWT.
 	/// The subject typically represents the principal that is the focus of the JWT, often a user identifier.
 	/// </summary>
 	/// <remarks>
@@ -241,5 +232,32 @@ public class JsonWebTokenPayload
 	{
 		get => Json.GetProperty<string>(JwtClaimTypes.AuthContextClassRef);
 		set => Json.SetProperty(JwtClaimTypes.AuthContextClassRef, value);
+	}
+
+	/// <summary>
+	/// The email address of the subject.
+	/// </summary>
+	/// <remarks>
+	/// When the subject uses external authentication (Google, Microsoft, etc.) or authenticates via email verification,
+	/// this property contains the exact email used during authentication, ensuring the email claim in ID tokens
+	/// reflects the authentication method rather than the primary email from the user's profile.
+	/// </remarks>
+	public string? Email
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.Email);
+		set => Json.SetProperty(JwtClaimTypes.Email, value);
+	}
+
+	/// <summary>
+	/// Indicates whether the email address has been verified.
+	/// </summary>
+	/// <remarks>
+	/// For external providers that verify emails or when email verification has been completed through challenge flows,
+	/// this value is set to true. This is used in the email_verified claim in ID tokens.
+	/// </remarks>
+	public bool? EmailVerified
+	{
+		get => Json.GetProperty<bool?>(JwtClaimTypes.EmailVerified);
+		set => Json.SetProperty(JwtClaimTypes.EmailVerified, value);
 	}
 }

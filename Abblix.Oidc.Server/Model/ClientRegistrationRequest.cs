@@ -41,7 +41,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = default!;
+    public Uri[] RedirectUris { get; set; } = null!;
 
     /// <summary>
     /// List of OAuth 2.0 response_type values that the client will use.
@@ -52,7 +52,7 @@ public record ClientRegistrationRequest
         Common.Constants.ResponseTypes.Token,
         Common.Constants.ResponseTypes.IdToken)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = { new [] { Common.Constants.ResponseTypes.Code } };
+    public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
 
     /// <summary>
     /// List of OAuth 2.0 grant type values that the client will use.
@@ -63,7 +63,7 @@ public record ClientRegistrationRequest
         Common.Constants.GrantTypes.Implicit,
         Common.Constants.GrantTypes.RefreshToken,
         Common.Constants.GrantTypes.Ciba)]
-    public string[] GrantTypes { get; init; } = { Common.Constants.GrantTypes.AuthorizationCode };
+    public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Kind of the application.
@@ -209,6 +209,37 @@ public record ClientRegistrationRequest
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
+    // RFC 8705 - tls_client_auth metadata
+    /// <summary>
+    /// Exact Subject Distinguished Name the client certificate must present when using tls_client_auth.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSubjectDn)]
+    public string? TlsClientAuthSubjectDn { get; init; }
+
+    /// <summary>
+    /// Required DNS Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanDns)]
+    public string[]? TlsClientAuthSanDns { get; init; }
+
+    /// <summary>
+    /// Required URI Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanUri)]
+    public Uri[]? TlsClientAuthSanUri { get; init; }
+
+    /// <summary>
+    /// Required IP Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanIp)]
+    public string[]? TlsClientAuthSanIp { get; init; }
+
+    /// <summary>
+    /// Required email Subject Alternative Names for tls_client_auth.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanEmail)]
+    public string[]? TlsClientAuthSanEmail { get; init; }
+
     /// <summary>
     /// Default Maximum Authentication Age in seconds.
     /// </summary>
@@ -256,7 +287,7 @@ public record ClientRegistrationRequest
     public bool? OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the URI for back-channel logout.
+    /// The URI for back-channel logout.
     /// </summary>
     /// <value>
     /// The URI for the back-channel logout, or <c>null</c> if not specified.
@@ -282,7 +313,7 @@ public record ClientRegistrationRequest
     public bool? BackChannelLogoutSessionRequired { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets the URI for front-channel logout.
+    /// The URI for front-channel logout.
     /// </summary>
     /// <value>
     /// The URI to be used for front-channel logout, or <c>null</c> if it is not specified.
@@ -317,7 +348,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
-    public Uri[] PostLogoutRedirectUris { get; set; } = Array.Empty<Uri>();
+    public Uri[] PostLogoutRedirectUris { get; set; } = [];
 
     /// <summary>
     /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
@@ -377,6 +408,11 @@ public record ClientRegistrationRequest
         public const string RequestObjectEncryptionEnc = "request_object_encryption_enc";
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
         public const string TokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";
+        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DefaultMaxAge = "default_max_age";
         public const string RequireAuthTime = "require_auth_time";
         public const string DefaultAcrValues = "default_acr_values";

@@ -32,25 +32,15 @@ namespace Abblix.Jwt;
 /// The JWT header typically specifies the cryptographic operations applied to the JWT
 /// and can also include additional properties defined or required by the application.
 /// </remarks>
-public class JsonWebTokenHeader
+public class JsonWebTokenHeader(JsonObject json)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="JsonWebTokenHeader"/> class with the specified JSON object.
-    /// </summary>
-    /// <param name="json">The <see cref="JsonObject"/> representing the JWT header.</param>
-    public JsonWebTokenHeader(JsonObject json)
-    {
-        Json = json;
-    }
-
     /// <summary>
     /// The underlying JSON object representing the JWT header.
     /// </summary>
-    public JsonObject Json { get; }
-
+    public JsonObject Json { get; } = json;
 
     /// <summary>
-    /// Gets or sets the type of the JWT, typically "JWT" or a similar identifier.
+    /// The type of the JWT, typically "JWT" or a similar identifier.
     /// This field is optional and used to declare the media type of the JWT.
     /// </summary>
     /// <remarks>
@@ -64,7 +54,7 @@ public class JsonWebTokenHeader
     }
 
     /// <summary>
-    /// Gets or sets the algorithm used to sign the JWT, indicating how the token is secured.
+    /// The algorithm used to sign the JWT, indicating how the token is secured.
     /// </summary>
     /// <remarks>
     /// The 'alg' parameter identifies the cryptographic algorithm used to secure the JWT.
@@ -74,5 +64,19 @@ public class JsonWebTokenHeader
     {
         get => Json.GetProperty<string>(JwtClaimTypes.Algorithm);
         set => Json.SetProperty(JwtClaimTypes.Algorithm, value);
+    }
+
+    /// <summary>
+    /// The key ID that indicates which key was used to secure the JWT.
+    /// </summary>
+    /// <remarks>
+    /// The 'kid' parameter is a hint indicating which specific key from a JWKS was used to sign the JWT.
+    /// This is particularly useful when the issuer has multiple keys and the verifier needs to
+    /// identify the correct key for signature verification.
+    /// </remarks>
+    public string? KeyId
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.KeyId);
+        set => Json.SetProperty(JwtClaimTypes.KeyId, value);
     }
 }
