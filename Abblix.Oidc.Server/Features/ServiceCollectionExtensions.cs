@@ -23,12 +23,17 @@
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.DeviceAuthorization;
+using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
@@ -39,7 +44,9 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -49,6 +56,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features;
@@ -72,8 +80,12 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IClientAuthenticator, NoneClientAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretPostAuthenticator>()
             .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
-            //.AddSingleton<IClientRequestAuthenticator, ClientSecretJwtAuthenticator>() //TODO support and uncomment
+            .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
             .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
+            // mTLS self-signed client authentication per RFC 8705
+            .AddSingleton<IClientAuthenticator, TlsClientAuthenticator>()
+            // mTLS metadata-driven subject/SAN matching (tls_client_auth)
+            .AddSingleton<IClientAuthenticator, TlsMetadataClientAuthenticator>()
             .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 
@@ -105,7 +117,9 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        services.TryAddSingleton<IBinarySerializer, JsonBinarySerializer>();
+        services.AddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
+        services.AddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
+        services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
     }
@@ -368,6 +382,7 @@ public static class ServiceCollectionExtensions
     /// configurations to be chained.</returns>
     public static IServiceCollection AddStorages(this IServiceCollection services)
     {
+        services.TryAddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         return services;
@@ -411,7 +426,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Configures services for handling back-channel authentication requests, enabling secure server-to-server
-    /// authentication flows.
+    /// authentication flows and registers the CIBA grant handler.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
@@ -419,7 +434,116 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IUserDeviceAuthenticationHandler, UserDeviceAuthenticationHandlerStub>();
         services.TryAddSingleton<IAuthenticationRequestIdGenerator, AuthenticationRequestIdGenerator>();
-        services.TryAddSingleton<IBackChannelAuthenticationStorage, BackChannelAuthenticationStorage>();
+        services.TryAddSingleton<IBackChannelRequestStorage, BackChannelRequestStorage>();
+        services.TryAddSingleton<INotificationDeliveryService, HttpNotificationDeliveryService>();
+
+        // Register mode-specific completion handlers as keyed services
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PollModeCompletionHandler>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PingModeCompletionHandler>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedScoped<AuthenticationCompletionHandler, PushModeCompletionHandler>(BackchannelTokenDeliveryModes.Push);
+
+        // Register router that automatically selects the appropriate mode-specific handler
+        services.TryAddScoped<IAuthenticationCompletionHandler, AuthenticationCompletionRouter>();
+
+        // Register mode-specific grant processors as keyed services
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PingModeGrantProcessor>(BackchannelTokenDeliveryModes.Ping);
+        services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PushModeGrantProcessor>(BackchannelTokenDeliveryModes.Push);
+
+        // Register long-polling status notifier if long-polling is enabled
+        // This service is optional - if not registered, long-polling will be disabled
+        services.TryAddSingleton<IBackChannelLongPollingService>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<OidcOptions>>();
+            if (options.Value.BackChannelAuthentication.UseLongPolling)
+            {
+                var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
+                return new InMemoryLongPollingService(logger);
+            }
+            return null!;
+        });
+
+        // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime
+        // Use configuration callback to get handler lifetime from OidcOptions
+        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpNotificationDeliveryService))
+            .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
+            {
+                httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
+            });
+
+        services.AddHttpClient(nameof(HttpNotificationDeliveryService));
+
+        // Register CIBA grant handler
+        services.AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Configures services for handling Device Authorization Grant (RFC 8628) requests,
+    /// enabling devices with limited input capabilities to obtain user authorization.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddDeviceAuthorization(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IDeviceCodeGenerator, DeviceCodeGenerator>();
+        services.TryAddSingleton<IUserCodeGenerator, UserCodeGenerator>();
+        services.TryAddSingleton<IDeviceAuthorizationStorage, DeviceAuthorizationStorage>();
+        services.TryAddSingleton<IUserCodeRateLimiter, UserCodeRateLimiter>();
+        services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
+
+        // Register Device Authorization grant handler
+        services.AddSingleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers secure HTTP fetching services with SSRF (Server-Side Request Forgery) protection.
+    /// This method configures the HTTP client for fetching external content (such as sector identifier URIs
+    /// and request URIs) and decorates it with validation to prevent SSRF attacks.
+    /// </summary>
+    /// <remarks>
+    /// The registered services include:
+    /// - A typed HTTP client (<see cref="SecureHttpFetcher"/>) for making secure HTTP requests
+    /// - A custom message handler (<see cref="SsrfValidatingHttpMessageHandler"/>) that provides comprehensive SSRF protection
+    ///
+    /// The SSRF protection includes:
+    /// - Blocking requests to internal hostnames (localhost, internal, etc.)
+    /// - Blocking requests to internal TLDs (.local, .internal, etc.)
+    /// - DNS resolution and blocking of private/reserved IP address ranges
+    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
+    /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
+    ///
+    /// The multi-layered protection strategy follows OWASP SSRF Prevention guidelines and provides
+    /// defense-in-depth against various SSRF attack vectors including DNS rebinding and redirect-based bypasses.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <param name="configure">Optional configuration action to customize <see cref="SecureHttpFetchOptions"/>.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddSecureHttpFetch(
+        this IServiceCollection services,
+        Action<SecureHttpFetchOptions>? configure = null)
+    {
+        // Register and configure options
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+
+        if (configure != null)
+        {
+            optionsBuilder.Configure(configure);
+        }
+
+        services
+            .AddSingleton<SsrfValidatingHttpMessageHandler>()
+            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
+                client.Timeout = options.RequestTimeout;
+            })
+            .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
+
         return services;
     }
 }

@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
@@ -36,39 +36,27 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// This class checks if the client exists and is authorized for the end-session request.
 /// If the client is not found, it returns an error indicating an unauthorized client.
 /// </remarks>
-public class ClientValidator : IEndSessionContextValidator
+/// <param name="logger">The logger to be used for logging purposes.</param>
+/// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
+public class ClientValidator(
+    ILogger<ClientValidator> logger,
+    IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the ClientValidator class with a client info provider and a logger.
-    /// </summary>
-    /// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
-    /// <param name="logger">The logger to be used for logging purposes.</param>
-    public ClientValidator(
-        ILogger<ClientValidator> logger,
-        IClientInfoProvider clientInfoProvider)
-    {
-        _clientInfoProvider = clientInfoProvider;
-        _logger = logger;
-    }
-
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the client associated with an end-session request.
     /// </summary>
     /// <param name="context">The validation context containing client information.</param>
     /// <returns>An error if the validation fails, or null if the request is valid.</returns>
-    public async Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
             return null;
 
-        var clientInfo = await _clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            _logger.LogWarning("The client with id {ClientId} was not found", new Sanitized(context.ClientId));
-            return new EndSessionRequestValidationError(
+            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(context.ClientId));
+            return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");
         }

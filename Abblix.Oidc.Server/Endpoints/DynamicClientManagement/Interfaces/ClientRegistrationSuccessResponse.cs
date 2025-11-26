@@ -24,24 +24,40 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Represents a successful response for a client registration in the context of OpenID Connect.
+/// Per RFC 7591 Section 3.2.1, the authorization server must return all registered metadata about the client.
 /// </summary>
-/// <param name="ClientId">A string representing the unique identifier assigned to the registered client.</param>
-/// <param name="ClientIdIssuedAt">An optional DateTimeOffset indicating the time at which the client identifier was issued.</param>
-public record ClientRegistrationSuccessResponse(string ClientId, DateTimeOffset? ClientIdIssuedAt)
-    : ClientRegistrationResponse
+/// <remarks>
+/// The response includes the client identifier, credentials, registration endpoint information,
+/// and all registered client metadata. This allows the client to use the registration API
+/// for subsequent operations on the client configuration.
+/// </remarks>
+/// <param name="ClientId">
+/// A string representing the unique identifier assigned to the registered client.
+/// Required per RFC 7591 Section 3.2.1.
+/// </param>
+/// <param name="ClientIdIssuedAt">
+/// Time at which the client identifier was issued.
+/// Optional per RFC 7591 Section 3.2.1.
+/// </param>
+/// <param name="RegistrationAccessToken">
+/// The access token for subsequent operations on the client configuration endpoint.
+/// Required per RFC 7592 Section 3 for accessing the client configuration endpoint.
+/// </param>
+public record ClientRegistrationSuccessResponse(
+    string ClientId,
+    DateTimeOffset? ClientIdIssuedAt,
+    string RegistrationAccessToken)
 {
     /// <summary>
     /// The client secret assigned to the registered client.
+    /// Optional - only present for confidential clients. Per RFC 7591 Section 3.2.1.
     /// </summary>
     public string? ClientSecret { get; init; }
 
     /// <summary>
-    /// The expiration time of the client secret, if applicable.
+    /// The expiration time of the client secret.
+    /// Required if client_secret is issued. Per RFC 7591 Section 3.2.1.
+    /// A value of 0 indicates the secret does not expire.
     /// </summary>
     public DateTimeOffset? ClientSecretExpiresAt { get; init; }
-
-    /// <summary>
-    /// The registration access token associated with the client registration, if applicable.
-    /// </summary>
-    public string? RegistrationAccessToken { get; init; }
 }

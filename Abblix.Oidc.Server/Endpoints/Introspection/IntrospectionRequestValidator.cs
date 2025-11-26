@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -41,28 +41,14 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// The validation process includes checking the authenticity of the client and the integrity of the token.
 /// It leverages a client request authenticator for client authentication and a JWT validator for token validation.
 /// </remarks>
-public class IntrospectionRequestValidator : IIntrospectionRequestValidator
+/// <param name="logger">The logger for logging activities within the validator.</param>
+/// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
+/// <param name="jwtValidator">The JWT validator to validate the token.</param>
+public class IntrospectionRequestValidator(
+	ILogger<IntrospectionRequestValidator> logger,
+	IClientAuthenticator clientAuthenticator,
+	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="IntrospectionRequestValidator"/> class.
-	/// </summary>
-	/// <param name="logger">The logger for logging activities within the validator.</param>
-	/// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
-	/// <param name="jwtValidator">The JWT validator to validate the token.</param>
-	public IntrospectionRequestValidator(
-		ILogger<IntrospectionRequestValidator> logger,
-		IClientAuthenticator clientAuthenticator,
-		IAuthServiceJwtValidator jwtValidator)
-	{
-		_logger = logger;
-		_clientAuthenticator = clientAuthenticator;
-		_jwtValidator = jwtValidator;
-	}
-
-	private readonly ILogger _logger;
-	private readonly IClientAuthenticator _clientAuthenticator;
-	private readonly IAuthServiceJwtValidator _jwtValidator;
-
 	/// <summary>
 	/// Validates the introspection request properties and authenticates a client that initiated the request.
 	/// </summary>
@@ -70,38 +56,34 @@ public class IntrospectionRequestValidator : IIntrospectionRequestValidator
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
 	/// A task representing the asynchronous validation operation. The task result contains the
-	/// <see cref="IntrospectionRequestValidationResult"/> which indicates whether the request is valid or contains errors.
+	/// <see cref="Result{ValidIntrospectionRequest, AuthError}"/> which indicates whether the request is valid or contains errors.
 	/// </returns>
-	public async Task<IntrospectionRequestValidationResult> ValidateAsync(
+	public async Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
-		var clientInfo = await _clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			return new IntrospectionRequestValidationError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
-		var result = await _jwtValidator.ValidateAsync(introspectionRequest.Token);
-		switch (result)
+		var result = await jwtValidator.ValidateAsync(introspectionRequest.Token);
+
+		if (result.TryGetFailure(out var error))
 		{
-			case ValidJsonWebToken { Token: var token }:
-
-				var clientId = token.Payload.ClientId;
-				if (clientId != clientInfo.ClientId)
-				{
-					// The token was issued to another client
-					return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-				}
-
-				return new ValidIntrospectionRequest(introspectionRequest, token);
-
-			case JwtValidationError error:
-				_logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
-				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-
-			default:
-				throw new UnexpectedTypeException(nameof(result), result.GetType());
+			logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
+			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
 		}
+
+		var token = result.GetSuccess();
+		var clientId = token.Payload.ClientId;
+		if (clientId != clientInfo.ClientId)
+		{
+			// The token was issued to another client
+			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+		}
+
+		return new ValidIntrospectionRequest(introspectionRequest, token);
 	}
 }

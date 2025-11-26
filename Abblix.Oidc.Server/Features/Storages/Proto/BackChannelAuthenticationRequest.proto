@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+import "Features/Storages/Proto/AuthorizedGrant.proto";
+
+// Status of a backchannel authentication request
+enum BackChannelAuthenticationStatus {
+  // Request is pending user action
+  PENDING = 0;
+
+  // User has denied the request
+  DENIED = 1;
+
+  // Request has been successfully authenticated
+  AUTHENTICATED = 2;
+}
+
+// Represents a backchannel authentication request (CIBA protocol)
+message BackChannelAuthenticationRequest {
+  // The authorized grant associated with this authentication request
+  AuthorizedGrant authorized_grant = 1;
+
+  // Next time the client should poll for updates
+  optional google.protobuf.Timestamp next_poll_at = 2;
+
+  // Current status of the authentication request
+  BackChannelAuthenticationStatus status = 3;
+
+  // Absolute expiration time for this authentication request
+  google.protobuf.Timestamp expires_at = 4;
+}

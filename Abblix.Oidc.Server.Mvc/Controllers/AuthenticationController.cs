@@ -21,20 +21,22 @@
 // info@abblix.com
 
 using System.Net.Mime;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Attributes;
+using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
-using UserInfoResponse = Abblix.Oidc.Server.Mvc.Model.UserInfoResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 
@@ -75,6 +77,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpPost(Path.PushAuthorizationRequest)]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
+    [EnabledBy(OidcEndpoints.PushedAuthorizationRequest)]
     public async Task<ActionResult<AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
@@ -94,7 +97,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
     /// <param name="request">The authorization request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// <returns>A task that returns an action result containing
     /// the authorization response.</returns>
     /// <remarks>
     /// This endpoint is a key component of the OpenID Connect flow, initiating user authentication and
@@ -106,6 +109,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpGetOrPost(Path.Authorize)]
     //[Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
+    [EnabledBy(OidcEndpoints.Authorize)]
     public async Task<ActionResult<AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
@@ -124,7 +128,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="formatter">The formatter used to generate a response with user claims.</param>
     /// <param name="userInfoRequest">The userinfo request containing the access token.</param>
     /// <param name="clientRequest">Additional request information provided by the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result containing
+    /// <returns>A task that returns an action result containing
     /// the userinfo response.</returns>
     /// <remarks>
     /// This endpoint provides claims about the authenticated user, conforming to the
@@ -134,7 +138,8 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpGetOrPost(Path.UserInfo)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    public async Task<ActionResult<UserInfoResponse>> UserInfoAsync(
+    [EnabledBy(OidcEndpoints.UserInfo)]
+    public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
@@ -153,7 +158,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for processing end session requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the end session request.</param>
     /// <param name="request">The end session request details received from the client.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// <returns>A task that returns an action result for
     /// the end session process.</returns>
     /// <remarks>
     /// This endpoint supports the RP-Initiated Logout functionality, enabling clients to initiate
@@ -166,6 +171,7 @@ public sealed class AuthenticationController : ControllerBase
     //[Consumes(MediaTypes.FormUrlEncoded, IsOptional = true)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.EndSession)]
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
         [FromServices] IEndSessionResponseFormatter formatter,
@@ -183,7 +189,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for the check session operation.</param>
     /// <param name="formatter">The formatter used to generate a response suitable for session checking
     /// within an iframe.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an action result for
+    /// <returns>A task that returns an action result for
     /// the check session response.</returns>
     /// <remarks>
     /// This endpoint is part of the OpenID Connect session management specification,
@@ -195,6 +201,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpGet(Path.CheckSession)]
     [Produces(MediaTypes.Javascript)]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [EnabledBy(OidcEndpoints.CheckSession)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
         [FromServices] ICheckSessionResponseFormatter formatter)
@@ -233,6 +240,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </returns>
     [HttpPost(Path.BackChannelAuthentication)]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    [EnabledBy(OidcEndpoints.BackChannelAuthentication)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
@@ -245,7 +253,6 @@ public sealed class AuthenticationController : ControllerBase
         return await formatter.FormatResponseAsync(mappedAuthenticationRequest, response);
     }
 
-    /*
     /// <summary>
     /// Handles the device authorization endpoint for getting user authorization on limited-input devices.
     /// </summary>
@@ -256,8 +263,16 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpPost(Path.DeviceAuthorization)]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    public Task<ActionResult> DeviceAuthorizationAsync()
+    [EnabledBy(OidcEndpoints.DeviceAuthorization)]
+    public async Task<ActionResult> DeviceAuthorizationAsync(
+        [FromServices] IDeviceAuthorizationHandler handler,
+        [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
+        [FromForm] ClientRequest clientRequest)
     {
-        throw new NotImplementedException();
-    }*/
+        var mappedDeviceAuthorizationRequest = deviceAuthorizationRequest.Map();
+        var mappedClientRequest = clientRequest.Map();
+        var response = await handler.HandleAsync(mappedDeviceAuthorizationRequest, mappedClientRequest);
+        return await formatter.FormatResponseAsync(mappedDeviceAuthorizationRequest, response);
+    }
 }

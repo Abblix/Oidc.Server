@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -37,7 +37,7 @@ public interface IEntityStorage
     /// <param name="value">The entity to be stored in the cache.</param>
     /// <param name="options">Configuration options for the cache entry, such as expiration times.</param>
     /// <param name="token">An optional cancellation token that can be used to cancel the storage operation.</param>
-    /// <returns>A task that represents the asynchronous operation, providing awareness of completion or faults.
+    /// <returns>A task that completes when the operation finishes.
     /// </returns>
     Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null);
 
@@ -57,6 +57,6 @@ public interface IEntityStorage
     /// </summary>
     /// <param name="key">The unique cache key associated with the entity to be removed.</param>
     /// <param name="token">An optional cancellation token that can be used to cancel the removal operation.</param>
-    /// <returns>A task that represents the asynchronous operation of removing the entity.</returns>
+    /// <returns>A task that completes when the entity is removed.</returns>
     Task RemoveAsync(string key, CancellationToken? token = null);
 }

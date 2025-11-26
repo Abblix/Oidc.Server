@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -34,36 +35,29 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// It implements the IClientRequestValidator interface. It uses an IClientInfoProvider to retrieve client information
 /// and an IRegistrationAccessTokenValidator to validate the authorization header.
 /// </summary>
-public class ClientRequestValidator : IClientRequestValidator
+/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
+/// <param name="registrationAccessTokenValidator">Validator for registration access tokens.</param>
+public class ClientRequestValidator(
+    IClientInfoProvider clientInfoProvider,
+    IRegistrationAccessTokenValidator registrationAccessTokenValidator) : IClientRequestValidator
 {
-    public ClientRequestValidator(
-        IClientInfoProvider clientInfoProvider,
-        IRegistrationAccessTokenValidator registrationAccessTokenValidator)
-    {
-        _clientInfoProvider = clientInfoProvider;
-        _registrationAccessTokenValidator = registrationAccessTokenValidator;
-    }
-
-    private readonly IClientInfoProvider _clientInfoProvider;
-    private readonly IRegistrationAccessTokenValidator _registrationAccessTokenValidator;
-
     /// <summary>
     /// Validates a client request asynchronously by checking the authorization header and client existence.
     /// </summary>
     /// <param name="request">The client request to validate.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the validation result.</returns>
-    public async Task<ClientRequestValidationResult> ValidateAsync(ClientRequest request)
+    /// <returns>A task that returns the validation result.</returns>
+    public async Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request)
     {
-        var headerErrorDescription = await _registrationAccessTokenValidator.ValidateAsync(
+        var headerErrorDescription = await registrationAccessTokenValidator.ValidateAsync(
             request.AuthorizationHeader,
             request.ClientId.NotNull(nameof(request.ClientId)));
 
         if (headerErrorDescription != null)
-            return new ClientRequestValidationError(ErrorCodes.InvalidGrant, headerErrorDescription);
+            return new OidcError(ErrorCodes.InvalidGrant, headerErrorDescription);
 
-        var clientInfo = await _clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
         if (clientInfo == null)
-            return new ClientRequestValidationError(ErrorCodes.InvalidClient, "Client does not exist on this server");
+            return new OidcError(ErrorCodes.InvalidClient, "Client does not exist on this server");
 
         return new ValidClientRequest(request, clientInfo);
     }

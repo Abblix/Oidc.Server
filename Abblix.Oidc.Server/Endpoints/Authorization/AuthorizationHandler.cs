@@ -32,30 +32,15 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// Handles the processing of authorization requests by validating and then processing these requests based
 /// on defined business logic. It also includes the fetching of authorization requests when necessary.
 /// </summary>
-public class AuthorizationHandler : IAuthorizationHandler
+/// <param name="fetcher">The service responsible for fetching external authorization requests when
+/// specified by a request or request_uri parameter.</param>
+/// <param name="validator">The service responsible for validating authorization requests.</param>
+/// <param name="processor">The service responsible for processing validated authorization requests.</param>
+public class AuthorizationHandler(
+    IAuthorizationRequestFetcher fetcher,
+    IAuthorizationRequestValidator validator,
+    IAuthorizationRequestProcessor processor) : IAuthorizationHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationHandler"/> class with the specified request fetcher,
-    /// validator and processor.
-    /// </summary>
-    /// <param name="fetcher">The service responsible for fetching external authorization requests when
-    /// specified by a request or request_uri parameter.</param>
-    /// <param name="validator">The service responsible for validating authorization requests.</param>
-    /// <param name="processor">The service responsible for processing validated authorization requests.</param>
-    public AuthorizationHandler(
-        IAuthorizationRequestFetcher fetcher,
-        IAuthorizationRequestValidator validator,
-        IAuthorizationRequestProcessor processor)
-    {
-        _fetcher = fetcher;
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IAuthorizationRequestFetcher _fetcher;
-    private readonly IAuthorizationRequestValidator _validator;
-    private readonly IAuthorizationRequestProcessor _processor;
-
     public AuthorizationEndpointMetadata Metadata => new()
     {
         RequestParameterSupported = true,
@@ -80,7 +65,7 @@ public class AuthorizationHandler : IAuthorizationHandler
     /// </summary>
     /// <param name="request">The authorization request to be handled. This can be a direct request or a reference
     /// to an external request that needs to be fetched.</param>
-    /// <returns>A task that represents the asynchronous operation, resulting in an <see cref="AuthorizationResponse"/>.
+    /// <returns>A task that returns an <see cref="AuthorizationResponse"/>.
     /// This response can be either an authorization success response or an error response based on the fetching,
     /// validation and processing outcomes.</returns>
     /// <exception cref="UnexpectedTypeException">Thrown if the validation result is of an unexpected type.</exception>
@@ -96,23 +81,17 @@ public class AuthorizationHandler : IAuthorizationHandler
     /// </remarks>
     public async Task<AuthorizationResponse> HandleAsync(AuthorizationRequest request)
     {
-        var fetchResult = await _fetcher.FetchAsync(request);
-        switch (fetchResult)
-        {
-            case FetchResult.Success success:
-                request = success.Request;
-                break;
+        var fetchResult = await fetcher.FetchAsync(request);
 
-            case FetchResult.Fault { Error: var error }:
-                return new AuthorizationError(request, error);
-        }
+        if (fetchResult.TryGetFailure(out var fetchError))
+            return new AuthorizationError(request, fetchError);
 
-        var validationResult = await _validator.ValidateAsync(request);
-        return validationResult switch
-        {
-            ValidAuthorizationRequest validRequest => await _processor.ProcessAsync(validRequest),
-            AuthorizationRequestValidationError error => new AuthorizationError(request, error),
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        request = fetchResult.GetSuccess();
+
+        var validationResult = await validator.ValidateAsync(request);
+
+        return await validationResult.MatchAsync(
+            onSuccess: processor.ProcessAsync,
+            onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(request, error)));
     }
 }

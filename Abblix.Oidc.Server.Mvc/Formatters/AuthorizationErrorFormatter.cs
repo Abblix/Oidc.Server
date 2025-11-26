@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
@@ -35,27 +36,14 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Handles the formatting of authorization error responses, converting them into an appropriate HTTP action
 /// result based on the specified response mode and the nature of the error.
 /// </summary>
-public class AuthorizationErrorFormatter
+/// <param name="parametersProvider">The provider for extracting and formatting response parameters,
+/// which includes details like state and error descriptions.</param>
+/// <param name="issuerProvider">The provider for the issuer URL, ensuring the 'iss' claim is correctly
+/// included in error responses if applicable.</param>
+public class AuthorizationErrorFormatter(
+    IParametersProvider parametersProvider,
+    IIssuerProvider issuerProvider) : IAuthorizationErrorFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of <see cref="AuthorizationErrorFormatter"/> with necessary dependencies for
-    /// response parameter handling.
-    /// </summary>
-    /// <param name="parametersProvider">The provider for extracting and formatting response parameters,
-    /// which includes details like state and error descriptions.</param>
-    /// <param name="issuerProvider">The provider for the issuer URL, ensuring the 'iss' claim is correctly
-    /// included in error responses if applicable.</param>
-    public AuthorizationErrorFormatter(
-        IParametersProvider parametersProvider,
-        IIssuerProvider issuerProvider)
-    {
-        _parametersProvider = parametersProvider;
-        _issuerProvider = issuerProvider;
-    }
-
-    private readonly IParametersProvider _parametersProvider;
-    private readonly IIssuerProvider _issuerProvider;
-
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,
     /// considering the request's redirect URI and the error details.
@@ -63,17 +51,7 @@ public class AuthorizationErrorFormatter
     /// <param name="request">The original authorization request that led to the error.</param>
     /// <param name="error">The authorization error to be formatted.</param>
     /// <returns>A task that resolves to the formatted HTTP action result.</returns>
-    public Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
-        => Task.FromResult(FormatResponse(request, error));
-
-    /// <summary>
-    /// Internally formats the authorization error response based on the request context and the error's properties,
-    /// such as whether to use a redirect URI.
-    /// </summary>
-    /// <param name="request">The authorization request associated with the error.</param>
-    /// <param name="error">The error to be formatted into a response.</param>
-    /// <returns>The action result representing the formatted error response.</returns>
-    private ActionResult FormatResponse(AuthorizationRequest request, AuthorizationError error)
+    public async Task<ActionResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationError error)
     {
         switch (error)
         {
@@ -82,13 +60,13 @@ public class AuthorizationErrorFormatter
                 var response = new AuthorizationResponse
                 {
                     State = request.State,
-                    Issuer = _issuerProvider.GetIssuer(),
+                    Issuer = issuerProvider.GetIssuer(),
                     Error = error.Error,
                     ErrorDescription = error.ErrorDescription,
                     ErrorUri = error.ErrorUri,
                 };
 
-                return ToActionResult(response, error.ResponseMode, redirectUri);
+                return await FormatResponseAsync(response, error.ResponseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));
@@ -102,20 +80,20 @@ public class AuthorizationErrorFormatter
     /// <param name="responseMode">The response mode indicating how the response should be delivered.</param>
     /// <param name="redirectUri">The URI to redirect to, if applicable.</param>
     /// <returns>The action result for the given authorization response.</returns>
-    protected ActionResult ToActionResult(AuthorizationResponse response, string responseMode, Uri redirectUri)
+    public Task<ActionResult> FormatResponseAsync(AuthorizationResponse response, string responseMode, Uri redirectUri)
     {
-        return responseMode switch
+        return Task.FromResult<ActionResult>(responseMode switch
         {
             ResponseModes.FormPost => new OkObjectResult(response)
             {
-                Formatters = { new AutoPostFormatter(_parametersProvider, redirectUri) },
+                Formatters = { new AutoPostFormatter(parametersProvider, redirectUri) },
             },
 
             ResponseModes.Query => new RedirectResult(redirectUri.AddToQuery(GetParametersFrom(response))),
             ResponseModes.Fragment => new RedirectResult(redirectUri.AddToFragment(GetParametersFrom(response))),
 
             _ => throw new ArgumentOutOfRangeException(nameof(responseMode)),
-        };
+        });
     }
 
     /// <summary>
@@ -124,5 +102,5 @@ public class AuthorizationErrorFormatter
     /// <param name="response">The authorization response containing the parameters.</param>
     /// <returns>An array of name-value pairs representing the response parameters.</returns>
     private (string name, string? value)[] GetParametersFrom(AuthorizationResponse response)
-        => _parametersProvider.GetParameters(response).ToArray();
+        => parametersProvider.GetParameters(response).ToArray();
 }

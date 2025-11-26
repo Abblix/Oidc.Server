@@ -31,25 +31,13 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// This implementation relies on cryptographic randomness to generate codes that are difficult to predict,
 /// enhancing the security of the authorization process.
 /// </summary>
-public class AuthorizationCodeGenerator : IAuthorizationCodeGenerator
+public class AuthorizationCodeGenerator(IOptions<OidcOptions> options) : IAuthorizationCodeGenerator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationCodeGenerator"/> class.
-    /// </summary>
-    /// <param name="options">Configuration options that determine the behavior of the code generation,
-    /// including the length of the authorization codes generated.</param>
-    public AuthorizationCodeGenerator(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Generates a unique authorization code using secure cryptographic methods. The code is URL-safe encoded
     /// to ensure it can be transmitted safely in URLs.
     /// </summary>
     /// <returns>A URL-safe, secure, and randomly generated authorization code.</returns>
     public string GenerateAuthorizationCode()
-        => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(_options.Value.AuthorizationCodeLength));
+        => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.AuthorizationCodeLength));
 }

@@ -21,10 +21,12 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
@@ -39,67 +41,52 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// tokens previously issued with that code and denies the request, effectively mitigating potential
 /// security risks associated with code reuse.
 /// </remarks>
-public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
+/// <param name="processor">The underlying token request processor to be enhanced.</param>
+/// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
+/// <param name="authorizationCodeService">
+/// The service responsible for managing the lifecycle of authorization codes.</param>
+public class AuthorizationCodeReusePreventingDecorator(
+    ITokenRequestProcessor processor,
+    ITokenRegistry tokenRegistry,
+    IAuthorizationCodeService authorizationCodeService): ITokenRequestProcessor
 {
-    /// <summary>
-    /// Initializes a new instance of the class, incorporating token revocation logic into the token request
-    /// processing pipeline.
-    /// </summary>
-    /// <param name="processor">The underlying token request processor to be enhanced.</param>
-    /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
-    /// <param name="authorizationCodeService">
-    /// The service responsible for managing the lifecycle of authorization codes.</param>
-    public AuthorizationCodeReusePreventingDecorator(
-        ITokenRequestProcessor processor,
-        ITokenRegistry tokenRegistry,
-        IAuthorizationCodeService authorizationCodeService)
-    {
-        _processor = processor;
-        _tokenRegistry = tokenRegistry;
-        _authorizationCodeService = authorizationCodeService;
-    }
-
-    private readonly ITokenRequestProcessor _processor;
-    private readonly ITokenRegistry _tokenRegistry;
-    private readonly IAuthorizationCodeService _authorizationCodeService;
-
     /// <summary>
     /// Processes a valid token request, including revoking existing tokens if necessary and registering new tokens.
     /// </summary>
     /// <param name="request">The valid token request to process.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation, resulting in a <see cref="TokenResponse"/>.
+    /// A task that returns a <see cref="TokenResponse"/>.
     /// </returns>
-    public async Task<TokenResponse> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
     {
         if (request is not {
                 Model: { GrantType: GrantTypes.AuthorizationCode, Code: {} code },
                 AuthorizedGrant.IssuedTokens: var issuedTokens })
         {
-            return await _processor.ProcessAsync(request);
+            return await processor.ProcessAsync(request);
         }
 
         // Handle revocation for used authorization codes and their associated tokens
         if (issuedTokens is { Length: > 0 })
         {
             // code was already used to issue some tokens, so we have to revoke all these tokens for security reason
-            await _authorizationCodeService.RemoveAuthorizationCodeAsync(code);
+            await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
             foreach (var (jwtId, expiresAt) in issuedTokens)
             {
-                await _tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+                await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
-            return new TokenErrorResponse(
+            return new OidcError(
                 ErrorCodes.InvalidGrant,
                 "The authorization code was already used");
         }
 
         // Proceed with processing the request using the decorated processor
-        var response = await _processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(request);
 
         // Register issued tokens as part of the authorization code grant
-        if (response is TokenIssuedResponse { AccessToken: var accessToken, RefreshToken: var refreshToken })
+        if (result.TryGetSuccess(out var tokenResponse))
         {
             var issuedTokensList = new List<TokenInfo>();
 
@@ -111,18 +98,18 @@ public class AuthorizationCodeReusePreventingDecorator: ITokenRequestProcessor
                 }
             }
 
-            TryRegisterToken(accessToken.Token);
-            TryRegisterToken(refreshToken?.Token);
+            TryRegisterToken(tokenResponse.AccessToken.Token);
+            TryRegisterToken(tokenResponse.RefreshToken?.Token);
 
             if (issuedTokensList.Count > 0)
             {
-                await _authorizationCodeService.UpdateAuthorizationGrantAsync(
+                await authorizationCodeService.UpdateAuthorizationGrantAsync(
                     code,
                     request.AuthorizedGrant with { IssuedTokens = issuedTokensList.ToArray() },
                     request.ClientInfo.AuthorizationCodeExpiresIn);
             }
         }
 
-        return response;
+        return result;
     }
 }

@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -30,56 +31,31 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Manages the removal of registered clients from the authorization server, ensuring that requests for client
 /// unregistration are handled securely and in accordance with OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class RemoveClientHandler : IRemoveClientHandler
+/// <param name="validator">The service used to validate incoming client removal requests.</param>
+/// <param name="processor">The service responsible for processing validated removal requests and unregistering
+/// the client.</param>
+public class RemoveClientHandler(
+    IClientRequestValidator validator,
+    IRemoveClientRequestProcessor processor) : IRemoveClientHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RemoveClientHandler"/> class with the specified validator
-    /// and processor services.
-    /// </summary>
-    /// <param name="validator">The service used to validate incoming client removal requests.</param>
-    /// <param name="processor">The service responsible for processing validated removal requests and unregistering
-    /// the client.</param>
-    public RemoveClientHandler(
-        IClientRequestValidator validator,
-        IRemoveClientRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IClientRequestValidator _validator;
-    private readonly IRemoveClientRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously processes a request to remove a registered client, ensuring the request is valid and authorized
     /// before proceeding with client unregistration.
     /// </summary>
     /// <param name="clientRequest">The client request containing necessary information for identifying and removing
     /// the specified client.</param>
-    /// <returns>A task that results in a <see cref="RemoveClientResponse"/>, which encapsulates the outcome of
+    /// <returns>A task that results in a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>, which encapsulates the outcome of
     /// the removal process, including success or error information.</returns>
-    /// <exception cref="UnexpectedTypeException">
-    /// Thrown if the result of the validation process is of an unexpected type, indicating a potential issue
-    /// in the request handling pipeline.</exception>
     /// <remarks>
     /// This method follows a two-step process: first, validating the removal request to ensure it meets all
     /// required criteria and is authorized; second, if validation succeeds, processing the request to unregister
     /// the client from the system. This approach ensures that client removal is managed securely and aligns with
     /// best practices in client management within OAuth 2.0 and OpenID Connect frameworks.
     /// </remarks>
-    public async Task<RemoveClientResponse> HandleAsync(ClientRequest clientRequest)
+    public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(clientRequest);
+        var validationResult = await validator.ValidateAsync(clientRequest);
 
-        var response = validationResult switch
-        {
-            ValidClientRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            ClientRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new RemoveClientErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

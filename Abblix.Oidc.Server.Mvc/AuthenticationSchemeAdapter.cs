@@ -39,36 +39,18 @@ namespace Abblix.Oidc.Server.Mvc;
 /// This adapter allows the integration of the Abblix OIDC Server with standard ASP.NET authentication mechanisms,
 /// enabling the use of existing authentication schemes to manage OIDC sessions.
 /// </summary>
-public class AuthenticationSchemeAdapter : IAuthSessionService
+/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
+/// allowing operations on the HTTP context of the current request.</param>
+/// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
+/// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
+public class AuthenticationSchemeAdapter(
+	IHttpContextAccessor httpContextAccessor,
+	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthenticationSchemeAdapter"/> class with a specific authentication scheme,
-	/// injecting dependencies needed to access and manage HTTP contexts.
-	/// </summary>
-	/// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
-	/// allowing operations on the HTTP context of the current request.</param>
-	/// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
-	/// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
-	public AuthenticationSchemeAdapter(
-		IHttpContextAccessor httpContextAccessor,
-		string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme)
-	{
-		_httpContextAccessor = httpContextAccessor;
-		_authenticationScheme = authenticationScheme;
-	}
-
-	private readonly IHttpContextAccessor _httpContextAccessor;
-	
-	/// <summary>
-	/// The authentication scheme to use for all authentication operations (SignIn, SignOut, Authenticate).
-	/// This ensures consistent behavior when multiple authentication schemes are registered.
-	/// </summary>
-	private readonly string _authenticationScheme;
-
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
 	/// </summary>
-	private HttpContext HttpContext => _httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
+	private HttpContext HttpContext => httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
 
 	/// <summary>
 	/// Asynchronously retrieves the current user's authentication session if available.
@@ -92,12 +74,12 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// converting the authentication results into an <see cref="AuthSession"/>.
 	/// </summary>
 	/// <returns>
-	/// A task that represents the asynchronous operation. The task result contains the <see cref="AuthSession"/>
+	/// A task that returns the <see cref="AuthSession"/>
 	/// of the authenticated user or null if the authentication fails.
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()
 	{
-		var authenticationResult = await HttpContext.AuthenticateAsync(_authenticationScheme);
+		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
 		if (!authenticationResult.Succeeded)
 			return null;
 
@@ -200,7 +182,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 		if (authSession is { AffectedClientIds.Count: > 0 })
 			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
 
-		return HttpContext.SignInAsync(_authenticationScheme, principal, properties);
+		return HttpContext.SignInAsync(authenticationScheme, principal, properties);
 	}
 
 	/// <summary>
@@ -209,19 +191,14 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// </summary>
 	private static string SerializeJsonValue(JsonNode jsonValue)
 	{
-		return jsonValue switch
+		return jsonValue.GetValue<JsonElement>() switch
 		{
-			JsonValue jsonValueNode => jsonValueNode.GetValue<JsonElement>() switch
-			{
-				{ ValueKind: JsonValueKind.String } element => element.GetString()!,
-				{ ValueKind: JsonValueKind.Number } element => element.ToString(),
-				{ ValueKind: JsonValueKind.True } => "true",
-				{ ValueKind: JsonValueKind.False } => "false",
-				{ ValueKind: JsonValueKind.Null } => "",
-				_ => jsonValue.ToJsonString()
-			},
-			JsonArray or JsonObject => jsonValue.ToJsonString(),
-			_ => jsonValue.ToJsonString()
+			{ ValueKind: JsonValueKind.String } element => element.GetString()!,
+			{ ValueKind: JsonValueKind.Number } element => element.ToString(),
+			{ ValueKind: JsonValueKind.True } => "true",
+			{ ValueKind: JsonValueKind.False } => "false",
+			{ ValueKind: JsonValueKind.Null } => "",
+			_ => jsonValue.ToJsonString(),
 		};
 	}
 
@@ -229,7 +206,7 @@ public class AuthenticationSchemeAdapter : IAuthSessionService
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
-	public Task SignOutAsync() => HttpContext.SignOutAsync(_authenticationScheme);
+	public Task SignOutAsync() => HttpContext.SignOutAsync(authenticationScheme);
 
 	/// <summary>
 	/// Extracts additional claims from the principal, excluding standard OIDC claims.

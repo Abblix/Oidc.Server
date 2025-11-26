@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net.Http.Headers;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Model;
@@ -66,6 +67,13 @@ public record ClientRequest
 	/// <summary>
 	/// The client assertion, often a JWT, used as a credential to authenticate the client to the authorization server.
 	/// </summary>
-	[JsonPropertyName(Parameters.ClientAssertion)]
-	public string? ClientAssertion { get; set; }
+    [JsonPropertyName(Parameters.ClientAssertion)]
+    public string? ClientAssertion { get; set; }
+
+    /// <summary>
+    /// The client X.509 certificate presented via mutual TLS (mTLS) at the transport layer
+    /// or forwarded by a trusted reverse proxy. Used for RFC 8705 client authentication and
+    /// for certificate-bound access tokens.
+    /// </summary>
+    public X509Certificate2? ClientCertificate { get; set; }
 }

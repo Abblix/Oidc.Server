@@ -29,18 +29,20 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// </summary>
 public sealed class ExactMatchUriValidator : IUriValidator
 {
+	/// <summary>
+	/// Validates a URI based on an exact match against a predefined value, disregarding the query and fragment parts.
+	/// </summary>
 	public ExactMatchUriValidator(Uri validUri, bool ignoreQueryAndFragment = false)
 	{
-		if (!validUri.IsAbsoluteUri)
-		{
+		if (validUri is not { IsAbsoluteUri: true })
 			throw new ArgumentException($"{nameof(validUri)} must be absolute");
-		}
-		_validUri = validUri;
+
 		_ignoreQueryAndFragment = ignoreQueryAndFragment;
+		_validUri = validUri;
 	}
 
-	private readonly Uri _validUri;
 	private readonly bool _ignoreQueryAndFragment;
+	private readonly Uri _validUri;
 
 	/// <summary>
 	/// Validates the specified URI by checking for an exact match with the predefined URI.

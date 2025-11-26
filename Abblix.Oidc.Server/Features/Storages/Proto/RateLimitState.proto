@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// Represents the rate limiting state for a user code or IP address
+message RateLimitState {
+  // The total number of failed verification attempts
+  int32 failure_count = 1;
+
+  // The timestamp of the first failure in the current window
+  google.protobuf.Timestamp first_failure_at = 2;
+
+  // The timestamp of the most recent failure
+  google.protobuf.Timestamp last_failure_at = 3;
+
+  // The timestamp until which the user code/IP is blocked (null if not blocked)
+  optional google.protobuf.Timestamp blocked_until = 4;
+}

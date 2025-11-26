@@ -86,7 +86,7 @@ public static class JsonWebTokenExtensions
     /// a single string value or an array of strings.
     /// </remarks>
     public static IEnumerable<string> GetArrayOfStrings(this JsonObject json, string name)
-        => json.TryGetPropertyValue(name, out var property) ? GetArrayOfStrings(property) : Enumerable.Empty<string>();
+        => json.TryGetPropertyValue(name, out var property) ? GetArrayOfStrings(property) : [];
 
     /// <summary>
     /// Retrieves an array of strings from a <see cref="JsonObject"/> based on a specified property name,
@@ -128,9 +128,8 @@ public static class JsonWebTokenExtensions
                 break;
 
             case JsonArray array:
-                foreach (var element in array)
-                    if (element != null)
-                        yield return element.GetValue<string>();
+                foreach (var node in array.OfType<JsonNode>())
+                    yield return node.GetValue<string>();
                 break;
         }
     }

@@ -46,8 +46,8 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// </summary>
     /// <param name="jwt">The JWT string to validate.</param>
     /// <param name="parameters">The parameters defining the validation rules and requirements.</param>
-    /// <returns>A task representing the validation operation, with a result of JwtValidationResult indicating the validation outcome.</returns>
-    public Task<JwtValidationResult> ValidateAsync(string jwt, ValidationParameters parameters)
+    /// <returns>A task representing the validation operation, with a result containing either a validated JsonWebToken or a JwtValidationError.</returns>
+    public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters)
         => Task.FromResult(Validate(jwt, parameters));
 
     /// <summary>
@@ -56,7 +56,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// <param name="jwt">The JWT string to validate.</param>
     /// <param name="parameters">The validation parameters.</param>
     /// <returns>The result of the JWT validation process, either indicating success or detailing any validation errors.</returns>
-    private static JwtValidationResult Validate(string jwt, ValidationParameters parameters)
+    private static Result<JsonWebToken, JwtValidationError> Validate(string jwt, ValidationParameters parameters)
     {
         var validationParameters = new TokenValidationParameters
         {
@@ -148,7 +148,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
 
         MergeClaims(jwToken.Claims, result.Payload.Json, JwtSecurityTokenHandlerConstants.ClaimTypesToExclude);
 
-        return new ValidJsonWebToken(result);
+        return result;
     }
 
     /// <summary>

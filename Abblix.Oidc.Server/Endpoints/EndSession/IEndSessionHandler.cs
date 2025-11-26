@@ -20,11 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
 public interface IEndSessionHandler
 {
-    Task<EndSessionResponse> HandleAsync(Model.EndSessionRequest endSessionRequest);
+    Task<Result<EndSessionSuccess, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest);
 }

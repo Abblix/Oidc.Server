@@ -34,24 +34,12 @@ namespace Abblix.Oidc.Server.Mvc.ActionResults;
 /// The 'barrierSync' function ensures that the user is redirected to the post-logout URI only after all iframes have loaded,
 /// indicating that logout requests have been sent to all clients.
 /// </remarks>
-public class FrontChannelLogoutResult : GeneratedHtmlResult
+/// <param name="postLogOutUri">The URI to redirect to after the front-channel logout process is complete.</param>
+/// <param name="frontChannelLogoutUris">A list of URIs for the iframes to be used in the front-channel logout process.</param>
+public class FrontChannelLogoutResult(
+    Uri? postLogOutUri,
+    IList<Uri> frontChannelLogoutUris) : GeneratedHtmlResult
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FrontChannelLogoutResult"/> class.
-    /// </summary>
-    /// <param name="postLogOutUri">The URI to redirect to after the front-channel logout process is complete.</param>
-    /// <param name="frontChannelLogoutUris">A list of URIs for the iframes to be used in the front-channel logout process.</param>
-    public FrontChannelLogoutResult(
-        Uri? postLogOutUri,
-        IList<Uri> frontChannelLogoutUris)
-    {
-        _postLogOutUri = postLogOutUri;
-        _frontChannelLogoutUris = frontChannelLogoutUris;
-    }
-
-    private readonly IList<Uri> _frontChannelLogoutUris;
-    private readonly Uri? _postLogOutUri;
-
     /// <summary>
     /// Asynchronously writes the HTML content that includes iframes for each front-channel logout URI and
     /// a script to redirect to the post-logout URI.
@@ -66,15 +54,15 @@ public class FrontChannelLogoutResult : GeneratedHtmlResult
 
         writer.WriteElementString("style", "iframe { display: none; width: 0; height: 0; }");
         writer.WriteStartElement("script");
-        await writer.WriteStringAsync($"var count = {_frontChannelLogoutUris.Count}; ");
+        await writer.WriteStringAsync($"var count = {frontChannelLogoutUris.Count}; ");
 
-        if (_postLogOutUri != null)
+        if (postLogOutUri != null)
         {
-            var postLogOutUri = HttpUtility.JavaScriptStringEncode(_postLogOutUri.OriginalString, true);
+            var postLogOutUriEncoded = HttpUtility.JavaScriptStringEncode(postLogOutUri.OriginalString, true);
 
             await writer.WriteStringAsync("function barrierSync() { ");
             await writer.WriteStringAsync("if (--count === 0) ");
-            await writer.WriteStringAsync($"window.location.replace({postLogOutUri}); ");
+            await writer.WriteStringAsync($"window.location.replace({postLogOutUriEncoded}); ");
             await writer.WriteStringAsync("}");
         }
 
@@ -82,7 +70,7 @@ public class FrontChannelLogoutResult : GeneratedHtmlResult
         await writer.WriteEndElementAsync(); // </head>
 
         writer.WriteStartElement("body");
-        foreach (var uri in _frontChannelLogoutUris)
+        foreach (var uri in frontChannelLogoutUris)
         {
             writer.WriteStartElement("iframe");
             writer.WriteAttributeString("onload", "barrierSync()");

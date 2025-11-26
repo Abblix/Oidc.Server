@@ -20,9 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -42,16 +44,12 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     /// <param name="request">The token revocation request.</param>
     /// <param name="response">The response to the token revocation request.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains the formatted action result.
+    /// A task that returns the formatted action result.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, RevocationResponse response)
+    public Task<ActionResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response)
     {
-        return Task.FromResult<ActionResult>(response switch
-        {
-            TokenRevokedResponse => new OkResult(),
-            RevocationErrorResponse error => new BadRequestObjectResult(new ErrorResponse(error.Error,
-                error.ErrorDescription)),
-            _ => throw new ArgumentOutOfRangeException(nameof(response))
-        });
+        return Task.FromResult(response.Match<ActionResult>(
+            onSuccess: _ => new OkResult(),
+            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
     }
 }

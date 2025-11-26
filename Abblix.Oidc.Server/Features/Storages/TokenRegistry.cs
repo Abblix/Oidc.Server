@@ -29,20 +29,10 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// This class is responsible for determining the current status of JWTs, such as whether they are active,
 /// revoked, or expired, and updating these statuses as necessary.
 /// </summary>
-public class TokenRegistry : ITokenRegistry
+/// <param name="storage">The storage mechanism that will handle the persistence of token statuses.</param>
+/// <param name="keyFactory">The factory for generating standardized storage keys.</param>
+public class TokenRegistry(IEntityStorage storage, IEntityStorageKeyFactory keyFactory) : ITokenRegistry
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="TokenRegistry"/> class.
-	/// </summary>
-	/// <param name="storage">The storage mechanism that will handle the persistence of token statuses.</param>
-	public TokenRegistry(IEntityStorage storage)
-	{
-		_storage = storage;
-	}
-
-	private readonly IEntityStorage _storage;
-
-
 	/// <summary>
 	/// Retrieves the current status of a JWT by its identifier.
 	/// </summary>
@@ -50,7 +40,7 @@ public class TokenRegistry : ITokenRegistry
 	/// <returns>A task that resolves to the status of the JWT if found; otherwise, a default status indicating
 	/// the token does not exist in the registry.</returns>
 	public Task<JsonWebTokenStatus> GetStatusAsync(string jwtId)
-		=> _storage.GetAsync<JsonWebTokenStatus>(ToKeyString(jwtId), false);
+		=> storage.GetAsync<JsonWebTokenStatus>(keyFactory.JsonWebTokenStatusKey(jwtId), false);
 
 	/// <summary>
 	/// Sets or updates the status of a JWT by its identifier, with an expiration on the status entry.
@@ -60,7 +50,5 @@ public class TokenRegistry : ITokenRegistry
 	/// <param name="expiresAt">The time at which the status record should expire.</param>
 	/// <returns>A task representing the asynchronous operation of setting the token's status.</returns>
 	public Task SetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
-		=> _storage.SetAsync(ToKeyString(jwtId), status, new StorageOptions { AbsoluteExpiration = expiresAt });
-
-	private static string ToKeyString(string jwtId) => $"{nameof(jwtId)}:{jwtId}";
+		=> storage.SetAsync(keyFactory.JsonWebTokenStatusKey(jwtId), status, new () { AbsoluteExpiration = expiresAt });
 }

@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
-using TokenResponse = Abblix.Oidc.Server.Endpoints.Token.Interfaces.TokenResponse;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
@@ -32,25 +32,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// This includes validating the request for compliance with the protocol requirements and processing it to issue,
 /// renew or exchange tokens as appropriate.
 /// </summary>
-public class TokenHandler : ITokenHandler
+/// <param name="validator">An implementation of <see cref="ITokenRequestValidator"/> responsible for ensuring
+/// that token requests meet the required validation criteria.</param>
+/// <param name="processor">An implementation of <see cref="ITokenRequestProcessor"/> responsible for executing
+/// the logic necessary to issue, renew, or exchange tokens based on validated requests.</param>
+public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcessor processor) : ITokenHandler
 {
-    /// <summary>
-    /// Constructs a new instance of the <see cref="TokenHandler"/> with specified validator and processor
-    /// for handling token requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="ITokenRequestValidator"/> responsible for ensuring
-    /// that token requests meet the required validation criteria.</param>
-    /// <param name="processor">An implementation of <see cref="ITokenRequestProcessor"/> responsible for executing
-    /// the logic necessary to issue, renew, or exchange tokens based on validated requests.</param>
-    public TokenHandler(ITokenRequestValidator validator, ITokenRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly ITokenRequestValidator _validator;
-    private readonly ITokenRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a token request by first validating it and then, if the validation is successful,
     /// processing the request to issue, renew, or exchange tokens as required by the request parameters.
@@ -70,21 +57,11 @@ public class TokenHandler : ITokenHandler
     /// It employs rigorous validation to prevent unauthorized access and to maintain the integrity of the token
     /// lifecycle management process.
     /// </remarks>
-    public async Task<TokenResponse> HandleAsync(
+    public async Task<Result<TokenIssued, OidcError>> HandleAsync(
         TokenRequest tokenRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(tokenRequest, clientRequest);
-
-        var response = validationResult switch
-        {
-            ValidTokenRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            TokenRequestError { Error: var error, ErrorDescription: var description }
-                => new TokenErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        var validationResult = await validator.ValidateAsync(tokenRequest, clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

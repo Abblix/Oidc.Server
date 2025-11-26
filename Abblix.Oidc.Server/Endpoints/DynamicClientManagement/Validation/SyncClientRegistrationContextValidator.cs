@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -31,14 +31,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 public abstract class SyncClientRegistrationContextValidator : IClientRegistrationContextValidator
 {
-    public Task<ClientRegistrationValidationError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
-    /// Validates the client registration context synchronously and returns a ClientRegistrationValidationError if validation fails,
+    /// Validates the client registration context synchronously and returns a AuthError if validation fails,
     /// or null if the context is valid. Derived classes must implement this method.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A ClientRegistrationValidationError if validation fails, or null if the context is valid.</returns>
-    protected abstract ClientRegistrationValidationError? Validate(ClientRegistrationValidationContext context);
+    /// <returns>A AuthError if validation fails, or null if the context is valid.</returns>
+    protected abstract OidcError? Validate(ClientRegistrationValidationContext context);
 }
