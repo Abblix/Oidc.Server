@@ -28,5 +28,4 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <summary>
 /// Represents a valid client request along with client information.
 /// </summary>
-public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo)
-    : ClientRequestValidationResult;
+public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo);

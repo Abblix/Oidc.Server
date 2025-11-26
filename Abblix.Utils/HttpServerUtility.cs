@@ -40,7 +40,7 @@ public static class HttpServerUtility
 	{
 		var length = input.Length;
 		if (length == 0)
-			return Array.Empty<byte>();
+			return [];
 
 		unchecked
 		{

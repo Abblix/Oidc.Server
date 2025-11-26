@@ -20,13 +20,15 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Interfaces;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
 /// Defines a contract for handling authorization requests, ensuring they are processed according to OAuth 2.0
 /// and OpenID Connect protocol specifications.
 /// </summary>
-public interface IAuthorizationHandler
+public interface IAuthorizationHandler : IGrantTypeInformer
 {
     /// <summary>
     /// Metadata related to the authorization endpoint, detailing supported features such as claims parameters,

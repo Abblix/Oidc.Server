@@ -33,7 +33,8 @@ internal static class JwtSecurityTokenHandlerConstants
     /// These claims are typically handled specially by JWT security token handlers
     /// due to their significance in the JWT standard and security implications.
     /// </summary>
-    public static readonly string[] ClaimTypesToExclude = {
+    public static readonly string[] ClaimTypesToExclude =
+    [
 
         // Issuer claim, identifies the principal that issued the JWT.
         IanaClaimTypes.Iss,
@@ -48,6 +49,6 @@ internal static class JwtSecurityTokenHandlerConstants
         IanaClaimTypes.Nbf,
 
         // Issued at claim, indicates the time at which the JWT was issued.
-        IanaClaimTypes.Iat,
-    };
+        IanaClaimTypes.Iat
+    ];
 }

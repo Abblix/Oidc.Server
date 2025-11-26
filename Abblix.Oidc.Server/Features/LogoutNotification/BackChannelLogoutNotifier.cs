@@ -29,27 +29,14 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// Implements the mechanism for notifying clients about logout events through the back-channel,
 /// leveraging logout tokens to securely communicate the logout state to client applications.
 /// </summary>
-public class BackChannelLogoutNotifier : ILogoutNotifier
+/// <param name="logoutTokenService">The service responsible for creating logout tokens that encapsulate
+/// the details of the logout event.</param>
+/// <param name="logoutTokenSender">The service responsible for sending the logout tokens to the client
+/// applications via back-channel communication.</param>
+public class BackChannelLogoutNotifier(
+    ILogoutTokenService logoutTokenService,
+    ILogoutTokenSender logoutTokenSender) : ILogoutNotifier
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BackChannelLogoutNotifier"/> class, setting up
-    /// the services for logout token creation and distribution.
-    /// </summary>
-    /// <param name="logoutTokenService">The service responsible for creating logout tokens that encapsulate
-    /// the details of the logout event.</param>
-    /// <param name="logoutTokenSender">The service responsible for sending the logout tokens to the client
-    /// applications via back-channel communication.</param>
-    public BackChannelLogoutNotifier(
-        ILogoutTokenService logoutTokenService,
-        ILogoutTokenSender logoutTokenSender)
-    {
-        _logoutTokenService = logoutTokenService;
-        _logoutTokenSender = logoutTokenSender;
-    }
-
-    private readonly ILogoutTokenService _logoutTokenService;
-    private readonly ILogoutTokenSender _logoutTokenSender;
-
     /// <summary>
     /// Asynchronously notifies a client of a logout event by creating a logout token and sending it to the client's
     /// back-channel logout endpoint. This ensures that the client application is informed about the logout event
@@ -59,7 +46,7 @@ public class BackChannelLogoutNotifier : ILogoutNotifier
     /// notification should be sent.</param>
     /// <param name="logoutContext">The context of the logout event, containing details such as the subject identifier
     /// and session identifier, which are included in the logout token.</param>
-    /// <returns>A task that represents the asynchronous operation of notifying the client. The task completes when
+    /// <returns>A task that completes when
     /// the notification has been successfully sent to the client's back-channel logout endpoint.</returns>
     public async Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
     {
@@ -68,10 +55,10 @@ public class BackChannelLogoutNotifier : ILogoutNotifier
             return;
 
         // Create the logout token specific to the logout event and client
-        var logoutToken = await _logoutTokenService.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(clientInfo, logoutContext);
 
         // Send the logout token to the client's back-channel logout endpoint
-        await _logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
+        await logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
     }
 
     public bool FrontChannelLogoutSupported => false;

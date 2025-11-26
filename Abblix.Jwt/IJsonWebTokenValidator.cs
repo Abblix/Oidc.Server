@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -38,6 +40,6 @@ public interface IJsonWebTokenValidator
 	/// </summary>
 	/// <param name="jwt">The JWT as a string to be validated.</param>
 	/// <param name="parameters">The parameters against which the JWT will be validated.</param>
-	/// <returns>A Task representing the asynchronous validation operation, which yields a JwtValidationResult indicating the outcome of the validation.</returns>
-	Task<JwtValidationResult> ValidateAsync(string jwt, ValidationParameters parameters);
+	/// <returns>A Task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.</returns>
+	Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters);
 }

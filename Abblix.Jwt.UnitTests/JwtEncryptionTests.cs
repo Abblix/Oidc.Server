@@ -27,11 +27,27 @@ using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
 
+/// <summary>
+/// Unit tests for JWT (JSON Web Token) encryption and signing full lifecycle.
+/// Tests the complete cycle of creating, signing, encrypting, decrypting, validating, and verifying JWTs,
+/// including expiration handling per RFC 7519 (JWT), RFC 7515 (JWS), and RFC 7516 (JWE).
+/// </summary>
 public class JwtEncryptionTests
 {
     private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
 
+    /// <summary>
+    /// Verifies the complete JWT lifecycle: create → sign → encrypt → decrypt → validate → verify → expire.
+    /// Tests that:
+    /// - JWT can be created with header (algorithm RS256) and payload (claims, timestamps)
+    /// - Token is signed with RSA private key (JWS - RFC 7515)
+    /// - Token is encrypted with RSA public key (JWE - RFC 7516)
+    /// - Token can be decrypted with RSA private key
+    /// - Token signature validates correctly
+    /// - All claims round-trip correctly (simple, structured objects, arrays)
+    /// - Token expiration is enforced after ExpiresAt timestamp
+    /// </summary>
     [Fact]
     public async Task JwtFullCycleTest()
     {
@@ -72,22 +88,24 @@ public class JwtEncryptionTests
             ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
         };
 
-        var result = Assert.IsType<ValidJsonWebToken>(await validator.ValidateAsync(jwt, parameters));
+        var validatorResult = await validator.ValidateAsync(jwt, parameters);
+        Assert.True(validatorResult.TryGetSuccess(out var result));
         var expectedClaims = ExtractClaims(token);
-        var actualClaims = ExtractClaims(result.Token);
+        var actualClaims = ExtractClaims(result);
         Assert.Equal(expectedClaims, actualClaims);
 
-        var arrayValues = result.Token.Payload.Json.GetArrayOfStrings("colors");
+        var arrayValues = result.Payload.Json.GetArrayOfStrings("colors");
         Assert.Equal(["red", "green", "blue"], arrayValues);
 
-        var address = result.Token.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+        var address = result.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
         Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
 
         await Task.Delay(expiresIn);
 
-        var (error, description) = Assert.IsType<JwtValidationError>(await validator.ValidateAsync(jwt, parameters));
-        Assert.Equal(JwtError.InvalidToken, error);
-        Assert.Contains("Lifetime validation failed", description);
+        var result2 = await validator.ValidateAsync(jwt, parameters);
+        Assert.True(result2.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("Lifetime validation failed", error.ErrorDescription);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

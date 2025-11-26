@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -31,20 +32,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// It utilizes an <see cref="ITokenRegistry"/> to check the token's status and an inner <see cref="IJsonWebTokenValidator"/>
 /// for initial token validation.
 /// </summary>
-public class TokenStatusValidatorDecorator : IJsonWebTokenValidator
+/// <param name="tokenRegistry">The token registry used to check token status.</param>
+/// <param name="innerValidator">The inner validator for initial token validation.</param>
+public class TokenStatusValidatorDecorator(
+	ITokenRegistry tokenRegistry,
+	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
-	public TokenStatusValidatorDecorator(
-		ITokenRegistry tokenRegistry,
-		IJsonWebTokenValidator innerValidator)
-	{
-		_tokenRegistry = tokenRegistry;
-		_innerValidator = innerValidator;
-	}
-
-	private readonly ITokenRegistry _tokenRegistry;
-	private readonly IJsonWebTokenValidator _innerValidator;
-
-	public IEnumerable<string> SigningAlgorithmsSupported => _innerValidator.SigningAlgorithmsSupported;
+	public IEnumerable<string> SigningAlgorithmsSupported => innerValidator.SigningAlgorithmsSupported;
 
 	/// <summary>
 	/// Validates a JSON Web Token (JWT) and checks its revocation status.
@@ -52,19 +46,19 @@ public class TokenStatusValidatorDecorator : IJsonWebTokenValidator
 	/// <param name="jwt">The JWT to be validated.</param>
 	/// <param name="parameters">Validation parameters to use during validation.</param>
 	/// <returns>
-	/// A <see cref="JwtValidationResult"/> indicating the validation outcome.
-	/// If the token is revoked or already used, it returns a <see cref="JwtValidationError"/>.
+	/// A Result containing either a validated JsonWebToken or a JwtValidationError.
+	/// If the token is revoked or already used, it returns a JwtValidationError.
 	/// Otherwise, it returns the result from the inner validator.
 	/// </returns>
-	public async Task<JwtValidationResult> ValidateAsync(
+	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		string jwt,
 		ValidationParameters parameters)
 	{
-		var result = await _innerValidator.ValidateAsync(jwt, parameters);
+		var result = await innerValidator.ValidateAsync(jwt, parameters);
 
-		if (result is ValidJsonWebToken { Token.Payload.JwtId: { } jwtId })
+		if (result.TryGetSuccess(out var token) && token.Payload.JwtId is { } jwtId)
 		{
-			switch (await _tokenRegistry.GetStatusAsync(jwtId))
+			switch (await tokenRegistry.GetStatusAsync(jwtId))
 			{
 				case JsonWebTokenStatus.Used:
 					return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");

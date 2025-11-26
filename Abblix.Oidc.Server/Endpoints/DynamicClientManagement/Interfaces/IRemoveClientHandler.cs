@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
@@ -35,7 +37,7 @@ public interface IRemoveClientHandler
     /// </summary>
     /// <param name="clientRequest">
     /// The client request containing the necessary information to identify the client to be removed.</param>
-    /// <returns>A task that results in a <see cref="RemoveClientResponse"/>, encapsulating the outcome of the client
+    /// <returns>A task that results in a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>, encapsulating the outcome of the client
     /// removal process, which can be a confirmation of successful removal or details of any errors encountered.
     /// </returns>
     /// <remarks>
@@ -43,5 +45,5 @@ public interface IRemoveClientHandler
     /// and OpenID Connect framework. It ensures that only authorized and validated requests result in the removal of
     /// a client, adhering to the standards and practices of dynamic client management.
     /// </remarks>
-    Task<RemoveClientResponse> HandleAsync(ClientRequest clientRequest);
+    Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
 }

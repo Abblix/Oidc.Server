@@ -30,26 +30,14 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This class allows for attempting client authentication through a sequence of different
 /// authentication methods, providing flexibility in supporting multiple authentication protocols.
 /// </summary>
-internal class CompositeClientAuthenticator : IClientAuthenticator
+internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators) : IClientAuthenticator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="CompositeClientAuthenticator"/> class.
-	/// </summary>
-	/// <param name="clientAuthenticators">An array of <see cref="IClientAuthenticator"/> implementations.
-	/// These authenticators are used in the order they are provided to attempt client authentication.</param>
-	public CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators)
-	{
-		_clientAuthenticators = clientAuthenticators;
-	}
-
-	private readonly IClientAuthenticator[] _clientAuthenticators;
-
 	/// <summary>
 	/// Gets a collection of strings representing the client authentication methods supported by the implementation.
 	/// This can include methods such as client_secret_basic, client_secret_post, private_key_jwt, etc.
 	/// </summary>
 	public IEnumerable<string> ClientAuthenticationMethodsSupported =>
-		from authenticator in _clientAuthenticators
+		from authenticator in clientAuthenticators
 		from method in authenticator.ClientAuthenticationMethodsSupported
 		select method;
 
@@ -70,7 +58,7 @@ internal class CompositeClientAuthenticator : IClientAuthenticator
 	/// </remarks>
 	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
 	{
-		foreach (var clientAuthenticator in _clientAuthenticators)
+		foreach (var clientAuthenticator in clientAuthenticators)
 		{
 			var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(request);
 			if (clientInfo != null)

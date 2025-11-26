@@ -4,6 +4,8 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # User-specific files
+testing*.md
+TEST_*.md
 *.rsuser
 *.suo
 *.user
@@ -371,5 +373,8 @@ FodyWeavers.xsd
 /LicenseGenerator
 
 # Development configuration
-CLAUDE.md
+**/CLAUDE.md
 .claude/
+TEST_*.md
+LICENSE-*.md
+RELEASE_NOTES*.txt

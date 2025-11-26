@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
@@ -29,4 +31,4 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// the client on where to direct the user for further actions if necessary.
 /// </summary>
 public record AuthorizationRequestValidationError(string Error, string ErrorDescription, Uri? RedirectUri, string ResponseMode)
-    : AuthorizationRequestValidationResult(ResponseMode);
+    : OidcError(Error, ErrorDescription);

@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-//
+// 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-//
+// 
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-//
+// 
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-//
+// 
 // For full licensing terms, please visit:
-//
+// 
 // https://oidc.abblix.com/license
-//
+// 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -36,7 +36,7 @@ public class SanitizedTests
     public void ToString_ShouldReturnOriginalString_WhenNoSpecialCharacters()
     {
         const string input = "HelloWorld";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(input, sanitizedValue.ToString());
     }
 
@@ -48,7 +48,7 @@ public class SanitizedTests
     {
         const string input = "Hello\x01\x02\x03World";
         const string expected = "HelloWorld";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -60,7 +60,7 @@ public class SanitizedTests
     {
         const string input = "Hello\nWorld";
         const string expected = "Hello\\nWorld";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -72,7 +72,7 @@ public class SanitizedTests
     {
         const string input = "Hello\rWorld";
         const string expected = "Hello\\rWorld";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -84,7 +84,7 @@ public class SanitizedTests
     {
         const string input = "Hello\tWorld";
         const string expected = "Hello\\tWorld";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -96,7 +96,7 @@ public class SanitizedTests
     {
         const string input = "Hello\"World";
         const string expected = "Hello\\\"World";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -108,7 +108,7 @@ public class SanitizedTests
     {
         const string input = "Hello'World";
         const string expected = "Hello\\'World";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -120,7 +120,7 @@ public class SanitizedTests
     {
         const string input = "Hello\\World";
         const string expected = "Hello\\\\World";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -132,7 +132,7 @@ public class SanitizedTests
     {
         const string input = "Hello,World";
         const string expected = "Hello\\,World";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -144,7 +144,7 @@ public class SanitizedTests
     {
         const string input = "Hello;World";
         const string expected = "Hello\\;World";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 
@@ -155,7 +155,7 @@ public class SanitizedTests
     public void ToString_ShouldHandleNullInput()
     {
         const string? input = null;
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(string.Empty, sanitizedValue.ToString());
     }
 
@@ -166,7 +166,7 @@ public class SanitizedTests
     public void ToString_ShouldHandleEmptyString()
     {
         const string input = "";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(input, sanitizedValue.ToString());
     }
 
@@ -178,7 +178,7 @@ public class SanitizedTests
     {
         const string input = "\x01\x02\x03";
         const string expected = "";
-        var sanitizedValue = new Sanitized(input);
+        var sanitizedValue = Sanitized.Value(input);
         Assert.Equal(expected, sanitizedValue.ToString());
     }
 }

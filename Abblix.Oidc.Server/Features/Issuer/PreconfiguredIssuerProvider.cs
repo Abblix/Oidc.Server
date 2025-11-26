@@ -31,15 +31,8 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// This provider retrieves the issuer identifier from the OIDC options, making it ideal for scenarios where the issuer
 /// needs to be consistent and predefined, such as environments with multiple hosts.
 /// </summary>
-internal class PreconfiguredIssuerProvider : IIssuerProvider
+internal class PreconfiguredIssuerProvider(IOptions<OidcOptions> options) : IIssuerProvider
 {
-	public PreconfiguredIssuerProvider(IOptions<OidcOptions> options)
-	{
-		_options = options;
-	}
-
-	private readonly IOptions<OidcOptions> _options;
-
 	/// <summary>
 	/// Retrieves the issuer identifier from the OIDC options.
 	/// </summary>
@@ -47,5 +40,5 @@ internal class PreconfiguredIssuerProvider : IIssuerProvider
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if the issuer identifier is not configured in OIDC options.
 	/// </exception>
-	public string GetIssuer() => _options.Value.Issuer.NotNull(nameof(OidcOptions.Issuer));
+	public string GetIssuer() => options.Value.Issuer.NotNull(nameof(OidcOptions.Issuer));
 }

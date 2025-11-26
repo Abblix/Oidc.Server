@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -34,7 +37,7 @@ public interface IRegisterClientHandler
     /// </summary>
     /// <param name="clientRegistrationRequest">The client registration request containing the necessary parameters
     /// for registering a new client, such as client metadata.</param>
-    /// <returns>A task that results in a <see cref="ClientRegistrationResponse"/>, encapsulating either the successful
+    /// <returns>A task that results in a Result containing either the successful
     /// registration details of the new client or an error response indicating the reasons for registration failure.
     /// </returns>
     /// <remarks>
@@ -43,5 +46,5 @@ public interface IRegisterClientHandler
     /// It ensures that all registered clients adhere to the protocol's requirements and the authorization server's
     /// policies.
     /// </remarks>
-    Task<ClientRegistrationResponse> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
 }

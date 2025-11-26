@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>true</ImplicitUsings>
         <PackageId>Abblix.OIDC.Server</PackageId>
@@ -16,12 +16,12 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) 2024 Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>v1.6.0: Enhanced authentication session management with AMR (Authentication Method Reference) support. Performance improvements to Base32 encoding. Updated Microsoft.Extensions dependencies for .NET 6.0-9.0 compatibility. Backward compatible release. Visit https://github.com/Abblix/Oidc.Server/releases for full changelog.</PackageReleaseNotes>
+        <PackageReleaseNotes>v2.0: Major release with mTLS authentication (RFC 8705), JWT Bearer grants (RFC 7523), Device Authorization (RFC 8628), CIBA Ping/Push modes &amp; Long-Polling, and Result pattern migration. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/blob/master/CHANGELOG.md</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <AssemblyVersion>1.6.0.0</AssemblyVersion>
-        <FileVersion>1.6.0.0</FileVersion>
-        <PackageVersion>1.6.0</PackageVersion>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <FileVersion>2.0.0.0</FileVersion>
+        <PackageVersion>2.0</PackageVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -32,27 +32,29 @@
       <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.8" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(TargetFramework)' == 'net6.0' OR '$(TargetFramework)' == 'net7.0' OR '$(TargetFramework)' == 'net8.0'">
-      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
-      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
-      <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
-      <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+      <PackageReference Include="Grpc.Tools" Version="2.76.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Protobuf Include="Features\Storages\Proto\*.proto" GrpcServices="None" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
       <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
     </ItemGroup>
 
 </Project>

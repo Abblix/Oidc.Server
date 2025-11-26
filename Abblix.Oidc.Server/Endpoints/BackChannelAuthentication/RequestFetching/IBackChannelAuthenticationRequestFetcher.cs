@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,8 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -37,7 +37,7 @@ public interface IBackChannelAuthenticationRequestFetcher
     /// and any necessary validation or processing to ensure that the request is ready for further handling.
     /// </summary>
     /// <param name="request">The backchannel authentication request to be fetched and validated.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="FetchResult"/>
+    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/>
     /// indicating whether the fetch was successful or if it resulted in an error.</returns>
-    Task<Result<BackChannelAuthenticationRequest>> FetchAsync(BackChannelAuthenticationRequest request);
+    Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request);
 }

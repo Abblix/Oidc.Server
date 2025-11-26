@@ -38,7 +38,7 @@ public record BackChannelLogoutOptions(Uri Uri, bool RequiresSessionId = true)
     public bool RequiresSessionId { get; init; } = RequiresSessionId;
 
     /// <summary>
-    /// Gets or sets the duration a logout token is valid for.
+    /// The duration a logout token is valid for.
     /// </summary>
     public TimeSpan LogoutTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(5);
 }

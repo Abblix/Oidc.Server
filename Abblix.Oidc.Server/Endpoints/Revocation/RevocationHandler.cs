@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
 
@@ -30,29 +31,16 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// Manages the handling of token revocation requests in accordance with OAuth 2.0 specifications, ensuring that such
 /// requests are properly validated and processed to revoke tokens as intended.
 /// </summary>
-public class RevocationHandler : IRevocationHandler
+/// <param name="validator">
+/// An implementation of <see cref="IRevocationRequestValidator"/> responsible for validating the revocation request
+/// against the OAuth 2.0 specifications.</param>
+/// <param name="processor">
+/// An implementation of <see cref="IRevocationRequestProcessor"/> responsible for processing validated revocation
+/// requests to effectively revoke tokens.</param>
+public class RevocationHandler(
+    IRevocationRequestValidator validator,
+    IRevocationRequestProcessor processor) : IRevocationHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RevocationHandler"/> class with the necessary validator and
-    /// processor for revocation requests.
-    /// </summary>
-    /// <param name="validator">
-    /// An implementation of <see cref="IRevocationRequestValidator"/> responsible for validating the revocation request
-    /// against the OAuth 2.0 specifications.</param>
-    /// <param name="processor">
-    /// An implementation of <see cref="IRevocationRequestProcessor"/> responsible for processing validated revocation
-    /// requests to effectively revoke tokens.</param>
-    public RevocationHandler(
-        IRevocationRequestValidator validator,
-        IRevocationRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IRevocationRequestValidator _validator;
-    private readonly IRevocationRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously handles a token revocation request by validating it and then processing it if the
     /// validation succeeds.
@@ -62,9 +50,8 @@ public class RevocationHandler : IRevocationHandler
     /// <param name="clientRequest">
     /// Additional client request information that may be necessary for validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="RevocationResponse"/>, indicating the outcome of
-    /// the request handling. This can either be a successful revocation or an error response if
-    /// the request does not pass validation.
+    /// A <see cref="Task"/> that resolves to a <see cref="Result{TSuccess, TFailure}"/> containing either
+    /// <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
     /// </returns>
     /// <remarks>
     /// This method plays a critical role in maintaining the security and integrity of the OAuth 2.0 ecosystem
@@ -72,21 +59,11 @@ public class RevocationHandler : IRevocationHandler
     /// their invalidation. It ensures that revocation requests are thoroughly vetted before any action is taken,
     /// preventing unauthorized or malicious attempts to revoke tokens.
     /// </remarks>
-    public async Task<RevocationResponse> HandleAsync(
+    public async Task<Result<TokenRevoked, OidcError>> HandleAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(revocationRequest, clientRequest);
-
-        var response = validationResult switch
-        {
-            ValidRevocationRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            RevocationRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new RevocationErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        var validationResult = await validator.ValidateAsync(revocationRequest, clientRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

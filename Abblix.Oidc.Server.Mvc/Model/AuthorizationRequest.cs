@@ -43,7 +43,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.Scope)]
 	[ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-	public string[] Scope { get; init; } = Array.Empty<string>();
+	public string[] Scope { get; init; } = [];
 
 	/// <summary>
 	/// Specifies the information about the user that the application seeks to access,
@@ -66,7 +66,7 @@ public record AuthorizationRequest
 	/// Unique identifier of the client application making the authorization request.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.ClientId)]
-	public string? ClientId { get; init; } = default!;
+	public string? ClientId { get; init; } = null!;
 
 	/// <summary>
 	/// URL to which the response from the authorization request should be sent.

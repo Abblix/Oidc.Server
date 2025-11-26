@@ -20,15 +20,15 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -38,33 +38,17 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// It ensures that clients can obtain fresh access tokens without re-authenticating the user,
 /// enhancing user experience while maintaining security.
 /// </summary>
-public class RefreshTokenGrantHandler : IAuthorizationGrantHandler
+/// <param name="parameterValidator">
+/// Validates the presence and format of required parameters in the request. </param>
+/// <param name="jwtValidator">
+/// Validates the JWT structure of the refresh token to ensure its authenticity and integrity.</param>
+/// <param name="refreshTokenService">
+/// Handles the logic of authorizing clients and issuing new tokens based on refresh tokens.</param>
+public class RefreshTokenGrantHandler(
+	IParameterValidator parameterValidator,
+	IAuthServiceJwtValidator jwtValidator,
+	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="RefreshTokenGrantHandler"/> class.
-	/// The constructor sets up services responsible for validating refresh tokens, handling JWT validation,
-	/// and interacting with the refresh token storage service.
-	/// </summary>
-	/// <param name="parameterValidator">
-	/// Validates the presence and format of required parameters in the request. </param>
-	/// <param name="jwtValidator">
-	/// Validates the JWT structure of the refresh token to ensure its authenticity and integrity.</param>
-	/// <param name="refreshTokenService">
-	/// Handles the logic of authorizing clients and issuing new tokens based on refresh tokens.</param>
-	public RefreshTokenGrantHandler(
-		IParameterValidator parameterValidator,
-		IAuthServiceJwtValidator jwtValidator,
-		IRefreshTokenService refreshTokenService)
-	{
-		_parameterValidator = parameterValidator;
-		_jwtValidator = jwtValidator;
-		_refreshTokenService = refreshTokenService;
-	}
-
-	private readonly IParameterValidator _parameterValidator;
-	private readonly IAuthServiceJwtValidator _jwtValidator;
-	private readonly IRefreshTokenService _refreshTokenService;
-
 	/// <summary>
 	/// Indicates that this handler is responsible for processing the 'refresh_token' grant type.
 	/// The framework uses this information to ensure that this handler is only invoked for the refresh token flow.
@@ -86,46 +70,46 @@ public class RefreshTokenGrantHandler : IAuthorizationGrantHandler
 	/// A task representing the outcome of the authorization process, either returning a successful grant with a new
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
-	public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 	{
 		// Validate that the refresh token parameter is present in the request, throwing an error if missing.
-		_parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
+		parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
-		var jwtValidationResult = await _jwtValidator.ValidateAsync(request.RefreshToken);
+		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);
 
-		switch (jwtValidationResult)
+		if (jwtValidationResult.TryGetFailure(out var error))
 		{
-			// If the token type is invalid, return an error indicating the issue.
-			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.RefreshToken:
-				return new InvalidGrantResult(
-					ErrorCodes.InvalidGrant,
-					$"Invalid token type: {tokenType}");
-
-			// If the token is valid and of the correct type (refresh token), proceed with authorization.
-			case ValidJsonWebToken { Token: {} token }:
-
-				// Authorize the request based on the refresh token and check if the token belongs to the correct client.
-				var result = await _refreshTokenService.AuthorizeByRefreshTokenAsync(token);
-				if (result is AuthorizedGrant { Context.ClientId: var clientId } &&
-				    clientId != clientInfo.ClientId)
-				{
-					// If the client information in the token doesn't match the request, return an error.
-					return new InvalidGrantResult(
-						ErrorCodes.InvalidGrant,
-						"The specified grant belongs to another client");
-				}
-
-				// If everything is valid, return the authorized result.
-				return result;
-
-			// If there was a validation error, return it as an invalid grant result.
-			case JwtValidationError error:
-				return new InvalidGrantResult(ErrorCodes.InvalidGrant, error.ErrorDescription);
-
-			// If an unexpected result type is encountered, throw an exception.
-			default:
-				throw new UnexpectedTypeException(nameof(jwtValidationResult), jwtValidationResult.GetType());
+			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 		}
+
+		var token = jwtValidationResult.GetSuccess();
+
+		// If the token type is invalid, return an error indicating the issue.
+		if (token.Header.Type is var tokenType && tokenType != JwtTypes.RefreshToken)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				$"Invalid token type: {tokenType}");
+		}
+
+		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token);
+		if (result.TryGetFailure(out var authError))
+		{
+			return authError;
+		}
+
+		var grant = result.GetSuccess();
+		if (grant.Context.ClientId != clientInfo.ClientId)
+		{
+			// If the client information in the token doesn't match the request, return an error.
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"The specified grant belongs to another client");
+		}
+
+		// If everything is valid, return the authorized result.
+		return grant;
 	}
 }

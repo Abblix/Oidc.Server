@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -30,9 +32,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 public interface IClientRequestValidator
 {
     /// <summary>
-    /// Validates a client request asynchronously and returns a result of type ClientRequestValidationResult.
+    /// Validates a client request asynchronously and returns a result of type Result&lt;ValidClientRequest, AuthError&gt;.
     /// </summary>
     /// <param name="request">The client request to validate.</param>
     /// <returns>A task representing the validation result.</returns>
-    Task<ClientRequestValidationResult> ValidateAsync(ClientRequest request);
+    Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request);
 }

@@ -34,8 +34,8 @@ public interface ITokenRegistry
 	/// Asynchronously retrieves the current status of a specified JWT identifier.
 	/// </summary>
 	/// <param name="jwtId">The identifier of the JWT whose status is to be queried.</param>
-	/// <returns>A task that, when completed successfully, returns the <see cref="JsonWebTokenStatus"/>
-	/// indicating the current status of the JWT (e.g., active, revoked).</returns>
+	/// <returns>A task that returns the <see cref="JsonWebTokenStatus"/> of the JWT
+	/// (e.g., active, revoked).</returns>
 	Task<JsonWebTokenStatus> GetStatusAsync(string jwtId);
 
 	/// <summary>

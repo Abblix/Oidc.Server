@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-//
+// 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-//
+// 
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-//
+// 
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-//
+// 
 // For full licensing terms, please visit:
-//
+// 
 // https://oidc.abblix.com/license
-//
+// 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -61,14 +61,14 @@ public record BackChannelAuthenticationValidationContext(
     /// These scopes define the permissions and access levels that the client is requesting from
     /// the authorization server.
     /// </summary>
-    public ScopeDefinition[] Scope { get; set; } = Array.Empty<ScopeDefinition>();
+    public ScopeDefinition[] Scope { get; set; } = [];
 
     /// <summary>
     /// A collection of resource definitions requested as part of the authorization process.
     /// These resources specify the URIs that the client is requesting access to, enhancing the granularity
     /// of resource-level authorization.
     /// </summary>
-    public ResourceDefinition[] Resources { get; set; } = Array.Empty<ResourceDefinition>();
+    public ResourceDefinition[] Resources { get; set; } = [];
 
     /// <summary>
     /// Represents the login hint token, which is an optional token used to provide hints about the user's identity

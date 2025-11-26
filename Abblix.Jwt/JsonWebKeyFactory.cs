@@ -39,8 +39,8 @@ public static class JsonWebKeyFactory
     /// <param name="usage">The intended usage of the key, typically 'sig' for signing or 'enc' for encryption.</param>
     /// <param name="keySize">The size of the RSA key in bits. The default is 2048 bits, which is commonly used and
     /// provides a good security level.</param>
-    /// <returns>A <see cref="JsonWebKey"/> that contains the RSA key details suitable for JWT operations.</returns>
-    public static JsonWebKey CreateRsa(string usage, int keySize = 2048 /* Recommended key size for RSA */)
+    /// <returns>A <see cref="RsaJsonWebKey"/> that contains the RSA key details suitable for JWT operations.</returns>
+    public static RsaJsonWebKey CreateRsa(string usage, int keySize = 2048 /* Recommended key size for RSA */)
     {
         var algorithm = usage switch
         {
@@ -54,16 +54,14 @@ public static class JsonWebKeyFactory
         rsa.KeySize = keySize;
         var parameters = rsa.ExportParameters(true);
 
-        var parametersExponent = parameters.Exponent;
-        var key = new JsonWebKey
+        var key = new RsaJsonWebKey
         {
-            KeyType = "RSA",
             KeyId = parameters.ToKeyId(),
             Algorithm = algorithm,
             Usage = usage,
-            RsaExponent = parametersExponent,
-            RsaModulus = parameters.Modulus,
-            PrivateKey = parameters.D,
+            Exponent = parameters.Exponent,
+            Modulus = parameters.Modulus,
+            PrivateExponent = parameters.D,
             FirstPrimeFactor = parameters.P,
             SecondPrimeFactor = parameters.Q,
             FirstFactorCrtExponent = parameters.DP,

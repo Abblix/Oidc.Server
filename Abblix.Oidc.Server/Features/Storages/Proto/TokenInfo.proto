@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// Represents information about an issued token
+message TokenInfo {
+  // The unique identifier (JWT ID) of the token
+  string jwt_id = 1;
+
+  // The expiration time
+  google.protobuf.Timestamp expires_at = 2;
+}

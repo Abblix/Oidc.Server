@@ -50,7 +50,7 @@ public record ClientRegistrationResponse
     /// </summary>
     [Required]
     [JsonPropertyName(Parameters.ClientId)]
-    public string ClientId { get; init; } = default!;
+    public string ClientId { get; init; } = null!;
 
     /// <summary>
     /// The client secret. This value must not be assigned to multiple clients and is used for authenticating the client with the server.

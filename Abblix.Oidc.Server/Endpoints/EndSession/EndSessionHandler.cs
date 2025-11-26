@@ -20,37 +20,19 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
-public class EndSessionHandler : IEndSessionHandler
+public class EndSessionHandler(
+    IEndSessionRequestValidator validator,
+    IEndSessionRequestProcessor processor) : IEndSessionHandler
 {
-    public EndSessionHandler(
-        IEndSessionRequestValidator validator,
-        IEndSessionRequestProcessor processor)
+    public async Task<Result<EndSessionSuccess, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IEndSessionRequestValidator _validator;
-    private readonly IEndSessionRequestProcessor _processor;
-
-    public async Task<EndSessionResponse> HandleAsync(Model.EndSessionRequest endSessionRequest)
-    {
-        var validationResult = await _validator.ValidateAsync(endSessionRequest);
-
-        var response = validationResult switch
-        {
-            ValidEndSessionRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            EndSessionRequestValidationError { Error: var error, ErrorDescription: var description }
-                => new EndSessionErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType())
-        };
-        return response;
+        var validationResult = await validator.ValidateAsync(endSessionRequest);
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

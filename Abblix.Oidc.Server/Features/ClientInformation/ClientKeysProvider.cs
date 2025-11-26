@@ -20,8 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Net.Http.Json;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -30,24 +31,12 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// Facilitates the retrieval of JSON Web Keys (JWKs) for cryptographic operations, including encryption and signing.
 /// This provider supports fetching keys from a client's JSON Web Key Set (JWKS) URL or directly from the client configuration.
 /// </summary>
-public class ClientKeysProvider : IClientKeysProvider
+/// <param name="logger">Logger for capturing any operational logs.</param>
+/// <param name="serviceProvider">Service provider used to resolve scoped dependencies like ISecureHttpFetcher.</param>
+public class ClientKeysProvider(
+    ILogger<ClientKeysProvider> logger,
+    IServiceProvider serviceProvider) : IClientKeysProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClientKeysProvider"/> class.
-    /// </summary>
-    /// <param name="logger">Logger for capturing any operational logs.</param>
-    /// <param name="httpClientFactory">Factory for creating instances of <see cref="HttpClient"/> used to fetch JWKS from remote URLs.</param>
-    public ClientKeysProvider(
-        ILogger<ClientKeysProvider> logger,
-        IHttpClientFactory httpClientFactory)
-    {
-        _logger = logger;
-        _httpClientFactory = httpClientFactory;
-    }
-
-    private readonly ILogger _logger;
-    private readonly IHttpClientFactory _httpClientFactory;
-
     /// <summary>
     /// Retrieves the encryption keys associated with a specific client.
     /// </summary>
@@ -69,13 +58,14 @@ public class ClientKeysProvider : IClientKeysProvider
     }
 
     /// <summary>
-    /// Internally fetches keys from the client's JWKS or JWKS URI.
+    /// Internally fetches keys from the client's JWKS or JWKS URI with SSRF protection.
     /// </summary>
     /// <param name="clientInfo">The client information specifying where to find the JWKS.</param>
     /// <returns>An asynchronous enumerable of <see cref="JsonWebKey"/>.</returns>
     /// <remarks>
     /// This method attempts to retrieve keys directly from the client's configured JWKS. If a JWKS URI is provided,
-    /// it fetches the JWKS from the remote URI. Logs warnings if the retrieval process fails.
+    /// it fetches the JWKS from the remote URI using ISecureHttpFetcher for SSRF protection.
+    /// Logs warnings if the retrieval process fails.
     /// </remarks>
     private async IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo)
     {
@@ -86,25 +76,33 @@ public class ClientKeysProvider : IClientKeysProvider
                 yield return key;
         }
 
-        // Attempt to fetch keys from JWKS URI
+        // Attempt to fetch keys from JWKS URI with SSRF protection
         var jwksUri = clientInfo.JwksUri;
         if (jwksUri == null)
             yield break;
 
-        JsonWebKeySet? jwks = null;
-        try
-        {
-            jwks = await _httpClientFactory.CreateClient().GetFromJsonAsync<JsonWebKeySet>(jwksUri);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Unable to get JWKS from specified URI: {JwksUri}", jwksUri);
-        }
+        logger.LogDebug("Fetching JWKS for client {ClientId} from {JwksUri}", clientInfo.ClientId, jwksUri);
 
-        if (jwks == null)
+        using var scope = serviceProvider.CreateScope();
+        var secureFetcher = scope.ServiceProvider.GetRequiredService<ISecureHttpFetcher>();
+
+        var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
+
+        if (result.TryGetFailure(out var error))
+        {
+            logger.LogWarning("Failed to fetch JWKS for client {ClientId} from {JwksUri}: {Error}",
+                clientInfo.ClientId, jwksUri, error.ErrorDescription);
             yield break;
+        }
 
-        foreach (var key in jwks.Keys)
+        if (result.GetSuccess() is not { Keys: { Length: > 0 } keys })
+        {
+            logger.LogWarning("JWKS for client {ClientId} from {JwksUri} is empty or invalid",
+                clientInfo.ClientId, jwksUri);
+            yield break;
+        }
+
+        foreach (var key in keys)
             yield return key;
     }
 }

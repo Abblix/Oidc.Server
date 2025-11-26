@@ -32,25 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// Processes pushed authorization requests by storing them and generating a response
 /// that includes the request URI and expiration information.
 /// </summary>
-public class PushedAuthorizationRequestProcessor : IPushedAuthorizationRequestProcessor
+public class PushedAuthorizationRequestProcessor(
+    IAuthorizationRequestStorage storage,
+    IOptionsSnapshot<OidcOptions> options) : IPushedAuthorizationRequestProcessor
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PushedAuthorizationRequestProcessor"/> class
-    /// with a specified authorization request storage.
-    /// </summary>
-    /// <param name="storage">The storage used to keep the authorization requests.</param>
-    /// <param name="options"></param>
-    public PushedAuthorizationRequestProcessor(
-        IAuthorizationRequestStorage storage,
-        IOptionsSnapshot<OidcOptions> options)
-    {
-        _storage = storage;
-        _options = options;
-    }
-
-    private readonly IAuthorizationRequestStorage _storage;
-    private readonly IOptionsSnapshot<OidcOptions> _options;
-
     /// <summary>
     /// Asynchronously processes a valid pushed authorization request by storing it and returning a response
     /// that includes the request URI for later retrieval and the duration for which the request is valid.
@@ -59,5 +44,5 @@ public class PushedAuthorizationRequestProcessor : IPushedAuthorizationRequestPr
     /// <returns>A task that resolves to an <see cref="AuthorizationResponse"/> containing
     /// the request URI and expiration information.</returns>
     public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
-        => await _storage.StoreAsync(request.Model,_options.Value.PushedAuthorizationRequestExpiresIn);
+        => await storage.StoreAsync(request.Model, options.Value.PushedAuthorizationRequestExpiresIn);
 }

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 
@@ -66,6 +67,11 @@ public class ClientRegistrationRequestTest
         Assert.Equal("dynamic_client_1 RqxLk9BdhK8qC3z", req.ClientName);
         Assert.Equal(["implicit"], req.GrantTypes);
         Assert.Equal([["id_token", "token"]], req.ResponseTypes);
-        Assert.Equal(["certification@oidf.org"], req.Contacts);
+        Assert.Equal(["certification@oidf.org"], req.Contacts!);
+        
+        Assert.NotNull(req.Jwks);
+        var jwk = Assert.Single(req.Jwks.Keys);
+        var rsaKey = Assert.IsType<RsaJsonWebKey>(jwk);
+        Assert.Equal("RSA", rsaKey.KeyType);
     }
 }

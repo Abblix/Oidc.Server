@@ -28,5 +28,4 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <summary>
 /// Represents a valid client registration request along with a sector identifier.
 /// </summary>
-public record ValidClientRegistrationRequest(ClientRegistrationRequest Model, string? SectorIdentifier)
-    : ClientRegistrationRequestValidationResult;
+public record ValidClientRegistrationRequest(ClientRegistrationRequest Model, string? SectorIdentifier);

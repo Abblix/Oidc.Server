@@ -22,6 +22,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -38,29 +39,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// PKCE is a security mechanism primarily used in public clients, and its enforcement helps prevent code injection
 /// attacks.
 /// </summary>
-public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
+/// <param name="parameterValidator">
+/// Service for validating request parameters, ensuring required fields are provided.</param>
+/// <param name="authorizationCodeService">
+/// Service responsible for generating, validating, and managing authorization codes.</param>
+public class AuthorizationCodeGrantHandler(
+    IParameterValidator parameterValidator,
+    IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthorizationCodeGrantHandler"/> class.
-    /// The constructor sets up the services necessary for validating the parameters of a token request and managing
-    /// authorization codes. It centralizes these services to streamline the validation process and ensure secure
-    /// handling of authorization codes.
-    /// </summary>
-    /// <param name="parameterValidator">
-    /// Service for validating request parameters, ensuring required fields are provided.</param>
-    /// <param name="authorizationCodeService">
-    /// Service responsible for generating, validating, and managing authorization codes.</param>
-    public AuthorizationCodeGrantHandler(
-        IParameterValidator parameterValidator,
-        IAuthorizationCodeService authorizationCodeService)
-    {
-        _parameterValidator = parameterValidator;
-        _authorizationCodeService = authorizationCodeService;
-    }
-
-    private readonly IParameterValidator _parameterValidator;
-    private readonly IAuthorizationCodeService _authorizationCodeService;
-
     /// <summary>
     /// Provides the grant type this handler supports, which is the OAuth 2.0 'authorization_code' grant type.
     /// This information is useful for identifying the handler's capabilities in a broader authorization framework.
@@ -83,40 +69,53 @@ public class AuthorizationCodeGrantHandler : IAuthorizationGrantHandler
     /// Information about the client, used to verify that the request is valid for this client.</param>
     /// <returns>A task that represents the asynchronous authorization operation.
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
-    public async Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         // Ensures the authorization code is provided in the request.
-        _parameterValidator.Required(request.Code, nameof(request.Code));
+        parameterValidator.Required(request.Code, nameof(request.Code));
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
-        var result = await _authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        var result = await authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        if (result.TryGetFailure(out var error))
+        {
+            return error;
+        }
+
+        var grant = result.GetSuccess();
 
         // Verifies that the authorization code was issued for the requesting client.
-        return result switch
+        if (grant.Context.ClientId != clientInfo.ClientId)
         {
-            // If the client making the request is not the same as the one that initiated the authentication,
-            // return an unauthorized error.
-            AuthorizedGrant { Context.ClientId: var clientId } when clientId != clientInfo.ClientId
-                => new InvalidGrantResult(
-                    ErrorCodes.UnauthorizedClient,
-                    "Code was issued for another client"),
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient,
+                "Code was issued for another client");
+        }
+
+        if (grant.Context.CodeChallenge != null)
+        {
+            // Checks if PKCE is required but the code challenge method is missing from the request.
+            if (string.IsNullOrEmpty(grant.Context.CodeChallengeMethod))
+            {
+                return new OidcError(ErrorCodes.InvalidGrant, "Code challenge method is required");
+            }
 
             // Checks if PKCE is required but the code verifier is missing from the request.
-            AuthorizedGrant { Context.CodeChallenge: not null } when string.IsNullOrEmpty(request.CodeVerifier)
-                => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is required"),
+            if (string.IsNullOrEmpty(request.CodeVerifier))
+            {
+                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is required");
+            }
 
             // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
-            AuthorizedGrant { Context: { CodeChallenge: { } challenge, CodeChallengeMethod: { } method } }
-                when !string.Equals(
-                    challenge,
-                    CalculateChallenge(method, request.CodeVerifier),
-                    StringComparison.OrdinalIgnoreCase)
+            if (!string.Equals(
+                    grant.Context.CodeChallenge,
+                    CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+            }
+        }
 
-                => new InvalidGrantResult(ErrorCodes.InvalidGrant, "Code verifier is not valid"),
-
-            // Returns the authorized grant if all checks pass.
-            _ => result,
-        };
+        return grant;
     }
 
     /// <summary>

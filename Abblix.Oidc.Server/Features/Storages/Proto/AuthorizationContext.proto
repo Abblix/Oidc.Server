@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "Features/Storages/Proto/RequestedClaims.proto";
+
+// Represents the context of an authorization process
+message AuthorizationContext {
+  // The unique identifier of the client
+  string client_id = 1;
+
+  // The requested scopes
+  repeated string scope = 2;
+
+  // Optional claims requested by the client
+  optional RequestedClaims requested_claims = 3;
+
+  // Base64url-encoded SHA-256 thumbprint of the client X.509 certificate (RFC 8705)
+  optional string x509_certificate_sha256_thumbprint = 4;
+
+  // The URI where the authorization response should be sent
+  optional string redirect_uri = 5;
+
+  // Nonce value to associate client session with ID Token
+  optional string nonce = 6;
+
+  // PKCE code challenge
+  optional string code_challenge = 7;
+
+  // PKCE code challenge method
+  optional string code_challenge_method = 8;
+
+  // Resources for which authorization is granted
+  repeated string resources = 9;
+}

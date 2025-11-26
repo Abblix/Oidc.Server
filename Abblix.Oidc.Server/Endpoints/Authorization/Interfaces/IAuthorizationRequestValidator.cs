@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
 
@@ -43,5 +44,5 @@ public interface IAuthorizationRequestValidator
 	/// <param name="request">The authorization request to validate.</param>
 	/// <returns>A task that resolves to a validation result indicating the request's compliance with
 	/// the specifications.</returns>
-	Task<AuthorizationRequestValidationResult> ValidateAsync(AuthorizationRequest request);
+	Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request);
 }

@@ -33,25 +33,13 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// state handling into the authorization response, enabling clients to maintain and manage session
 /// state in accordance with OpenID Connect session management specifications.
 /// </summary>
-public class AuthorizationRequestProcessorDecorator: IAuthorizationRequestProcessor
+/// <param name="inner">The authorization request processor to be enhanced with session management functionality.</param>
+/// <param name="sessionManagementService">The session management service responsible for generating and
+/// handling session state information.</param>
+public class AuthorizationRequestProcessorDecorator(
+    IAuthorizationRequestProcessor inner,
+    ISessionManagementService sessionManagementService): IAuthorizationRequestProcessor
 {
-    /// <summary>
-    /// Constructs an instance of <see cref="AuthorizationRequestProcessorDecorator"/> with a specified
-    /// authorization request processor and session management service.
-    /// </summary>
-    /// <param name="inner">The authorization request processor to be enhanced with session management functionality.</param>
-    /// <param name="sessionManagementService">The session management service responsible for generating and
-    /// handling session state information.</param>
-    public AuthorizationRequestProcessorDecorator(
-        IAuthorizationRequestProcessor inner,
-        ISessionManagementService sessionManagementService)
-    {
-        _inner = inner;
-        _sessionManagementService = sessionManagementService;
-    }
-
-    private readonly IAuthorizationRequestProcessor _inner;
-    private readonly ISessionManagementService _sessionManagementService;
 
     /// <summary>
     /// Asynchronously processes an authorization request by delegating to the encapsulated authorization request processor,
@@ -59,7 +47,7 @@ public class AuthorizationRequestProcessorDecorator: IAuthorizationRequestProces
     /// </summary>
     /// <param name="request">The authorization request to be processed, expected to be a valid and authenticated request.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. Upon completion, the task yields an <see cref="AuthorizationResponse"/>
+    /// A task that returns an <see cref="AuthorizationResponse"/>
     /// that may include session state information to be used by the client for session management purposes.
     /// </returns>
     /// <remarks>
@@ -69,14 +57,14 @@ public class AuthorizationRequestProcessorDecorator: IAuthorizationRequestProces
     /// </remarks>
     public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
     {
-        var response = await _inner.ProcessAsync(request);
+        var response = await inner.ProcessAsync(request);
 
         // Append session state to the response if session management is enabled and the request qualifies
-        if (_sessionManagementService.Enabled &&
+        if (sessionManagementService.Enabled &&
             response is SuccessfullyAuthenticated success && success.SessionId.HasValue() &&
             request.Model.Scope.HasFlag(Scopes.OpenId))
         {
-            success.SessionState = _sessionManagementService.GetSessionState(request.Model, success.SessionId);
+            success.SessionState = sessionManagementService.GetSessionState(request.Model, success.SessionId);
         }
 
         return response;

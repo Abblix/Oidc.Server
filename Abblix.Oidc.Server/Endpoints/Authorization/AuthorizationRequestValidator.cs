@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Model;
@@ -34,21 +35,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// allowing a sequence of validators to handle the request in a decoupled manner. Each validator in the chain
 /// processes the request and potentially passes it along to the next validator.
 /// </summary>
-public class AuthorizationRequestValidator : IAuthorizationRequestValidator
+/// <param name="validator">The first validator in the chain to handle the authorization context.</param>
+public class AuthorizationRequestValidator(IAuthorizationContextValidator validator) : IAuthorizationRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="AuthorizationRequestValidator"/> class,
-	/// setting up a chain of responsibility with the provided authorization context validator.
-	/// This approach enables flexible and modular handling of validation logic.
-	/// </summary>
-	/// <param name="validator">The first validator in the chain to handle the authorization context.</param>
-	public AuthorizationRequestValidator(IAuthorizationContextValidator validator)
-	{
-		_validator = validator;
-	}
-
-	private readonly IAuthorizationContextValidator _validator;
-
 	/// <summary>
 	/// Asynchronously validates an <see cref="AuthorizationRequest"/> by passing it through a chain of validators.
 	/// The method creates a validation context and delegates the validation process to the initial validator in the chain,
@@ -59,13 +48,14 @@ public class AuthorizationRequestValidator : IAuthorizationRequestValidator
 	/// An <see cref="AuthorizationRequestValidationResult"/> representing the outcome of the validation process,
 	/// which may be the result of processing by one or more validators in the chain.
 	/// </returns>
-	public async Task<AuthorizationRequestValidationResult> ValidateAsync(AuthorizationRequest request)
+	public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request)
 	{
 		var context = new AuthorizationValidationContext(request);
 
-		var result = await _validator.ValidateAsync(context) ??
-		             (AuthorizationRequestValidationResult)new ValidAuthorizationRequest(context);
+		var error = await validator.ValidateAsync(context);
+		if (error != null)
+			return error;
 
-		return result;
+		return new ValidAuthorizationRequest(context);
 	}
 }

@@ -31,21 +31,14 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// Provides functionality to format JSON Web Tokens (JWTs) issued to clients by the authentication service.
 /// This class handles the signing of JWTs and, if configured, their encryption, based on the needs of each client.
 /// </summary>
-public class ClientJwtFormatter : IClientJwtFormatter
+/// <param name="jwtCreator">Creator for issuing JWTs.</param>
+/// <param name="clientKeysProvider">Provider for client encryption keys.</param>
+/// <param name="serviceKeysProvider">Provider for service signing keys.</param>
+public class ClientJwtFormatter(
+    IJsonWebTokenCreator jwtCreator,
+    IClientKeysProvider clientKeysProvider,
+    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
-    public ClientJwtFormatter(
-        IJsonWebTokenCreator jwtCreator,
-        IClientKeysProvider clientKeysProvider,
-        IAuthServiceKeysProvider serviceKeysProvider)
-    {
-        _jwtCreator = jwtCreator;
-        _clientKeysProvider = clientKeysProvider;
-        _serviceKeysProvider = serviceKeysProvider;
-    }
-
-    private readonly IJsonWebTokenCreator _jwtCreator;
-    private readonly IClientKeysProvider _clientKeysProvider;
-    private readonly IAuthServiceKeysProvider _serviceKeysProvider;
 
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, applying the necessary cryptographic operations
@@ -53,7 +46,7 @@ public class ClientJwtFormatter : IClientJwtFormatter
     /// </summary>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued, including any requirements for encryption.</param>
-    /// <returns>A <see cref="Task"/> that represents the asynchronous operation, resulting in a JWT string formatted and ready for use by the client.</returns>
+    /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     /// <remarks>
     /// This method ensures the JWT is signed with the appropriate key from the authentication service. If the client's configuration supports encryption,
     /// the method also encrypts the JWT using the client's public key. The result is a JWT that conforms to the security requirements of both
@@ -61,12 +54,12 @@ public class ClientJwtFormatter : IClientJwtFormatter
     /// </remarks>
     public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
     {
-        var signingCredentials = await _serviceKeysProvider.GetSigningKeys(true)
+        var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
-        var encryptingCredentials = await _clientKeysProvider.GetEncryptionKeys(clientInfo)
+        var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
             .FirstOrDefaultAsync();
 
-        return await _jwtCreator.IssueAsync(token, signingCredentials, encryptingCredentials);
+        return await jwtCreator.IssueAsync(token, signingCredentials, encryptingCredentials);
     }
 }

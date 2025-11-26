@@ -31,5 +31,5 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 /// </summary>
 /// <param name="User">The collection of JWT claims associated with the user.</param>
 /// <param name="ClientInfo">Information about the client making the request.</param>
-public record UserInfoFoundResponse(JsonObject User, ClientInfo ClientInfo, string Issuer)
-    : UserInfoResponse;
+/// <param name="Issuer">The issuer identifier.</param>
+public record UserInfoFoundResponse(JsonObject User, ClientInfo ClientInfo, string Issuer);
