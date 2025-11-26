@@ -37,19 +37,10 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// The controller/action remains enabled if ANY of the specified endpoints is enabled.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
-public class EnabledByAttribute : Attribute
+public class EnabledByAttribute(OidcEndpoints endpoint) : Attribute
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EnabledByAttribute"/> class.
-    /// </summary>
-    /// <param name="endpoint">The OIDC endpoint configuration flag that controls whether this controller/action is enabled.</param>
-    public EnabledByAttribute(OidcEndpoints endpoint)
-    {
-        Endpoint = endpoint;
-    }
-
     /// <summary>
     /// The OIDC endpoint configuration flag.
     /// </summary>
-    public OidcEndpoints Endpoint { get; }
+    public OidcEndpoints Endpoint { get; } = endpoint;
 }
