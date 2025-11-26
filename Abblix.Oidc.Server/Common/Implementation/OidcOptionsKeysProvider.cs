@@ -36,24 +36,17 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
-internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
+internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthServiceKeysProvider
 {
-	public OidcOptionsKeysProvider(IOptions<OidcOptions> options)
-	{
-		_options = options;
-	}
-
-	private readonly IOptions<OidcOptions> _options;
-
 	/// <summary>
 	/// Retrieves a collection of JSON Web Keys used for encryption, based on the configured encryption certificates.
 	/// </summary>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for encryption purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys)
+	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
 	{
 		var jsonWebKeys =
-			from jwk in _options.Value.EncryptionKeys
+			from jwk in options.Value.EncryptionKeys
 			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
@@ -64,10 +57,10 @@ internal class OidcOptionsKeysProvider : IAuthServiceKeysProvider
 	/// </summary>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for signing purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys)
+	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
 	{
 		var jsonWebKeys =
-			from jwk in _options.Value.SigningKeys
+			from jwk in options.Value.SigningKeys
 			select jwk.Sanitize(includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();

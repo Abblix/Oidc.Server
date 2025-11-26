@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
@@ -48,5 +50,5 @@ public interface ITokenHandler
     /// authorization server. They must ensure that only valid and authorized requests lead to the issuance of tokens,
     /// thereby maintaining the integrity and security of the authentication and authorization process.
     /// </remarks>
-    Task<TokenResponse> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
+    Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
 }

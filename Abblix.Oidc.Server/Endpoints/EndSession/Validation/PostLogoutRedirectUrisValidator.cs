@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -32,31 +32,21 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// <summary>
 /// Validates the post-logout redirect URIs for an end-session request.
 /// </summary>
-public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
+/// <param name="logger">The logger for capturing validation information.</param>
+public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PostLogoutRedirectUrisValidator"/> class.
-    /// </summary>
-    /// <param name="logger">The logger for capturing validation information.</param>
-    public PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger)
-    {
-        _logger = logger;
-    }
-
-    private readonly ILogger _logger;
-
     /// <summary>
     /// Validates the end-session request asynchronously.
     /// </summary>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation.
-    /// Returns an EndSessionRequestValidationError if validation fails, or null if successful.
+    /// Returns an AuthError if validation fails, or null if successful.
     /// </returns>
-    public Task<EndSessionRequestValidationError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
-    private EndSessionRequestValidationError? Validate(EndSessionValidationContext context)
+    private OidcError? Validate(EndSessionValidationContext context)
     {
         var request = context.Request;
 
@@ -66,7 +56,7 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
 
         if (context.ClientInfo == null)
         {
-             return new EndSessionRequestValidationError(
+             return new OidcError(
                  ErrorCodes.UnauthorizedClient,
                  $"Unable to determine a client from {Parameters.ClientId} or {Parameters.IdTokenHint}, but it is necessary to validate {Parameters.PostLogoutRedirectUri} value");
         }
@@ -75,11 +65,11 @@ public class PostLogoutRedirectUrisValidator : IEndSessionContextValidator
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        _logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-            new Sanitized(redirectUri),
+        logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
+            Sanitized.Value(redirectUri),
             context.ClientInfo.ClientId);
 
-        return new EndSessionRequestValidationError(
+        return new OidcError(
             ErrorCodes.InvalidRequest,
             "The post-logout redirect URI is not valid for specified client");
     }

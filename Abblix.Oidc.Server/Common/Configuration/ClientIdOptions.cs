@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 public record ClientIdOptions
 {
     /// <summary>
-    /// Gets or sets the length of the generated client ID.
+    /// The length of the generated client ID.
     /// </summary>
     public int Length { get; init; } = 16;
 }

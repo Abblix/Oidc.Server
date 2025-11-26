@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+// The possible states of a JSON Web Token
+enum JsonWebTokenStatusEnum {
+  // The status of the token is not known
+  UNKNOWN = 0;
+
+  // The token has been used
+  USED = 1;
+
+  // The token has been revoked
+  REVOKED = 2;
+}
+
+// Wrapper message for JsonWebTokenStatus enum to enable serialization
+message JsonWebTokenStatus {
+  JsonWebTokenStatusEnum status = 1;
+}

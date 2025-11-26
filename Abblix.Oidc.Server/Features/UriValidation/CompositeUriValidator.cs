@@ -32,19 +32,13 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// URI validation strategies into a single cohesive unit. This class is particularly useful in scenarios where
 /// URIs need to be validated against multiple criteria before being deemed valid.
 /// </remarks>
-public sealed class CompositeUriValidator : IUriValidator
+/// <param name="validators">A collection of URI validators to be combined.</param>
+public sealed class CompositeUriValidator(IEnumerable<IUriValidator> validators) : IUriValidator
 {
-	public CompositeUriValidator(IEnumerable<IUriValidator> validators)
-	{
-		_validators = validators;
-	}
-
 	public CompositeUriValidator(params IUriValidator[] validators)
 		: this((IEnumerable<IUriValidator>)validators)
 	{
 	}
-
-	private readonly IEnumerable<IUriValidator> _validators;
 
 	/// <summary>
 	/// Determines whether the specified URI is valid based on the criteria of all validators in the composite.
@@ -53,5 +47,5 @@ public sealed class CompositeUriValidator : IUriValidator
 	/// <returns>
 	/// <c>true</c> if the URI passes the validation rules of all included validators; otherwise, <c>false</c>.
 	/// </returns>
-	public bool IsValid(Uri uri) => _validators.Any(validator => validator.IsValid(uri));
+	public bool IsValid(Uri uri) => validators.Any(validator => validator.IsValid(uri));
 }

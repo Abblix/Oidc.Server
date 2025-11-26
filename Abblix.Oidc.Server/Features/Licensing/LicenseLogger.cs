@@ -88,7 +88,7 @@ internal class LicenseLogger: ILogger
     private const string LoggerName = "Abblix.Oidc.Server";
     private ILogger _logger = NullLogger.Instance;
     private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes;
-    private Timer _timer;
+    private readonly Timer _timer;
 
     /// <summary>
     /// Initializes the logger with a specific logger factory.

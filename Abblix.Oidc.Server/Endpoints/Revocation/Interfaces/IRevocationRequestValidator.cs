@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 
 
@@ -40,7 +42,7 @@ public interface IRevocationRequestValidator
 	/// <param name="revocationRequest">The revocation request to be validated.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A task representing the asynchronous operation with the validation result.</returns>
-	Task<RevocationRequestValidationResult> ValidateAsync(
+	Task<Result<ValidRevocationRequest, OidcError>> ValidateAsync(
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest);
 }

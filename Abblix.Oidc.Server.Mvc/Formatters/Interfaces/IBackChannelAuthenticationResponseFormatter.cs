@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -34,11 +36,11 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// Formats a back-channel authentication response asynchronously.
     /// </summary>
     /// <param name="request">The back-channel authentication request.</param>
-    /// <param name="response">The back-channel authentication response to be formatted.</param>
+    /// <param name="response">The back-channel authentication response result to be formatted.</param>
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.
     /// </returns>
     Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
-        BackChannelAuthenticationResponse response);
+        Result<BackChannelAuthenticationSuccess, OidcError> response);
 }

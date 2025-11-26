@@ -30,5 +30,18 @@ public class DiscoveryOptions
 	/// <summary>
 	/// Allows exposing exact paths to OIDC endpoints via discovery manifest.
 	/// </summary>
-	public bool AllowEndpointPathsDiscovery { get; set; } = true;
+    public bool AllowEndpointPathsDiscovery { get; set; } = true;
+
+    /// <summary>
+    /// RFC 8705: Optional mTLS endpoint aliases to advertise.
+    /// Configure with absolute URIs hosted on an mTLS-enabled origin.
+    /// </summary>
+    public MtlsAliasesOptions? MtlsEndpointAliases { get; set; }
+
+    /// <summary>
+    /// RFC 8705: Optional base URI for computing mTLS endpoint aliases automatically.
+    /// If set, and a specific alias is not provided, discovery will derive the alias by
+    /// taking the standard endpoint path and applying this base URI (scheme/host/port and optional base path).
+    /// </summary>
+    public Uri? MtlsBaseUri { get; set; }
 }

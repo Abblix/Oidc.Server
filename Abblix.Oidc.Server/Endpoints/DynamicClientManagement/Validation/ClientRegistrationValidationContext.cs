@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 public record ClientRegistrationValidationContext(ClientRegistrationRequest Request)
 {
 	/// <summary>
-	/// Gets or sets the sector identifier associated with the client.
+	/// The sector identifier associated with the client.
 	/// </summary>
 	public string? SectorIdentifier { get; set; }
 }

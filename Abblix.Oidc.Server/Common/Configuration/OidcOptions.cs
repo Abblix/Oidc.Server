@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-//
+// 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-//
+// 
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-//
+// 
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-//
+// 
 // For full licensing terms, please visit:
-//
+// 
 // https://oidc.abblix.com/license
-//
+// 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -53,7 +53,7 @@ public record OidcOptions
 	/// redirect URIs, and other OAuth2/OIDC parameters. Proper client configuration is essential for securing client
 	/// applications and enabling them to interact with the OIDC server according to the OAuth2 and OIDC specifications.
 	/// </summary>
-	public IEnumerable<ClientInfo> Clients { get; set; } = Array.Empty<ClientInfo>();
+	public IEnumerable<ClientInfo> Clients { get; set; } = [];
 
 	/// <summary>
 	/// The URL to a user interface or service that allows users to select an account during the authentication process.
@@ -105,7 +105,7 @@ public record OidcOptions
 	/// allowing clients to verify that the tokens have not been tampered with and were indeed issued by this server.
 	/// It is recommended to rotate these keys periodically to maintain the security of the token signing process.
 	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = Array.Empty<JsonWebKey>();
+	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
 
 	/// <summary>
 	/// Options related to the check session mechanism in OIDC. This configuration controls how the OIDC server manages
@@ -134,7 +134,7 @@ public record OidcOptions
 	/// These keys are used to encrypt ID tokens and, optionally, access tokens when the OIDC server sends them to clients.
 	/// Clients use the corresponding public keys to decrypt the tokens and access the contained claims.
 	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = Array.Empty<JsonWebKey>();
+	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
 
 	/// <summary>
 	/// The duration for which a Pushed Authorization Request (PAR) is valid. PAR is a security enhancement that allows
@@ -184,6 +184,12 @@ public record OidcOptions
 	public BackChannelAuthenticationOptions BackChannelAuthentication { get; set; } = new();
 
 	/// <summary>
+	/// Configuration options for the Device Authorization Grant (RFC 8628),
+	/// used for devices with limited input capabilities.
+	/// </summary>
+	public DeviceAuthorizationOptions? DeviceAuthorization { get; set; }
+
+	/// <summary>
 	/// Specifies the length of session identifiers used by the OIDC server.
 	/// The length determines the uniqueness and security of the session identifiers.
 	/// </summary>
@@ -205,4 +211,10 @@ public record OidcOptions
 	/// enhancing security for certain sensitive operations.
 	/// </summary>
 	public bool RequireSignedRequestObject { get; set; } = false;
+
+	/// <summary>
+	/// Configuration options for JWT Bearer grant type (RFC 7523).
+	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
+	/// </summary>
+	public JwtBearerOptions JwtBearer { get; set; } = new();
 }

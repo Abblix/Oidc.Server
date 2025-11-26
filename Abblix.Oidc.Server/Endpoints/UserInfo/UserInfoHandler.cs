@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
@@ -30,27 +31,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// Handles user information requests in an OpenID Connect compliant manner. It ensures that requests for user info
 /// are correctly validated and processed, returning the requested user information if the request is authorized.
 /// </summary>
-public class UserInfoHandler : IUserInfoHandler
+/// <param name="validator">An implementation of <see cref="IUserInfoRequestValidator"/> responsible for validating
+/// user info requests against OpenID Connect specifications.</param>
+/// <param name="processor">An implementation of <see cref="IUserInfoRequestProcessor"/> responsible for processing
+/// validated requests and retrieving user information.</param>
+public class UserInfoHandler(
+    IUserInfoRequestValidator validator,
+    IUserInfoRequestProcessor processor) : IUserInfoHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UserInfoHandler"/> class, setting up the necessary validator
-    /// and processor for handling user info requests.
-    /// </summary>
-    /// <param name="validator">An implementation of <see cref="IUserInfoRequestValidator"/> responsible for validating
-    /// user info requests against OpenID Connect specifications.</param>
-    /// <param name="processor">An implementation of <see cref="IUserInfoRequestProcessor"/> responsible for processing
-    /// validated requests and retrieving user information.</param>
-    public UserInfoHandler(
-        IUserInfoRequestValidator validator,
-        IUserInfoRequestProcessor processor)
-    {
-        _validator = validator;
-        _processor = processor;
-    }
-
-    private readonly IUserInfoRequestValidator _validator;
-    private readonly IUserInfoRequestProcessor _processor;
-
     /// <summary>
     /// Asynchronously processes a user info request by first validating it and then, if validation is successful,
     /// retrieving the requested user information.
@@ -68,20 +56,12 @@ public class UserInfoHandler : IUserInfoHandler
     /// user information, in line with OpenID Connect protocols. It leverages the validator to ensure requests meet
     /// OIDC standards and the processor to fetch and return the relevant user information securely.
     /// </remarks>
-    public async Task<UserInfoResponse> HandleAsync(
+    public async Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(userInfoRequest, clientRequest);
 
-        return validationResult switch
-        {
-            ValidUserInfoRequest validRequest => await _processor.ProcessAsync(validRequest),
-
-            UserInfoRequestError { Error: var error, ErrorDescription: var description }
-                => new UserInfoErrorResponse(error, description),
-
-            _ => throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType()),
-        };
+        return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -37,5 +39,5 @@ public interface IIntrospectionResponseFormatter
     /// <param name="request">The introspection request.</param>
     /// <param name="response">The introspection response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, IntrospectionResponse response);
+    Task<ActionResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response);
 }

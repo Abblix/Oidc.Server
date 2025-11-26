@@ -52,7 +52,7 @@ public record PushedAuthorizationResponse
     /// </summary>
     [JsonPropertyName(Parameters.RequestUri)]
     [JsonPropertyOrder(1)]
-    public Uri RequestUri { get; init; } = default!;
+    public Uri RequestUri { get; init; } = null!;
 
     /// <summary>
     /// The duration for which the authorization request is considered valid.

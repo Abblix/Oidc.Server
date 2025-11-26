@@ -34,7 +34,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// The authorized grant associated with this authentication request,
 /// containing details about the user's authorization context.
 /// </param>
-public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant)
+/// <param name="ExpiresAt">
+/// The absolute time when this backchannel authentication request expires.
+/// </param>
+public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, DateTimeOffset ExpiresAt)
 {
     /// <summary>
     /// Specifies the next time the client should poll for updates regarding the authentication request.
@@ -47,4 +50,16 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant)
     /// Defaults to Pending, reflecting that the request has not yet been resolved.
     /// </summary>
     public BackChannelAuthenticationStatus Status { get; set; } = BackChannelAuthenticationStatus.Pending;
+
+    /// <summary>
+    /// The client notification endpoint for ping mode.
+    /// Populated from client configuration when ping mode is used.
+    /// </summary>
+    public Uri? ClientNotificationEndpoint { get; set; }
+
+    /// <summary>
+    /// The client notification token for ping mode.
+    /// Provided by the client in the authentication request for secure notification delivery.
+    /// </summary>
+    public string? ClientNotificationToken { get; set; }
 }

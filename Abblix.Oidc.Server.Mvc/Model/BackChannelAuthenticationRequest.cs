@@ -26,7 +26,6 @@ using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
 
-
 /// <summary>
 /// Represents a client-initiated backchannel authentication request, typically used in the CIBA (Client-Initiated
 /// Backchannel Authentication) flow as part of OpenID Connect. This request allows a client to request user
@@ -41,7 +40,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [BindProperty(Name = Parameters.Scope)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-    public string[] Scope { get; init; } = Array.Empty<string>();
+    public string[] Scope { get; init; } = [];
 
     /// <summary>
     /// A token issued by the client that the authorization server uses to notify the client about the result
@@ -57,7 +56,8 @@ public record BackChannelAuthenticationRequest
     /// such as multifactor authentication or biometric verification.
     /// </summary>
     [BindProperty(Name = Parameters.AcrValues)]
-    public List<string>? AcrValues { get; init; }
+    [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
+    public string[]? AcrValues { get; init; }
 
     /// <summary>
     /// A token used to pass a hint about the login identifier to the authorization server.

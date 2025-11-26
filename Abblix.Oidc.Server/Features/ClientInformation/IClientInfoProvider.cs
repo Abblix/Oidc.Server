@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -37,7 +37,7 @@ public interface IClientInfoProvider
 	/// </summary>
 	/// <param name="clientId">The unique identifier of the client whose information is being requested.</param>
 	/// <returns>
-	/// A task that represents the asynchronous operation, resulting in the client's information if found;
+	/// A task that returns the client's information if found;
 	/// otherwise, null. This allows for non-blocking queries to the underlying client information storage.
 	/// </returns>
 	/// <remarks>

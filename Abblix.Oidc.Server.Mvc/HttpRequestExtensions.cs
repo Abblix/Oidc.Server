@@ -54,4 +54,26 @@ public static class HttpRequestExtensions
 	/// <returns>The full URL constructed from the request's components and the specified path.</returns>
 	private static string GetFullUrl(this HttpRequest request, PathString path)
 		=> request.Scheme + Uri.SchemeDelimiter + request.Host + path;
+
+	/// <summary>
+	/// Converts a relative path into an absolute URI using the application's base URL.
+	/// </summary>
+	/// <param name="request">The HTTP request used to determine the application's base URL.</param>
+	/// <param name="path">
+	/// The path to resolve. If it starts with <c>"~/"</c>, it is treated as application-relative.
+	/// Otherwise, it is resolved as a relative path from the application root.
+	/// </param>
+	/// <returns>
+	/// A fully qualified <see cref="Uri"/> representing the resolved absolute URL.
+	/// </returns>
+	/// <remarks>
+	/// This method uses <c>~/</c> as an indicator of application-relative paths (e.g., <c>~/dashboard</c>).
+	/// </remarks>
+	public static Uri ToAbsoluteUri(this HttpRequest request, string path)
+	{
+		var appUrl = request.GetAppUrl();
+		return path.StartsWith("~/")
+			? new Uri(appUrl + path[1..], UriKind.Absolute)
+			: new Uri(new Uri(appUrl, UriKind.Absolute), path);
+	}
 }

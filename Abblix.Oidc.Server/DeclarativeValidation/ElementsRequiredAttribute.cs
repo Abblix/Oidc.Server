@@ -26,6 +26,4 @@ namespace Abblix.Oidc.Server.DeclarativeValidation;
 /// An attribute indicating that elements of array (properties, fields, or parameters) are required.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-public class ElementsRequiredAttribute : Attribute
-{
-}
+public class ElementsRequiredAttribute : Attribute;

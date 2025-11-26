@@ -31,7 +31,6 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 /// Represents a valid end-session request with the associated client information.
 /// </summary>
 public record ValidEndSessionRequest(EndSessionRequest Model, ClientInfo? ClientInfo)
-    : EndSessionRequestValidationResult
 {
     /// <summary>
     /// The end-session request model.

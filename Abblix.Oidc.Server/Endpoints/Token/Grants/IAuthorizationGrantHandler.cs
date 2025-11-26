@@ -20,10 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -42,7 +44,7 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <param name="request">The authorization request containing the required parameters for the grant type.</param>
 	/// <param name="clientInfo">Client information associated with the request, used for validation and
 	/// to generate the authorization response.</param>
-	/// <returns>A task that, when completed successfully, returns a <see cref="GrantAuthorizationResult"/> indicating
-	/// the outcome of the authorization process, including any tokens or error messages.</returns>
-	Task<GrantAuthorizationResult> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
+	/// <returns>A task that returns a <see cref="Result{AuthorizedGrant, AuthError}"/> with the authorization outcome,
+	/// including any tokens or error messages.</returns>
+	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
 }

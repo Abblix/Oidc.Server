@@ -31,8 +31,8 @@ internal static class JsonWebTokenAlgorithms
     /// for supported algorithms used by both JsonWebTokenCreator and JsonWebTokenValidator classes,
     /// leveraging JwtSecurityTokenHandler under the hood.
     /// </summary>
-    public static readonly IEnumerable<string> SigningAlgValuesSupported = new[]
-    {
+    public static readonly IEnumerable<string> SigningAlgValuesSupported =
+    [
         SigningAlgorithms.RS256,
         SigningAlgorithms.RS384,
         SigningAlgorithms.RS512,
@@ -49,6 +49,6 @@ internal static class JsonWebTokenAlgorithms
         SigningAlgorithms.HS384,
         SigningAlgorithms.HS512,
 
-        SigningAlgorithms.None,
-    };
+        SigningAlgorithms.None
+    ];
 }

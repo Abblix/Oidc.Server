@@ -44,14 +44,11 @@ public class AutoPostFormatter : TextOutputFormatter
 	{
 		_parametersProvider = parametersProvider;
 		_action = action;
-
 		SupportedMediaTypes.Add(MediaTypeNames.Text.Html);
 		SupportedEncodings.Add(Encoding.UTF8);
 	}
-
 	private readonly IParametersProvider _parametersProvider;
 	private readonly Uri _action;
-
 	/// <summary>
 	/// Writes the HTML content to the response body asynchronously.
 	/// This method overrides the base class implementation to write an HTML form with the specified parameters.

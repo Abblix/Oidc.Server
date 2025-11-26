@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "Features/Storages/Proto/AuthSession.proto";
+import "Features/Storages/Proto/AuthorizationContext.proto";
+import "Features/Storages/Proto/TokenInfo.proto";
+
+// Represents the successful result of an authorized grant operation
+message AuthorizedGrant {
+  // The authentication session associated with the grant
+  AuthSession auth_session = 1;
+
+  // The context of the authorization process
+  AuthorizationContext context = 2;
+
+  // Tokens that have been issued as part of this grant
+  repeated TokenInfo issued_tokens = 3;
+}

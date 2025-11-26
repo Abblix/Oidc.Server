@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Model;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
@@ -36,7 +38,6 @@ public interface IUserInfoResponseFormatter
     /// </summary>
     /// <param name="request">The UserInfo request.</param>
     /// <param name="response">The UserInfo response to be formatted.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult{UserInfoResponse}"/>.</returns>
-    Task<ActionResult<UserInfoResponse>> FormatResponseAsync(UserInfoRequest request,
-        Endpoints.UserInfo.Interfaces.UserInfoResponse response);
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.</returns>
+    Task<ActionResult> FormatResponseAsync(UserInfoRequest request, Result<UserInfoFoundResponse, OidcError> response);
 }

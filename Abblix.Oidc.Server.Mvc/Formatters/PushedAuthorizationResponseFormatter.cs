@@ -23,9 +23,7 @@
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -33,22 +31,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
-/// Implements response formatting for pushed authorization requests, extending the base functionality to handle
-/// specific response types.
+/// Implements response formatting for pushed authorization requests.
 /// </summary>
-public class PushedAuthorizationResponseFormatter : AuthorizationErrorFormatter, IPushedAuthorizationResponseFormatter
+/// <param name="errorFormatter">The formatter for handling authorization errors.</param>
+public class PushedAuthorizationResponseFormatter(IAuthorizationErrorFormatter errorFormatter)
+    : IPushedAuthorizationResponseFormatter
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PushedAuthorizationResponseFormatter"/> class
-    /// with the specified parameters' provider.
-    /// </summary>
-    /// <param name="parametersProvider">Provides access to parameters used in formatting the response.</param>
-    /// <param name="issuerProvider">Provides access to the issuer information used in responses.</param>
-    public PushedAuthorizationResponseFormatter(IParametersProvider parametersProvider, IIssuerProvider issuerProvider)
-        : base(parametersProvider, issuerProvider)
-    {
-    }
-
     /// <summary>
     /// Asynchronously formats the response to a pushed authorization request.
     /// </summary>
@@ -76,7 +64,7 @@ public class PushedAuthorizationResponseFormatter : AuthorizationErrorFormatter,
                 return new JsonResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
 
             case AuthorizationError error:
-                return await base.FormatResponseAsync(request, error);
+                return await errorFormatter.FormatResponseAsync(request, error);
 
             default:
                 throw new UnexpectedTypeException(nameof(response), response.GetType());

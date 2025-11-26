@@ -29,14 +29,14 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents a successful backchannel authentication response. This record indicates that the
 /// backchannel authentication request has been successfully processed and the client has been authenticated.
 /// </summary>
-public record BackChannelAuthenticationSuccess : BackChannelAuthenticationResponse
+public record BackChannelAuthenticationSuccess
 {
     /// <summary>
     /// The unique identifier of the authentication request. The client uses this ID
     /// to poll the authorization server and check the status of the user's authentication.
     /// </summary>
     [JsonPropertyName(Parameters.AuthenticationRequestId)]
-    public string AuthenticationRequestId { get; set; } = default!;
+    public string AuthenticationRequestId { get; set; } = null!;
 
     /// <summary>
     /// Specifies the time period (in seconds) after which the backchannel authentication request expires.

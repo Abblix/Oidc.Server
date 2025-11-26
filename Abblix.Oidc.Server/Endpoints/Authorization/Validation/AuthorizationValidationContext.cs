@@ -72,11 +72,11 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// <summary>
 	/// A collection of scope definitions applicable to the authorization request, determining the permissions granted.
 	/// </summary>
-	public ScopeDefinition[] Scope { get; set; } = Array.Empty<ScopeDefinition>();
+	public ScopeDefinition[] Scope { get; set; } = [];
 
 	/// <summary>
 	/// A collection of resource definitions that may be requested as part of the authorization process,
 	/// providing additional control over the accessible resources.
 	/// </summary>
-	public ResourceDefinition[] Resources { get; set; } = Array.Empty<ResourceDefinition>();
+	public ResourceDefinition[] Resources { get; set; } = [];
 }

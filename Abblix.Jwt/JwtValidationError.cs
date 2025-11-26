@@ -24,9 +24,7 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Represents an error encountered during the validation of a JSON Web Token (JWT).
-/// This record extends the <see cref="JwtValidationResult"/> indicating a validation failure.
 /// </summary>
 /// <param name="Error">The specific type of JWT error encountered.</param>
 /// <param name="ErrorDescription">A description of the error providing details about the validation failure.</param>
-public record JwtValidationError(JwtError Error, string ErrorDescription)
-	: JwtValidationResult;
+public record JwtValidationError(JwtError Error, string ErrorDescription);

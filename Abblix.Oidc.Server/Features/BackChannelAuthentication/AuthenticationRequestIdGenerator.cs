@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-//
+// 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-//
+// 
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-//
+// 
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-//
+// 
 // For full licensing terms, please visit:
-//
+// 
 // https://oidc.abblix.com/license
-//
+// 
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -31,21 +31,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// Generates a unique authentication request ID using a cryptographically secure random number generator.
 /// This ID is encoded for safe use in URLs and is typically used in backchannel authentication flows.
 /// </summary>
-public class AuthenticationRequestIdGenerator : IAuthenticationRequestIdGenerator
+/// <param name="options">The configuration options for OIDC, including settings for backchannel authentication.</param>
+public class AuthenticationRequestIdGenerator(IOptions<OidcOptions> options) : IAuthenticationRequestIdGenerator
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AuthenticationRequestIdGenerator"/> class,
-    /// using the provided OIDC options for configuring the request ID length.
-    /// </summary>
-    /// <param name="options">The configuration options for OIDC, including settings for backchannel authentication.
-    /// </param>
-    public AuthenticationRequestIdGenerator(IOptions<OidcOptions> options)
-    {
-        _options = options;
-    }
-
-    private readonly IOptions<OidcOptions> _options;
-
     /// <summary>
     /// Generates a unique authentication request ID by creating a cryptographically secure random byte array
     /// and encoding it for safe use in URLs.
@@ -54,5 +42,5 @@ public class AuthenticationRequestIdGenerator : IAuthenticationRequestIdGenerato
     public string GenerateAuthenticationRequestId()
         => HttpServerUtility.UrlTokenEncode(
             CryptoRandom.GetRandomBytes(
-                _options.Value.BackChannelAuthentication.RequestIdLength));
+                options.Value.BackChannelAuthentication.RequestIdLength));
 }

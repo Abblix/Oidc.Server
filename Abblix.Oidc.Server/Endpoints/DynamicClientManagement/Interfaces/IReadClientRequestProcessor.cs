@@ -20,6 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -32,5 +36,5 @@ public interface IReadClientRequestProcessor
     /// </summary>
     /// <param name="request">The valid client request to process.</param>
     /// <returns>A task representing the processing result.</returns>
-    Task<ReadClientResponse> ProcessAsync(ValidClientRequest request);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
 }

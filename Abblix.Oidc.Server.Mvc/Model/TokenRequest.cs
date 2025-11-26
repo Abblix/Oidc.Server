@@ -46,9 +46,8 @@ public record TokenRequest
         GrantTypes.RefreshToken,
         GrantTypes.Password,
         GrantTypes.Ciba,
-        GrantTypes.Implicit,
         GrantTypes.ClientCredentials)]
-    public string GrantType { get; set; } = default!;
+    public string GrantType { get; set; } = null!;
 
     /// <summary>
     /// The authorization code received from the authorization server.
@@ -84,7 +83,7 @@ public record TokenRequest
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.Scope)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-    public string[] Scope { get; set; } = Array.Empty<string>();
+    public string[] Scope { get; set; } = [];
 
     /// <summary>
     /// The username of the resource owner, used in the password grant type.
@@ -108,6 +107,13 @@ public record TokenRequest
     public string? CodeVerifier { get; set; }
 
     /// <summary>
+    /// The authentication request identifier for Client Initiated Backchannel Authentication (CIBA).
+    /// This is used in the CIBA grant type to reference a previously initiated authentication request.
+    /// </summary>
+    [BindProperty(SupportsGet = true, Name = Parameters.AuthenticationRequestId)]
+    public string? AuthenticationRequestId { get; set; }
+
+    /// <summary>
     /// Maps the properties of this token request to a <see cref="Core.TokenRequest"/> object.
     /// This method is used to translate the request data into a format that can be processed by the core logic of the server.
     /// </summary>
@@ -124,6 +130,7 @@ public record TokenRequest
             RefreshToken = RefreshToken,
             RedirectUri = RedirectUri,
             CodeVerifier = CodeVerifier,
+            AuthenticationRequestId = AuthenticationRequestId,
         };
     }
 }

@@ -33,18 +33,10 @@ namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 /// This cache is used to store CheckSession responses for quick retrieval, reducing the need to recompute them
 /// for the same input key.
 /// </remarks>
-public class CheckSessionResponseCache : ICheckSessionResponseCache
+/// <param name="cacheOptions">The options to configure the memory cache.</param>
+public class CheckSessionResponseCache(IOptions<MemoryCacheOptions> cacheOptions) : ICheckSessionResponseCache
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CheckSessionResponseCache"/> class with the specified cache options.
-    /// </summary>
-    /// <param name="cacheOptions">The options to configure the memory cache.</param>
-    public CheckSessionResponseCache(IOptions<MemoryCacheOptions> cacheOptions)
-    {
-        _cache = new MemoryCache(cacheOptions);
-    }
-
-    private readonly MemoryCache _cache;
+    private readonly MemoryCache _cache = new(cacheOptions);
 
     /// <summary>
     /// Gets an ActionResult from the cache with the specified key, or adds it to the cache if not present.

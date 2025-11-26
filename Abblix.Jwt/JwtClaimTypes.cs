@@ -39,6 +39,12 @@ public static class JwtClaimTypes
     public const string Algorithm = "alg";
 
     /// <summary>
+    /// The 'kid' (key ID) claim is a hint indicating which key was used to secure the JWT.
+    /// It is typically found in the JWT header and helps identify the key in a JWKS.
+    /// </summary>
+    public const string KeyId = "kid";
+
+    /// <summary>
     /// The 'idp' claim represents the identity provider that authenticated the end user.
     /// </summary>
     public const string IdentityProvider = "idp";

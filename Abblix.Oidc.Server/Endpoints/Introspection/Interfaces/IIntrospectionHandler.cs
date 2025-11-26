@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
@@ -50,7 +52,7 @@ public interface IIntrospectionHandler
     /// This helps prevent unauthorized access and ensures that tokens are used in accordance with their
     /// intended scopes and lifetimes.
     /// </remarks>
-    Task<IntrospectionResponse> HandleAsync(
+    Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest);
 }

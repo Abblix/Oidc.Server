@@ -23,14 +23,13 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.UserInfoRequest;
 
 
@@ -41,28 +40,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// Validates user information requests by verifying the access token and ensuring the request conforms to expected standards.
 /// Implements the <see cref="IUserInfoRequestValidator"/> interface.
 /// </summary>
-public class UserInfoRequestValidator : IUserInfoRequestValidator
+/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
+/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
+/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+public class UserInfoRequestValidator(
+	IAuthServiceJwtValidator jwtValidator,
+	IAccessTokenService accessTokenService,
+	IClientInfoProvider clientInfoProvider) : IUserInfoRequestValidator
 {
-	/// <summary>
-	/// Initializes a new instance of the <see cref="UserInfoRequestValidator"/> class.
-	/// </summary>
-	/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
-	/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
-	/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
-	public UserInfoRequestValidator(
-		IAuthServiceJwtValidator jwtValidator,
-		IAccessTokenService accessTokenService,
-		IClientInfoProvider clientInfoProvider)
-	{
-		_jwtValidator = jwtValidator;
-		_accessTokenService = accessTokenService;
-		_clientInfoProvider = clientInfoProvider;
-	}
-
-	private readonly IAuthServiceJwtValidator _jwtValidator;
-	private readonly IAccessTokenService _accessTokenService;
-	private readonly IClientInfoProvider _clientInfoProvider;
-
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
 	/// the provided access token and request parameters.
@@ -70,8 +55,8 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 	/// <param name="userInfoRequest">The user info request to validate.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
-	/// which upon completion will yield a <see cref="UserInfoRequestValidationResult"/>.</returns>
-	public async Task<UserInfoRequestValidationResult> ValidateAsync(
+	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, AuthError}"/>.</returns>
+	public async Task<Result<ValidUserInfoRequest, OidcError>> ValidateAsync(
 		UserInfoRequest userInfoRequest,
 		ClientRequest clientRequest)
 	{
@@ -81,14 +66,14 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		{
 			if (authorizationHeader.Scheme != TokenTypes.Bearer)
 			{
-				return new UserInfoRequestError(
+				return new OidcError(
 					ErrorCodes.InvalidGrant,
 					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 			}
 
 			if (userInfoRequest.AccessToken != null)
 			{
-				return new UserInfoRequestError(
+				return new OidcError(
 					ErrorCodes.InvalidGrant,
 					$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 					$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
@@ -96,7 +81,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 
 			if (authorizationHeader.Parameter == null)
 			{
-				return new UserInfoRequestError(
+				return new OidcError(
 					ErrorCodes.InvalidGrant,
 					$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 			}
@@ -105,7 +90,7 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 		}
 		else if (userInfoRequest.AccessToken == null)
 		{
-			return new UserInfoRequestError(
+			return new OidcError(
 				ErrorCodes.InvalidGrant,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
@@ -115,33 +100,27 @@ public class UserInfoRequestValidator : IUserInfoRequestValidator
 			jwtAccessToken = userInfoRequest.AccessToken;
 		}
 
-		var result = await _jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
+		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
-		AuthSession? authSession;
-		AuthorizationContext? authContext;
-
-		switch (result)
+		if (!result.TryGetSuccess(out var token))
 		{
-			case ValidJsonWebToken { Token.Header.Type: var tokenType } when tokenType != JwtTypes.AccessToken:
-				return new UserInfoRequestError(
-					ErrorCodes.InvalidGrant,
-					$"Invalid token type: {tokenType}");
-
-			case ValidJsonWebToken { Token: var token }:
-				(authSession, authContext) = await _accessTokenService.AuthenticateByAccessTokenAsync(token);
-				break;
-
-			case JwtValidationError error:
-				return new UserInfoRequestError(ErrorCodes.InvalidGrant, error.ErrorDescription);
-
-			default:
-				throw new UnexpectedTypeException(nameof(result), result.GetType());
+			var error = result.GetFailure();
+			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 		}
 
-		var clientInfo = await _clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
+		if (token.Header.Type is var tokenType && tokenType != JwtTypes.AccessToken)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				$"Invalid token type: {tokenType}");
+		}
+
+		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
+
+		var clientInfo = await clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
 		if (clientInfo == null)
 		{
-			return new UserInfoRequestError(
+			return new OidcError(
 				ErrorCodes.InvalidGrant,
 				$"The client '{authContext.ClientId}' is not found");
 		}

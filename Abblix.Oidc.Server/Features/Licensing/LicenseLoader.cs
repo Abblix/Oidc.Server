@@ -65,31 +65,28 @@ public class LicenseLoader
                 ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
             });
 
-        switch (validationResult)
+        if (!validationResult.TryGetSuccess(out var token))
         {
-            case ValidJsonWebToken { Token.Header.Type: ValidLicenseType, Token: var token }:
-                var license = new License
-                {
-                    NotBefore = token.Payload.NotBefore,
-                    ExpiresAt = token.Payload.ExpiresAt,
-                    GracePeriod = token.Payload.Json.GetUnixTimeSeconds("grace_period"),
-                    ClientLimit = token.Payload["client_limit"]?.GetValue<int>(),
-                    IssuerLimit = token.Payload["issuer_limit"]?.GetValue<int>(),
-                    ValidIssuers = token.Payload.Json.GetArrayOfStrings("valid_issuers").ToHashSet(StringComparer.Ordinal),
-                };
-                LicenseChecker.AddLicense(license);
-                break;
-
-            case ValidJsonWebToken:
-                throw new InvalidOperationException("The JWT type is not valid");
-
-            case JwtValidationError { Error: var error, ErrorDescription: var description}:
-                throw new InvalidOperationException(
-                    $"The license can't be validated: [{error}] {description}");
-
-            default:
-                throw new UnexpectedTypeException(nameof(validationResult), validationResult.GetType());
+            var error = validationResult.GetFailure();
+            throw new InvalidOperationException(
+                $"The license can't be validated: [{error.Error}] {error.ErrorDescription}");
         }
+
+        if (token.Header.Type != ValidLicenseType)
+        {
+            throw new InvalidOperationException("The JWT type is not valid");
+        }
+
+        var license = new License
+        {
+            NotBefore = token.Payload.NotBefore,
+            ExpiresAt = token.Payload.ExpiresAt,
+            GracePeriod = token.Payload.Json.GetUnixTimeSeconds("grace_period"),
+            ClientLimit = token.Payload["client_limit"]?.GetValue<int>(),
+            IssuerLimit = token.Payload["issuer_limit"]?.GetValue<int>(),
+            ValidIssuers = token.Payload.Json.GetArrayOfStrings("valid_issuers").ToHashSet(StringComparer.Ordinal),
+        };
+        LicenseChecker.AddLicense(license);
     }
 
     /// <summary>

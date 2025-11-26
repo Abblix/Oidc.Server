@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/struct.proto";
+
+// Details of a requested claim per OpenID Connect Core specification
+message RequestedClaimDetails {
+  // Whether the claim is essential for authorization
+  optional bool essential = 1;
+
+  // Specific value the claim should have (any JSON type: string, number, boolean, object, array, null).
+  // Used when requesting a claim with an exact required value.
+  // Example: { "email": { "value": "user@example.com" } }
+  optional google.protobuf.Value value = 2;
+
+  // Set of acceptable values for the claim (array of any JSON types).
+  // Used when multiple values are acceptable for the claim.
+  // Example: { "locale": { "values": ["en-US", "en-GB", "en"] } }
+  optional google.protobuf.ListValue values = 3;
+}
+
+// Dictionary entry mapping claim name to its details.
+// Represents key-value pairs for structured claim requests.
+message ClaimEntry {
+  string key = 1;
+  RequestedClaimDetails value = 2;
+}
+
+// Claims requested for UserInfo response and ID Token per OpenID Connect specification.
+// Stores claim requests as structured data without JSON string encoding.
+message RequestedClaims {
+  // Claims requested for UserInfo endpoint response
+  repeated ClaimEntry user_info = 1;
+
+  // Claims requested for ID Token
+  repeated ClaimEntry id_token = 2;
+}

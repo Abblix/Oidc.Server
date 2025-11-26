@@ -39,4 +39,4 @@ public record ValidUserInfoRequest(
 	UserInfoRequest Model,
 	AuthSession AuthSession,
 	AuthorizationContext AuthContext,
-	ClientInfo ClientInfo) : UserInfoRequestValidationResult;
+	ClientInfo ClientInfo);

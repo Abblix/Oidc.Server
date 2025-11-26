@@ -31,26 +31,14 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// is obtained from external sources and passed directly to the application without the need for asynchronous
 /// retrieval from a configuration store or service.
 /// </remarks>
-public class StaticLicenseJwtProvider : ILicenseJwtProvider
+public class StaticLicenseJwtProvider(string licenseJwt) : ILicenseJwtProvider
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="StaticLicenseJwtProvider"/> class with a specified license JWT.
-    /// </summary>
-    /// <param name="licenseJwt">The license JWT to be used for OIDC service configuration validation.</param>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="licenseJwt"/> is null or empty.</exception>
-    public StaticLicenseJwtProvider(string licenseJwt)
-    {
-        _licenseJwt = licenseJwt;
-    }
-
-    private readonly string _licenseJwt;
-
     /// <summary>
     /// Asynchronously returns the predefined license JWT string.
     /// </summary>
-    /// <returns>A task that represents the asynchronous operation, resulting in the license JWT string.</returns>
-    public IAsyncEnumerable<string>? GetLicenseJwtAsync()
+    /// <returns>A task that returns the license JWT string.</returns>
+    public IAsyncEnumerable<string> GetLicenseJwtAsync()
     {
-        return new[] { _licenseJwt }.ToAsyncEnumerable();
+        return new[] { licenseJwt }.ToAsyncEnumerable();
     }
 }

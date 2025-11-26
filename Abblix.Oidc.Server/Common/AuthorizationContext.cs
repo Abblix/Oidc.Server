@@ -122,6 +122,13 @@ public record AuthorizationContext
     public RequestedClaims? RequestedClaims { get; init; }
 
     /// <summary>
+    /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
+    /// for mutual TLS client authentication. When present, access tokens should include a confirmation claim
+    /// (cnf) containing "x5t#S256" equal to this value (RFC 8705).
+    /// </summary>
+    public string? X509CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
     /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI
     /// for the client application, ensuring that authorization responses are delivered to the correct destination
     /// securely.
