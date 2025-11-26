@@ -71,10 +71,16 @@ public class EnabledByConvention(IOptions<OidcOptions> options) : IApplicationMo
 
     private bool Disabled(ICommonModel model)
     {
-        var attr = model.Attributes
+        var attributes = model.Attributes
             .OfType<EnabledByAttribute>()
-            .FirstOrDefault();
+            .ToArray();
 
-        return attr != null && !options.Value.EnabledEndpoints.HasFlag(attr.Endpoint);
+        // If there are no attributes, it's not disabled
+        if (attributes.Length == 0)
+            return false;
+
+        // It's disabled only if ALL attributes have endpoints that are not enabled.
+        // In other words: ANY attribute with an enabled endpoint keeps the controller/action active.
+        return attributes.All(attr => !options.Value.EnabledEndpoints.HasFlag(attr.Endpoint));
     }
 }
