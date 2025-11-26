@@ -437,13 +437,13 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IBackChannelRequestStorage, BackChannelRequestStorage>();
         services.TryAddSingleton<INotificationDeliveryService, HttpNotificationDeliveryService>();
 
-        // Register mode-specific completion handlers as keyed services (scoped to allow scoped dependencies)
+        // Register mode-specific completion handlers as keyed services
         services.TryAddKeyedScoped<AuthenticationCompletionHandler, PollModeCompletionHandler>(BackchannelTokenDeliveryModes.Poll);
         services.TryAddKeyedScoped<AuthenticationCompletionHandler, PingModeCompletionHandler>(BackchannelTokenDeliveryModes.Ping);
         services.TryAddKeyedScoped<AuthenticationCompletionHandler, PushModeCompletionHandler>(BackchannelTokenDeliveryModes.Push);
 
         // Register router that automatically selects the appropriate mode-specific handler
-        services.TryAddSingleton<IAuthenticationCompletionHandler, AuthenticationCompletionRouter>();
+        services.TryAddScoped<IAuthenticationCompletionHandler, AuthenticationCompletionRouter>();
 
         // Register mode-specific grant processors as keyed services
         services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PollModeGrantProcessor>(BackchannelTokenDeliveryModes.Poll);
