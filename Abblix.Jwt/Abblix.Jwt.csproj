@@ -17,12 +17,12 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>v2.0: Major release with mTLS authentication (RFC 8705), JWT Bearer grants (RFC 7523), Device Authorization (RFC 8628), CIBA Ping/Push modes &amp; Long-Polling, and Result pattern migration. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.0</PackageReleaseNotes>
+    <PackageReleaseNotes>Comprehensive JWT validation with support for JWT Bearer grants (RFC 7523), signature verification, custom claims, and audience validation. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
-    <PackageVersion>2.0</PackageVersion>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <FileVersion>2.0.1.0</FileVersion>
+    <PackageVersion>2.0.1</PackageVersion>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
