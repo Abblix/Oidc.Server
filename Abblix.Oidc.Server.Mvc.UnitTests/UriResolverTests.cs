@@ -13,14 +13,12 @@ public class UriResolverTests
 {
 	private readonly Mock<IHttpContextAccessor> _httpContextAccessor;
 	private readonly Mock<IUrlHelperFactory> _urlHelperFactory;
-	private readonly UriResolver _uriResolver;
 	private readonly DefaultHttpContext _httpContext;
 
 	public UriResolverTests()
 	{
 		_httpContextAccessor = new Mock<IHttpContextAccessor>(MockBehavior.Strict);
 		_urlHelperFactory = new Mock<IUrlHelperFactory>(MockBehavior.Strict);
-		_uriResolver = new UriResolver(_httpContextAccessor.Object, _urlHelperFactory.Object);
 
 		// Setup HttpContext with default request properties
 		_httpContext = new DefaultHttpContext();
@@ -28,10 +26,29 @@ public class UriResolverTests
 		_httpContext.Request.Host = new HostString("example.com");
 		_httpContext.Request.PathBase = "/app";
 
-		// Initialize RequestServices with fallback convention (like production does)
-		SetupConfiguration(null);
+		// Setup RequestServices with empty service provider
+		_httpContext.RequestServices = new ServiceCollection().BuildServiceProvider();
 
 		_httpContextAccessor.Setup(x => x.HttpContext).Returns(_httpContext);
+	}
+
+	private UriResolver CreateResolver(IConfigurationSection? configSection = null)
+	{
+		var services = new ServiceCollection();
+
+		// Configure MVC options with ConfigurableRouteConvention if configSection is provided
+		services.Configure<MvcOptions>(options =>
+		{
+			if (configSection != null)
+			{
+				options.Conventions.Add(new ConfigurableRouteConvention(Path.RoutePrefix, configSection));
+			}
+		});
+
+		_httpContext.RequestServices = services.BuildServiceProvider();
+
+		var mvcOptions = _httpContext.RequestServices.GetRequiredService<IOptions<MvcOptions>>();
+		return new UriResolver(_httpContextAccessor.Object, _urlHelperFactory.Object, mvcOptions);
 	}
 
 	[Theory]
@@ -40,8 +57,11 @@ public class UriResolverTests
 	[InlineData("images/logo.png", "https://example.com/images/logo.png")] // Relative to server root, not app
 	public void Content_StaticPath_ReturnsAbsoluteUri(string path, string expectedUrl)
 	{
+		// Arrange
+		var resolver = CreateResolver();
+
 		// Act
-		var result = _uriResolver.Content(path);
+		var result = resolver.Content(path);
 
 		// Assert
 		Assert.Equal(expectedUrl, result.ToString());
@@ -57,10 +77,10 @@ public class UriResolverTests
 	public void Content_PathConstantWithDefaultValue_ReturnsAbsoluteUri(string pathConstant, string expectedUrl)
 	{
 		// Arrange - No configuration provided, should use default values
-		SetupConfiguration(null);
+		var resolver = CreateResolver();
 
 		// Act
-		var result = _uriResolver.Content(pathConstant);
+		var result = resolver.Content(pathConstant);
 
 		// Assert
 		Assert.Equal(expectedUrl, result.ToString());
@@ -69,20 +89,21 @@ public class UriResolverTests
 	[Fact]
 	public void Content_PathConstantWithConfiguredValue_ReturnsConfiguredUri()
 	{
-		// Arrange - Same structure as ConfigurableRouteConvention uses
+		// Arrange
 		var configuration = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				["route:authorize"] = "~/oauth/authorize",
-				["route:token"] = "~/oauth/token"
+				["Routes:authorize"] = "~/oauth/authorize",
+				["Routes:token"] = "~/oauth/token"
 			})
 			.Build();
 
-		SetupConfiguration(configuration);
+		var configSection = configuration.GetSection("Routes");
+		var resolver = CreateResolver(configSection);
 
 		// Act
-		var authorizeResult = _uriResolver.Content(Path.Authorize);
-		var tokenResult = _uriResolver.Content(Path.Token);
+		var authorizeResult = resolver.Content(Path.Authorize);
+		var tokenResult = resolver.Content(Path.Token);
 
 		// Assert
 		Assert.Equal("https://example.com/app/oauth/authorize", authorizeResult.ToString());
@@ -96,15 +117,16 @@ public class UriResolverTests
 		var configuration = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				["route:base"] = "~/custom-connect",
-				["route:authorize"] = "[route:base]/authorize"
+				["Routes:base"] = "~/custom-connect",
+				["Routes:authorize"] = "[route:base]/authorize"
 			})
 			.Build();
 
-		SetupConfiguration(configuration);
+		var configSection = configuration.GetSection("Routes");
+		var resolver = CreateResolver(configSection);
 
 		// Act
-		var result = _uriResolver.Content(Path.Authorize);
+		var result = resolver.Content(Path.Authorize);
 
 		// Assert
 		Assert.Equal("https://example.com/app/custom-connect/authorize", result.ToString());
@@ -117,10 +139,10 @@ public class UriResolverTests
 		_httpContext.Request.Scheme = "http";
 		_httpContext.Request.Host = new HostString("localhost:5000");
 		_httpContext.Request.PathBase = "";
-		SetupConfiguration(null);
+		var resolver = CreateResolver();
 
 		// Act
-		var result = _uriResolver.Content(Path.Authorize);
+		var result = resolver.Content(Path.Authorize);
 
 		// Assert
 		Assert.Equal("http://localhost:5000/connect/authorize", result.ToString());
@@ -141,10 +163,10 @@ public class UriResolverTests
 		_httpContext.Request.Scheme = scheme;
 		_httpContext.Request.Host = new HostString(host);
 		_httpContext.Request.PathBase = pathBase;
-		SetupConfiguration(null);
+		var resolver = CreateResolver();
 
 		// Act
-		var result = _uriResolver.Content(path);
+		var result = resolver.Content(path);
 
 		// Assert
 		Assert.Equal(expectedUrl, result.ToString());
@@ -157,16 +179,17 @@ public class UriResolverTests
 		var configuration = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				["route:authorize"] = "[route:token]",
-				["route:token"] = "[route:authorize]"
+				["Routes:authorize"] = "[route:token]",
+				["Routes:token"] = "[route:authorize]"
 			})
 			.Build();
 
-		SetupConfiguration(configuration);
+		var configSection = configuration.GetSection("Routes");
+		var resolver = CreateResolver(configSection);
 
 		// Act & Assert
 		var exception = Assert.Throws<InvalidOperationException>(() =>
-			_uriResolver.Content(Path.Authorize));
+			resolver.Content(Path.Authorize));
 
 		Assert.Contains("Circular dependency", exception.Message);
 	}
@@ -176,41 +199,13 @@ public class UriResolverTests
 	{
 		// Arrange - Create a custom route template without fallback
 		const string customTemplate = "[route:nonexistent]";
-		SetupConfiguration(null);
+		var resolver = CreateResolver();
 
 		// Act & Assert
 		var exception = Assert.Throws<InvalidOperationException>(() =>
-			_uriResolver.Content(customTemplate));
+			resolver.Content(customTemplate));
 
-		// ConfigurableRouteConvention uses message: "Can't resolve the route {token}"
 		Assert.Contains("Can't resolve the route", exception.Message);
 		Assert.Contains("nonexistent", exception.Message);
-	}
-
-	private void SetupConfiguration(IConfiguration? configuration)
-	{
-		var services = new ServiceCollection();
-
-		if (configuration != null)
-		{
-			services.AddSingleton(configuration);
-
-			// Register MvcOptions with ConfigurableRouteConvention
-			var configSection = configuration.GetSection("route");
-			services.Configure<MvcOptions>(options =>
-			{
-				options.Conventions.Add(new ConfigurableRouteConvention(Path.RoutePrefix, configSection));
-			});
-		}
-		else
-		{
-			// Register fallback convention when no configuration
-			services.Configure<MvcOptions>(options =>
-			{
-				options.Conventions.Add(new ConfigurableRouteConvention(Path.RoutePrefix));
-			});
-		}
-
-		_httpContext.RequestServices = services.BuildServiceProvider();
 	}
 }

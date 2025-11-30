@@ -22,9 +22,7 @@
 
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -62,7 +60,7 @@ public static class HttpRequestExtensions
 	/// <summary>
 	/// Converts a relative path into an absolute URI using the application's base URL.
 	/// </summary>
-	/// <param name="request">The HTTP request used to determine the application's base URL.</param>
+	/// <param name="request">The HTTP request used to access the <see cref="IUriResolver"/> service.</param>
 	/// <param name="path">
 	/// The path to resolve. Supports:
 	/// - Application-relative paths starting with <c>"~/"</c> (e.g., <c>~/dashboard</c>)
@@ -73,42 +71,11 @@ public static class HttpRequestExtensions
 	/// A fully qualified <see cref="Uri"/> representing the resolved absolute URL.
 	/// </returns>
 	/// <remarks>
-	/// This method resolves route template constants from <see cref="Path"/> class using the current
-	/// routing configuration. If route values are configured, they override the default values.
+	/// This extension method delegates to <see cref="IUriResolver.Content"/> for URI resolution.
 	/// </remarks>
 	public static Uri ToAbsoluteUri(this HttpRequest request, string path)
 	{
-		var appUrl = request.GetAppUrl();
-
-		// Handle route template constants like [route:authorize?~/connect/authorize]
-		path = request.ResolveRouteTemplate(path);
-
-		return path.StartsWith("~/")
-			? new Uri(appUrl + path[1..], UriKind.Absolute)
-			: new Uri(new Uri(appUrl, UriKind.Absolute), path);
-	}
-
-	/// <summary>
-	/// Resolves route template constants to their actual path values using the registered
-	/// <see cref="ConfigurableRouteConvention"/> from MVC options.
-	/// This ensures the same configuration is used for both route templates and runtime path resolution.
-	/// </summary>
-	/// <param name="request">The HTTP request providing access to services.</param>
-	/// <param name="path">The path that may contain route template syntax.</param>
-	/// <returns>The resolved path with route templates replaced by actual values.</returns>
-	private static string ResolveRouteTemplate(this HttpRequest request, string path)
-	{
-		// Try to get the registered ConfigurableRouteConvention from MVC options
-		var mvcOptions = request.HttpContext.RequestServices.GetService<IOptions<MvcOptions>>();
-
-		// If convention is registered, use it to resolve the path
-		var convention = mvcOptions?.Value.Conventions
-			.OfType<ConfigurableRouteConvention>()
-			.FirstOrDefault();
-
-		// Fallback: create a convention with no configuration section (uses only fallback values)
-		convention ??= new ConfigurableRouteConvention();
-
-		return convention.Resolve(path);
+		var uriResolver = request.HttpContext.RequestServices.GetRequiredService<IUriResolver>();
+		return uriResolver.Content(path);
 	}
 }
