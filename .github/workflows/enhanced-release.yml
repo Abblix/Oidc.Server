@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Explicit version (e.g., 1.6.0) - leave empty for auto-increment'
+        description: 'Explicit version (e.g., 2.0) - leave empty for auto-increment'
         required: false
         type: string
       version_bump:
@@ -78,7 +78,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
-          dotnet-version: '9.0'
+          dotnet-version: '10.0'
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
@@ -114,7 +114,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
-          dotnet-version: '9.0'
+          dotnet-version: '10.0'
       - name: Setup local package source
         run: |
           dotnet nuget add source "$(pwd)/local-packages" --name "LocalAbblix"
@@ -140,7 +140,6 @@ jobs:
   publish-packages:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
-    environment: package-publishing  # This creates a manual approval gate
     steps:
       - name: Download NuGet packages
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
@@ -150,7 +149,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
         with:
-          dotnet-version: '9.0'
+          dotnet-version: '10.0'
       - name: List packages to be published
         run: |
           echo "📦 Packages ready for publishing:"
@@ -259,7 +258,7 @@ jobs:
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
           tag_name: v${{ needs.versioning.outputs.version }}
-          name: Release v${{ needs.versioning.outputs.version }}
+          name: v${{ needs.versioning.outputs.version }}
           body_path: CHANGELOG.md
           files: nupkg/*.nupkg
           prerelease: ${{ github.event.inputs.pre_release }}
