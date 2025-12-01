@@ -33,14 +33,21 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// This attribute is processed at application startup by <see cref="Conventions.EnabledByConvention"/>,
 /// which removes controllers or actions from the application model if their endpoint is disabled. This prevents
 /// the controller/action from being registered at all, rather than checking at runtime.
-/// Multiple instances of this attribute can be applied to specify multiple endpoint requirements.
-/// The controller/action remains enabled if ANY of the specified endpoints is enabled.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
-public class EnabledByAttribute(OidcEndpoints endpoint) : Attribute
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public class EnabledByAttribute : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EnabledByAttribute"/> class.
+    /// </summary>
+    /// <param name="endpoint">The OIDC endpoint configuration flag that controls whether this controller/action is enabled.</param>
+    public EnabledByAttribute(OidcEndpoints endpoint)
+    {
+        Endpoint = endpoint;
+    }
+
     /// <summary>
     /// The OIDC endpoint configuration flag.
     /// </summary>
-    public OidcEndpoints Endpoint { get; } = endpoint;
+    public OidcEndpoints Endpoint { get; }
 }

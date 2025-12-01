@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 
 /// <summary>
 /// A convention that resolves tokenized route templates using configuration values,
-/// supporting fallback values with the syntax: [route:TokenName??FallbackValue].
+/// supporting fallback values with the syntax: [route:TokenName?FallbackValue].
 /// </summary>
 public class ConfigurableRouteConvention : IApplicationModelConvention
 {
