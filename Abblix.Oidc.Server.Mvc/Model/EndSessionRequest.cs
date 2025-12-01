@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using Abblix.Oidc.Server.Mvc.Attributes;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 /// Represents a request to end a session, typically used in OpenID Connect logout scenarios.
 /// This record encapsulates the necessary parameters for initiating a user logout request.
 /// </summary>
-public record EndSessionRequest
+public record EndSessionRequest : IValidatableObject
 {
     /// <summary>
     /// The ID token previously issued by the server, used as a hint about the End-User's current authenticated session.
@@ -53,10 +53,9 @@ public record EndSessionRequest
     /// <summary>
     /// The client identifier for the application requesting the logout.
     /// This helps the server in identifying which client application is initiating the logout process.
-    /// Required when PostLogoutRedirectUri is specified or when IdTokenHint is not provided.
+    /// Required when PostLogoutRedirectUri is specified and IdTokenHint is not provided.
     /// </summary>
     [BindProperty(SupportsGet = true, Name = Parameters.ClientId)]
-    [RequiredWhenNoIdTokenHint]
     public string? ClientId { get; set; }
 
     /// <summary>
@@ -106,19 +105,26 @@ public record EndSessionRequest
             Confirmed = Confirmed,
         };
     }
-}
 
-/// <summary>
-/// Validates that the ClientId is required when PostLogoutRedirectUri is specified but IdTokenHint is not.
-/// Per OIDC RP-Initiated Logout 1.0 specification:
-/// - When post_logout_redirect_uri is used without id_token_hint, client_id identifies the client
-/// - When id_token_hint is provided, the OP can extract client identity from the token
-/// - When neither are provided, the OP uses session cookies to identify the user
-/// </summary>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-file sealed class RequiredWhenNoIdTokenHintAttribute : ConditionalRequiredAttribute
-{
-    protected override bool IsRequired(object model)
-        => model is EndSessionRequest { PostLogoutRedirectUri: not null } request &&
-           string.IsNullOrEmpty(request.IdTokenHint);
+    /// <summary>
+    /// Validates the end session request according to OIDC RP-Initiated Logout 1.0 specification.
+    /// This method is called AFTER all properties are bound, ensuring cross-property validation works correctly.
+    /// Per OIDC specification:
+    /// - When post_logout_redirect_uri is used without id_token_hint, client_id identifies the client
+    /// - When id_token_hint is provided, the OP can extract client identity from the token
+    /// - When neither are provided, the OP uses session cookies to identify the user
+    /// </summary>
+    /// <param name="validationContext">The validation context.</param>
+    /// <returns>A collection of validation results.</returns>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (PostLogoutRedirectUri is not null &&
+            string.IsNullOrWhiteSpace(IdTokenHint) &&
+            string.IsNullOrWhiteSpace(ClientId))
+        {
+            yield return new ValidationResult(
+                "The client_id field is required when post_logout_redirect_uri is specified without id_token_hint.",
+                [nameof(ClientId)]);
+        }
+    }
 }

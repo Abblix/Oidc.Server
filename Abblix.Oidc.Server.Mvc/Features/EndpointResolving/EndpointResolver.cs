@@ -35,13 +35,13 @@ namespace Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 /// <param name="endpointDataSource">
 /// The endpoint data source that provides access to all configured route endpoints in the application.
 /// </param>
-/// <param name="httpContextAccessor">
-/// The HTTP context accessor used to determine the base URL of the current request.
+/// <param name="uriResolver">
+/// The URI resolver used to convert relative paths to absolute URIs.
 /// </param>
 public class EndpointResolver(
     ILogger<EndpointResolver> logger,
     EndpointDataSource endpointDataSource,
-    IHttpContextAccessor httpContextAccessor) : IEndpointResolver
+    IUriResolver uriResolver) : IEndpointResolver
 {
     /// <summary>
     /// Resolves the absolute URI for a given controller and action based on the configured routes.
@@ -76,7 +76,6 @@ public class EndpointResolver(
         if (string.IsNullOrEmpty(actionUri))
             return null;
 
-        var httpContext = httpContextAccessor.HttpContext;
-        return httpContext.NotNull(nameof(httpContext)).Request.ToAbsoluteUri(actionUri);
+        return uriResolver.Content(actionUri);
     }
 }

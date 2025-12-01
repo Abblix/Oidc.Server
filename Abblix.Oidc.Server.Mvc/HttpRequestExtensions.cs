@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -58,22 +60,22 @@ public static class HttpRequestExtensions
 	/// <summary>
 	/// Converts a relative path into an absolute URI using the application's base URL.
 	/// </summary>
-	/// <param name="request">The HTTP request used to determine the application's base URL.</param>
+	/// <param name="request">The HTTP request used to access the <see cref="IUriResolver"/> service.</param>
 	/// <param name="path">
-	/// The path to resolve. If it starts with <c>"~/"</c>, it is treated as application-relative.
-	/// Otherwise, it is resolved as a relative path from the application root.
+	/// The path to resolve. Supports:
+	/// - Application-relative paths starting with <c>"~/"</c> (e.g., <c>~/dashboard</c>)
+	/// - Route template constants with default values (e.g., <c>[route:authorize?~/connect/authorize]</c>)
+	/// - Regular relative paths
 	/// </param>
 	/// <returns>
 	/// A fully qualified <see cref="Uri"/> representing the resolved absolute URL.
 	/// </returns>
 	/// <remarks>
-	/// This method uses <c>~/</c> as an indicator of application-relative paths (e.g., <c>~/dashboard</c>).
+	/// This extension method delegates to <see cref="IUriResolver.Content"/> for URI resolution.
 	/// </remarks>
 	public static Uri ToAbsoluteUri(this HttpRequest request, string path)
 	{
-		var appUrl = request.GetAppUrl();
-		return path.StartsWith("~/")
-			? new Uri(appUrl + path[1..], UriKind.Absolute)
-			: new Uri(new Uri(appUrl, UriKind.Absolute), path);
+		var uriResolver = request.HttpContext.RequestServices.GetRequiredService<IUriResolver>();
+		return uriResolver.Content(path);
 	}
 }

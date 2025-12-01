@@ -86,7 +86,7 @@ public class AuthenticationHeaderBinder : ModelBinderBase
     /// Provides values from HTTP headers.
     /// </summary>
     /// <param name="headers">The HTTP header dictionary to provide values from.</param>
-    private sealed class HeaderValueProvider(IHeaderDictionary headers) : IValueProvider
+    private class HeaderValueProvider(IHeaderDictionary headers) : IValueProvider
     {
         /// <inheritdoc />
         public bool ContainsPrefix(string prefix)

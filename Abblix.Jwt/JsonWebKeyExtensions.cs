@@ -261,6 +261,13 @@ public static class JsonWebKeyExtensions
 		return jwk;
 	}
 
+	private static class EllipticCurveOids
+	{
+		public const string P256 = "1.2.840.10045.3.1.7";
+		public const string P384 = "1.3.132.0.34";
+		public const string P521 = "1.3.132.0.35";
+	}
+
 	/// <summary>
 	/// Applies Elliptic Curve parameters to an EllipticCurveJsonWebKey.
 	/// </summary>

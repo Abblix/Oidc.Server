@@ -67,10 +67,21 @@ public static class ConfigurableRoutesExtensions
         IConfigurationSection configSection,
         string prefix = Path.RoutePrefix)
     {
-        services.Configure<MvcOptions>(options =>
-        {
-            options.Conventions.Add(new ConfigurableRouteConvention(prefix, configSection));
-        });
+        services.Configure<MvcOptions>(
+            options =>
+            {
+                var routeConvention = new ConfigurableRouteConvention(prefix, configSection);
+                for (var i = 0; i < options.Conventions.Count; i++)
+                {
+                    if (options.Conventions[i] is not ConfigurableRouteConvention)
+                        continue;
+
+                    options.Conventions[i] = routeConvention;
+                    return;
+                }
+
+                options.Conventions.Add(routeConvention);
+            });
 
         return services;
     }
@@ -95,7 +106,8 @@ public static class ConfigurableRoutesExtensions
     {
         services.PostConfigure<MvcOptions>(options =>
         {
-            options.Conventions.Add(new ConfigurableRouteConvention(prefix));
+            if (!options.Conventions.OfType<ConfigurableRouteConvention>().Any())
+                options.Conventions.Add(new ConfigurableRouteConvention(prefix));
         });
 
         return services;
