@@ -99,9 +99,11 @@ public class RequestObjectFetcher(
     /// </remarks>
     private async Task<Result<JsonObject, OidcError>> ValidateAsync(string requestObject)
     {
-        var validationOptions = ValidationOptions.ValidateIssuerSigningKey;
-        if (options.Value.RequireSignedRequestObject)
-            validationOptions |= ValidationOptions.RequireSignedTokens;
+        // If RequireSignedRequestObject is true, enforce signature validation
+        // If false, allow unsigned tokens (alg=none) but don't validate signing keys
+        var validationOptions = options.Value.RequireSignedRequestObject
+            ? ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey
+            : default(ValidationOptions);
 
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
