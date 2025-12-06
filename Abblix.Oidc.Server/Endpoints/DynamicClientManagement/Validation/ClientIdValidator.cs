@@ -39,20 +39,36 @@ public class ClientIdValidator(
 {
     /// <summary>
     /// Validates the client specified in the client registration request by checking if it already exists and is registered.
+    /// For update operations, ensures the client exists. For new registrations, ensures it doesn't exist.
     /// </summary>
     /// <param name="context">The validation context containing client registration information.</param>
     /// <returns>A AuthError if the validation fails, or null if the request is valid.</returns>
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
-        if (clientId.HasValue())
+        if (!clientId.HasValue())
+            return null;
+
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        switch (context.Operation)
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
-            if (clientInfo != null)
-            {
+            // For UPDATE: client MUST exist
+            case DynamicClientOperation.Update when clientInfo is not null:
+
+            // For new registration: client must NOT exist
+            case DynamicClientOperation.Register when clientInfo is null:
+                break;
+
+            case DynamicClientOperation.Update:
+                logger.LogWarning("The client with id {ClientId} does not exist", Sanitized.Value(clientId));
+                return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} does not exist");
+
+            case DynamicClientOperation.Register:
                 logger.LogWarning("The client with id {ClientId} is already registered", Sanitized.Value(clientId));
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
-            }
+
+            default:
+                throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");
         }
         return null;
     }

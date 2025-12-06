@@ -403,12 +403,17 @@ public static class ServiceCollectionExtensions
 
             .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
             .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
+            .AddKeyedScoped<IRegisterClientRequestValidator, UpdateClientRegistrationValidator>(UpdateClientRequestValidator.RegistrationKey)
             .AddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>()
 
             .AddScoped<IClientRequestValidator, ClientRequestValidator>()
 
             .AddScoped<IReadClientHandler, ReadClientHandler>()
             .AddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>()
+
+            .AddScoped<IUpdateClientHandler, UpdateClientHandler>()
+            .AddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>()
+            .AddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>()
 
             .AddScoped<IRemoveClientHandler, RemoveClientHandler>()
             .AddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();

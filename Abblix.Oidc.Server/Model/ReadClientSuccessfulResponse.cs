@@ -63,7 +63,7 @@ public record ReadClientSuccessfulResponse
     /// </summary>
     [JsonPropertyOrder(4)]
     [JsonPropertyName(Parameters.RegistrationClientUri)]
-    public required Uri RegistrationClientUri { get; init; }
+    public Uri? RegistrationClientUri { get; init; }
 
     /// <summary>
     /// The access token for subsequent operations on the client configuration endpoint.

@@ -115,6 +115,7 @@ public static class ServiceCollectionExtensions
 
 			.AddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>()
 			.AddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>()
+			.AddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>()
 			.AddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>()
 
 			.Configure<MvcOptions>(options =>
