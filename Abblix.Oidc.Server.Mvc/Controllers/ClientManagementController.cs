@@ -79,8 +79,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client information requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client information response.</param>
-    /// <param name="clientId">The client identifier from the URL path.</param>
-    /// <param name="request">The authentication details (registration_access_token via Authorization header).</param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that includes
     /// the client information response.</returns>
     /// <remarks>
@@ -93,10 +92,9 @@ public class ClientManagementController : ControllerBase
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
         [FromServices] IReadClientResponseFormatter formatter,
-        [FromRoute] string clientId,
-        ClientRequest request)
+        ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = request.Map() with { ClientId = clientId };
+        var clientRequest = authorizationRequest.ToClientRequest();
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }
@@ -106,8 +104,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client update requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client update response.</param>
-    /// <param name="clientId">The client identifier from the URL path.</param>
-    /// <param name="clientRequest"></param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <param name="registrationRequest">The updated client metadata from request body.</param>
     /// <returns>A task that returns an action result with the updated client configuration.</returns>
     /// <remarks>
@@ -123,12 +120,11 @@ public class ClientManagementController : ControllerBase
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter formatter,
-        [FromRoute] string clientId,
-        ClientRequest clientRequest,
+        ClientAuthorizationRequest authorizationRequest,
         [FromBody] ClientRegistrationRequest registrationRequest)
     {
         var updateRequest = new UpdateClientRequest(
-            clientRequest.Map() with { ClientId = clientId },
+            authorizationRequest.ToClientRequest(),
             registrationRequest.Map());
         var response = await handler.HandleAsync(updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
@@ -140,23 +136,22 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client removal requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client removal response.</param>
-    /// <param name="clientId">The client identifier from the URL path.</param>
-    /// <param name="request">The authentication details from query parameters.</param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that confirms
     /// the client removal.</returns>
     /// <remarks>
     /// This method supports the removal of clients from the authorization server per RFC 7592 Section 2.3.
     /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
     [HttpDelete(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
         [FromServices] IRemoveClientResponseFormatter formatter,
-        [FromRoute] string clientId,
-        [FromQuery] ClientRequest request)
+        ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = request.Map() with { ClientId = clientId };
+        var clientRequest = authorizationRequest.ToClientRequest();
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }
