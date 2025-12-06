@@ -89,6 +89,6 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
         MvcUtils.NameOf<ClientManagementController>(),
         new RouteValueDictionary
         {
-            { ClientRequest.Parameters.ClientId, clientId },
+            { "clientId", clientId },
         });
 }

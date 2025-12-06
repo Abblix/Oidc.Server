@@ -95,6 +95,12 @@ public static class Path
     public const string Register = "[" + RoutePrefix + ":register?" + Base + "/register]";
 
     /// <summary>
+    /// Path for the client configuration endpoint per RFC 7592 Section 2.
+    /// Format: /connect/register/{client_id}
+    /// </summary>
+    public const string RegisterClient = Register + "/{clientId}";
+
+    /// <summary>
     /// Base route template for .well-known endpoints with default value ~/.well-known.
     /// </summary>
     private const string WellKnown = "[" + RoutePrefix + ":well_known?~/.well-known]";
