@@ -79,22 +79,24 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client information requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client information response.</param>
-    /// <param name="request">The details of the client information request.</param>
+    /// <param name="clientId">The client identifier from the URL path.</param>
+    /// <param name="request">The authentication details (registration_access_token via Authorization header).</param>
     /// <returns>A task that returns an action result that includes
     /// the client information response.</returns>
     /// <remarks>
     /// This method allows clients to query their current configuration stored by the authorization server.
-    /// It is compliant with the OpenID Connect Dynamic Client Registration protocol, enabling clients to manage
-    /// their registration details post-registration.
+    /// Per RFC 7592 Section 2.1, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpGet(Path.Register)]
+    [HttpGet(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
         [FromServices] IReadClientResponseFormatter formatter,
-        [FromQuery] ClientRequest request)
+        [FromRoute] string clientId,
+        ClientRequest request)
     {
-        var clientRequest = request.Map();
+        var clientRequest = request.Map() with { ClientId = clientId };
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }
@@ -104,25 +106,30 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client update requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client update response.</param>
-    /// <param name="queryRequest">The client authentication from query parameters.</param>
-    /// <param name="bodyRequest">The updated client metadata from request body.</param>
+    /// <param name="clientId">The client identifier from the URL path.</param>
+    /// <param name="clientRequest"></param>
+    /// <param name="registrationRequest">The updated client metadata from request body.</param>
     /// <returns>A task that returns an action result with the updated client configuration.</returns>
     /// <remarks>
     /// This method implements RFC 7592 OAuth 2.0 Dynamic Client Registration Management Protocol Section 2.2.
-    /// It allows clients to update their registration metadata using the registration_access_token.
-    /// The request body must contain all client metadata including the client_id.
+    /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
+    /// The request body must contain all client metadata including the client_id and client_secret.
     /// Returns 200 OK with updated configuration on success.
     /// </remarks>
-    [HttpPut(Path.Register)]
+    [HttpPut(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter formatter,
-        [FromQuery] ClientRequest queryRequest,
-        [FromBody] ClientRegistrationRequest bodyRequest)
+        [FromRoute] string clientId,
+        ClientRequest clientRequest,
+        [FromBody] ClientRegistrationRequest registrationRequest)
     {
-        var updateRequest = new UpdateClientRequest(queryRequest.Map(), bodyRequest.Map());
+        var updateRequest = new UpdateClientRequest(
+            clientRequest.Map() with { ClientId = clientId },
+            registrationRequest.Map());
         var response = await handler.HandleAsync(updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
     }
@@ -133,22 +140,23 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client removal requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client removal response.</param>
-    /// <param name="request">The details of the client removal request.</param>
+    /// <param name="clientId">The client identifier from the URL path.</param>
+    /// <param name="request">The authentication details from query parameters.</param>
     /// <returns>A task that returns an action result that confirms
     /// the client removal.</returns>
     /// <remarks>
-    /// This method supports the removal of clients from the authorization server. Following the OpenID Connect Dynamic
-    /// Client Registration protocol, it allows for the clean-up of client configurations that are no longer needed
-    /// or valid.
+    /// This method supports the removal of clients from the authorization server per RFC 7592 Section 2.3.
+    /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
     /// </remarks>
-    [HttpDelete(Path.Register)]
+    [HttpDelete(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
         [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromRoute] string clientId,
         [FromQuery] ClientRequest request)
     {
-        var clientRequest = request.Map();
+        var clientRequest = request.Map() with { ClientId = clientId };
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }

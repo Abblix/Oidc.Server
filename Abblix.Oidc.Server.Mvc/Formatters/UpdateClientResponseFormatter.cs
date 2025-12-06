@@ -58,7 +58,7 @@ public class UpdateClientResponseFormatter(IUriResolver uriResolver) : IUpdateCl
                             MvcUtils.NameOf<ClientManagementController>(),
                             new RouteValueDictionary
                             {
-                                { ClientRequest.Parameters.ClientId, success.ClientId },
+                                { "clientId", success.ClientId },
                             })
                         : null
                 }),

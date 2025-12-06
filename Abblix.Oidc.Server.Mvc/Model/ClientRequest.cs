@@ -41,8 +41,8 @@ public record ClientRequest
     /// The authorization header value, typically containing credentials to authenticate the client to the server.
     /// This header is used in standard HTTP authentication schemes like Basic, Bearer, etc.
     /// </summary>
-    [ModelBinder(typeof(AuthenticationHeaderBinder), Name = HttpRequestHeaders.Authorization)]
-    public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
+        [ModelBinder(typeof(AuthenticationHeaderBinder), Name = HttpRequestHeaders.Authorization)]
+        public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
 
     /// <summary>
     /// The client identifier issued to the client during the registration process.

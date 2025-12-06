@@ -59,7 +59,7 @@ public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClient
                         MvcUtils.NameOf<ClientManagementController>(),
                         new RouteValueDictionary
                         {
-                            { ClientRequest.Parameters.ClientId, success.ClientId },
+                            { "clientId", success.ClientId },
                         })
                     : null
             }),
