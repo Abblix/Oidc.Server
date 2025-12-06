@@ -100,6 +100,34 @@ public class ClientManagementController : ControllerBase
     }
 
     /// <summary>
+    /// Updates a registered client's configuration with new metadata per RFC 7592 Section 2.2.
+    /// </summary>
+    /// <param name="handler">The handler responsible for processing client update requests.</param>
+    /// <param name="formatter">The formatter responsible for generating the client update response.</param>
+    /// <param name="queryRequest">The client authentication from query parameters.</param>
+    /// <param name="bodyRequest">The updated client metadata from request body.</param>
+    /// <returns>A task that returns an action result with the updated client configuration.</returns>
+    /// <remarks>
+    /// This method implements RFC 7592 OAuth 2.0 Dynamic Client Registration Management Protocol Section 2.2.
+    /// It allows clients to update their registration metadata using the registration_access_token.
+    /// The request body must contain all client metadata including the client_id.
+    /// Returns 200 OK with updated configuration on success.
+    /// </remarks>
+    [HttpPut(Path.Register)]
+    [Produces(MediaTypeNames.Application.Json)]
+    [Consumes(MediaTypeNames.Application.Json)]
+    public async Task<ActionResult> UpdateClientAsync(
+        [FromServices] IUpdateClientHandler handler,
+        [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromQuery] ClientRequest queryRequest,
+        [FromBody] ClientRegistrationRequest bodyRequest)
+    {
+        var updateRequest = new UpdateClientRequest(queryRequest.Map(), bodyRequest.Map());
+        var response = await handler.HandleAsync(updateRequest);
+        return await formatter.FormatResponseAsync(updateRequest, response);
+    }
+
+    /// <summary>
     /// Removes a registered client's configuration from the authorization server, effectively revoking its registration
     /// and access.
     /// </summary>
