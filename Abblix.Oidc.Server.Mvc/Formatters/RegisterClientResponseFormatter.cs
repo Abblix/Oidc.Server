@@ -78,7 +78,8 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 ? GetClientReadUrl(success.ClientId)
                 : null,
 
-            InitiateLoginUri = request.InitiateLoginUri
+            InitiateLoginUri = request.InitiateLoginUri,
+            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

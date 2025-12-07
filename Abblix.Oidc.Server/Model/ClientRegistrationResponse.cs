@@ -42,6 +42,7 @@ public record ClientRegistrationResponse
         public const string RegistrationAccessToken = "registration_access_token";
         public const string RegistrationClientUri = "registration_client_uri";
         public const string InitiateLoginUri = "initiate_login_uri";
+        public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
     }
 
     /// <summary>
@@ -91,4 +92,13 @@ public record ClientRegistrationResponse
     /// </summary>
     [JsonPropertyName(Parameters.InitiateLoginUri)]
     public Uri? InitiateLoginUri { get; init; }
+
+    /// <summary>
+    /// The authentication method used by the client at the token endpoint.
+    /// Possible values include "client_secret_basic", "client_secret_post", "client_secret_jwt",
+    /// "private_key_jwt", "tls_client_auth", "self_signed_tls_client_auth", or "none".
+    /// Per OpenID Connect Dynamic Client Registration Section 2.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
+    public string? TokenEndpointAuthMethod { get; init; }
 }
