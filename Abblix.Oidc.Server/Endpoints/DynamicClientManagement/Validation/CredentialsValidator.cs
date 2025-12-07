@@ -22,7 +22,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Utils;
+using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Ensures public clients don't have credentials, and confidential clients have the required credentials
 /// for their chosen authentication method (JWKS for JWT methods, TLS metadata for TLS methods).
 /// </summary>
-public class AuthenticationCredentialsValidator : SyncClientRegistrationContextValidator
+public class CredentialsValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Validates that the client's authentication method is consistent with its ability to hold credentials.
@@ -69,6 +69,7 @@ public class AuthenticationCredentialsValidator : SyncClientRegistrationContextV
             // Client secret basic/post - should NOT have JWKS (would indicate wrong auth method)
             case ClientAuthenticationMethods.ClientSecretBasic or ClientAuthenticationMethods.ClientSecretPost
                 when HasJwksCredentials(request):
+
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     $"Clients using '{request.TokenEndpointAuthMethod}' authentication should not provide 'jwks' or 'jwks_uri'. " +
@@ -77,6 +78,7 @@ public class AuthenticationCredentialsValidator : SyncClientRegistrationContextV
             // TLS auth - should NOT have JWKS (uses certificate-based authentication)
             case ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth
                 when HasJwksCredentials(request):
+
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     $"Clients using '{request.TokenEndpointAuthMethod}' authentication should not provide 'jwks' or 'jwks_uri'. " +
@@ -85,6 +87,7 @@ public class AuthenticationCredentialsValidator : SyncClientRegistrationContextV
             // TLS auth - MUST have TLS metadata
             case ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth
                 when !HasTlsMetadata(request):
+
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     $"Clients using '{request.TokenEndpointAuthMethod}' authentication must provide at least one TLS metadata field: " +
@@ -98,27 +101,17 @@ public class AuthenticationCredentialsValidator : SyncClientRegistrationContextV
     /// <summary>
     /// Checks if the request contains JWKS credentials (either jwks or jwks_uri).
     /// </summary>
-    private static bool HasJwksCredentials(ClientRegistrationRequest request) =>
-        request is { Jwks.Keys.Length: > 0 } or { JwksUri: not null };
+    private static bool HasJwksCredentials(ClientRegistrationRequest request)
+        => request is { Jwks.Keys.Length: > 0 } or { JwksUri: not null };
 
     /// <summary>
     /// Checks if the request contains TLS metadata for certificate-based authentication.
     /// </summary>
-    private static bool HasTlsMetadata(ClientRegistrationRequest request) =>
-        request is
-        {
-            TlsClientAuthSubjectDn.Length: > 0
-        } or
-        {
-            TlsClientAuthSanDns.Length: > 0
-        } or
-        {
-            TlsClientAuthSanUri.Length: > 0
-        } or
-        {
-            TlsClientAuthSanIp.Length: > 0
-        } or
-        {
-            TlsClientAuthSanEmail.Length: > 0
-        };
+    private static bool HasTlsMetadata(ClientRegistrationRequest request)
+        => request
+            is { TlsClientAuthSubjectDn.Length: > 0 }
+            or { TlsClientAuthSanDns.Length: > 0 }
+            or { TlsClientAuthSanUri.Length: > 0 }
+            or { TlsClientAuthSanIp.Length: > 0 }
+            or { TlsClientAuthSanEmail.Length: > 0 };
 }
