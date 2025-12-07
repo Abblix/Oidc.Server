@@ -130,7 +130,7 @@ public class RegisterClientRequestProcessor(
         // Map tls_client_auth metadata if selected
         if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
         {
-            clientInfo.TlsClientAuth = new TlsClientAuthOptions
+            clientInfo.TlsClientAuth = new ()
             {
                 SubjectDn = model.TlsClientAuthSubjectDn,
                 SanDns = model.TlsClientAuthSanDns,
@@ -174,14 +174,14 @@ public class RegisterClientRequestProcessor(
 
         if (model.BackChannelLogoutUri != null)
         {
-            clientInfo.BackChannelLogout = new BackChannelLogoutOptions(
+            clientInfo.BackChannelLogout = new (
                 model.BackChannelLogoutUri,
                 model.BackChannelLogoutSessionRequired ?? false);
         }
 
         if (model.FrontChannelLogoutUri != null)
         {
-            clientInfo.FrontChannelLogout = new FrontChannelLogoutOptions(
+            clientInfo.FrontChannelLogout = new (
                 model.FrontChannelLogoutUri,
                 model.FrontChannelLogoutSessionRequired ?? false);
         }
