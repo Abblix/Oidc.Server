@@ -43,8 +43,6 @@ public record ClientInfo(string ClientId)
     /// </summary>
     public string ClientId { get; set; } = ClientId;
 
-    private ClientType? _clientType;
-
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret.
     /// This classification is derived from the TokenEndpointAuthMethod:
@@ -53,36 +51,7 @@ public record ClientInfo(string ClientId)
     /// Setting this property validates consistency with TokenEndpointAuthMethod.
     /// </summary>
     public ClientType ClientType
-    {
-        get
-        {
-            _clientType ??= DetermineClientType(TokenEndpointAuthMethod);
-            return _clientType.Value;
-        }
-        [Obsolete($"{nameof(ClientType)} is auto-calculated from {nameof(TokenEndpointAuthMethod)}. Setting this property is unnecessary and will be removed in a future version.")]
-        set
-        {
-            var expectedType = DetermineClientType(TokenEndpointAuthMethod);
-            if (value != expectedType)
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(ClientType)} {value} is inconsistent with {nameof(TokenEndpointAuthMethod)} '{TokenEndpointAuthMethod}'. " +
-                    $"Expected {expectedType}.");
-            }
-            _clientType = value;
-        }
-    }
-
-    /// <summary>
-    /// Determines the client type based on the token endpoint authentication method.
-    /// </summary>
-    /// <param name="tokenEndpointAuthMethod">The authentication method used at the token endpoint.</param>
-    /// <returns>
-    /// <see cref="ClientType.Public"/> if the method is 'none' (no authentication),
-    /// <see cref="ClientType.Confidential"/> for all other methods (secrets, keys, certificates).
-    /// </returns>
-    private static ClientType DetermineClientType(string tokenEndpointAuthMethod)
-        => ClientAuthenticationMethods.None.Equals(tokenEndpointAuthMethod, StringComparison.Ordinal)
+        => ClientAuthenticationMethods.None.Equals(TokenEndpointAuthMethod, StringComparison.Ordinal)
             ? ClientType.Public
             : ClientType.Confidential;
 
@@ -193,6 +162,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Describes how the client authenticates to the token endpoint.
     /// Common methods include client_secret_basic and client_secret_post.
+    /// Changing this value invalidates the cached ClientType.
     /// </summary>
     public string TokenEndpointAuthMethod { get; set; } = ClientAuthenticationMethods.ClientSecretBasic;
 
