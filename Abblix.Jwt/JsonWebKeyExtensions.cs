@@ -56,6 +56,9 @@ public static class JsonWebKeyExtensions
 			RsaJsonWebKey rsaKey
 				=> new RsaSecurityKey(rsaKey.ToRsa()) { KeyId = rsaKey.KeyId },
 
+			EllipticCurveJsonWebKey ecKey
+				=> new ECDsaSecurityKey(ecKey.ToEcdsa()) { KeyId = ecKey.KeyId },
+
 			OctetJsonWebKey { KeyId: var keyId, KeyValue: {} keyValue }
 				=> new SymmetricSecurityKey(keyValue) { KeyId = keyId },
 
@@ -65,20 +68,53 @@ public static class JsonWebKeyExtensions
 
 	/// <summary>
 	/// Converts a JsonWebKey to EncryptingCredentials used in cryptographic operations, specifically for encrypting tokens.
+	/// Supports RSA-OAEP and RSA1_5 key encryption with AES-CBC-HMAC and AES-GCM content encryption.
 	/// </summary>
 	/// <param name="jsonWebKey">The JsonWebKey to convert.</param>
 	/// <returns>EncryptingCredentials based on the provided JsonWebKey.</returns>
 	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
 	public static EncryptingCredentials ToEncryptingCredentials(this JsonWebKey jsonWebKey)
 	{
+		var securityKey = jsonWebKey.ToSecurityKey();
+
+		// Map signing algorithm to appropriate key encryption algorithm
 		return jsonWebKey.Algorithm switch
 		{
-			SecurityAlgorithms.RsaSha256 => new EncryptingCredentials(
-				jsonWebKey.ToSecurityKey(),
-				SecurityAlgorithms.RsaOAEP,
-				SecurityAlgorithms.Aes128CbcHmacSha256),
+			// RSA with SHA-256 variants
+			SecurityAlgorithms.RsaSha256 or SigningAlgorithms.RS256 or SigningAlgorithms.PS256
+				=> new EncryptingCredentials(
+					securityKey,
+					SecurityAlgorithms.RsaOAEP,
+					SecurityAlgorithms.Aes128CbcHmacSha256),
 
-			_ => throw new InvalidOperationException($"Not supported algorithm: {jsonWebKey.Algorithm}"),
+			// RSA with SHA-384 variants
+			SecurityAlgorithms.RsaSha384 or SigningAlgorithms.RS384 or SigningAlgorithms.PS384
+				=> new EncryptingCredentials(
+					securityKey,
+					SecurityAlgorithms.RsaOAEP,
+					SecurityAlgorithms.Aes192CbcHmacSha384),
+
+			// RSA with SHA-512 variants
+			SecurityAlgorithms.RsaSha512 or SigningAlgorithms.RS512 or SigningAlgorithms.PS512
+				=> new EncryptingCredentials(
+					securityKey,
+					SecurityAlgorithms.RsaOAEP,
+					SecurityAlgorithms.Aes256CbcHmacSha512),
+
+			// Direct key encryption algorithms (for explicit encryption operations)
+			SecurityAlgorithms.RsaOAEP
+				=> new EncryptingCredentials(
+					securityKey,
+					SecurityAlgorithms.RsaOAEP,
+					SecurityAlgorithms.Aes256CbcHmacSha512),
+
+			SecurityAlgorithms.RsaPKCS1
+				=> new EncryptingCredentials(
+					securityKey,
+					SecurityAlgorithms.RsaPKCS1,
+					SecurityAlgorithms.Aes256CbcHmacSha512),
+
+			_ => throw new InvalidOperationException($"Encryption not supported for algorithm: {jsonWebKey.Algorithm}"),
 		};
 	}
 
@@ -215,11 +251,10 @@ public static class JsonWebKeyExtensions
 			return defaultUsage;
 
 		var sig = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.DigitalSignature);
-		var enc = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment |
-		                                     X509KeyUsageFlags.DataEncipherment);
+		var enc = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment);
 		return (sig, enc) switch
 		{
-			(true, true) => PublicKeyUsages.Signature + " " + PublicKeyUsages.Encryption,
+			(true, true) => $"{PublicKeyUsages.Signature} {PublicKeyUsages.Encryption}",
 			(true, false) => PublicKeyUsages.Signature,
 			(false, true) => PublicKeyUsages.Encryption,
 			_ => defaultUsage,
@@ -261,13 +296,6 @@ public static class JsonWebKeyExtensions
 		return jwk;
 	}
 
-	private static class EllipticCurveOids
-	{
-		public const string P256 = "1.2.840.10045.3.1.7";
-		public const string P384 = "1.3.132.0.34";
-		public const string P521 = "1.3.132.0.35";
-	}
-
 	/// <summary>
 	/// Applies Elliptic Curve parameters to an EllipticCurveJsonWebKey.
 	/// </summary>
@@ -305,9 +333,9 @@ public static class JsonWebKeyExtensions
 	{
 		return key.Kty switch
 		{
-			JsonWebKeyTypes.Rsa => ConvertRsaFromMicrosoft(key, includePrivateKeys),
-			JsonWebKeyTypes.EllipticCurve => ConvertEcFromMicrosoft(key, includePrivateKeys),
-			JsonWebKeyTypes.Octet => ConvertSymmetricFromMicrosoft(key, includePrivateKeys),
+			JsonWebKeyTypes.Rsa => key.ConvertRsaFromMicrosoft(includePrivateKeys),
+			JsonWebKeyTypes.EllipticCurve => key.ConvertEcFromMicrosoft(includePrivateKeys),
+			JsonWebKeyTypes.Octet => key.ConvertSymmetricFromMicrosoft(includePrivateKeys),
 			_ => throw new InvalidOperationException($"Unsupported key type: {key.Kty}"),
 		};
 	}
@@ -316,7 +344,7 @@ public static class JsonWebKeyExtensions
 	/// Converts an RSA key from Microsoft.IdentityModel.Tokens.JsonWebKey.
 	/// </summary>
 	private static RsaJsonWebKey ConvertRsaFromMicrosoft(
-		Microsoft.IdentityModel.Tokens.JsonWebKey key,
+		this Microsoft.IdentityModel.Tokens.JsonWebKey key,
 		bool includePrivateKeys)
 	{
 		var jwk = new RsaJsonWebKey
@@ -348,7 +376,9 @@ public static class JsonWebKeyExtensions
 	/// <summary>
 	/// Converts an Elliptic Curve key from Microsoft.IdentityModel.Tokens.JsonWebKey.
 	/// </summary>
-	private static EllipticCurveJsonWebKey ConvertEcFromMicrosoft(Microsoft.IdentityModel.Tokens.JsonWebKey key, bool includePrivateKeys)
+	private static EllipticCurveJsonWebKey ConvertEcFromMicrosoft(
+		this Microsoft.IdentityModel.Tokens.JsonWebKey key,
+		bool includePrivateKeys)
 	{
 		var jwk = new EllipticCurveJsonWebKey
 		{
@@ -375,7 +405,9 @@ public static class JsonWebKeyExtensions
 	/// <summary>
 	/// Converts a symmetric key from Microsoft.IdentityModel.Tokens.JsonWebKey.
 	/// </summary>
-	private static OctetJsonWebKey ConvertSymmetricFromMicrosoft(Microsoft.IdentityModel.Tokens.JsonWebKey key, bool includePrivateKeys)
+	private static OctetJsonWebKey ConvertSymmetricFromMicrosoft(
+		this Microsoft.IdentityModel.Tokens.JsonWebKey key,
+		bool includePrivateKeys)
 	{
 		var jwk = new OctetJsonWebKey
 		{
@@ -420,4 +452,49 @@ public static class JsonWebKeyExtensions
 		DQ = key.SecondFactorCrtExponent,
 		InverseQ = key.FirstCrtCoefficient,
 	};
+
+	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to an ECDsa object,
+	/// which represents an ECDSA public and private key pair or just a public key.
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECDsa object based on the provided EllipticCurveJsonWebKey.</returns>
+	public static ECDsa ToEcdsa(this EllipticCurveJsonWebKey key)
+	{
+		var ecdsa = ECDsa.Create();
+		ecdsa.ImportParameters(key.ToEcParameters());
+		return ecdsa;
+	}
+
+	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to ECParameters,
+	/// which represent the key parameters used in ECDSA cryptographic operations.
+	/// Supports P-256, P-384, and P-521 curves as defined in NIST standards.
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECParameters object based on the provided EllipticCurveJsonWebKey.</returns>
+	/// <exception cref="InvalidOperationException">Thrown when the curve type is not supported.</exception>
+	public static ECParameters ToEcParameters(this EllipticCurveJsonWebKey key)
+	{
+		var curve = key.Curve switch
+		{
+			JsonWebKeyECTypes.P256 => ECCurve.NamedCurves.nistP256,
+			JsonWebKeyECTypes.P384 => ECCurve.NamedCurves.nistP384,
+			JsonWebKeyECTypes.P521 => ECCurve.NamedCurves.nistP521,
+			_ => throw new InvalidOperationException(
+				$"Unsupported elliptic curve: {key.Curve}. " +
+				$"Supported curves: {JsonWebKeyECTypes.P256}, {JsonWebKeyECTypes.P384}, {JsonWebKeyECTypes.P521}"),
+		};
+
+		return new ECParameters
+		{
+			Curve = curve,
+			Q = new ECPoint
+			{
+				X = key.X ?? throw new InvalidOperationException("X coordinate is required for elliptic curve key"),
+				Y = key.Y ?? throw new InvalidOperationException("Y coordinate is required for elliptic curve key"),
+			},
+			D = key.PrivateKey, // Optional private key component
+		};
+	}
 }
