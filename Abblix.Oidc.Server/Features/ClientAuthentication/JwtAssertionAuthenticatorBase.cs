@@ -84,7 +84,8 @@ public abstract class JwtAssertionAuthenticatorBase(
         var token = validJwt.Token;
         var clientInfo = validJwt.Client;
 
-        if (!ClientAuthenticationMethodsSupported.Contains(clientInfo.TokenEndpointAuthMethod.NotNull(nameof(clientInfo.TokenEndpointAuthMethod))))
+        var tokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod;
+        if (!ClientAuthenticationMethodsSupported.Contains(tokenEndpointAuthMethod.NotNull(nameof(tokenEndpointAuthMethod))))
         {
             logger.LogWarning("The authentication method is not allowed for the client {@ClientId}", clientInfo.ClientId);
             return null;

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -41,7 +42,6 @@ public abstract class ClientSecretAuthenticator(
 	TimeProvider clock,
 	IHashService hashService)
 {
-
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
 	/// against stored values, considering the authentication method and secret expiration.
@@ -66,14 +66,14 @@ public abstract class ClientSecretAuthenticator(
 			return null;
 		}
 
-		if (client.ClientSecrets?.Length == 0)
-		{
-			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
+		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
+			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", Value(clientId));
 			return null;
 		}
 
-		if (client.TokenEndpointAuthMethod != authenticationMethod) {
-			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", Value(clientId));
+		if (client is not { ClientSecrets.Length: > 0 })
+		{
+			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
 			return null;
 		}
 

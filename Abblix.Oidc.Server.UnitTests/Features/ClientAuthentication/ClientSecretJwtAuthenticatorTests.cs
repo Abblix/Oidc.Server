@@ -192,7 +192,11 @@ public class ClientSecretJwtAuthenticatorTests
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
-                    await parameters.ValidateIssuer(ClientId);
+                {
+                    var issuerValid = await parameters.ValidateIssuer(ClientId);
+                    if (!issuerValid)
+                        return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+                }
 
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
@@ -279,7 +283,11 @@ public class ClientSecretJwtAuthenticatorTests
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
-                    await parameters.ValidateIssuer(ClientId);
+                {
+                    var issuerValid = await parameters.ValidateIssuer(ClientId);
+                    if (!issuerValid)
+                        return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+                }
 
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
@@ -332,7 +340,11 @@ public class ClientSecretJwtAuthenticatorTests
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
-                    await parameters.ValidateIssuer(ClientId);
+                {
+                    var issuerValid = await parameters.ValidateIssuer(ClientId);
+                    if (!issuerValid)
+                        return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+                }
 
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
@@ -385,7 +397,11 @@ public class ClientSecretJwtAuthenticatorTests
             {
                 // Simulate JWT validator executing the callbacks
                 if (parameters.ValidateIssuer != null)
-                    await parameters.ValidateIssuer(ClientId);
+                {
+                    var issuerValid = await parameters.ValidateIssuer(ClientId);
+                    if (!issuerValid)
+                        return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+                }
 
                 if (parameters.ResolveIssuerSigningKeys != null)
                     await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();

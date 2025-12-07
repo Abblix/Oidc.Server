@@ -72,10 +72,10 @@ public class ClientSecretBasicAuthenticator(
 		if (request.AuthorizationHeader is not { Scheme: "Basic", Parameter: { } parameter })
 			return null;
 
-		var value = Encoding.ASCII.GetString(Convert.FromBase64String(parameter));
+		var value = Encoding.UTF8.GetString(Convert.FromBase64String(parameter));
 
 		// According to RFC 7617: https://www.rfc-editor.org/rfc/rfc7617#section-2.1
-		// the first colon in a user-pass string separates user-id and password from one another;
+		// the first colon in a user-pass string separates user-id and password from one another,
 		// text after the first colon is part of the password.
 		// User-ids containing colons cannot be encoded in user-pass strings.
 		var colonIndex = value.IndexOf(':');
