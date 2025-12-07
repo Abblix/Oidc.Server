@@ -35,7 +35,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="jwtValidator">An implementation of <see cref="IAuthServiceJwtValidator"/> responsible for the
 /// JWT validation logic.</param>
-public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator) : IRegistrationAccessTokenValidator
+public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
+    : IRegistrationAccessTokenValidator
 {
     /// <summary>
     /// Asynchronously validates a registration access token, verifying its format, type, and authorization for
@@ -64,11 +65,10 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
             header.Parameter,
             ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
-        if (!result.TryGetSuccess(out var token))
-        {
-            var error = result.GetFailure();
+        if (result.TryGetFailure(out var error))
             return error.ErrorDescription;
-        }
+
+        var token = result.GetSuccess();
 
         var tokenType = token.Header.Type;
         var audiences = token.Payload.Audiences;

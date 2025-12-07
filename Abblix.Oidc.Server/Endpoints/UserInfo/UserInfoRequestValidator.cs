@@ -102,13 +102,13 @@ public class UserInfoRequestValidator(
 
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
 
-		if (!result.TryGetSuccess(out var token))
-		{
-			var error = result.GetFailure();
+		if (result.TryGetFailure(out var error))
 			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
-		}
 
-		if (token.Header.Type is var tokenType && tokenType != JwtTypes.AccessToken)
+		var token = result.GetSuccess();
+
+		var tokenType = token.Header.Type;
+		if (tokenType != JwtTypes.AccessToken)
 		{
 			return new OidcError(
 				ErrorCodes.InvalidGrant,

@@ -65,12 +65,11 @@ public class LicenseLoader
                 ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
             });
 
-        if (!validationResult.TryGetSuccess(out var token))
-        {
-            var error = validationResult.GetFailure();
+        if (validationResult.TryGetFailure(out var error))
             throw new InvalidOperationException(
                 $"The license can't be validated: [{error.Error}] {error.ErrorDescription}");
-        }
+
+        var token = validationResult.GetSuccess();
 
         if (token.Header.Type != ValidLicenseType)
         {

@@ -135,22 +135,24 @@ public class JwtBearerIssuerProvider(
 
 		var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
 
-		if (!result.TryGetSuccess(out var jwks))
-		{
-			var error = result.GetFailure();
-			logger.LogError("Failed to fetch JWKS for issuer {Issuer} from {JwksUri}: {Error}",
-				issuer, jwksUri, error.ErrorDescription);
-			yield break;
-		}
+		await foreach (var key in result.Match(
+			jwks =>
+			{
+				if (jwks is not { Keys: { Length: > 0 } keys })
+				{
+					logger.LogWarning("JWKS for issuer {Issuer} from {JwksUri} is empty or invalid", issuer, jwksUri);
+					return AsyncEnumerable.Empty<JsonWebKey>();
+				}
 
-		if (jwks is not { Keys: { Length: > 0} keys })
-		{
-			logger.LogWarning("JWKS for issuer {Issuer} from {JwksUri} is empty or invalid", issuer, jwksUri);
-			yield break;
-		}
-
-		// Return only keys suitable for signature verification
-		foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
+				// Return only keys suitable for signature verification
+				return keys.Where(k => k.Usage is null or PublicKeyUsages.Signature).ToAsyncEnumerable();
+			},
+			error =>
+			{
+				logger.LogError("Failed to fetch JWKS for issuer {Issuer} from {JwksUri}: {Error}",
+					issuer, jwksUri, error.ErrorDescription);
+				return AsyncEnumerable.Empty<JsonWebKey>();
+			}))
 		{
 			yield return key;
 		}
