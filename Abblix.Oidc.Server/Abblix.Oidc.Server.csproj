@@ -19,9 +19,9 @@
         <PackageReleaseNotes>Complete OpenID Connect and OAuth 2.0 server implementation with mTLS (RFC 8705), JWT Bearer grants (RFC 7523), Device Authorization (RFC 8628), and CIBA support. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.0</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <AssemblyVersion>2.0.1.0</AssemblyVersion>
-        <FileVersion>2.0.1.0</FileVersion>
-        <PackageVersion>2.0.1</PackageVersion>
+        <AssemblyVersion>2.0.2.0</AssemblyVersion>
+        <FileVersion>2.0.2.0</FileVersion>
+        <PackageVersion>2.0.2</PackageVersion>
 
         <!-- Deterministic builds for reproducible binaries -->
         <Deterministic>true</Deterministic>

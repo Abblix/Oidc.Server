@@ -69,10 +69,7 @@ public sealed record OctetJsonWebKey : JsonWebKey
         {
             true when KeyValue is { Length: > 0 } => this,
             true => throw new InvalidOperationException($"There is no key value for kid={KeyId}"),
-            false => this with
-            {
-                KeyValue = null,
-            }
+            false => this with { KeyValue = null },
         };
     }
 }

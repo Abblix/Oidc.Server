@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -36,7 +35,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IIssuerProvider issuerProvider,
     TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <summary>
@@ -60,9 +58,6 @@ public class ReadClientRequestProcessor(
     {
         var client = request.ClientInfo;
 
-        var issuer = issuerProvider.GetIssuer();
-        var registrationClientUri = new Uri(new Uri(issuer), $"register/{client.ClientId}");
-
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(client.ClientId, issuedAt, null);
 
@@ -71,7 +66,6 @@ public class ReadClientRequestProcessor(
             ClientId = client.ClientId,
             ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
             ClientSecretExpiresAt = GetClientSecretExpiresAt(client),
-            RegistrationClientUri = registrationClientUri,
             RegistrationAccessToken = registrationAccessToken,
             TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
             ApplicationType = client.ApplicationType,
