@@ -137,8 +137,19 @@ public class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        context.ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
-        return context.ClientInfo != null;
+        switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck())
+        {
+            case { } clientInfo when !string.Equals(clientInfo.TokenEndpointAuthMethod, ClientAuthenticationMethods.ClientSecretJwt, StringComparison.Ordinal):
+                logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", issuer);
+                return false;
+
+            case { } clientInfo:
+                context.ClientInfo = clientInfo;
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /// <summary>

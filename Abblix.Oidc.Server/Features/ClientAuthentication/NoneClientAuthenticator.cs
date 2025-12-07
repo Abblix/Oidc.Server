@@ -73,16 +73,17 @@ public class NoneClientAuthenticator(
             return null;
 
         var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
-        if (client == null)
+        switch (client)
         {
-            logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
-            return null;
+            case null:
+                logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
+                return null;
+
+            case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:
+                return client;
+
+            default:
+                return null;
         }
-
-        if (client.ClientType == ClientType.Public)
-            return client;
-
-        return null;
-
     }
 }

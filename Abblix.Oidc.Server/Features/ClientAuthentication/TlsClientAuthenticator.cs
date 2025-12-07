@@ -93,7 +93,7 @@ public class TlsClientAuthenticator(
             return null;
         }
 
-        if (!string.Equals(client.TokenEndpointAuthMethod, ClientAuthenticationMethods.SelfSignedTlsClientAuth, StringComparison.Ordinal))
+        if (!ClientAuthenticationMethods.SelfSignedTlsClientAuth.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal))
         {
             // We currently only support self-signed mTLS in this authenticator
             return null;

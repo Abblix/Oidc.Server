@@ -174,7 +174,10 @@ public class NoneClientAuthenticatorTests
         // Arrange
         var (authenticator, mocks) = CreateAuthenticator();
 
-        var clientInfo = CreateConfidentialClientInfo(ConfidentialClientId);
+        var clientInfo = new ClientInfo(ConfidentialClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost
+        };
         mocks.ClientInfoProvider
             .Setup(p => p.TryFindClientAsync(ConfidentialClientId))
             .ReturnsAsync(clientInfo);
@@ -268,22 +271,8 @@ public class NoneClientAuthenticatorTests
     {
         return new ClientInfo(clientId)
         {
-            ClientType = ClientType.Public,
             TokenEndpointAuthMethod = ClientAuthenticationMethods.None
-        };
-    }
-
-    /// <summary>
-    /// Creates a test ClientInfo object for a confidential client.
-    /// </summary>
-    /// <param name="clientId">The client ID.</param>
-    /// <returns>A configured ClientInfo object for a confidential client.</returns>
-    private ClientInfo CreateConfidentialClientInfo(string clientId)
-    {
-        return new ClientInfo(clientId)
-        {
-            ClientType = ClientType.Confidential,
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost
+            // ClientType is auto-calculated from TokenEndpointAuthMethod
         };
     }
 

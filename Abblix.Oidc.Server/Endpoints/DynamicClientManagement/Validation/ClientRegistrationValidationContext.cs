@@ -34,4 +34,11 @@ public record ClientRegistrationValidationContext(ClientRegistrationRequest Requ
 	/// The sector identifier associated with the client.
 	/// </summary>
 	public string? SectorIdentifier { get; set; }
+
+	/// <summary>
+	/// The type of registration operation being performed.
+	/// For Update operations, client_id validation ensures the client exists.
+	/// For Register operations, it ensures the client doesn't exist.
+	/// </summary>
+	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;
 }
