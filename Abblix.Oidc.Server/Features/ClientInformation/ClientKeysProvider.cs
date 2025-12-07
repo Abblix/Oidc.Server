@@ -88,21 +88,29 @@ public class ClientKeysProvider(
 
         var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
 
-        if (result.TryGetFailure(out var error))
-        {
-            logger.LogWarning("Failed to fetch JWKS for client {ClientId} from {JwksUri}: {Error}",
-                clientInfo.ClientId, jwksUri, error.ErrorDescription);
-            yield break;
-        }
+        var jwksKeys = result.Match(
+            jwks =>
+            {
+                if (jwks is { Keys: { Length: > 0 } keys })
+                    return keys.ToAsyncEnumerable();
 
-        if (result.GetSuccess() is not { Keys: { Length: > 0 } keys })
-        {
-            logger.LogWarning("JWKS for client {ClientId} from {JwksUri} is empty or invalid",
-                clientInfo.ClientId, jwksUri);
-            yield break;
-        }
+                logger.LogWarning("JWKS for client {ClientId} from {JwksUri} is empty or invalid",
+                    clientInfo.ClientId, jwksUri);
 
-        foreach (var key in keys)
+                return AsyncEnumerable.Empty<JsonWebKey>();
+
+            },
+            error =>
+            {
+                logger.LogWarning("Failed to fetch JWKS for client {ClientId} from {JwksUri}: {Error}",
+                    clientInfo.ClientId, jwksUri, error.ErrorDescription);
+
+                return AsyncEnumerable.Empty<JsonWebKey>();
+            });
+
+        await foreach (var key in jwksKeys)
+        {
             yield return key;
+        }
     }
 }

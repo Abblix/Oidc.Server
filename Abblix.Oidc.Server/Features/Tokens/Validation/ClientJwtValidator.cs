@@ -110,7 +110,12 @@ public class ClientJwtValidator(
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
         /// </summary>
-        public ClientInfo? ClientInfo { get; set; }
+        public ClientInfo? ClientInfo { get; private set; }
+
+        /// <summary>
+        /// Tracks whether client lookup has been performed to avoid duplicate lookups.
+        /// </summary>
+        private bool _clientLookupPerformed;
 
         /// <summary>
         /// Validates the issuer by attempting to match it with known client information. Ensures that the JWT issuer
@@ -127,24 +132,14 @@ public class ClientJwtValidator(
         /// </exception>
         public async Task<bool> ValidateIssuer(string issuer)
         {
-            switch (ClientInfo)
+            if (!_clientLookupPerformed)
             {
-                // Case where client information is already known and the issuer matches the client ID.
-                case { ClientId: var clientId } when issuer == clientId:
-                    return true;
-
-                // Case where client information is already known, but the issuer does not match the known client ID.
-                case { ClientId: var clientId }:
-                    throw new InvalidOperationException(
-                        $"Trying to validate issuer {issuer}, but already has info about client {clientId}");
-
-                // Case where client information is not yet known; attempt to find the client by issuer.
-                default:
-                    ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
-
-                    // If the client is found but does not use the expected authentication method, validation fails.
-                    return ClientInfo != null;
+                // Attempt to find the client by issuer
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
+                _clientLookupPerformed = true;
             }
+
+            return ClientInfo?.ClientId == issuer;
         }
 
         /// <summary>

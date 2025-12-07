@@ -35,7 +35,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="registrationRequestValidator">Validator for client registration metadata (keyed service).</param>
 public class UpdateClientRequestValidator(
     IClientRequestValidator clientRequestValidator,
-    [FromKeyedServices(UpdateClientRequestValidator.RegistrationKey)] IRegisterClientRequestValidator registrationRequestValidator) : IUpdateClientRequestValidator
+    [FromKeyedServices(UpdateClientRequestValidator.RegistrationKey)] IRegisterClientRequestValidator registrationRequestValidator)
+    : IUpdateClientRequestValidator
 {
     /// <summary>
     /// Service key for the update-specific registration validator.
@@ -51,14 +52,15 @@ public class UpdateClientRequestValidator(
     {
         // First validate client authentication (registration_access_token)
         var clientValidation = await clientRequestValidator.ValidateAsync(request.ClientRequest);
-        if (clientValidation.TryGetFailure(out var clientError))
+        var validClientRequest = clientValidation;
+
+        if (validClientRequest.TryGetFailure(out var clientError))
             return clientError;
 
-        if (!clientValidation.TryGetSuccess(out var validClientRequest))
-            return new OidcError(ErrorCodes.ServerError, "Unexpected validation state");
+        var clientInfo = validClientRequest.GetSuccess();
 
         // RFC 7592 Section 2.2: client_id in request body must match authenticated client
-        if (request.RegistrationRequest.ClientId != validClientRequest.ClientInfo.ClientId)
+        if (request.RegistrationRequest.ClientId != clientInfo.ClientInfo.ClientId)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -67,15 +69,11 @@ public class UpdateClientRequestValidator(
 
         // Validate the registration request metadata using update-specific validator
         var registrationValidation = await registrationRequestValidator.ValidateAsync(request.RegistrationRequest);
-        if (registrationValidation.TryGetFailure(out var registrationError))
-            return registrationError;
 
-        if (!registrationValidation.TryGetSuccess(out var validRegistration))
-            return new OidcError(ErrorCodes.ServerError, "Unexpected validation state");
-
-        return new ValidUpdateClientRequest(
-            request,
-            validClientRequest.ClientInfo,
-            validRegistration.Model);
+        return registrationValidation.MapSuccess(
+            validRegistration => new ValidUpdateClientRequest(
+                request,
+                clientInfo.ClientInfo,
+                validRegistration.Model));
     }
 }
