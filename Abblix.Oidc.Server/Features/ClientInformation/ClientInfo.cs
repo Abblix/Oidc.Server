@@ -43,13 +43,48 @@ public record ClientInfo(string ClientId)
     /// </summary>
     public string ClientId { get; set; } = ClientId;
 
+    private ClientType? _clientType;
+
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret.
-    /// This classification influences the authorization flow and token endpoint authentication method that
-    /// the client can use. Public clients, such as mobile or desktop applications, can’t securely store secrets,
-    /// while confidential clients, like server-side web applications, can.
+    /// This classification is derived from the TokenEndpointAuthMethod:
+    /// - Public: when TokenEndpointAuthMethod is 'none' (no client authentication)
+    /// - Confidential: for all other authentication methods (secrets, keys, certificates)
+    /// Setting this property validates consistency with TokenEndpointAuthMethod.
     /// </summary>
-    public ClientType ClientType { get; set; } = ClientType.Public;
+    public ClientType ClientType
+    {
+        get
+        {
+            _clientType ??= DetermineClientType(TokenEndpointAuthMethod);
+            return _clientType.Value;
+        }
+        [Obsolete($"{nameof(ClientType)} is auto-calculated from {nameof(TokenEndpointAuthMethod)}. Setting this property is unnecessary and will be removed in a future version.")]
+        set
+        {
+            var expectedType = DetermineClientType(TokenEndpointAuthMethod);
+            if (value != expectedType)
+            {
+                throw new InvalidOperationException(
+                    $"{nameof(ClientType)} {value} is inconsistent with {nameof(TokenEndpointAuthMethod)} '{TokenEndpointAuthMethod}'. " +
+                    $"Expected {expectedType}.");
+            }
+            _clientType = value;
+        }
+    }
+
+    /// <summary>
+    /// Determines the client type based on the token endpoint authentication method.
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">The authentication method used at the token endpoint.</param>
+    /// <returns>
+    /// <see cref="ClientType.Public"/> if the method is 'none' (no authentication),
+    /// <see cref="ClientType.Confidential"/> for all other methods (secrets, keys, certificates).
+    /// </returns>
+    private static ClientType DetermineClientType(string tokenEndpointAuthMethod)
+        => ClientAuthenticationMethods.None.Equals(tokenEndpointAuthMethod, StringComparison.Ordinal)
+            ? ClientType.Public
+            : ClientType.Confidential;
 
     /// <summary>
     /// A collection of secrets associated with the client, used for authenticating the client to the authorization server.

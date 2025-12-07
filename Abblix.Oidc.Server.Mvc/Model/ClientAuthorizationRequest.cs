@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net.Http.Headers;
-using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Mvc;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 

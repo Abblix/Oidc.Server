@@ -35,7 +35,6 @@ internal static class JwtSecurityTokenHandlerConstants
     /// </summary>
     public static readonly string[] ClaimTypesToExclude =
     [
-
         // Issuer claim, identifies the principal that issued the JWT.
         IanaClaimTypes.Iss,
 
