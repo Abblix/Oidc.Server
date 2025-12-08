@@ -296,7 +296,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-getting-started:
-    needs: [versioning, create-release]
+    needs: [versioning, create-release, publish-nuget-org]
     runs-on: ubuntu-latest
     if: ${{ !github.event.inputs.pre_release }}
     steps:
