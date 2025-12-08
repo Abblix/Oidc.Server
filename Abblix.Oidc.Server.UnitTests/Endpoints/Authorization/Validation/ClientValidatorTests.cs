@@ -40,8 +40,8 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 /// </summary>
 public class ClientValidatorTests
 {
-    private const string ValidClientId = "test_client_1";
-    private const string ValidClientId2 = "test_client_2";
+    private const string ValidClientId = TestConstants.DefaultClientId;
+    private const string ValidClientId2 = TestConstants.AlternativeClientId;
     private const string UnknownClientId = "unknown_client";
 
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
