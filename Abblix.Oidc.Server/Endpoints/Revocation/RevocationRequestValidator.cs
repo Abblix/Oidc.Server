@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -87,23 +88,23 @@ public class RevocationRequestValidator(
 
 		var result = await jwtValidator.ValidateAsync(revocationRequest.Token);
 
-		// If token validation fails, log the error and return an invalid token result.
-		if (result.TryGetFailure(out var error))
-		{
-			logger.LogWarning("The token validation failed: {@Error}", error);
-			return ValidRevocationRequest.InvalidToken(revocationRequest);
-		}
+		return result.Match(
+			token =>
+			{
+				// If the token was issued to a different client, log a warning and return an invalid token result.
+				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
+				{
+					logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
+					return ValidRevocationRequest.InvalidToken(revocationRequest);
+				}
 
-		var token = result.GetSuccess();
-
-		// If the token was issued to a different client, log a warning and return an invalid token result.
-		if (token.Payload.ClientId is {} clientId && clientId != clientInfo.ClientId)
-		{
-			logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
-			return ValidRevocationRequest.InvalidToken(revocationRequest);
-		}
-
-		// If the token is valid and belongs to the authenticated client, return a valid revocation request.
-		return new ValidRevocationRequest(revocationRequest, token);
+				// If the token is valid and belongs to the authenticated client, return a valid revocation request.
+				return new ValidRevocationRequest(revocationRequest, token);
+			},
+			error =>
+			{
+				logger.LogWarning("The token validation failed: {@Error}", error);
+				return ValidRevocationRequest.InvalidToken(revocationRequest);
+			});
 	}
 }

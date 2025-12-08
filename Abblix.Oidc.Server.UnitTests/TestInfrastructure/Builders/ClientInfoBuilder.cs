@@ -44,10 +44,10 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure.Builders;
 public class ClientInfoBuilder
 {
     private string _clientId = TestConstants.DefaultClientId;
-    private string[] _clientSecrets = new[] { TestConstants.DefaultClientSecret };
+    private string[] _clientSecrets = [TestConstants.DefaultClientSecret];
     private string _authMethod = ClientAuthenticationMethods.ClientSecretPost;
-    private string[] _grantTypes = new[] { GrantTypes.AuthorizationCode };
-    private Uri[] _redirectUris = new[] { new Uri(TestConstants.DefaultRedirectUri) };
+    private string[] _grantTypes = [GrantTypes.AuthorizationCode];
+    private Uri[] _redirectUris = [new Uri(TestConstants.DefaultRedirectUri)];
     private TimeSpan _accessTokenExpiresIn = TestConstants.DefaultAccessTokenLifetime;
     private TimeSpan _authorizationCodeExpiresIn = TestConstants.DefaultAuthorizationCodeLifetime;
     private bool? _pkceRequired;
@@ -77,7 +77,7 @@ public class ClientInfoBuilder
     /// </summary>
     public ClientInfoBuilder WithSecret(string secret)
     {
-        _clientSecrets = new[] { secret };
+        _clientSecrets = [secret];
         return this;
     }
 
@@ -114,7 +114,7 @@ public class ClientInfoBuilder
     /// </summary>
     public ClientInfoBuilder WithRedirectUri(string uri)
     {
-        _redirectUris = new[] { new Uri(uri) };
+        _redirectUris = [new Uri(uri)];
         return this;
     }
 
@@ -123,7 +123,7 @@ public class ClientInfoBuilder
     /// </summary>
     public ClientInfoBuilder WithRedirectUri(Uri uri)
     {
-        _redirectUris = new[] { uri };
+        _redirectUris = [uri];
         return this;
     }
 

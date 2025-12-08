@@ -79,24 +79,55 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client information requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client information response.</param>
-    /// <param name="request">The details of the client information request.</param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that includes
     /// the client information response.</returns>
     /// <remarks>
     /// This method allows clients to query their current configuration stored by the authorization server.
-    /// It is compliant with the OpenID Connect Dynamic Client Registration protocol, enabling clients to manage
-    /// their registration details post-registration.
+    /// Per RFC 7592 Section 2.1, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpGet(Path.Register)]
+    [HttpGet(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
         [FromServices] IReadClientResponseFormatter formatter,
-        [FromQuery] ClientRequest request)
+        ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = request.Map();
+        var clientRequest = authorizationRequest.ToClientRequest();
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
+    }
+
+    /// <summary>
+    /// Updates a registered client's configuration with new metadata per RFC 7592 Section 2.2.
+    /// </summary>
+    /// <param name="handler">The handler responsible for processing client update requests.</param>
+    /// <param name="formatter">The formatter responsible for generating the client update response.</param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
+    /// <param name="registrationRequest">The updated client metadata from request body.</param>
+    /// <returns>A task that returns an action result with the updated client configuration.</returns>
+    /// <remarks>
+    /// This method implements RFC 7592 OAuth 2.0 Dynamic Client Registration Management Protocol Section 2.2.
+    /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
+    /// The request body must contain all client metadata including the client_id and client_secret.
+    /// Returns 200 OK with updated configuration on success.
+    /// </remarks>
+    [HttpPut(Path.RegisterClient)]
+    [Produces(MediaTypeNames.Application.Json)]
+    [Consumes(MediaTypeNames.Application.Json)]
+    public async Task<ActionResult> UpdateClientAsync(
+        [FromServices] IUpdateClientHandler handler,
+        [FromServices] IUpdateClientResponseFormatter formatter,
+        ClientAuthorizationRequest authorizationRequest,
+        [FromBody] ClientRegistrationRequest registrationRequest)
+    {
+        var updateRequest = new UpdateClientRequest(
+            authorizationRequest.ToClientRequest(),
+            registrationRequest.Map());
+        var response = await handler.HandleAsync(updateRequest);
+        return await formatter.FormatResponseAsync(updateRequest, response);
     }
 
     /// <summary>
@@ -105,22 +136,22 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client removal requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client removal response.</param>
-    /// <param name="request">The details of the client removal request.</param>
+    /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that confirms
     /// the client removal.</returns>
     /// <remarks>
-    /// This method supports the removal of clients from the authorization server. Following the OpenID Connect Dynamic
-    /// Client Registration protocol, it allows for the clean-up of client configurations that are no longer needed
-    /// or valid.
+    /// This method supports the removal of clients from the authorization server per RFC 7592 Section 2.3.
+    /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
+    /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpDelete(Path.Register)]
+    [HttpDelete(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
         [FromServices] IRemoveClientResponseFormatter formatter,
-        [FromQuery] ClientRequest request)
+        ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = request.Map();
+        var clientRequest = authorizationRequest.ToClientRequest();
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }

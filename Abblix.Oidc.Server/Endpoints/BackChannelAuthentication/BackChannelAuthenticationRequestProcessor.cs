@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
+using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
@@ -70,39 +71,34 @@ public class BackChannelAuthenticationRequestProcessor(
 		request.ClientInfo.CheckClientLicense();
 
 		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
-
-		AuthorizedGrant authorizedGrant;
-		if (authResult.TryGetSuccess(out var authSession))
-		{
-			var authContext = new AuthorizationContext(
-				request.ClientInfo.ClientId,
-				request.Scope,
-				request.Resources,
-				request.Model.Claims);
-
-			authorizedGrant = new AuthorizedGrant(authSession, authContext);
-		}
-		else if (authResult.TryGetFailure(out var error))
+		if (authResult.TryGetFailure(out var error))
 		{
 			return error.Error switch
 			{
-				ErrorCodes.UnauthorizedClient => new BackChannelAuthenticationUnauthorized(ErrorCodes.AccessDenied, error.ErrorDescription),
-				ErrorCodes.AccessDenied => new BackChannelAuthenticationForbidden(ErrorCodes.AccessDenied, error.ErrorDescription),
-				_ => new OidcError(error.Error, error.ErrorDescription)
+				ErrorCodes.UnauthorizedClient
+					=> new BackChannelAuthenticationUnauthorized(ErrorCodes.AccessDenied, error.ErrorDescription),
+
+				ErrorCodes.AccessDenied
+					=> new BackChannelAuthenticationForbidden(ErrorCodes.AccessDenied, error.ErrorDescription),
+
+				_ => error,
 			};
 		}
-		else
-		{
-			throw new InvalidOperationException("Unexpected result state");
-		}
+
+		var authContext = new AuthorizationContext(
+			request.ClientInfo.ClientId,
+			request.Scope,
+			request.Resources,
+			request.Model.Claims);
+
+		var authorizedGrant = new AuthorizedGrant(authResult.GetSuccess(), authContext);
 
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 
 		// Store authentication request with notification endpoint and token (used by ping and push modes)
 		var expiresAt = timeProvider.GetUtcNow() + request.ExpiresIn;
-		var backChannelRequest = new Features.BackChannelAuthentication.BackChannelAuthenticationRequest(
-			authorizedGrant,
-			expiresAt)
+
+		var backChannelRequest = new BackChannelAuthenticationRequest(authorizedGrant, expiresAt)
 		{
 			Status = BackChannelAuthenticationStatus.Pending,
 			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
