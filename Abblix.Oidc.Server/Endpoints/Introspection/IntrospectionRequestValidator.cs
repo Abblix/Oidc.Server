@@ -70,20 +70,22 @@ public class IntrospectionRequestValidator(
 
 		var result = await jwtValidator.ValidateAsync(introspectionRequest.Token);
 
-		if (result.TryGetFailure(out var error))
-		{
-			logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
-			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-		}
+		return result.Match(
+			token =>
+			{
+				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
+				{
+					// The token was issued to another client
+					return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+				}
 
-		var token = result.GetSuccess();
-		var clientId = token.Payload.ClientId;
-		if (clientId != clientInfo.ClientId)
-		{
-			// The token was issued to another client
-			return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
-		}
+				return new ValidIntrospectionRequest(introspectionRequest, token);
 
-		return new ValidIntrospectionRequest(introspectionRequest, token);
+			},
+			error =>
+			{
+				logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
+				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+			});
 	}
 }

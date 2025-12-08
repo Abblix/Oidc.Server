@@ -50,7 +50,7 @@ public class ClientJwtValidator(
     IRequestInfoProvider requestInfoProvider,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientJwksProvider): IClientJwtValidator
+    IClientKeysProvider clientJwksProvider) : IClientJwtValidator
 {
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -67,23 +67,20 @@ public class ClientJwtValidator(
         string jwt,
         ValidationOptions options = ValidationOptions.Default)
     {
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
+
         var result = await tokenValidator.ValidateAsync(
             jwt,
             new ValidationParameters
             {
                 Options = options,
                 ValidateAudience = ValidateAudience,
-                ValidateIssuer = ValidateIssuer,
-                ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
+                ValidateIssuer = context.ValidateIssuer,
+                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys
             });
 
-        return result.MapSuccess(token => new ValidJsonWebToken(token, ClientInfo.NotNull(nameof(ClientInfo))));
+        return result.MapSuccess(token => new ValidJsonWebToken(token, context.ClientInfo.NotNull(nameof(context.ClientInfo))));
     }
-
-    /// <summary>
-    /// Holds client information after the issuer has been successfully validated.
-    /// </summary>
-    private ClientInfo? ClientInfo { get; set; }
 
     /// <summary>
     /// Validates the audience by checking if it matches the request URI.
@@ -95,62 +92,72 @@ public class ClientJwtValidator(
         var requestUri = requestInfoProvider.RequestUri;
         var result = audiences.Contains(requestUri);
         if (!result)
-        {
             logger.LogWarning(
                 "Audience validation failed, token audiences: {@Audiences}, actual requestUri: {RequestUri}",
                 audiences, requestUri);
-        }
 
         return Task.FromResult(result);
     }
 
     /// <summary>
-    /// Validates the issuer by attempting to match it with known client information. Ensures that the JWT issuer
-    /// corresponds to an authorized client, and handles scenarios where client information is already known.
+    /// Encapsulates the validation context for a single JWT validation operation.
+    /// Holds client information that gets populated during the validation process.
     /// </summary>
-    /// <param name="issuer">The issuer value to validate.</param>
-    /// <returns>
-    /// A task that returns whether the issuer is valid
-    /// and corresponds to an authorized client.
-    /// </returns>
-    /// <exception cref="InvalidOperationException">Thrown if attempting to validate a different issuer than the one
-    /// associated with the stored client information.</exception>
-    private async Task<bool> ValidateIssuer(string issuer)
+    private sealed class ValidationContext(
+        IClientInfoProvider clientInfoProvider,
+        IClientKeysProvider clientJwksProvider)
     {
-        switch (ClientInfo)
+        /// <summary>
+        /// Holds client information after the issuer has been successfully validated.
+        /// </summary>
+        public ClientInfo? ClientInfo { get; private set; }
+
+        /// <summary>
+        /// Tracks whether client lookup has been performed to avoid duplicate lookups.
+        /// </summary>
+        private bool _clientLookupPerformed;
+
+        /// <summary>
+        /// Validates the issuer by attempting to match it with known client information. Ensures that the JWT issuer
+        /// corresponds to an authorized client, and handles scenarios where client information is already known.
+        /// </summary>
+        /// <param name="issuer">The issuer value to validate.</param>
+        /// <returns>
+        /// A task that returns whether the issuer is valid
+        /// and corresponds to an authorized client.
+        /// </returns>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown if attempting to validate a different issuer than the one
+        /// associated with the stored client information.
+        /// </exception>
+        public async Task<bool> ValidateIssuer(string issuer)
         {
-            // Case where client information is already known and the issuer matches the client ID.
-            case { ClientId: var clientId } when issuer == clientId:
-                return true;
-
-            // Case where client information is already known, but the issuer does not match the known client ID.
-            case { ClientId: var clientId }:
-                throw new InvalidOperationException(
-                    $"Trying to validate issuer {issuer}, but already has info about client {clientId}");
-
-            // Case where client information is not yet known; attempt to find the client by issuer.
-            default:
+            if (!_clientLookupPerformed)
+            {
+                // Attempt to find the client by issuer
                 ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
+                _clientLookupPerformed = true;
+            }
 
-                // If the client is found but does not use the expected authentication method, validation fails.
-                return ClientInfo != null;
+            return ClientInfo?.ClientId == issuer;
         }
-    }
 
-    /// <summary>
-    /// Asynchronously resolves the signing keys for a validated issuer's JWTs, allowing the authentication service
-    /// to verify the JWT signature.
-    /// </summary>
-    /// <param name="issuer">The issuer URL whose signing keys are to be resolved.</param>
-    /// <returns>An asynchronous stream of <see cref="JsonWebKey"/> objects representing the issuer's signing keys.
-    /// </returns>
-    private async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer)
-    {
-        if (!await ValidateIssuer(issuer))
-            yield break;
+        /// <summary>
+        /// Asynchronously resolves the signing keys for a validated issuer's JWTs, allowing the authentication service
+        /// to verify the JWT signature.
+        /// </summary>
+        /// <param name="issuer">The issuer URL whose signing keys are to be resolved.</param>
+        /// <returns>
+        /// An asynchronous stream of <see cref="JsonWebKey" /> objects representing the issuer's signing keys.
+        /// </returns>
+        public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer)
+        {
+            if (!await ValidateIssuer(issuer))
+                yield break;
 
-        var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
-        await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo))
-            yield return key;
+            var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
+            await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo))
+                yield return key;
+        }
     }
 }

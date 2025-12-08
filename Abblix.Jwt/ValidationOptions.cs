@@ -30,17 +30,17 @@ namespace Abblix.Jwt;
 public enum ValidationOptions
 {
 	/// <summary>
+	/// Validates the issuer of the JWT.
+	/// Ensures that the issuer claim (iss) matches a specified value, typically configured in the token validation parameters.
+	/// </summary>
+	ValidateIssuer = 1 << 0,
+
+	/// <summary>
 	/// Default validation options that include validating the issuer, audience, presence of a signature,
 	/// validation of the issuer's signing key, and the token's lifetime.
 	/// This is a common set of validations providing a standard level of security.
 	/// </summary>
 	Default = ValidateIssuer | ValidateAudience | RequireSignedTokens | ValidateIssuerSigningKey | ValidateLifetime,
-
-	/// <summary>
-	/// Validates the issuer of the JWT.
-	/// Ensures that the issuer claim (iss) matches a specified value, typically configured in the token validation parameters.
-	/// </summary>
-	ValidateIssuer = 1 << 0,
 
 	/// <summary>
 	/// Validates the audience of the JWT.

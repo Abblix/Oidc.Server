@@ -34,13 +34,14 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// Unit tests for <see cref="ClientValidator"/> verifying client authentication and authorization
+/// Unit tests for <see cref="ClientValidator" /> verifying client authentication and authorization
 /// per OAuth 2.0 RFC 6749. Tests cover client_id validation, client lookup, authorization checks,
 /// and context population.
 /// </summary>
 public class ClientValidatorTests
 {
     private const string ValidClientId = "test_client_1";
+    private const string ValidClientId2 = "test_client_2";
     private const string UnknownClientId = "unknown_client";
 
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
@@ -63,7 +64,7 @@ public class ClientValidatorTests
             ClientId = clientId,
             ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = [Scopes.OpenId],
+            Scope = [Scopes.OpenId]
         };
 
         return new AuthorizationValidationContext(request);
@@ -165,18 +166,18 @@ public class ClientValidatorTests
     /// <summary>
     /// Verifies that ValidateAsync accepts client_id with different formats.
     /// Tests that validator uses client_id exactly as provided.
-    /// Uses ValidClientId to stay within license limits.
+    /// Uses ValidClientId2 to stay within license limits.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithVariousClientIdFormats_ShouldSucceed()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ValidClientId);
+        var clientInfo = new ClientInfo(ValidClientId2);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(ValidClientId2))
             .ReturnsAsync(clientInfo);
 
-        var context = CreateContext(ValidClientId);
+        var context = CreateContext(ValidClientId2);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -211,7 +212,6 @@ public class ClientValidatorTests
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(uppercaseClientId), Times.Once);
     }
 
-
     /// <summary>
     /// Verifies that ValidateAsync populates context.ClientInfo on success.
     /// Downstream validators rely on ClientInfo being populated.
@@ -224,7 +224,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo(ValidClientId)
         {
             ClientName = "Test Client",
-            AllowedResponseTypes = [[ResponseTypes.Code]],
+            AllowedResponseTypes = [[ResponseTypes.Code]]
         };
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ValidClientId))
@@ -358,5 +358,4 @@ public class ClientValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
     }
-
 }

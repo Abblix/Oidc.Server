@@ -43,6 +43,17 @@ public interface IClientInfoManager
     Task AddClientAsync(ClientInfo clientInfo);
 
     /// <summary>
+    /// Asynchronously updates an existing client's information in the storage system.
+    /// </summary>
+    /// <param name="clientInfo">The updated client information.</param>
+    /// <returns>A task representing the asynchronous operation, indicating the completion of the update process.</returns>
+    /// <remarks>
+    /// This operation updates the client metadata per RFC 7592 Section 2 (Client Update Request).
+    /// The client must already exist in the storage system.
+    /// </remarks>
+    Task UpdateClientAsync(ClientInfo clientInfo);
+
+    /// <summary>
     /// Asynchronously removes an existing client and its information from the storage system.
     /// </summary>
     /// <param name="clientId">The unique identifier of the client to be removed.</param>

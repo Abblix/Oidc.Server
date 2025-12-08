@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,25 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Model;
-
-namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+namespace Abblix.Jwt;
 
 /// <summary>
-/// Represents a validation context used during the client registration validation process.
-/// It contains information about the client registration request and the sector identifier.
+/// ASN.1 object identifiers (OIDs) for NIST-recommended elliptic curves used in ECDSA cryptography.
 /// </summary>
-public record ClientRegistrationValidationContext(ClientRegistrationRequest Request)
+internal static class EllipticCurveOids
 {
-	/// <summary>
-	/// The sector identifier associated with the client.
-	/// </summary>
-	public string? SectorIdentifier { get; set; }
+    /// <summary>
+    /// OID for the P-256 curve (secp256r1/prime256v1), a 256-bit prime field Weierstrass curve.
+    /// </summary>
+    public const string P256 = "1.2.840.10045.3.1.7";
 
-	/// <summary>
-	/// The type of registration operation being performed.
-	/// For Update operations, client_id validation ensures the client exists.
-	/// For Register operations, it ensures the client doesn't exist.
-	/// </summary>
-	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;
+    /// <summary>
+    /// OID for the P-384 curve (secp384r1), a 384-bit prime field Weierstrass curve.
+    /// </summary>
+    public const string P384 = "1.3.132.0.34";
+
+    /// <summary>
+    /// OID for the P-521 curve (secp521r1), a 521-bit prime field Weierstrass curve.
+    /// </summary>
+    public const string P521 = "1.3.132.0.35";
 }
