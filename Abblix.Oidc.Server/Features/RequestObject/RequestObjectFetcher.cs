@@ -75,11 +75,11 @@ public class RequestObjectFetcher(
         return await validationResult.BindAsync<T>(
             async payload =>
             {
-                return await jsonObjectBinder.BindModelAsync(payload, request) switch
-                {
-                    {} updatedRequest => updatedRequest,
-                    null => InvalidRequestObject("Unable to bind request object"),
-                };
+                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, request);
+                if (updatedRequest == null)
+                    return InvalidRequestObject("Unable to bind request object");
+
+                return updatedRequest;
             }
         );
     }
