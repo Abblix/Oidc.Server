@@ -128,27 +128,34 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
 
         var jwToken = (JwtSecurityToken)token;
 
-        var result = new JsonWebToken
+        try
         {
-            Header =
+            var result = new JsonWebToken
             {
-                Type = jwToken.Header.Typ,
-                Algorithm = jwToken.Header.Alg,
-            },
-            Payload =
-            {
-                JwtId = jwToken.Id,
-                IssuedAt = jwToken.IssuedAt,
-                NotBefore = jwToken.ValidFrom,
-                ExpiresAt = jwToken.ValidTo,
-                Issuer = jwToken.Issuer,
-                Audiences = jwToken.Audiences,
-            },
-        };
+                Header =
+                {
+                    Type = jwToken.Header.Typ,
+                    Algorithm = jwToken.Header.Alg,
+                },
+                Payload =
+                {
+                    JwtId = jwToken.Id,
+                    IssuedAt = jwToken.IssuedAt,
+                    NotBefore = jwToken.ValidFrom,
+                    ExpiresAt = jwToken.ValidTo,
+                    Issuer = jwToken.Issuer,
+                    Audiences = jwToken.Audiences,
+                },
+            };
 
-        MergeClaims(jwToken.Claims, result.Payload.Json, JwtSecurityTokenHandlerConstants.ClaimTypesToExclude);
+            MergeClaims(jwToken.Claims, result.Payload.Json, JwtSecurityTokenHandlerConstants.ClaimTypesToExclude);
 
-        return result;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new JwtValidationError(JwtError.InvalidToken, $"Invalid token claims: {ex.Message}");
+        }
     }
 
     /// <summary>

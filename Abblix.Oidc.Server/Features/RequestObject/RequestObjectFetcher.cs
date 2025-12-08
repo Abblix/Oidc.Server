@@ -75,11 +75,11 @@ public class RequestObjectFetcher(
         return await validationResult.BindAsync<T>(
             async payload =>
             {
-                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, request);
-                if (updatedRequest != null)
-                    return updatedRequest;
-
-                return InvalidRequestObject("Unable to bind request object");
+                return await jsonObjectBinder.BindModelAsync(payload, request) switch
+                {
+                    {} updatedRequest => updatedRequest,
+                    null => InvalidRequestObject("Unable to bind request object"),
+                };
             }
         );
     }
@@ -99,7 +99,10 @@ public class RequestObjectFetcher(
     /// </remarks>
     private async Task<Result<JsonObject, OidcError>> ValidateAsync(string requestObject)
     {
-        var validationOptions = ValidationOptions.ValidateIssuerSigningKey;
+        // Always validate signatures when present (ValidateIssuerSigningKey)
+        // Always validate lifetime (exp/nbf claims) to reject expired request objects
+        // Only require signed tokens when RequireSignedRequestObject is true
+        var validationOptions = ValidationOptions.ValidateIssuerSigningKey | ValidationOptions.ValidateLifetime;
         if (options.Value.RequireSignedRequestObject)
             validationOptions |= ValidationOptions.RequireSignedTokens;
 
@@ -107,13 +110,9 @@ public class RequestObjectFetcher(
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
         var result = await tokenValidator.ValidateAsync(requestObject, validationOptions);
 
-        if (!result.TryGetSuccess(out var validJwt))
-        {
-            var error = result.GetFailure();
-            return InvalidRequestObject(error);
-        }
-
-        return validJwt.Token.Payload.Json;
+        return result.Match<Result<JsonObject, OidcError>>(
+            validJwt => validJwt.Token.Payload.Json,
+            error => InvalidRequestObject(error));
     }
 
     private OidcError InvalidRequestObject(JwtValidationError error)

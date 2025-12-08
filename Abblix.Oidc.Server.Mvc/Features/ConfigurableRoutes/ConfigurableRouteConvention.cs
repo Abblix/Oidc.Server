@@ -52,7 +52,6 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
             RegexOptions.Compiled,
             TimeSpan.FromMilliseconds(100));
     }
-
     private readonly IConfigurationSection? _configSection;
     private readonly Regex _routeRegex;
 

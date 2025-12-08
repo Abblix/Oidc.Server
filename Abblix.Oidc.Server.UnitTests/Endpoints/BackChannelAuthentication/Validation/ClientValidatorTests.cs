@@ -261,9 +261,9 @@ public class ClientValidatorTests
 
         var clientInfo = new ClientInfo("test-client")
         {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.Ciba],
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
-            ClientType = ClientType.Confidential
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
         _clientAuthenticator

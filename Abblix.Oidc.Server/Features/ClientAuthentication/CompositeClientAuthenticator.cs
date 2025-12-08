@@ -30,7 +30,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This class allows for attempting client authentication through a sequence of different
 /// authentication methods, providing flexibility in supporting multiple authentication protocols.
 /// </summary>
-internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators) : IClientAuthenticator
+internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators)
+	: IClientAuthenticator
 {
 	/// <summary>
 	/// Gets a collection of strings representing the client authentication methods supported by the implementation.

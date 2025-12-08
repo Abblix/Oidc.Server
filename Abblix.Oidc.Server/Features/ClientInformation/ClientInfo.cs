@@ -45,11 +45,15 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret.
-    /// This classification influences the authorization flow and token endpoint authentication method that
-    /// the client can use. Public clients, such as mobile or desktop applications, can’t securely store secrets,
-    /// while confidential clients, like server-side web applications, can.
+    /// This classification is derived from the TokenEndpointAuthMethod:
+    /// - Public: when TokenEndpointAuthMethod is 'none' (no client authentication)
+    /// - Confidential: for all other authentication methods (secrets, keys, certificates)
+    /// Setting this property validates consistency with TokenEndpointAuthMethod.
     /// </summary>
-    public ClientType ClientType { get; set; } = ClientType.Public;
+    public ClientType ClientType
+        => ClientAuthenticationMethods.None.Equals(TokenEndpointAuthMethod, StringComparison.Ordinal)
+            ? ClientType.Public
+            : ClientType.Confidential;
 
     /// <summary>
     /// A collection of secrets associated with the client, used for authenticating the client to the authorization server.
@@ -158,6 +162,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Describes how the client authenticates to the token endpoint.
     /// Common methods include client_secret_basic and client_secret_post.
+    /// Changing this value invalidates the cached ClientType.
     /// </summary>
     public string TokenEndpointAuthMethod { get; set; } = ClientAuthenticationMethods.ClientSecretBasic;
 

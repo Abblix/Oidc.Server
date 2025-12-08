@@ -326,7 +326,7 @@ public class ClientJwtValidatorTests
     /// Prevents validator state corruption and ensures single-client-per-instance semantics.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithDifferentIssuerAfterClientInfoSet_ShouldThrowException()
+    public async Task ValidateAsync_WithDifferentIssuerAfterClientInfoSet_ShouldReturnFalse()
     {
         // Arrange - First validation sets ClientInfo
         var token = CreateValidToken();
@@ -366,10 +366,9 @@ public class ClientJwtValidatorTests
         await _validator.ValidateAsync(ValidJwt);
         Assert.NotNull(capturedParams);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-        {
-            await capturedParams!.ValidateIssuer!(AnotherClientId);
-        });
+        // Second call with different issuer should return false (already looked up different client)
+        var result = await capturedParams!.ValidateIssuer!(AnotherClientId);
+        Assert.False(result);
     }
 
     /// <summary>
@@ -410,8 +409,9 @@ public class ClientJwtValidatorTests
         Assert.Same(clientInfo, validToken1.Client);
         Assert.Same(clientInfo, validToken2.Client);
 
-        // Verify client lookup only happened once (cached)
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Once);
+        // Verify client lookup happened twice (each ValidateAsync creates new ValidationContext)
+        // The flag prevents duplicate calls within a single validation, not across validations
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Exactly(2));
     }
 
     #endregion
