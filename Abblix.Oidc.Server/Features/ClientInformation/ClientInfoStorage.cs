@@ -61,6 +61,17 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     }
 
     /// <summary>
+    /// Updates an existing client's information in the storage asynchronously.
+    /// </summary>
+    /// <param name="clientInfo">The updated client information.</param>
+    /// <returns>A task that completes when the client is updated.</returns>
+    public Task UpdateClientAsync(ClientInfo clientInfo)
+    {
+        _clients[clientInfo.ClientId] = clientInfo;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Removes the client identified by the given client ID from the storage asynchronously.
     /// </summary>
     /// <param name="clientId">The unique identifier of the client to be removed.</param>

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
@@ -576,6 +577,115 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with out-of-range ExpiresAt timestamps fail validation gracefully.
+    /// Tests handling of invalid Unix timestamps that exceed DateTimeOffset valid range (year 0 to 10,000).
+    /// This can occur when exp claim contains raw seconds instead of Unix timestamp (e.g., 300 instead of 1733299200).
+    /// Returns JwtError.InvalidToken with error description instead of throwing ArgumentOutOfRangeException.
+    /// Critical for preventing HTTP 500 errors when processing malformed tokens.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithOutOfRangeExpiresAt_FailsValidationGracefully()
+    {
+        // Create a JWT manually with an invalid exp claim (negative value triggers ArgumentOutOfRangeException)
+        // Negative Unix timestamps represent dates before 1970 which can exceed valid DateTimeOffset range
+        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var payload = EncodeBase64Url(
+            $$"""
+            {
+                "iss":"https://issuer.example.com",
+                "aud":"test-audience",
+                "exp":-62135596801,
+                "iat":{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}},
+                "sub":"test-user"
+            }
+            """);
+        var malformedJwt = $"{header}.{payload}.";
+
+        var validator = new JsonWebTokenValidator();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens & ~ValidationOptions.ValidateLifetime;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(malformedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("Invalid token claims", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with out-of-range IssuedAt timestamps fail validation gracefully.
+    /// Tests handling of invalid iat claim values that would cause DateTimeOffset to throw ArgumentOutOfRangeException.
+    /// Returns JwtError.InvalidToken instead of unhandled exception.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithOutOfRangeIssuedAt_FailsValidationGracefully()
+    {
+        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var payload = EncodeBase64Url(
+            $$"""
+            {
+                "iss":"https://issuer.example.com",
+                "aud":"test-audience",
+                "exp":{{DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()}},
+                "iat":100,
+                "sub":"test-user"
+            }
+            """);
+        var malformedJwt = $"{header}.{payload}.";
+
+        var validator = new JsonWebTokenValidator();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(malformedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("Invalid token claims", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with extremely far future timestamps (year 10,000+) fail validation gracefully.
+    /// Tests upper bound of DateTimeOffset valid range.
+    /// Returns JwtError.InvalidToken instead of throwing ArgumentOutOfRangeException.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithExtremelyFarFutureTimestamp_FailsValidationGracefully()
+    {
+        // Unix timestamp for year 10,001 would exceed DateTimeOffset.MaxValue
+        var farFutureTimestamp = 253402300800L; // Year 10,000
+
+        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var payload = EncodeBase64Url(
+            $$"""
+            {
+                "iss":"https://issuer.example.com",
+                "aud":"test-audience",
+                "exp":{{farFutureTimestamp}},
+                "iat":{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}},
+                "sub":"test-user"
+            }
+            """);
+        var malformedJwt = $"{header}.{payload}.";
+
+        var validator = new JsonWebTokenValidator();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens & ~ValidationOptions.ValidateLifetime;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(malformedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("Invalid token claims", error.ErrorDescription);
+    }
+
+    private static string EncodeBase64Url(string input)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(input);
+        return HttpServerUtility.UrlTokenEncode(bytes);
     }
 
     private static JsonWebToken CreateValidToken()
