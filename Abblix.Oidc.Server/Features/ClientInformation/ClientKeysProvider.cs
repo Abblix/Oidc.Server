@@ -81,34 +81,10 @@ public class ClientKeysProvider(
         if (jwksUri == null)
             yield break;
 
-        logger.LogDebug("Fetching JWKS for client {ClientId} from {JwksUri}", clientInfo.ClientId, jwksUri);
-
         using var scope = serviceProvider.CreateScope();
         var secureFetcher = scope.ServiceProvider.GetRequiredService<ISecureHttpFetcher>();
 
-        var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
-
-        var jwksKeys = result.Match(
-            jwks =>
-            {
-                if (jwks is { Keys: { Length: > 0 } keys })
-                    return keys.ToAsyncEnumerable();
-
-                logger.LogWarning("JWKS for client {ClientId} from {JwksUri} is empty or invalid",
-                    clientInfo.ClientId, jwksUri);
-
-                return AsyncEnumerable.Empty<JsonWebKey>();
-
-            },
-            error =>
-            {
-                logger.LogWarning("Failed to fetch JWKS for client {ClientId} from {JwksUri}: {Error}",
-                    clientInfo.ClientId, jwksUri, error.ErrorDescription);
-
-                return AsyncEnumerable.Empty<JsonWebKey>();
-            });
-
-        await foreach (var key in jwksKeys)
+        await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, clientInfo.ClientId, "client"))
         {
             yield return key;
         }
