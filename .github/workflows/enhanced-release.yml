@@ -91,7 +91,9 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: nuget-packages
-          path: nupkg/*.nupkg
+          path: |
+            nupkg/*.nupkg
+            nupkg/*.snupkg
 
   test-getting-started:
     needs: [versioning, build-and-test]
@@ -140,6 +142,7 @@ jobs:
   publish-packages:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
+    environment: publish-packages
     steps:
       - name: Download NuGet packages
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
@@ -173,8 +176,7 @@ jobs:
             dotnet nuget push "$pkg" \
               --api-key "$GITHUB_TOKEN" \
               --source https://nuget.pkg.github.com/Abblix/index.json \
-              --skip-duplicate \
-              --no-symbols || echo "⚠️  Package $(basename "$pkg") may already exist"
+              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
           done
           echo "✅ GitHub Packages publishing completed"
       - name: Publish to NuGet.org
@@ -187,8 +189,7 @@ jobs:
             dotnet nuget push "$pkg" \
               --api-key "$NUGET_API_KEY" \
               --source https://api.nuget.org/v3/index.json \
-              --skip-duplicate \
-              --no-symbols || echo "⚠️  Package $(basename "$pkg") may already exist"
+              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
           done
           echo "✅ NuGet.org publishing completed"
       - name: Verify publication
@@ -260,7 +261,9 @@ jobs:
           tag_name: v${{ needs.versioning.outputs.version }}
           name: v${{ needs.versioning.outputs.version }}
           body_path: CHANGELOG.md
-          files: nupkg/*.nupkg
+          files: |
+            nupkg/*.nupkg
+            nupkg/*.snupkg
           prerelease: ${{ github.event.inputs.pre_release }}
           make_latest: ${{ !github.event.inputs.pre_release }}
         env:
