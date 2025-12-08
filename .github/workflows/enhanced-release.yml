@@ -134,8 +134,8 @@ jobs:
           cd getting-started/OpenIDProviderApp
           timeout 30s dotnet run &
           sleep 10
-          # Basic health check - just verify it starts
-          curl -k https://localhost:5001 || echo "Expected - no default route"
+          # Basic health check - just verify it starts (uses HTTP for local testing)
+          curl http://localhost:5000 || echo "Expected - no default route"
 
   publish-packages:
     needs: [versioning, build-and-test, test-getting-started, create-release]
