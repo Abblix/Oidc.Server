@@ -139,7 +139,50 @@ jobs:
           # Basic health check - just verify it starts (uses HTTP for local testing)
           curl http://localhost:5000 || echo "Expected - no default route"
 
-  publish-packages:
+  publish-github-packages:
+    needs: [versioning, build-and-test, test-getting-started, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: nuget-packages
+          path: nupkg
+      - name: Setup .NET
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v5.0.0
+        with:
+          dotnet-version: '10.0'
+      - name: List packages to be published
+        run: |
+          echo "📦 Packages ready for publishing to GitHub Packages:"
+          for pkg in nupkg/*.nupkg; do
+            echo "  - $(basename "$pkg")"
+          done
+          echo ""
+          echo "🎯 Publishing destination: https://nuget.pkg.github.com/Abblix/index.json"
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "📤 Publishing to GitHub Packages..."
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to GitHub Packages..."
+            dotnet nuget push "$pkg" \
+              --api-key "$GITHUB_TOKEN" \
+              --source https://nuget.pkg.github.com/Abblix/index.json \
+              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
+          done
+          echo "✅ GitHub Packages publishing completed"
+      - name: Verify publication
+        run: |
+          echo "🔍 Verification: https://github.com/Abblix/Oidc.Server/packages"
+          echo "📋 Published packages:"
+          for pkg in nupkg/*.nupkg; do
+            PACKAGE_NAME=$(basename "$pkg" .nupkg)
+            echo "  - $PACKAGE_NAME"
+          done
+
+  publish-nuget-org:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
     environment: publish-packages
@@ -155,30 +198,15 @@ jobs:
           dotnet-version: '10.0'
       - name: List packages to be published
         run: |
-          echo "📦 Packages ready for publishing:"
+          echo "📦 Packages ready for publishing to NuGet.org:"
           for pkg in nupkg/*.nupkg; do
             echo "  - $(basename "$pkg")"
           done
           echo ""
-          echo "🎯 Publishing destinations:"
-          echo "  - NuGet.org: https://api.nuget.org/v3/index.json"
-          echo "  - GitHub Packages: https://nuget.pkg.github.com/Abblix/index.json"
+          echo "🎯 Publishing destination: https://api.nuget.org/v3/index.json"
           echo ""
           echo "⚠️  This step requires manual approval in GitHub Actions."
           echo "🔄 Publishing will begin after approval..."
-      - name: Publish to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "📤 Publishing to GitHub Packages..."
-          for pkg in nupkg/*.nupkg; do
-            echo "Publishing $(basename "$pkg") to GitHub Packages..."
-            dotnet nuget push "$pkg" \
-              --api-key "$GITHUB_TOKEN" \
-              --source https://nuget.pkg.github.com/Abblix/index.json \
-              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
-          done
-          echo "✅ GitHub Packages publishing completed"
       - name: Publish to NuGet.org
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
@@ -194,10 +222,8 @@ jobs:
           echo "✅ NuGet.org publishing completed"
       - name: Verify publication
         run: |
-          echo "🔍 Verification steps:"
-          echo "1. Check GitHub Packages: https://github.com/Abblix/Oidc.Server/packages"
-          echo "2. Check NuGet.org: https://www.nuget.org/packages?q=Abblix"
-          echo "3. Wait 5-15 minutes for package indexing to complete"
+          echo "🔍 Verification: https://www.nuget.org/packages?q=Abblix"
+          echo "⏳ Wait 5-15 minutes for package indexing to complete"
           echo ""
           echo "📋 Published packages:"
           for pkg in nupkg/*.nupkg; do
