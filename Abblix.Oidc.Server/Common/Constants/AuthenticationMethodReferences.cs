@@ -41,6 +41,7 @@ public static class AuthenticationMethodReferences
     [SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
     public const string OneTimePassword = "otp"; // One-time password
 
+    public const string OutOfBand = "oob"; // Out-of-band authentication
     public const string Pin = "pin"; // PIN or pattern
     public const string ProofOfPossession = "pop"; // Proof-of-possession of a key
 
@@ -56,4 +57,8 @@ public static class AuthenticationMethodReferences
     public const string UserPresence = "user"; // User presence test
     public const string VoiceBiometric = "vbm"; // Voice biometric
     public const string WindowsIntegratedAuth = "wia"; // Windows Integrated Authentication
+
+    // Additional RFC 8176 values
+    public const string Biometric = "bio"; // Generic biometric authentication
+    public const string Certificate = "x509"; // X.509 certificate-based authentication
 }
