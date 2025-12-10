@@ -41,7 +41,6 @@ public static class AuthenticationMethodReferences
     [SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
     public const string OneTimePassword = "otp"; // One-time password
 
-    public const string OutOfBand = "oob"; // Out-of-band authentication
     public const string Pin = "pin"; // PIN or pattern
     public const string ProofOfPossession = "pop"; // Proof-of-possession of a key
 
@@ -58,7 +57,19 @@ public static class AuthenticationMethodReferences
     public const string VoiceBiometric = "vbm"; // Voice biometric
     public const string WindowsIntegratedAuth = "wia"; // Windows Integrated Authentication
 
-    // Additional RFC 8176 values
-    public const string Biometric = "bio"; // Generic biometric authentication
-    public const string Certificate = "x509"; // X.509 certificate-based authentication
+    // Non-standard values (not in IANA registry or RFC 8176):
+    // These custom values should be replaced with standard alternatives in production code.
+
+    // NOT in IANA registry - RFC 8176 defines specific biometric values instead:
+    // Use Face, Fingerprint, IrisScan, RetinaScan, or VoiceBiometric for specific biometric methods.
+    // public const string Biometric = "bio";
+
+    // NOT in IANA registry - RFC 8176 has Sms and Telephone for out-of-band methods.
+    // The "oob" identifier is used in OAuth for deprecated redirect URIs, not as an AMR value.
+    // Use Sms or Telephone for out-of-band authentication, or OneTimePassword for email codes.
+    // public const string OutOfBand = "oob";
+
+    // NOT in IANA registry - RFC 8176 defines SmartCard for certificate-based authentication.
+    // Use SmartCard for X.509 certificate authentication, or HardwareKey for hardware-secured keys.
+    // public const string Certificate = "x509";
 }
