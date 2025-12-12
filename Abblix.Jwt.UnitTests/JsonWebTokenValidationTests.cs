@@ -48,7 +48,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -68,7 +68,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(WrongSigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -88,7 +88,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = new ValidationParameters
         {
             ValidateAudience = _ => Task.FromResult(true),
@@ -121,7 +121,7 @@ public class JsonWebTokenValidationTests
 
         await Task.Delay(100);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -148,7 +148,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -176,7 +176,7 @@ public class JsonWebTokenValidationTests
 
         await Task.Delay(100);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -200,7 +200,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.ValidateIssuer;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -223,7 +223,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.ValidateAudience;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -243,7 +243,7 @@ public class JsonWebTokenValidationTests
     {
         var malformedJwt = "not.valid.base64!@#$%";
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(malformedJwt, parameters);
@@ -263,7 +263,7 @@ public class JsonWebTokenValidationTests
     {
         var malformedJwt = "header.payload";
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(malformedJwt, parameters);
@@ -280,7 +280,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task MalformedJwt_WithEmptyString_FailsValidation()
     {
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(string.Empty, parameters);
@@ -301,7 +301,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey, EncryptingKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey, EncryptingKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -323,7 +323,7 @@ public class JsonWebTokenValidationTests
         var wrongKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
         var jwt = await IssueToken(token, SigningKey, EncryptingKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey, wrongKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -344,7 +344,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey, EncryptingKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = new ValidationParameters
         {
             ValidateAudience = _ => Task.FromResult(true),
@@ -371,7 +371,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, signingKey: null);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -391,7 +391,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, signingKey: null);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -412,7 +412,7 @@ public class JsonWebTokenValidationTests
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
         parameters.ResolveIssuerSigningKeys = _ => new[] { WrongSigningKey, SigningKey }.ToAsyncEnumerable();
 
@@ -434,7 +434,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -460,7 +460,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -487,7 +487,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
         parameters.ClockSkew = TimeSpan.FromMinutes(5);
 
@@ -516,7 +516,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -548,7 +548,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -571,7 +571,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = CreateValidationParameters(SigningKey);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -604,7 +604,7 @@ public class JsonWebTokenValidationTests
             """);
         var malformedJwt = $"{header}.{payload}.";
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens & ~ValidationOptions.ValidateLifetime;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -643,7 +643,7 @@ public class JsonWebTokenValidationTests
             """);
         var malformedJwt = $"{header}.{payload}.";
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -685,7 +685,7 @@ public class JsonWebTokenValidationTests
             """);
         var malformedJwt = $"{header}.{payload}.";
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens & ~ValidationOptions.ValidateLifetime;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
@@ -735,6 +735,137 @@ public class JsonWebTokenValidationTests
     {
         var creator = new JsonWebTokenCreator();
         return await creator.IssueAsync(token, signingKey, encryptingKey);
+    }
+
+    /// <summary>
+    /// Verifies that JWTs without exp/nbf claims validate successfully when ValidateLifetime is enabled.
+    /// Custom LifetimeValidator allows missing lifetime claims while still validating them if present.
+    /// Critical for OpenID Connect request objects which may not include expiration times.
+    /// Per OIDC spec, request objects are one-time use and bound to authorization requests.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithoutLifetimeClaims_WithLifetimeValidationEnabled_Validates()
+    {
+        var token = CreateValidToken();
+        token.Payload.IssuedAt = null;
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = null;
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with only exp claim (no nbf) validate successfully.
+    /// Tests that nbf is optional even when ValidateLifetime is enabled.
+    /// Only validates exp when present.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithOnlyExpClaim_Validates()
+    {
+        var token = CreateValidToken();
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with only nbf claim (no exp) validate successfully.
+    /// Tests that exp is optional even when ValidateLifetime is enabled.
+    /// Only validates nbf when present.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithOnlyNbfClaim_Validates()
+    {
+        var token = CreateValidToken();
+        token.Payload.ExpiresAt = null;
+        token.Payload.NotBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that expired tokens fail validation even when nbf is missing.
+    /// Tests that exp claim is validated when present, regardless of whether nbf is present.
+    /// Note: Microsoft's JwtSecurityTokenHandler automatically adds nbf when creating tokens with exp,
+    /// so we create an expired token and wait for it to expire to test the lifetime validator.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithExpiredExpOnly_FailsValidation()
+    {
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload =
+            {
+                Issuer = "https://issuer.example.com",
+                Audiences = ["test-audience"],
+                NotBefore = baseTime,
+                ExpiresAt = baseTime.AddSeconds(1), // Add 1 second to ensure exp > nbf after rounding
+            },
+        };
+
+        var jwt = await IssueToken(token, SigningKey);
+        await Task.Delay(100); // Token already expired (created 2 minutes ago)
+
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that not-yet-valid tokens fail validation even when exp is missing.
+    /// Tests that nbf claim is validated when present, regardless of whether exp is present.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithFutureNbfOnly_FailsValidation()
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload =
+            {
+                Issuer = "https://issuer.example.com",
+                Audiences = ["test-audience"],
+                NotBefore = DateTimeOffset.UtcNow.AddHours(1),
+            },
+        };
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
     private static ValidationParameters CreateValidationParameters(

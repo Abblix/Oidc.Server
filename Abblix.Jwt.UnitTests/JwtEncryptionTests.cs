@@ -79,7 +79,7 @@ public class JwtEncryptionTests
         var creator = new JsonWebTokenCreator();
         var jwt = await creator.IssueAsync(token, SigningKey, EncryptingKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = new JsonWebTokenValidator(TimeProvider.System);
         var parameters = new ValidationParameters
         {
             ValidateAudience = aud => Task.FromResult(token.Payload.Audiences.SequenceEqual(aud)),

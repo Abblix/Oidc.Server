@@ -32,7 +32,8 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Represents a validator for JSON Web Tokens (JWTs) which validates a JWT against specified validation parameters.
 /// </summary>
-public class JsonWebTokenValidator : IJsonWebTokenValidator
+/// <param name="timeProvider">Provides access to the current time for lifetime validation.</param>
+public class JsonWebTokenValidator(TimeProvider timeProvider) : IJsonWebTokenValidator
 {
     /// <summary>
     /// Provides a collection of signing algorithms supported by the validator. This includes all algorithms recognized
@@ -56,7 +57,7 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
     /// <param name="jwt">The JWT string to validate.</param>
     /// <param name="parameters">The validation parameters.</param>
     /// <returns>The result of the JWT validation process, either indicating success or detailing any validation errors.</returns>
-    private static Result<JsonWebToken, JwtValidationError> Validate(string jwt, ValidationParameters parameters)
+    private Result<JsonWebToken, JwtValidationError> Validate(string jwt, ValidationParameters parameters)
     {
         var validationParameters = new TokenValidationParameters
         {
@@ -87,6 +88,38 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
                 validateAudience(audiences).Result;
         }
 
+        if (validationParameters.ValidateLifetime)
+        {
+            // Custom lifetime validator: validate exp/nbf if present, but allow them to be missing
+            validationParameters.LifetimeValidator = (notBefore, expires, _, tokenValidationParameters) =>
+            {
+                var now = timeProvider.GetUtcNow().UtcDateTime;
+
+                // If notBefore is present, validate it
+                if (notBefore.HasValue)
+                {
+                    var notBeforeUtc = notBefore.Value.ToUniversalTime();
+                    if (now.Add(tokenValidationParameters.ClockSkew) < notBeforeUtc)
+                    {
+                        return false;
+                    }
+                }
+
+                // If expires is present, validate it
+                if (expires.HasValue)
+                {
+                    var expiresUtc = expires.Value.ToUniversalTime();
+                    if (expiresUtc <= now.Subtract(tokenValidationParameters.ClockSkew))
+                    {
+                        return false;
+                    }
+                }
+
+                // If neither is present, or both are valid, accept the token
+                return true;
+            };
+        }
+
         if (validationParameters.ValidateIssuerSigningKey)
         {
             var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
@@ -94,6 +127,28 @@ public class JsonWebTokenValidator : IJsonWebTokenValidator
 
             validationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
             {
+                var alg = (securityToken as JwtSecurityToken)?.Header.Alg;
+
+                // For unsigned tokens (alg=none) when RequireSignedTokens is false,
+                // attempt issuer validation but return empty key list if it fails
+                if (string.Equals(alg, SigningAlgorithms.None, StringComparison.OrdinalIgnoreCase) &&
+                    !validationParameters.RequireSignedTokens)
+                {
+                    try
+                    {
+                        // Try to resolve keys to trigger issuer validation and populate ClientInfo
+                        _ = resolveIssuerSigningKeys(securityToken.Issuer).ToListAsync().Result;
+                    }
+                    catch (AggregateException) when (!validationParameters.RequireSignedTokens)
+                    {
+                        // Ignore issuer validation failures for unsigned tokens when signatures are not required
+                        // This allows the token to be validated even if the issuer is unknown
+                    }
+
+                    // Return empty list to allow Microsoft's validator to skip signature validation
+                    return [];
+                }
+
                 var signingKeys = resolveIssuerSigningKeys(securityToken.Issuer);
 
                 if (keyId.HasValue())
