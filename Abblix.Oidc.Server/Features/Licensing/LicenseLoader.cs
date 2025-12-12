@@ -53,7 +53,7 @@ public class LicenseLoader
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public static async Task LoadAsync(string licenseJwt)
     {
-        var validationResult = await new JsonWebTokenValidator().ValidateAsync(
+        var validationResult = await new JsonWebTokenValidator(TimeProvider.System).ValidateAsync(
             licenseJwt,
             new ValidationParameters
             {
