@@ -69,8 +69,6 @@ public class RequestObjectFetcher(
         if (!requestObject.HasValue())
             return request;
 
-        logger.LogDebug("JWT request object was: {RequestObject}", Sanitized.Value(requestObject));
-
         var validationResult = await ValidateAsync(requestObject);
         return await validationResult.BindAsync<T>(
             async payload =>
@@ -99,10 +97,14 @@ public class RequestObjectFetcher(
     /// </remarks>
     private async Task<Result<JsonObject, OidcError>> ValidateAsync(string requestObject)
     {
+        // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
-        // Always validate lifetime (exp/nbf claims) to reject expired request objects
+        // Always validate lifetime (exp/nbf claims) if present
         // Only require signed tokens when RequireSignedRequestObject is true
-        var validationOptions = ValidationOptions.ValidateIssuerSigningKey | ValidationOptions.ValidateLifetime;
+        var validationOptions = ValidationOptions.ValidateIssuer |
+                                ValidationOptions.ValidateIssuerSigningKey |
+                                ValidationOptions.ValidateLifetime;
+
         if (options.Value.RequireSignedRequestObject)
             validationOptions |= ValidationOptions.RequireSignedTokens;
 
