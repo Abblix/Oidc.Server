@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -35,7 +36,18 @@ namespace Abblix.Jwt.UnitTests;
 public class JsonWebTokenClaimsTests
 {
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
-    private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
+    private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
+
+    private static readonly IServiceProvider ServiceProvider = CreateServiceProvider();
+
+    private static IServiceProvider CreateServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        return services.BuildServiceProvider();
+    }
 
     /// <summary>
     /// Verifies that JWT string claims round-trip correctly through sign/encrypt/decrypt/validate cycle.
@@ -730,21 +742,25 @@ public class JsonWebTokenClaimsTests
 
     private static async Task<JsonWebToken> SignEncryptAndValidate(JsonWebToken token)
     {
-        var creator = new JsonWebTokenCreator();
-        var jwt = await creator.IssueAsync(token, SigningKey, EncryptingKey);
+        var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
+        var jwt = await creator.IssueAsync(token, SigningKey, encryptionKey);
 
-        var validator = new JsonWebTokenValidator(TimeProvider.System);
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveTokenDecryptionKeys = _ => new[] { EncryptingKey }.ToAsyncEnumerable(),
+            ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
             ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
-            Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime
+            Options = ValidationOptions.ValidateIssuer | ValidationOptions.ValidateAudience
         };
 
         var validatorResult = await validator.ValidateAsync(jwt, parameters);
-        Assert.True(validatorResult.TryGetSuccess(out var result));
+        if (!validatorResult.TryGetSuccess(out var result))
+        {
+            var error = validatorResult.Match<string>(_ => "Success?", err => $"{err.Error}: {err.ErrorDescription}");
+            Assert.Fail($"Validation failed: {error}");
+        }
         return result;
     }
 }

@@ -30,7 +30,6 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -188,9 +187,9 @@ public class ClientSecretJwtAuthenticator(
             // Provide keys for all supported HMAC algorithms
             // The JWT validator will use the one matching the JWT's alg header
             var secretBytes = Encoding.UTF8.GetBytes(clientSecret.Value);
-            yield return CreateSymmetricKey(SecurityAlgorithms.HmacSha512, secretBytes);
-            yield return CreateSymmetricKey(SecurityAlgorithms.HmacSha384, secretBytes);
-            yield return CreateSymmetricKey(SecurityAlgorithms.HmacSha256, secretBytes);
+            yield return CreateSymmetricKey(SigningAlgorithms.HS512, secretBytes);
+            yield return CreateSymmetricKey(SigningAlgorithms.HS384, secretBytes);
+            yield return CreateSymmetricKey(SigningAlgorithms.HS256, secretBytes);
         }
     }
 
@@ -200,9 +199,6 @@ public class ClientSecretJwtAuthenticator(
     /// <param name="algorithm">The HMAC algorithm identifier (e.g., HS256, HS384, HS512).</param>
     /// <param name="secret"></param>
     /// <returns>A JSON Web Key configured for the specified HMAC algorithm.</returns>
-    private static JsonWebKey CreateSymmetricKey(string algorithm, byte[] secret) => new OctetJsonWebKey
-    {
-        Algorithm = algorithm,
-        KeyValue = secret,
-    };
+    private static OctetJsonWebKey CreateSymmetricKey(string algorithm, byte[] secret)
+        => new() { Algorithm = algorithm, KeyValue = secret };
 }

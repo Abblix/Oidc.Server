@@ -45,6 +45,12 @@ public static class JwtClaimTypes
     public const string KeyId = "kid";
 
     /// <summary>
+    /// The 'enc' (encryption algorithm) claim identifies the content encryption algorithm used for JWE.
+    /// It is typically found in the JWE header.
+    /// </summary>
+    public const string EncryptionAlgorithm = "enc";
+
+    /// <summary>
     /// The 'idp' claim represents the identity provider that authenticated the end user.
     /// </summary>
     public const string IdentityProvider = "idp";
