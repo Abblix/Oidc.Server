@@ -52,15 +52,7 @@ public enum ValidationOptions
 	ValidateAudience = 1 << 3,
 
 	/// <summary>
-	/// Default validation options that include validating the issuer, audience, presence of a signature,
-	/// validation of the issuer's signing key, and the token's lifetime.
-	/// This is a common set of validations providing a standard level of security.
-	/// </summary>
-	Default = RequireIssuer | ValidateIssuer | RequireAudience | ValidateAudience | RequireSignedTokens | ValidateIssuerSigningKey | ValidateLifetime,
-
-	/// <summary>
 	/// Requires that the JWT has a valid signature.
-	/// This ensures that the token has not been tampered with and is from a trusted issuer.
 	/// </summary>
 	RequireSignedTokens = 1 << 4,
 
@@ -75,4 +67,29 @@ public enum ValidationOptions
 	/// Ensures that the token is within its valid time frame of use (not expired and not yet valid if the 'nbf' claim is specified).
 	/// </summary>
 	ValidateLifetime = 1 << 6,
+
+	/// <summary>
+	/// Requires and validates the issuer claim (iss).
+	/// Combines RequireIssuer and ValidateIssuer flags.
+	/// </summary>
+	RequireValidIssuer = RequireIssuer | ValidateIssuer,
+
+	/// <summary>
+	/// Requires and validates the audience claim (aud).
+	/// Combines RequireAudience and ValidateAudience flags.
+	/// </summary>
+	RequireValidAudience = RequireAudience | ValidateAudience,
+
+	/// <summary>
+	/// Requires and validates signed tokens.
+	/// Combines RequireSignedTokens and ValidateIssuerSigningKey flags.
+	/// </summary>
+	RequireValidSignedTokens = RequireSignedTokens | ValidateIssuerSigningKey,
+
+	/// <summary>
+	/// Default validation options that include validating the issuer, audience, presence of a signature,
+	/// validation of the issuer's signing key, and the token's lifetime.
+	/// This is a common set of validations providing a standard level of security.
+	/// </summary>
+	Default = RequireValidIssuer | RequireValidAudience | RequireValidSignedTokens | ValidateLifetime,
 }

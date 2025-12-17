@@ -213,7 +213,7 @@ public class JsonWebTokenValidationTests
         var jwt = await IssueToken(token, SigningKey);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
-        var options = ValidationOptions.Default & ~ValidationOptions.ValidateIssuer;
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireValidIssuer;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
         var result = await validator.ValidateAsync(jwt, parameters);
@@ -236,7 +236,7 @@ public class JsonWebTokenValidationTests
         var jwt = await IssueToken(token, SigningKey);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
-        var options = ValidationOptions.Default & ~ValidationOptions.ValidateAudience;
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
         var parameters = CreateValidationParameters(SigningKey, options: options);
 
         var result = await validator.ValidateAsync(jwt, parameters);
