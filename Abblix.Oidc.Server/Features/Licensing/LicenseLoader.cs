@@ -65,7 +65,7 @@ public class LicenseLoader
             licenseJwt,
             new ValidationParameters
             {
-                Options = ValidationOptions.ValidateIssuer |
+                Options = ValidationOptions.RequireIssuer |
                           ValidationOptions.RequireSignedTokens |
                           ValidationOptions.ValidateIssuerSigningKey,
 

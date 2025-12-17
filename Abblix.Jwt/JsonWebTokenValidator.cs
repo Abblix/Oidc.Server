@@ -22,6 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
 
@@ -120,7 +121,14 @@ internal class JsonWebTokenValidator(
     private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
     {
         var json = Encoding.UTF8.GetString(jwtPart);
-        jsonObject = JsonNode.Parse(json) as JsonObject;
+        try
+        {
+            jsonObject = JsonNode.Parse(json) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            jsonObject = null;
+        }
         return jsonObject is not null;
     }
 
@@ -145,16 +153,22 @@ internal class JsonWebTokenValidator(
             if (jwtParts[2].HasValue())
                 return new JwtValidationError(JwtError.InvalidToken, "Unsigned token must have empty signature");
         }
-        else if (parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey))
+        else
         {
-            var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
-                .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
+            var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey) ||
+                                 parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens);
 
-            var issuer = token.Payload.Issuer;
-            if (issuer == null)
-                return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
+            if (shouldValidate)
+            {
+                var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
+                    .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
 
-            return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+                var issuer = token.Payload.Issuer;
+                if (issuer == null)
+                    return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
+
+                return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+            }
         }
 
         return null;
@@ -179,11 +193,17 @@ internal class JsonWebTokenValidator(
     /// </summary>
     private static async Task<JwtValidationError?> ValidateIssuerAsync(string? issuer, ValidationParameters parameters)
     {
+        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer) ||
+                             parameters.Options.HasFlag(ValidationOptions.RequireIssuer);
+
         if (issuer != null)
         {
-            var validateIssuer = parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer));
-            if (!await validateIssuer(issuer))
-                return new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
+            if (shouldValidate)
+            {
+                var validateIssuer = parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer));
+                if (!await validateIssuer(issuer))
+                    return new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
+            }
         }
         else if (parameters.Options.HasFlag(ValidationOptions.RequireIssuer))
         {
@@ -205,7 +225,10 @@ internal class JsonWebTokenValidator(
         if (parameters.Options.HasFlag(ValidationOptions.RequireAudience) && audiencesList.Count == 0)
             return new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload");
 
-        if (parameters.Options.HasFlag(ValidationOptions.ValidateAudience))
+        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateAudience) ||
+                             parameters.Options.HasFlag(ValidationOptions.RequireAudience);
+
+        if (shouldValidate && audiencesList.Count > 0)
         {
             var validateAudience = parameters.ValidateAudience.NotNull(nameof(parameters.ValidateAudience));
             if (!await validateAudience(audiencesList))
