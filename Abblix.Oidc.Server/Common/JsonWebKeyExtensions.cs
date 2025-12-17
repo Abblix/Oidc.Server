@@ -32,19 +32,35 @@ public static class JsonWebKeyExtensions
 {
     /// <summary>
     /// Asynchronously retrieves the first <see cref="JsonWebKey"/> with the specified algorithm from the sequence.
+    /// Prioritizes keys with exact algorithm match, then falls back to algorithm-agnostic keys (Algorithm == null)
+    /// per RFC 7517, which allows keys without 'alg' parameter to be used with any compatible algorithm.
     /// </summary>
     /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
-    /// <param name="alg">The algorithm to match. Returns null if <see cref="SigningAlgorithms.None"/> is provided.</param>
+    /// <param name="algorithm">The algorithm to match. Returns null if <see cref="SigningAlgorithms.None"/> is provided.</param>
     /// <returns>The first <see cref="JsonWebKey"/> with the specified algorithm or null if not found.</returns>
 
-    public static async Task<JsonWebKey?> FirstByAlgorithmAsync(this IAsyncEnumerable<JsonWebKey> credentials, string? alg)
+    public static async Task<JsonWebKey?> FirstByAlgorithmAsync(
+        this IAsyncEnumerable<JsonWebKey> credentials,
+        string? algorithm)
     {
-        if (alg == SigningAlgorithms.None)
+        if (algorithm is null or SigningAlgorithms.None)
             return null;
 
-        if (alg.HasValue())
-            credentials = credentials.Where(key => key.Algorithm == alg);
+        if (algorithm.HasValue())
+        {
+            // Prioritize exact algorithm match, then fall back to algorithm-agnostic keys (Algorithm == null)
+            credentials = credentials
+                .Where(key => key.Algorithm == algorithm || key.Algorithm == null)
+                .OrderBy(key => key.Algorithm == algorithm ? 0 : 1); // Exact match first (0), then null (1)
+        }
 
-        return await credentials.FirstOrDefaultAsync();
+        var key = await credentials.FirstOrDefaultAsync();
+        if (key == null)
+        {
+            throw new InvalidOperationException(
+                $"No signing key found for algorithm '{algorithm}'. " +
+                $"Ensure signing certificates are properly configured and loaded.");
+        }
+        return key;
     }
 }
