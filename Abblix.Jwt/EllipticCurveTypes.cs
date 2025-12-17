@@ -26,7 +26,7 @@ namespace Abblix.Jwt;
 /// Elliptic curve type identifiers for JSON Web Keys as defined in RFC 7518 Section 6.2.1.1.
 /// These constants represent the standard curve names used in JWK "crv" parameter.
 /// </summary>
-internal static class EllipticCurveTypes
+public static class EllipticCurveTypes
 {
     /// <summary>
     /// P-256 curve (secp256r1/prime256v1), a 256-bit prime field Weierstrass curve.

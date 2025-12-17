@@ -25,7 +25,7 @@ namespace Abblix.Jwt;
 /// <summary>
 /// ASN.1 object identifiers (OIDs) for NIST-recommended elliptic curves used in ECDSA cryptography.
 /// </summary>
-internal static class EllipticCurveOids
+public static class EllipticCurveOids
 {
     /// <summary>
     /// OID for the P-256 curve (secp256r1/prime256v1), a 256-bit prime field Weierstrass curve.
