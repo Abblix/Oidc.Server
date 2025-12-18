@@ -536,7 +536,7 @@ public static class ServiceCollectionExtensions
         }
 
         services
-            .AddSingleton<SsrfValidatingHttpMessageHandler>()
+            .AddTransient<SsrfValidatingHttpMessageHandler>()
             .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
             {
                 var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
