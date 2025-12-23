@@ -65,4 +65,45 @@ public static class ArrayExtensions
         result[0] = value;
         return result;
     }
+
+    /// <summary>
+    /// Concatenates two byte arrays into a single array.
+    /// </summary>
+    /// <param name="first">The first array.</param>
+    /// <param name="second">The second array.</param>
+    /// <returns>A new array containing all elements from both arrays in order.</returns>
+    /// <remarks>
+    /// Uses Buffer.BlockCopy for efficient byte-level copying.
+    /// </remarks>
+    public static byte[] Concat(this byte[] first, byte[] second)
+    {
+        var result = new byte[first.Length + second.Length];
+        Buffer.BlockCopy(first, 0, result, 0, first.Length);
+        Buffer.BlockCopy(second, 0, result, first.Length, second.Length);
+        return result;
+    }
+
+    /// <summary>
+    /// Concatenates multiple byte arrays into a single array.
+    /// </summary>
+    /// <param name="arrays">The arrays to concatenate.</param>
+    /// <returns>A new array containing all input arrays concatenated in order.</returns>
+    /// <remarks>
+    /// Uses Buffer.BlockCopy for efficient byte-level copying.
+    /// Returns empty array if no arrays are provided.
+    /// </remarks>
+    public static byte[] Concat(params byte[][] arrays)
+    {
+        var totalLength = arrays.Sum(arr => arr.Length);
+        var result = new byte[totalLength];
+        var offset = 0;
+
+        foreach (var array in arrays)
+        {
+            Buffer.BlockCopy(array, 0, result, offset, array.Length);
+            offset += array.Length;
+        }
+
+        return result;
+    }
 }

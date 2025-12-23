@@ -44,4 +44,11 @@ public class DiscoveryOptions
     /// taking the standard endpoint path and applying this base URI (scheme/host/port and optional base path).
     /// </summary>
     public Uri? MtlsBaseUri { get; set; }
+
+    /// <summary>
+    /// Optional ACR (Authentication Context Class Reference) values supported by this provider.
+    /// These values represent authentication assurance levels that can be requested and achieved.
+    /// If not set, no acr_values_supported will be included in the discovery document.
+    /// </summary>
+    public IEnumerable<string>? AcrValuesSupported { get; set; }
 }

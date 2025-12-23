@@ -40,6 +40,7 @@ public interface IJsonWebTokenValidator
 	/// </summary>
 	/// <param name="jwt">The JWT as a string to be validated.</param>
 	/// <param name="parameters">The parameters against which the JWT will be validated.</param>
-	/// <returns>A Task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.</returns>
+	/// <returns>A Task representing the asynchronous validation operation, which yields a Result containing either
+	/// a validated JsonWebToken or a JwtValidationError.</returns>
 	Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters);
 }

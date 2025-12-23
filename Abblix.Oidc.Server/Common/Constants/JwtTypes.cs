@@ -28,9 +28,22 @@ namespace Abblix.Oidc.Server.Common.Constants;
 public static class JwtTypes
 {
 	/// <summary>
+	/// Standard JSON Web Token type.
+	/// Per RFC 7519 Section 5.1, this is the recommended value for the 'typ' header parameter.
+	/// </summary>
+	public const string Jwt = "JWT";
+
+	/// <summary>
 	/// The "AccessToken" JWT type is used to represent access tokens, typically used for authenticating and authorizing users in APIs.
 	/// </summary>
 	public const string AccessToken = "at+jwt";
+
+	/// <summary>
+	/// OpenID Connect ID Token.
+	/// Indicates this token is an OpenID Connect ID Token.
+	/// Used in the 'typ' header of ID tokens for explicit typing.
+	/// </summary>
+	public const string IdToken = "id_token+jwt";
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.

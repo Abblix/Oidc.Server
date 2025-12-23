@@ -105,6 +105,8 @@ public class ConfigurationResponseFormatter(
 			BackChannelTokenDeliveryModesSupported = response.BackChannelTokenDeliveryModesSupported,
 			BackChannelAuthenticationRequestSigningAlgValuesSupported = response.BackChannelAuthenticationRequestSigningAlgValuesSupported,
 			BackChannelUserCodeParameterSupported = response.BackChannelUserCodeParameterSupported,
+
+			AcrValuesSupported = response.AcrValuesSupported,
 		};
 
 		// Add mTLS endpoint aliases if configured

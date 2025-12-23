@@ -153,4 +153,9 @@ public record ConfigurationResponse
 	/// Indicates whether the OpenID Provider supports the backchannel user code parameter for CIBA.
 	/// </summary>
 	public bool? BackChannelUserCodeParameterSupported { get; init; }
+
+	/// <summary>
+	/// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.
+	/// </summary>
+	public IEnumerable<string>? AcrValuesSupported { get; init; }
 }

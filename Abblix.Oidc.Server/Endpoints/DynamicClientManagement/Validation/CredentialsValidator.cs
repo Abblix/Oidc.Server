@@ -28,8 +28,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates that client authentication methods are consistent with the credentials provided during registration.
-/// Ensures public clients don't have credentials, and confidential clients have the required credentials
-/// for their chosen authentication method (JWKS for JWT methods, TLS metadata for TLS methods).
+/// Ensures clients using JWT-based or TLS authentication have the required credentials (JWKS for JWT methods,
+/// TLS metadata for TLS methods). JWKS may be provided by any client for encryption or request object signing.
 /// </summary>
 public class CredentialsValidator : SyncClientRegistrationContextValidator
 {
@@ -47,12 +47,8 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
 
         switch (request.TokenEndpointAuthMethod.ToLowerInvariant())
         {
-            // Public clients (auth method = "none") must NOT have JWKS or client secrets
-            case ClientAuthenticationMethods.None when HasJwksCredentials(request):
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    "Public clients (token_endpoint_auth_method='none') cannot have 'jwks' or 'jwks_uri'. " +
-                    "Remove credentials or use a confidential authentication method like 'private_key_jwt'.");
+            // Note: Public clients (auth method = "none") MAY have JWKS for request object signing,
+            // ID token encryption, or UserInfo encryption. JWKS contains public keys, not secrets.
 
             // Private key JWT - requires JWKS or JWKS URI
             case ClientAuthenticationMethods.PrivateKeyJwt when !HasJwksCredentials(request):
@@ -66,33 +62,31 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
                     ErrorCodes.InvalidClientMetadata,
                     "Clients using 'client_secret_jwt' authentication must provide either 'jwks' or 'jwks_uri'.");
 
-            // Client secret basic/post - should NOT have JWKS (would indicate wrong auth method)
-            case ClientAuthenticationMethods.ClientSecretBasic or ClientAuthenticationMethods.ClientSecretPost
-                when HasJwksCredentials(request):
+            // Note: Clients using client_secret_basic/post MAY optionally provide jwks/jwks_uri
+            // for ID token encryption, UserInfo encryption, or request object signing.
+            // This is allowed per OIDC Dynamic Client Registration spec.
 
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    $"Clients using '{request.TokenEndpointAuthMethod}' authentication should not provide 'jwks' or 'jwks_uri'. " +
-                    "Did you mean to use 'private_key_jwt'?");
+            // Note: self_signed_tls_client_auth clients typically use jwks/jwks_uri to convey certificates.
+            // tls_client_auth clients MAY also provide jwks/jwks_uri for encryption or request signing.
 
-            // TLS auth - should NOT have JWKS (uses certificate-based authentication)
-            case ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth
-                when HasJwksCredentials(request):
-
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    $"Clients using '{request.TokenEndpointAuthMethod}' authentication should not provide 'jwks' or 'jwks_uri'. " +
-                    "TLS authentication uses certificate-based authentication, not JWKs.");
-
-            // TLS auth - MUST have TLS metadata
-            case ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth
+            // TLS auth with tls_client_auth - MUST have TLS metadata (DN or SAN fields)
+            case ClientAuthenticationMethods.TlsClientAuth
                 when !HasTlsMetadata(request):
 
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
-                    $"Clients using '{request.TokenEndpointAuthMethod}' authentication must provide at least one TLS metadata field: " +
+                    "Clients using 'tls_client_auth' authentication must provide at least one TLS metadata field: " +
                     "'tls_client_auth_subject_dn', 'tls_client_auth_san_dns', 'tls_client_auth_san_uri', " +
                     "'tls_client_auth_san_ip', or 'tls_client_auth_san_email'.");
+
+            // TLS auth with self_signed_tls_client_auth - MUST have either TLS metadata OR jwks/jwks_uri
+            case ClientAuthenticationMethods.SelfSignedTlsClientAuth
+                when !HasTlsMetadata(request) && !HasJwksCredentials(request):
+
+                return new OidcError(
+                    ErrorCodes.InvalidClientMetadata,
+                    "Clients using 'self_signed_tls_client_auth' authentication must provide either TLS metadata fields " +
+                    "('tls_client_auth_subject_dn', 'tls_client_auth_san_dns', etc.) or 'jwks'/'jwks_uri' to convey the client certificate.");
         }
 
         return null;

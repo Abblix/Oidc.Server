@@ -35,9 +35,29 @@ public interface IJsonWebTokenCreator
 	/// <summary>
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.
 	/// </summary>
-	/// <param name="jwt">The JsonWebToken object containing the payload of the JWT.</param>
+	/// <param name="token">The JsonWebToken object containing the payload of the JWT.</param>
 	/// <param name="signingKey">The JsonWebKey used to sign the JWT.</param>
-	/// <param name="encryptingKey">Optional JsonWebKey used to encrypt the JWT. If null, the JWT is not encrypted.</param>
-	/// <returns>A Task representing the asynchronous operation, which upon completion yields the JWT as a string.</returns>
-	Task<string> IssueAsync(JsonWebToken jwt, JsonWebKey? signingKey, JsonWebKey? encryptingKey = null);
+	/// <param name="encryptionKey">Optional JsonWebKey used to encrypt the JWT. If null, the JWT is not encrypted.</param>
+	/// <param name="keyEncryptionAlgorithm">
+	/// Key encryption algorithm for JWE. Defaults to RSA-OAEP-256.
+	/// Specifies how the Content Encryption Key (CEK) is encrypted with the recipient's public key.
+	/// Per RFC 7518 Section 4 (Key Management Algorithms).
+	/// Common values: RSA-OAEP-256, RSA-OAEP, RSA1_5, ECDH-ES, A128KW, A256KW.
+	/// Only used when encryptionKey is provided.
+	/// </param>
+	/// <param name="contentEncryptionAlgorithm">
+	/// Content encryption algorithm for JWE. Defaults to A256CBC-HS512.
+	/// Specifies how the JWT payload is encrypted using the CEK.
+	/// Per RFC 7518 Section 5 (Content Encryption Algorithms).
+	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
+	/// Only used when encryptionKey is provided.
+	/// </param>
+	/// <returns>A Task representing the asynchronous operation, which upon completion yields the JWT as a string.
+	/// </returns>
+	Task<string> IssueAsync(
+		JsonWebToken token,
+		JsonWebKey? signingKey,
+		JsonWebKey? encryptionKey = null,
+		string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+		string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512);
 }
