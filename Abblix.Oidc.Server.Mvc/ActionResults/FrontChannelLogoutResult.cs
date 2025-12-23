@@ -50,9 +50,29 @@ public class FrontChannelLogoutResult(
         await writer.WriteDocTypeAsync("html", null, null, null);
 
         writer.WriteStartElement("html");
-        writer.WriteStartElement("head");
+        await WriteHeadAsync(writer);
+        await WriteBodyAsync(writer);
+        await writer.WriteEndElementAsync(); // </html>
+    }
 
+    /// <summary>
+    /// Asynchronously writes the HTML head element with style and script.
+    /// </summary>
+    /// <param name="writer">The XML writer used to write the HTML content.</param>
+    private async Task WriteHeadAsync(XmlWriter writer)
+    {
+        writer.WriteStartElement("head");
         writer.WriteElementString("style", "iframe { display: none; width: 0; height: 0; }");
+        await WriteScriptAsync(writer);
+        await writer.WriteEndElementAsync(); // </head>
+    }
+
+    /// <summary>
+    /// Asynchronously writes the JavaScript to handle iframe loading and redirect.
+    /// </summary>
+    /// <param name="writer">The XML writer used to write the HTML content.</param>
+    private async Task WriteScriptAsync(XmlWriter writer)
+    {
         writer.WriteStartElement("script");
         await writer.WriteStringAsync($"var count = {frontChannelLogoutUris.Count}; ");
 
@@ -67,9 +87,25 @@ public class FrontChannelLogoutResult(
         }
 
         await writer.WriteEndElementAsync(); // </script>
-        await writer.WriteEndElementAsync(); // </head>
+    }
 
+    /// <summary>
+    /// Asynchronously writes the HTML body element with iframes for logout URIs.
+    /// </summary>
+    /// <param name="writer">The XML writer used to write the HTML content.</param>
+    private async Task WriteBodyAsync(XmlWriter writer)
+    {
         writer.WriteStartElement("body");
+        await WriteIFramesAsync(writer);
+        await writer.WriteEndElementAsync(); // </body>
+    }
+
+    /// <summary>
+    /// Asynchronously writes iframe elements for each front-channel logout URI.
+    /// </summary>
+    /// <param name="writer">The XML writer used to write the HTML content.</param>
+    private async Task WriteIFramesAsync(XmlWriter writer)
+    {
         foreach (var uri in frontChannelLogoutUris)
         {
             writer.WriteStartElement("iframe");
@@ -77,8 +113,5 @@ public class FrontChannelLogoutResult(
             writer.WriteAttributeString("src", uri.OriginalString);
             await writer.WriteEndElementAsync(); // </iframe>
         }
-
-        await writer.WriteEndElementAsync(); // </body>
-        await writer.WriteEndElementAsync(); // </html>
     }
 }
