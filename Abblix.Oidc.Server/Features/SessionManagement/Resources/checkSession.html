@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script type="application/javascript">
+        // eslint-disable-next-line no-restricted-globals
         if (window !== window.parent)
             window.addEventListener("message", receiveMessage, false);
 
@@ -34,7 +35,12 @@
             var data = new TextEncoder().encode(value);
             return crypto.subtle.digest("SHA-256", data).then(function(buffer)
             {
-                return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+                var bytes = new Uint8Array(buffer);
+                var binary = '';
+                for (var i = 0; i < bytes.length; i++) {
+                    binary += String.fromCodePoint(bytes[i]);
+                }
+                return btoa(binary)
                     .replaceAll("+", "-")
                     .replaceAll("/", "_")
                     .replaceAll("=", "");

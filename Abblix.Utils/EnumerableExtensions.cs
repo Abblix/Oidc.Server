@@ -47,7 +47,8 @@ public static class EnumerableExtensions
 	public static IEnumerable<T> TravelUp<T>(this T item, Func<T, T?> parentSelector)
 		where T: class
 	{
-		for (var current = item; current != null; )
+		var current = item;
+		while (current != null)
 		{
 			yield return current;
 

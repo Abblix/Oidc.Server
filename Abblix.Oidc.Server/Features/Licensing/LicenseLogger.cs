@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -88,6 +89,9 @@ internal class LicenseLogger: ILogger
     private const string LoggerName = "Abblix.Oidc.Server";
     private ILogger _logger = NullLogger.Instance;
     private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes;
+
+    [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Timer must be kept alive to prevent garbage collection")]
+    [SuppressMessage("SonarLint", "S4487:Unread private fields should be removed", Justification = "Timer must be kept alive to prevent garbage collection")]
     private readonly Timer _timer;
 
     /// <summary>
