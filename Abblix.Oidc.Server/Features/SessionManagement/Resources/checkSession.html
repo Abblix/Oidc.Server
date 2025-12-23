@@ -37,8 +37,8 @@
             {
                 var bytes = new Uint8Array(buffer);
                 var binary = '';
-                for (var i = 0; i < bytes.length; i++) {
-                    binary += String.fromCodePoint(bytes[i]);
+                for (var byte of bytes) {
+                    binary += String.fromCodePoint(byte);
                 }
                 return btoa(binary)
                     .replaceAll("+", "-")

@@ -66,9 +66,7 @@ public static class AuthenticationMethodReferences
     // NOT in IANA registry - RFC 8176 has Sms and Telephone for out-of-band methods.
     // The "oob" identifier is used in OAuth for deprecated redirect URIs, not as an AMR value.
     // Use Sms or Telephone for out-of-band authentication, or OneTimePassword for email codes.
-    // public const string OutOfBand = "oob";
 
     // NOT in IANA registry - RFC 8176 defines SmartCard for certificate-based authentication.
     // Use SmartCard for X.509 certificate authentication, or HardwareKey for hardware-secured keys.
-    // public const string Certificate = "x509";
 }
