@@ -22,6 +22,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -39,28 +40,31 @@ internal class LicenseLogger: ILogger
 {
     private LicenseLogger()
     {
-        var dictionary = new ConcurrentDictionary<object, DateTimeOffset>();
+        _timer = new Timer(OnTimer, _nextAllowedTimes, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+    }
 
-        _timer = new Timer(state =>
-            {
-                var dict = (ConcurrentDictionary<object, DateTimeOffset>)state!;
-                var utcNow = DateTimeOffset.UtcNow;
+    /// <summary>
+    /// Timer callback that removes expired throttle entries from the dictionary.
+    /// </summary>
+    /// <param name="state">The <see cref="ConcurrentDictionary{TKey,TValue}"/> containing throttle entries.</param>
+    /// <remarks>
+    /// This method is invoked periodically by the timer to clean up entries that have passed their throttle period,
+    /// preventing unbounded memory growth.
+    /// </remarks>
+    private static void OnTimer(object? state)
+    {
+        var nextAllowedTimes = (ConcurrentDictionary<object, DateTimeOffset>)state.NotNull(nameof(state));
+        var utcNow = DateTimeOffset.UtcNow;
 
-                var keysToRemove = dict
-                    .Where(kvp => kvp.Value < utcNow)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
+        var keysToRemove = nextAllowedTimes
+            .Where(kvp => kvp.Value < utcNow)
+            .Select(kvp => kvp.Key)
+            .ToArray();
 
-                foreach (var key in keysToRemove)
-                {
-                    dict.TryRemove(key, out _);
-                }
-            },
-            dictionary,
-            TimeSpan.FromMinutes(1),
-            TimeSpan.FromMinutes(1));
-
-        _nextAllowedTimes = dictionary;
+        foreach (var key in keysToRemove)
+        {
+            nextAllowedTimes.TryRemove(key, out _);
+        }
     }
 
     public static LicenseLogger Instance { get; } = new();
@@ -100,7 +104,7 @@ internal class LicenseLogger: ILogger
 
     private const string LoggerName = "Abblix.Oidc.Server";
     private ILogger _logger = NullLogger.Instance;
-    private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes;
+    private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes = new();
 
     [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Timer must be kept alive to prevent garbage collection")]
     [SuppressMessage("SonarLint", "S4487:Unread private fields should be removed", Justification = "Timer must be kept alive to prevent garbage collection")]
