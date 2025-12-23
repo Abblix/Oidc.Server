@@ -48,10 +48,10 @@ public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
         // Copy only non-JsonWebKeyConverter instances from original options
         foreach (var converter in options.Converters)
         {
-            if (converter is not JsonWebKeyConverter)
-            {
-                result.Converters.Add(converter);
-            }
+            if (converter is JsonWebKeyConverter)
+                continue;
+            
+            result.Converters.Add(converter);
         }
 
         return result;

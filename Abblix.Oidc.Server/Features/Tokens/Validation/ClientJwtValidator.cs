@@ -76,10 +76,50 @@ public class ClientJwtValidator(
                 Options = options,
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = context.ValidateIssuer,
-                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys
+                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
             });
 
-        return result.MapSuccess(token => new ValidJsonWebToken(token, context.ClientInfo.NotNull(nameof(context.ClientInfo))));
+        if (result.TryGetFailure(out var error))
+        {
+            logger.LogWarning(
+                "Client JWT validation failed. Error: {ErrorType}, Description: {Description}",
+                error.GetType().Name,
+                error.ToString());
+            return error;
+        }
+
+        var validatedToken = result.GetSuccess();
+
+        var clientIdFromJwt = validatedToken.Payload.ClientId;
+        if (clientIdFromJwt != null)
+        {
+            if (context.ClientInfo == null)
+            {
+                // No client found by issuer, try client_id claim
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt).WithLicenseCheck();
+            }
+            else if (context.ClientInfo.ClientId != clientIdFromJwt)
+            {
+                // Both issuer and client_id present but don't match
+                logger.LogWarning(
+                    "Client ID mismatch: issuer resolves to {IssuerClientId}, but client_id claim is {ClaimClientId}",
+                    context.ClientInfo.ClientId,
+                    clientIdFromJwt);
+
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"Client ID mismatch: issuer resolves to '{context.ClientInfo.ClientId}', but client_id claim is '{clientIdFromJwt}'");
+            }
+        }
+
+        if (context.ClientInfo == null)
+        {
+            logger.LogWarning("Unable to determine client from JWT. No matching client found by issuer or client_id claim.");
+            return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
+        }
+
+        logger.LogInformation("Client JWT validation succeeded for client: {ClientId}", context.ClientInfo.ClientId);
+        return new ValidJsonWebToken(validatedToken, context.ClientInfo);
     }
 
     /// <summary>
@@ -92,9 +132,11 @@ public class ClientJwtValidator(
         var requestUri = requestInfoProvider.RequestUri;
         var result = audiences.Contains(requestUri);
         if (!result)
+        {
             logger.LogWarning(
                 "Audience validation failed, token audiences: {@Audiences}, actual requestUri: {RequestUri}",
                 audiences, requestUri);
+        }
 
         return Task.FromResult(result);
     }
@@ -110,7 +152,7 @@ public class ClientJwtValidator(
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
         /// </summary>
-        public ClientInfo? ClientInfo { get; private set; }
+        public ClientInfo? ClientInfo { get; set; }
 
         /// <summary>
         /// Tracks whether client lookup has been performed to avoid duplicate lookups.
@@ -120,6 +162,7 @@ public class ClientJwtValidator(
         /// <summary>
         /// Validates the issuer by attempting to match it with known client information. Ensures that the JWT issuer
         /// corresponds to an authorized client, and handles scenarios where client information is already known.
+        /// If issuer is not present (null or empty), validation succeeds to allow client identification via client_id claim.
         /// </summary>
         /// <param name="issuer">The issuer value to validate.</param>
         /// <returns>
@@ -132,6 +175,10 @@ public class ClientJwtValidator(
         /// </exception>
         public async Task<bool> ValidateIssuer(string issuer)
         {
+            // If issuer is not present, accept it - client will be identified by client_id claim
+            if (string.IsNullOrEmpty(issuer))
+                return true;
+
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
@@ -145,6 +192,7 @@ public class ClientJwtValidator(
         /// <summary>
         /// Asynchronously resolves the signing keys for a validated issuer's JWTs, allowing the authentication service
         /// to verify the JWT signature.
+        /// If issuer is not present, returns empty sequence as client will be identified by client_id claim.
         /// </summary>
         /// <param name="issuer">The issuer URL whose signing keys are to be resolved.</param>
         /// <returns>
@@ -152,6 +200,10 @@ public class ClientJwtValidator(
         /// </returns>
         public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer)
         {
+            // If issuer is not present, return empty sequence - client will be identified by client_id claim
+            if (string.IsNullOrEmpty(issuer))
+                yield break;
+
             if (!await ValidateIssuer(issuer))
                 yield break;
 
