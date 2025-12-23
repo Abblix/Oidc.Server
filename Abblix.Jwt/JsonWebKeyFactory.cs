@@ -22,33 +22,30 @@
 
 using System.Security.Cryptography;
 using Abblix.Utils;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Abblix.Jwt;
 
 /// <summary>
-/// A factory for creating JsonWebKey objects, focusing on RSA keys.
-/// This class provides a method to generate RSA keys with a specified usage and key size,
-/// which can be used for signing or encryption in cryptographic operations.
+/// A factory for creating JsonWebKey objects for various cryptographic key types.
+/// Supports RSA, Elliptic Curve, and symmetric (HMAC) keys for JWT operations.
 /// </summary>
 public static class JsonWebKeyFactory
 {
     /// <summary>
-    /// Creates an RSA JsonWebKey with a specified usage and key size.
+    /// Creates an RSA JsonWebKey with a specified algorithm.
     /// </summary>
     /// <param name="usage">The intended usage of the key, typically 'sig' for signing or 'enc' for encryption.</param>
-    /// <param name="keySize">The size of the RSA key in bits. The default is 2048 bits, which is commonly used and
-    /// provides a good security level.</param>
-    /// <returns>A <see cref="RsaJsonWebKey"/> that contains the RSA key details suitable for JWT operations.</returns>
-    public static RsaJsonWebKey CreateRsa(string usage, int keySize = 2048 /* Recommended key size for RSA */)
+    /// <param name="algorithm">The signing or encryption algorithm. Key size is determined automatically based on the algorithm.</param>
+    /// <param name="keySize">The size of the RSA key in bits. If null, determined by algorithm (defaults to 2048).</param>
+    /// <returns>A <see cref="RsaJsonWebKey"/> configured for the specified algorithm.</returns>
+    public static RsaJsonWebKey CreateRsa(string usage, string? algorithm = null, int keySize = 2048)
     {
-        var algorithm = usage switch
+        if (usage is not (PublicKeyUsages.Signature or PublicKeyUsages.Encryption))
         {
-            JsonWebKeyUseNames.Sig or JsonWebKeyUseNames.Enc => SecurityAlgorithms.RsaSha256,
-            _ => throw new ArgumentException(
-                $"Invalid usage specified. Valid options are '{JsonWebKeyUseNames.Sig}' for signing or '{JsonWebKeyUseNames.Enc}' for encryption.",
-                nameof(usage))
-        };
+            throw new ArgumentException(
+                $"Invalid usage specified. Valid options are '{PublicKeyUsages.Signature}' for signing or '{PublicKeyUsages.Encryption}' for encryption.",
+                nameof(usage));
+        }
 
         using var rsa = RSA.Create();
         rsa.KeySize = keySize;
@@ -70,6 +67,69 @@ public static class JsonWebKeyFactory
         };
 
         return key;
+
+    }
+
+    /// <summary>
+    /// Creates an Elliptic Curve JsonWebKey with a specified curve.
+    /// </summary>
+    /// <param name="curve">The elliptic curve to use. Common values: P-256, P-384, P-521.</param>
+    /// <param name="algorithm">The signing algorithm. Common values: ES256, ES384, ES512.</param>
+    /// <returns>A <see cref="EllipticCurveJsonWebKey"/> suitable for ECDSA signing operations.</returns>
+    public static EllipticCurveJsonWebKey CreateEllipticCurve(string curve, string algorithm)
+    {
+        var ecCurve = curve switch
+        {
+            EllipticCurveTypes.P256 => ECCurve.NamedCurves.nistP256,
+            EllipticCurveTypes.P384 => ECCurve.NamedCurves.nistP384,
+            EllipticCurveTypes.P521 => ECCurve.NamedCurves.nistP521,
+            _ => throw new ArgumentException($"Unsupported elliptic curve: {curve}", nameof(curve))
+        };
+
+        using var ecdsa = ECDsa.Create(ecCurve);
+        var parameters = ecdsa.ExportParameters(true);
+
+        var key = new EllipticCurveJsonWebKey
+        {
+            KeyId = ComputeEcKeyId(parameters),
+            Algorithm = algorithm,
+            Usage = PublicKeyUsages.Signature,
+            Curve = curve,
+            X = parameters.Q.X,
+            Y = parameters.Q.Y,
+            PrivateKey = parameters.D,
+        };
+
+        return key;
+    }
+
+    /// <summary>
+    /// Creates a symmetric (Octet) JsonWebKey for HMAC signing.
+    /// </summary>
+    /// <param name="algorithm">The HMAC algorithm. Common values: HS256, HS384, HS512.</param>
+    /// <param name="keySize">The key size in bytes. Defaults based on algorithm: HS256=32, HS384=48, HS512=64.</param>
+    /// <returns>A <see cref="OctetJsonWebKey"/> suitable for HMAC signing operations.</returns>
+    public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize = null)
+    {
+        var size = keySize ?? algorithm switch
+        {
+            SigningAlgorithms.HS256 => 32, // 256 bits
+            SigningAlgorithms.HS384 => 48, // 384 bits
+            SigningAlgorithms.HS512 => 64, // 512 bits
+            _ => throw new ArgumentException($"Unsupported HMAC algorithm: {algorithm}", nameof(algorithm))
+        };
+
+        var keyValue = CryptoRandom.GetRandomBytes(size);
+
+        var key = new OctetJsonWebKey
+        {
+            KeyId = SHA256.HashData(keyValue).ToHexString(),
+            Algorithm = algorithm,
+            Usage = PublicKeyUsages.Signature,
+            KeyValue = keyValue,
+        };
+
+        return key;
     }
 
     private static string ToKeyId(this RSAParameters parameters)
@@ -82,15 +142,20 @@ public static class JsonWebKeyFactory
             (null, null) => Array.Empty<byte>(),
         };
 
-        // Compute the SHA-256 hash of the concatenated string
         return SHA256.HashData(keyMaterial).ToHexString();
     }
 
-    private static byte[] Concat(this byte[] modulus, byte[] exponent)
+    private static string ComputeEcKeyId(ECParameters parameters)
     {
-        var buffer = new byte[modulus.Length + exponent.Length];
-        Array.Copy(modulus, buffer, modulus.Length);
-        Array.Copy(exponent, 0, buffer, modulus.Length, exponent.Length);
-        return buffer;
+        var keyMaterial = (parameters.Q.X, parameters.Q.Y) switch
+        {
+            ({} x, {} y) => x.Concat(y),
+            ({} x, null) => x,
+            (null, {} y) => y,
+            (null, null) => Array.Empty<byte>(),
+        };
+
+        return SHA256.HashData(keyMaterial).ToHexString();
     }
+
 }

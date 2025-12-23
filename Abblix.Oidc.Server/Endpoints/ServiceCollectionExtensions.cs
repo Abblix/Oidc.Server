@@ -82,6 +82,7 @@ public static class ServiceCollectionExtensions
             .AddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>()
             .AddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>()
             .AddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>()
+            .AddScoped<IAcrMetadataProvider, AcrMetadataProvider>()
             .AddScoped<IConfigurationHandler, ConfigurationHandler>();
     }
 

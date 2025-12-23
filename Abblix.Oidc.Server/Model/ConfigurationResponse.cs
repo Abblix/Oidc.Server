@@ -79,6 +79,7 @@ public record ConfigurationResponse
         public const string DeviceAuthorizationEndpoint = "device_authorization_endpoint";
         // RFC 8705 mTLS endpoint aliases
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
+        public const string AcrValuesSupported = "acr_values_supported";
     }
 
     /// <summary>
@@ -336,4 +337,11 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.MtlsEndpointAliases)]
     public MtlsAliases? MtlsEndpointAliases { get; init; }
+
+    /// <summary>
+    /// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.
+    /// These values represent authentication assurance levels that can be requested and achieved.
+    /// </summary>
+    [JsonPropertyName(Parameters.AcrValuesSupported)]
+    public IEnumerable<string>? AcrValuesSupported { get; init; }
 }

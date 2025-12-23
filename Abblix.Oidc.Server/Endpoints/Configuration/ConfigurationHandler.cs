@@ -48,7 +48,8 @@ public sealed class ConfigurationHandler(
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
-	IAuthenticationCompletionHandler cibaCompletionHandler) : IConfigurationHandler
+	IAuthenticationCompletionHandler cibaCompletionHandler,
+	IAcrMetadataProvider acrMetadata) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
@@ -90,5 +91,7 @@ public sealed class ConfigurationHandler(
 		BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler.TokenDeliveryModesSupported,
 		BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
+
+		AcrValuesSupported = acrMetadata.AcrValuesSupported,
 	});
 }

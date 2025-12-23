@@ -38,14 +38,27 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
     /// <param name="options">Options for the serializer.</param>
     /// <returns>A byte array if the token is a string, otherwise null.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the token is not a string or null.</exception>
+    /// <exception cref="JsonException">Thrown if the string is not valid base64url encoding.</exception>
     public override byte[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         return reader.TokenType switch
         {
-            JsonTokenType.String => HttpServerUtility.UrlTokenDecode(reader.GetString()!),
+            JsonTokenType.String => DecodeBase64Url(reader.GetString()!),
             JsonTokenType.Null => null,
             _ => throw new InvalidOperationException($"Invalid token type: {reader.TokenType}"),
         };
+
+        static byte[] DecodeBase64Url(string value)
+        {
+            try
+            {
+                return HttpServerUtility.UrlTokenDecode(value);
+            }
+            catch (FormatException ex)
+            {
+                throw new JsonException($"Invalid base64url encoding: {value}", ex);
+            }
+        }
     }
 
     /// <summary>

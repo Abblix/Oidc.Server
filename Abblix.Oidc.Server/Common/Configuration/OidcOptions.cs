@@ -137,6 +137,14 @@ public record OidcOptions
 	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
 
 	/// <summary>
+	/// The default content encryption algorithm used for encrypting JWT tokens.
+	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
+	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
+	/// Defaults to A256CBC-HS512 for maximum security.
+	/// </summary>
+	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
+
+	/// <summary>
 	/// The duration for which a Pushed Authorization Request (PAR) is valid. PAR is a security enhancement that allows
 	/// clients to pre-register authorization requests directly with the authorization server. This duration specifies
 	/// the maximum time a pre-registered request is considered valid, balancing the need for security with usability
