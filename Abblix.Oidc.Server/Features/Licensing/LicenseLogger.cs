@@ -31,6 +31,10 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// A specialized logger for licensing checks, extending the standard logging functionality to include
 /// throttling capabilities for repetitive log messages.
 /// </summary>
+/// <remarks>
+/// This is a singleton that lives for the application lifetime. The internal timer is intentionally
+/// not disposed as the instance is never explicitly disposed.
+/// </remarks>
 internal class LicenseLogger: ILogger
 {
     private LicenseLogger()
@@ -41,10 +45,15 @@ internal class LicenseLogger: ILogger
             {
                 var dict = (ConcurrentDictionary<object, DateTimeOffset>)state!;
                 var utcNow = DateTimeOffset.UtcNow;
-                foreach (var item in dict)
+
+                var keysToRemove = dict
+                    .Where(kvp => kvp.Value < utcNow)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in keysToRemove)
                 {
-                    if (item.Value < utcNow)
-                        dict.TryRemove(item.Key, out _);
+                    dict.TryRemove(key, out _);
                 }
             },
             dictionary,
@@ -57,8 +66,7 @@ internal class LicenseLogger: ILogger
     public static LicenseLogger Instance { get; } = new();
 
     /// <summary>
-    /// Logs a message if the specified conditions are met, implementing throttling to prevent excessive logging
-    /// of similar messages.
+    /// Logs a message by delegating to the underlying logger.
     /// </summary>
     /// <typeparam name="TState">The type of the object to log.</typeparam>
     /// <param name="logLevel">The severity level of the log message.</param>
@@ -66,6 +74,10 @@ internal class LicenseLogger: ILogger
     /// <param name="state">The state related to the log message.</param>
     /// <param name="exception">The exception related to the log message, if any.</param>
     /// <param name="formatter">A function to create a string message from the state and exception.</param>
+    /// <remarks>
+    /// This method does not implement throttling directly. Callers must use <see cref="IsAllowed"/> to check
+    /// if logging should be throttled before calling this method.
+    /// </remarks>
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         => _logger.Log(logLevel, eventId, state, exception, formatter);
 
@@ -98,7 +110,12 @@ internal class LicenseLogger: ILogger
     /// Initializes the logger with a specific logger factory.
     /// </summary>
     /// <param name="loggerFactory">The factory used to create the underlying logger instance.</param>
-    internal void Init(ILoggerFactory loggerFactory) => _logger = loggerFactory.CreateLogger(LoggerName);
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="loggerFactory"/> is null.</exception>
+    internal void Init(ILoggerFactory loggerFactory)
+    {
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _logger = loggerFactory.CreateLogger(LoggerName);
+    }
 
     /// <summary>
     /// Determines whether a log write operation is allowed based on the specified key and period.
@@ -110,21 +127,30 @@ internal class LicenseLogger: ILogger
     /// <remarks>
     /// This method helps to throttle logging by allowing log messages to be written only if a specified period has elapsed
     /// since the last log write for a given key. This prevents flooding the log with repetitive messages.
+    /// Uses atomic operations to avoid race conditions in concurrent scenarios.
     /// </remarks>
     public bool IsAllowed(object key, DateTimeOffset utcNow, TimeSpan period)
     {
         var newTime = utcNow + period;
-        if (_nextAllowedTimes.TryAdd(key, newTime))
-        {
-            return true;
-        }
+        var wasAllowed = false;
 
-        if (_nextAllowedTimes.TryGetValue(key, out var nextAllowedTime) && nextAllowedTime < utcNow &&
-            _nextAllowedTimes.TryUpdate(key, newTime, nextAllowedTime))
-        {
-            return true;
-        }
+        _nextAllowedTimes.AddOrUpdate(
+            key,
+            _ =>
+            {
+                wasAllowed = true;
+                return newTime;
+            },
+            (_, existingTime) =>
+            {
+                if (existingTime < utcNow)
+                {
+                    wasAllowed = true;
+                    return newTime;
+                }
+                return existingTime;
+            });
 
-        return false;
+        return wasAllowed;
     }
 }
