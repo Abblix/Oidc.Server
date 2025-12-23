@@ -40,7 +40,7 @@ internal class LicenseLogger: ILogger
 {
     private LicenseLogger()
     {
-        _timer = new Timer(OnTimer, _nextAllowedTimes, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        _timer = new Timer(CleanupExpiredEntries, _nextAllowedTimes, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ internal class LicenseLogger: ILogger
     /// This method is invoked periodically by the timer to clean up entries that have passed their throttle period,
     /// preventing unbounded memory growth.
     /// </remarks>
-    private static void OnTimer(object? state)
+    private static void CleanupExpiredEntries(object? state)
     {
         var nextAllowedTimes = (ConcurrentDictionary<object, DateTimeOffset>)state.NotNull(nameof(state));
         var utcNow = DateTimeOffset.UtcNow;
