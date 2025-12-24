@@ -40,7 +40,11 @@ internal class LicenseLogger: ILogger
 {
     private LicenseLogger()
     {
-        _timer = new Timer(CleanupExpiredEntries, _nextAllowedTimes, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        _timer = new Timer(
+            CleanupExpiredEntries,
+            _nextAllowedTimes,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
     }
 
     /// <summary>

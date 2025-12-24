@@ -142,12 +142,14 @@ public class UserIdentityValidator(
             idTokenHint,
             ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
-        if (!result.TryGetSuccess(out var token))
+        if (result.TryGetFailure(out var error))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The id token hint contains invalid token");
+                $"The id token hint contains invalid token: {error.Error.ToLowerInvariant()}");
         }
+
+        var token = result.GetSuccess();
 
         var audiences = token.Payload.Audiences;
         if (!audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal))
