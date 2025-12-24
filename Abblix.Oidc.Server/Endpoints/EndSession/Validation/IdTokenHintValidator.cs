@@ -51,7 +51,7 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
                 ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
             if (result.TryGetFailure(out var error))
-                return new OidcError(ErrorCodes.InvalidRequest, $"The id token hint contains invalid token: {error.Error.ToLowerInvariant()}");
+                return new OidcError(ErrorCodes.InvalidRequest, $"The id token hint contains invalid token: {error.ToDescription()}");
 
             var idToken = result.GetSuccess();
 

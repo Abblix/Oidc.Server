@@ -146,7 +146,7 @@ public class UserIdentityValidator(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                $"The id token hint contains invalid token: {error.Error.ToLowerInvariant()}");
+                $"The id token hint contains invalid token: {error.ToDescription()}");
         }
 
         var token = result.GetSuccess();
