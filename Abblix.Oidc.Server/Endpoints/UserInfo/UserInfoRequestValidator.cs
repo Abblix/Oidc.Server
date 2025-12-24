@@ -103,7 +103,7 @@ public class UserInfoRequestValidator(
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		if (result.TryGetFailure(out var error))
-			return new OidcError(ErrorCodes.InvalidGrant, error.ToDescription(lowercaseFirst: false));
+			return new OidcError(ErrorCodes.InvalidGrant, error.ToString());
 
 		var token = result.GetSuccess();
 
