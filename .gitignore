@@ -379,3 +379,4 @@ TEST_*.md
 LICENSE-*.md
 RELEASE_NOTES*.txt
 RELEASE_NOTES*.md
+*.DotSettings

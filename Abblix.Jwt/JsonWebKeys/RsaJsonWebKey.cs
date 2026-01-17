@@ -138,4 +138,18 @@ public sealed record RsaJsonWebKey : JsonWebKey
             }
         };
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// For RSA keys, returns true if public key material (Modulus and Exponent) is present.
+    /// Public key enables encryption and signature verification operations.
+    /// </remarks>
+    public override bool HasPublicKey => Modulus is { Length: > 0 } && Exponent is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// For RSA keys, returns true if private key material (PrivateExponent) is present.
+    /// Private key enables decryption and signing operations.
+    /// </remarks>
+    public override bool HasPrivateKey => PrivateExponent is { Length: > 0 };
 }

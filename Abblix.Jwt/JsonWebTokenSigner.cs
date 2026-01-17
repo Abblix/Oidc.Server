@@ -58,6 +58,13 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         token.Header.Algorithm = algorithm;
         token.Header.KeyId = signingKey.KeyId;
 
+        // Validate that signing key contains private key material
+        if (!signingKey.HasPrivateKey)
+        {
+            throw new InvalidOperationException(
+                $"Signing operation requires private key material, but key (kid={signingKey.KeyId}) contains only public key data.");
+        }
+
         // Encode header and payload
         var signingInput = $"{EncodeJson(token.Header.Json)}.{EncodeJson(token.Payload.Json)}";
 
@@ -146,6 +153,13 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
     /// <returns>True if the signature is valid; otherwise, false.</returns>
     private bool VerifySignature(JsonWebKey key, string algorithm, byte[] data, byte[] signature)
     {
+        // Validate that key contains public key material for verification
+        if (!key.HasPublicKey)
+        {
+            throw new InvalidOperationException(
+                $"Signature verification requires public key material, but key (kid={key.KeyId}) contains no public key data.");
+        }
+
         return key switch
         {
             RsaJsonWebKey rsaKey => ValidateBy(rsaKey),
