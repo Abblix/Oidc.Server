@@ -79,6 +79,7 @@ public sealed record OctetJsonWebKey : JsonWebKey
     /// Symmetric keys use the same key material for all operations (encryption, decryption, signing, verification).
     /// This property returns the same value as HasPrivateKey.
     /// </remarks>
+    [JsonIgnore]
     public override bool HasPublicKey => KeyValue is { Length: > 0 };
 
     /// <inheritdoc/>
@@ -87,5 +88,6 @@ public sealed record OctetJsonWebKey : JsonWebKey
     /// Symmetric keys use the same key material for all operations (encryption, decryption, signing, verification).
     /// This property returns the same value as HasPublicKey.
     /// </remarks>
+    [JsonIgnore]
     public override bool HasPrivateKey => KeyValue is { Length: > 0 };
 }

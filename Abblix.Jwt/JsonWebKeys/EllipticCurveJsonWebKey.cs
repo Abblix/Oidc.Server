@@ -103,6 +103,7 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
     /// For Elliptic Curve keys, returns true if public key material (X, Y, and Curve) is present.
     /// Public key enables encryption and signature verification operations.
     /// </remarks>
+    [JsonIgnore]
     public override bool HasPublicKey => X is { Length: > 0 } && Y is { Length: > 0 } && Curve != null;
 
     /// <inheritdoc/>
@@ -110,5 +111,6 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
     /// For Elliptic Curve keys, returns true if private key material (PrivateKey) is present.
     /// Private key enables decryption and signing operations.
     /// </remarks>
+    [JsonIgnore]
     public override bool HasPrivateKey => PrivateKey is { Length: > 0 };
 }
