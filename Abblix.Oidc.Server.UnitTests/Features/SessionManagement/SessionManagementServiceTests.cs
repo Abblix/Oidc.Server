@@ -47,7 +47,6 @@ public class SessionManagementServiceTests
 {
     private const string CookieName = "TestSessionCookie";
     private const string CookieDomain = "example.com";
-    private const string SameSiteValue = "None";
     private const string ClientId = TestConstants.DefaultClientId;
     private const string SessionId = "session_abc456";
     private const string PathBase = "/auth";
@@ -66,7 +65,6 @@ public class SessionManagementServiceTests
             {
                 Name = CookieName,
                 Domain = CookieDomain,
-                SameSite = SameSiteValue
             }
         };
 
@@ -291,11 +289,11 @@ public class SessionManagementServiceTests
     }
 
     /// <summary>
-    /// Verifies that GetSessionCookie sets SameSite from options configuration.
-    /// SameSite attribute provides CSRF protection and controls cross-site cookie behavior.
+    /// Verifies that GetSessionCookie always sets SameSite to "None".
+    /// SameSite=None is required for cross-origin iframe access per OpenID Connect Session Management spec.
     /// </summary>
     [Fact]
-    public void GetSessionCookie_SetsSameSiteFromOptions()
+    public void GetSessionCookie_SetsSameSiteToNone()
     {
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
@@ -306,7 +304,7 @@ public class SessionManagementServiceTests
         var cookie = service.GetSessionCookie();
 
         // Assert
-        Assert.Equal(SameSiteValue, cookie.Options.SameSite);
+        Assert.Equal("None", cookie.Options.SameSite);
     }
 
     /// <summary>

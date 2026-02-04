@@ -59,6 +59,14 @@ public class SessionManagementService(
     /// </summary>
     /// <returns>A <see cref="Cookie"/> object configured with session management settings, such as the cookie name,
     /// domain, path, and security attributes.</returns>
+    /// <remarks>
+    /// Cookie attributes are configured for OpenID Connect Session Management compliance:
+    /// <list type="bullet">
+    ///     <item><c>HttpOnly = false</c> - Required for check_session_iframe JavaScript to read the cookie</item>
+    ///     <item><c>SameSite = None</c> - Required for cross-origin iframe access in Session Management</item>
+    ///     <item><c>Secure</c> - Set based on the current request's HTTPS status (required when SameSite=None)</item>
+    /// </list>
+    /// </remarks>
     public Cookie GetSessionCookie()
     {
         var cookieOptions = options.Value.CheckSessionCookie;
