@@ -62,14 +62,16 @@ public class SessionManagementService(
     public Cookie GetSessionCookie()
     {
         var cookieOptions = options.Value.CheckSessionCookie;
+        var path = cookieOptions.Path;
+
         return new Cookie(
             cookieOptions.Name,
-            new CookieOptions
+            new()
             {
                 HttpOnly = false,
                 IsEssential = true,
                 Secure = requestInfoProvider.IsHttps,
-                Path = requestInfoProvider.PathBase,
+                Path = !string.IsNullOrEmpty(path) ? path : requestInfoProvider.PathBase,
                 Domain = cookieOptions.Domain,
                 SameSite = cookieOptions.SameSite,
             });
