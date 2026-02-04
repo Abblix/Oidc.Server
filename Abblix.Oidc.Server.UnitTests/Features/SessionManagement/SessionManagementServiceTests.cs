@@ -250,16 +250,29 @@ public class SessionManagementServiceTests
     }
 
     /// <summary>
-    /// Verifies that GetSessionCookie sets Path from request info provider.
+    /// Verifies that GetSessionCookie gets Path from RequestInfoProvider when not specified in options.
     /// Path scoping ensures cookies are only sent to relevant endpoints.
     /// </summary>
     [Fact]
     public void GetSessionCookie_SetsPathFromRequestInfoProvider()
     {
         // Arrange
+        var options = new OidcOptions
+        {
+            EnabledEndpoints = OidcEndpoints.CheckSession,
+            CheckSessionCookie = new CheckSessionCookieOptions
+            {
+                Name = CookieName,
+                Domain = CookieDomain,
+                Path = "", // Empty path should fall back to RequestInfoProvider.PathBase
+            }
+        };
+        var optionsSnapshot = new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict);
+        optionsSnapshot.Setup(o => o.Value).Returns(options);
+
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = new SessionManagementService(optionsSnapshot.Object, _requestInfoProvider.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
