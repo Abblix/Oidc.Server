@@ -52,7 +52,7 @@ public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
     /// injects it into the HTML template, and sets the Content-Security-Policy header.
     /// This allows the ActionResult to be cached while still producing unique nonces per request.
     /// </summary>
-    private class CheckSessionHtmlResult(string htmlTemplate) : ActionResult
+    private sealed class CheckSessionHtmlResult(string htmlTemplate) : ActionResult
     {
         public override Task ExecuteResultAsync(ActionContext context)
         {
