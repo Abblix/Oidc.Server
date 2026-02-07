@@ -180,6 +180,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
         return services
+            .AddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>()
             .AddScoped<ILogoutNotifier, FrontChannelLogoutNotifier>();
     }
 

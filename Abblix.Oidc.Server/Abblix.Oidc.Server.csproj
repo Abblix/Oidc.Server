@@ -36,6 +36,7 @@
 
     <ItemGroup>
       <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
+      <EmbeddedResource Include=".\Features\LogoutNotification\Resources\frontChannelLogout.html" />
       <EmbeddedResource Include=".\Features\Licensing\Resources\Abblix Licensing.pem" />
       <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
       <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
@@ -52,7 +53,7 @@
 
     <ItemGroup>
       <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
-      <PackageReference Include="Grpc.Tools" Version="2.76.0" PrivateAssets="All" />
+      <PackageReference Include="Grpc.Tools" Version="2.78.0" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup>
