@@ -51,6 +51,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc.UnitTests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
         <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
         <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />

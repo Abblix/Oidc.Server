@@ -1,7 +1,8 @@
-<!DOCTYPE>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <script type="application/javascript">
+    <meta charset="UTF-8">
+    <script nonce="{{nonce}}">
         // eslint-disable-next-line no-restricted-globals
         if (window !== window.parent)
             window.addEventListener("message", receiveMessage, false);
@@ -41,16 +42,16 @@
                     binary += String.fromCodePoint(byte);
                 }
                 return btoa(binary)
-                    .replaceAll("+", "-")
-                    .replaceAll("/", "_")
-                    .replaceAll("=", "");
+                    .replace(/\+/g, "-")
+                    .replace(/\//g, "_")
+                    .replace(/=/g, "");
             });
         }
 
         function getCookieValue(name)
         {
             var cookies = parseCookies();
-            return cookies[name] ?? "";
+            return cookies[name] || "";
         }
 
         function parseCookies() {
