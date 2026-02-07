@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
-using static Microsoft.Net.Http.Headers.CacheControlHeaderValue;
 using CookieOptions = Microsoft.AspNetCore.Http.CookieOptions;
 
 namespace Abblix.Oidc.Server.Mvc.ActionResults;
@@ -63,38 +63,45 @@ public static class ActionResultExtensions
 	/// <summary>
 	/// Pre-computed Cache-Control header value that combines multiple cache prevention directives
 	/// for maximum compatibility across browsers, proxies, and HTTP versions.
-	/// Value: "no-store, no-cache, must-revalidate, max-age=0"
 	/// </summary>
-	private static readonly string PreventStorageInAnyCache =
-		$"{NoStoreString}, {NoCacheString}, {MustRevalidateString}, {MaxAgeString}=0";
+	private static readonly CacheControlHeaderValue PreventStorageInAnyCache = new()
+	{
+		MaxAge = TimeSpan.Zero,
+		SharedMaxAge = TimeSpan.Zero,
+		NoStore = true,
+		NoCache = true,
+	};
 
 	/// <summary>
-	/// Decorates an <see cref="ActionResult"/> to prevent caching by appending comprehensive no-cache headers.
-	/// Ensures responses containing sensitive information (tokens, credentials) are never cached by implementing
-	/// defense-in-depth caching prevention as required by the
-	/// <see href="https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse">OpenID Connect Core specification</see>.
+	/// Sets comprehensive no-cache headers on the response to prevent caching.
+	/// Ensures responses containing sensitive information (tokens, credentials, logout pages) are never cached.
 	/// </summary>
 	/// <remarks>
-	/// Appends the following headers for maximum compatibility:
+	/// Sets the following headers for maximum compatibility:
 	/// <list type="bullet">
 	/// <item><description>
-	/// <b>Cache-Control</b>: "no-store, no-cache, must-revalidate, max-age=0"
+	/// <b>Cache-Control</b>: "no-store, no-cache, max-age=0, s-maxage=0"
 	/// - Prevents storage in any cache (HTTP/1.1)</description></item>
 	/// <item><description>
 	/// <b>Pragma</b>: "no-cache" - Prevents caching in HTTP/1.0 proxies and legacy browsers</description></item>
 	/// <item><description>
-	/// <b>Expires</b>: "0" - Sets expiration to epoch time for HTTP/1.0 compatibility</description></item>
+	/// <b>Expires</b>: Unix epoch - Sets expiration to the past for HTTP/1.0 compatibility</description></item>
 	/// </list>
-	/// This multi-layered approach ensures cache prevention across all HTTP versions, modern browsers,
-	/// legacy systems, and intermediate proxies.
 	/// </remarks>
+	/// <param name="response">The HTTP response to modify.</param>
+	public static void SetNoCacheHeaders(this HttpResponse response)
+	{
+		var headers = response.GetTypedHeaders();
+		headers.Expires = DateTimeOffset.UnixEpoch;
+		headers.CacheControl = PreventStorageInAnyCache;
+		response.Headers.Pragma = CacheControlHeaderValue.NoCacheString;
+	}
+
+	/// <summary>
+	/// Decorates an <see cref="ActionResult"/> to prevent caching by appending comprehensive no-cache headers.
+	/// </summary>
 	/// <param name="innerResult">The <see cref="ActionResult"/> to decorate.</param>
 	/// <returns>A decorated <see cref="ActionResult"/> with comprehensive cache prevention headers.</returns>
 	public static ActionResult WithNoCacheHeaders(this ActionResult innerResult)
-	{
-		return innerResult
-			.WithHeader(HeaderNames.CacheControl, PreventStorageInAnyCache)
-			.WithHeader(HeaderNames.Pragma, NoCacheString)
-			.WithHeader(HeaderNames.Expires, "0");
-	}
+		=> new ActionResultDecorator(innerResult, SetNoCacheHeaders);
 }
