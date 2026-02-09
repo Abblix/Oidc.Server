@@ -49,7 +49,6 @@ Abblix OIDC Server fully implements a comprehensive suite of advanced standards 
 - **OAuth 2.0 Dynamic Client Registration Protocol**: [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591): Provides mechanisms for clients to register dynamically with authorization servers.
 - **OAuth 2.0 Dynamic Client Registration Management Protocol**: [RFC 7592](https://datatracker.ietf.org/doc/html/rfc7592): Enables management operations (read, update, delete) for dynamically registered clients.
 - **OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens**: [RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705): Provides mutual TLS authentication with PKI and self-signed certificate validation, plus certificate-bound tokens.
-- **OAuth 2.0 Token Exchange**: [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693): Details the method for a secure exchange of one token type for another.
 - **OAuth 2.0 Resource Indicators**: [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707): Enables clients to specify the resources they want access to, enhancing security and access control.
 - **JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens**: [RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068): Specifies the use of JWTs as OAuth 2.0 access tokens.
 - **JWT-Secured Authorization Request (JAR)**: [RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101): Secures authorization requests using JWTs.
@@ -57,15 +56,15 @@ Abblix OIDC Server fully implements a comprehensive suite of advanced standards 
 - **OAuth 2.0 Authorization Server Issuer Identification**: [RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207): Ensures the authenticity of authorization servers to clients.
 - **OAuth 2.0 Multiple Response Type Encoding Practices**: [Specification](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html): Encodes different response types in OAuth 2.0 requests.
 - **OAuth 2.0 Form Post Response Mode**: [Specification](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html): Transmits OAuth 2.0 responses via HTTP form posts.
-- **JWT Secured Authorization Response Mode (JARM)**: [Specification](https://openid.net/specs/oauth-v2-jarm-final.html): Secures authorization responses using JWTs.
 - **JSON Web Signature (JWS)**: [RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515): Defines digital signature and MAC methods for JSON data structures.
 - **JSON Web Encryption (JWE)**: [RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516): Defines encryption methods for JSON data structures.
 - **JSON Web Key (JWK)**: [RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517): Defines a JSON representation of cryptographic keys.
 - **JSON Web Algorithms (JWA)**: [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518): Defines cryptographic algorithms for use with JWS, JWE, and JWK.
 - **JSON Web Token (JWT)**: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519): Defines structure and use of JWTs for representing claims securely.
 - **JWT Profile for OAuth 2.0 Client Authentication and Authorization Grants**: [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523): Uses JWTs for secure client authentication (private_key_jwt, client_secret_jwt) and as authorization grants.
+- **Authentication Method Reference Values**: [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176): Defines standardized values for the `amr` (Authentication Methods References) JWT claim, enabling interoperable communication of authentication methods (password, OTP, biometrics, MFA, smart card, etc.).
 - **OpenID Connect Core 1.0**: [Specification](https://openid.net/specs/openid-connect-core-1_0.html): Core functionality for OpenID Connect identity layer over OAuth 2.0, including ID Token issuance, standard claims, and authentication flows.
-- **OpenID Connect Discovery 1.0**: [Specification](https://openid.net/specs/openid-connect-discovery-1_0.html): Enables clients to discover provider configurations dynamically via the well-known endpoint.
+- **OpenID Connect Discovery 1.0 / OAuth 2.0 Authorization Server Metadata**: [Specification](https://openid.net/specs/openid-connect-discovery-1_0.html), [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414): Enables clients to discover provider configurations dynamically via the well-known endpoint.
 - **OpenID Connect Dynamic Client Registration 1.0**: [Specification](https://openid.net/specs/openid-connect-registration-1_0.html): Enables OpenID Connect clients to register dynamically with providers.
 - **OpenID Connect Session Management 1.0**: [Specification](https://openid.net/specs/openid-connect-session-1_0.html): Manages user session states in identity providers with check_session_iframe support.
 - **OpenID Connect RP-Initiated Logout 1.0**: [Specification](https://openid.net/specs/openid-connect-rpinitiated-1_0.html): Details logout initiated by relying parties via the end-session endpoint.
