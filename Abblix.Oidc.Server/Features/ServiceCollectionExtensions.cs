@@ -180,6 +180,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
         return services
+            .AddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>()
             .AddScoped<ILogoutNotifier, FrontChannelLogoutNotifier>();
     }
 
@@ -536,7 +537,7 @@ public static class ServiceCollectionExtensions
         }
 
         services
-            .AddSingleton<SsrfValidatingHttpMessageHandler>()
+            .AddTransient<SsrfValidatingHttpMessageHandler>()
             .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
             {
                 var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;

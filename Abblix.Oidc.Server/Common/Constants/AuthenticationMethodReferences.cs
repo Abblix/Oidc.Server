@@ -56,4 +56,17 @@ public static class AuthenticationMethodReferences
     public const string UserPresence = "user"; // User presence test
     public const string VoiceBiometric = "vbm"; // Voice biometric
     public const string WindowsIntegratedAuth = "wia"; // Windows Integrated Authentication
+
+    // Non-standard values (not in IANA registry or RFC 8176):
+    // These custom values should be replaced with standard alternatives in production code.
+
+    // "bio" is NOT in IANA registry - RFC 8176 defines specific biometric values instead:
+    // Use Face, Fingerprint, IrisScan, RetinaScan, or VoiceBiometric for specific biometric methods.
+
+    // NOT in IANA registry - RFC 8176 has Sms and Telephone for out-of-band methods.
+    // The "oob" identifier is used in OAuth for deprecated redirect URIs, not as an AMR value.
+    // Use Sms or Telephone for out-of-band authentication, or OneTimePassword for email codes.
+
+    // NOT in IANA registry - RFC 8176 defines SmartCard for certificate-based authentication.
+    // Use SmartCard for X.509 certificate authentication, or HardwareKey for hardware-secured keys.
 }

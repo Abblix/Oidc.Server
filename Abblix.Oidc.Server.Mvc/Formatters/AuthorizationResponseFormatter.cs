@@ -50,7 +50,6 @@ public class AuthorizationResponseFormatter(
     IIssuerProvider issuerProvider,
     IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
-
     /// <summary>
     /// Formats an authorization response based on the specified request and response model asynchronously.
     /// It handles various outcomes such as redirections for additional user interactions and successful authentication,
@@ -99,12 +98,11 @@ public class AuthorizationResponseFormatter(
 
                 var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, success.ResponseMode, redirectUri);
 
-                if (sessionManagementService.Enabled  &&
+                if (sessionManagementService.Enabled &&
                     success.SessionId.HasValue() &&
                     response.Model.Scope.Contains(Scopes.OpenId))
                 {
                     var cookie = sessionManagementService.GetSessionCookie();
-
                     actionResult = actionResult.WithAppendCookie(
                         cookie.Name,
                         success.SessionId,

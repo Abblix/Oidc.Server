@@ -111,4 +111,16 @@ public abstract record JsonWebKey
     /// A new instance of <see cref="JsonWebKey"/> with or without private key data based on the input parameter.
     /// </returns>
     public abstract JsonWebKey Sanitize(bool includePrivateKeys);
+
+    /// <summary>
+    /// Checks if the key contains public key material.
+    /// </summary>
+    [JsonIgnore]
+    public abstract bool HasPublicKey { get; }
+
+    /// <summary>
+    /// Checks if the key contains private key material.
+    /// </summary>
+    [JsonIgnore]
+    public abstract bool HasPrivateKey { get; }
 }

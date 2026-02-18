@@ -52,7 +52,7 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// <summary>
 	/// Specifies how the authorization response should be delivered to the client, e.g., via a direct query or fragment.
 	/// </summary>
-	public string ResponseMode = ResponseModes.Query;
+	public string ResponseMode { get; set; } = ResponseModes.Query;
 
 	private FlowTypes? _flowType;
 

@@ -235,7 +235,18 @@ jobs:
     needs: [versioning, build-and-test, test-getting-started]
     runs-on: ubuntu-latest
     environment: release-approval  # This creates a manual approval gate
+    outputs:
+      is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
     steps:
+      - name: Validate and normalize inputs
+        id: validate_inputs
+        run: |
+          # Convert user input to validated boolean to avoid security issues
+          if [ "${{ github.event.inputs.pre_release }}" = "true" ]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
@@ -290,15 +301,15 @@ jobs:
           files: |
             nupkg/*.nupkg
             nupkg/*.snupkg
-          prerelease: ${{ github.event.inputs.pre_release }}
-          make_latest: ${{ !github.event.inputs.pre_release }}
+          prerelease: ${{ needs.create-release.outputs.is_prerelease }}
+          make_latest: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-getting-started:
     needs: [versioning, create-release, publish-nuget-org]
     runs-on: ubuntu-latest
-    if: ${{ !github.event.inputs.pre_release }}
+    if: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
     steps:
       - name: Checkout GettingStarted repo
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0

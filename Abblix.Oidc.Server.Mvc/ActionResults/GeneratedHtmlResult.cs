@@ -25,7 +25,6 @@ using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.Net.Http.Headers;
 
 namespace Abblix.Oidc.Server.Mvc.ActionResults;
 
@@ -38,10 +37,7 @@ namespace Abblix.Oidc.Server.Mvc.ActionResults;
 /// </remarks>
 public abstract class GeneratedHtmlResult : ActionResult, IStatusCodeActionResult
 {
-	/// <summary>
-	/// Gets the HTTP status code to be set in the response.
-	/// Defaults to 200 (OK) if not set.
-	/// </summary>
+	/// <inheritdoc />
 	public int? StatusCode { init; get; } = StatusCodes.Status200OK;
 
 	/// <summary>
@@ -52,28 +48,17 @@ public abstract class GeneratedHtmlResult : ActionResult, IStatusCodeActionResul
 	{
 		var response = context.HttpContext.Response;
 
-		if (StatusCode != null)
+		if (StatusCode.HasValue)
 			response.StatusCode = StatusCode.Value;
 
-		var headers = response.GetTypedHeaders();
-		headers.Expires = DateTimeOffset.UnixEpoch;
-		headers.CacheControl = new CacheControlHeaderValue
-		{
-			MaxAge = TimeSpan.Zero,
-			SharedMaxAge = TimeSpan.Zero,
-			NoStore = true,
-			NoCache = true,
-		};
-		response.Headers.Pragma = "no-cache";
+		response.SetNoCacheHeaders();
 		response.ContentType = MediaTypeNames.Text.Html;
 
-		await using var streamWriter = new StreamWriter(
-			response.Body,
-			leaveOpen: true);
+		await using var streamWriter = new StreamWriter(response.Body, leaveOpen: true);
 
 		await using var xmlWriter = XmlWriter.Create(
 			streamWriter,
-			new XmlWriterSettings
+			new()
 			{
 				OmitXmlDeclaration = true,
 				Indent = false,

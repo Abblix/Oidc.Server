@@ -22,6 +22,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -34,8 +35,19 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JwtEncryptionTests
 {
-    private static readonly JsonWebKey EncryptingKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
+    private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
+
+    private static readonly IServiceProvider ServiceProvider = CreateServiceProvider();
+
+    private static IServiceProvider CreateServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        return services.BuildServiceProvider();
+    }
 
     /// <summary>
     /// Verifies the complete JWT lifecycle: create → sign → encrypt → decrypt → validate → verify → expire.
@@ -76,22 +88,22 @@ public class JwtEncryptionTests
             },
         };
 
-        var creator = new JsonWebTokenCreator();
-        var jwt = await creator.IssueAsync(token, SigningKey, EncryptingKey);
+        var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
+        var jwt = await creator.IssueAsync(token, SigningKey, encryptionKey);
 
-        var validator = new JsonWebTokenValidator();
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
             ValidateAudience = aud => Task.FromResult(token.Payload.Audiences.SequenceEqual(aud)),
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
-            ResolveTokenDecryptionKeys = _ => new [] { EncryptingKey }.ToAsyncEnumerable(),
+            ResolveTokenDecryptionKeys = _ => new [] { encryptionKey }.ToAsyncEnumerable(),
             ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
         };
 
         var validatorResult = await validator.ValidateAsync(jwt, parameters);
         Assert.True(validatorResult.TryGetSuccess(out var result));
-        var expectedClaims = ExtractClaims(token);
-        var actualClaims = ExtractClaims(result);
+        var expectedClaims = ExtractClaims(token).OrderBy(c => c.Key).ToList();
+        var actualClaims = ExtractClaims(result).OrderBy(c => c.Key).ToList();
         Assert.Equal(expectedClaims, actualClaims);
 
         var arrayValues = result.Payload.Json.GetArrayOfStrings("colors");
@@ -105,7 +117,7 @@ public class JwtEncryptionTests
         var result2 = await validator.ValidateAsync(jwt, parameters);
         Assert.True(result2.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
-        Assert.Contains("Lifetime validation failed", error.ErrorDescription);
+        Assert.Contains("Token has expired", error.ErrorDescription);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

@@ -645,4 +645,90 @@ public class RequestObjectFetcherTests
         Assert.True(result.TryGetSuccess(out var value));
         Assert.Equal("openid profile", value.Scope);
     }
+
+    /// <summary>
+    /// Verifies unsigned JWT (alg=none) is accepted when RequireSignedRequestObject is false.
+    /// Per OIDC specification, servers advertising "none" in request_object_signing_alg_values_supported
+    /// and require_signed_request_object=false must accept unsigned request objects.
+    /// This is tested by OpenID Certification: oidcc-request-uri-unsigned-supported-correctly-or-rejected-as-unsupported
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithUnsignedJwtWhenNotRequired_ShouldSucceed()
+    {
+        // Arrange
+        _oidcOptions.RequireSignedRequestObject = false;
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
+
+        // Unsigned JWT with alg=none (no signature part)
+        var unsignedJwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIiwic3RhdGUiOiJ0ZXN0X3N0YXRlIn0.";
+        var payload = new JsonObject
+        {
+            ["client_id"] = TestConstants.DefaultClientId,
+            ["state"] = "test_state"
+        };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject { ["alg"] = "none" }),
+            Payload = new JsonWebTokenPayload(payload)
+        };
+        var boundRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, "test_state");
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(unsignedJwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, request))
+            .ReturnsAsync(boundRequest);
+
+        // Act
+        var result = await fetcher.FetchAsync(request, unsignedJwt);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Equal("test_state", value.State);
+
+        // Verify that RequireSignedTokens flag was NOT set
+        _jwtValidator.Verify(
+            v => v.ValidateAsync(
+                unsignedJwt,
+                It.Is<ValidationOptions>(opts => !opts.HasFlag(ValidationOptions.RequireSignedTokens))),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies unsigned JWT (alg=none) is rejected when RequireSignedRequestObject is true.
+    /// Per OIDC specification, servers with require_signed_request_object=true must reject unsigned tokens.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithUnsignedJwtWhenRequired_ShouldFail()
+    {
+        // Arrange
+        _oidcOptions.RequireSignedRequestObject = true;
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
+
+        // Unsigned JWT with alg=none
+        var unsignedJwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
+        var validationError = new JwtValidationError(JwtError.InvalidToken, "Unsigned tokens are not allowed");
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(unsignedJwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(validationError);
+
+        // Act
+        var result = await fetcher.FetchAsync(request, unsignedJwt);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+
+        // Verify that RequireSignedTokens flag WAS set
+        _jwtValidator.Verify(
+            v => v.ValidateAsync(
+                unsignedJwt,
+                It.Is<ValidationOptions>(opts => opts.HasFlag(ValidationOptions.RequireSignedTokens))),
+            Times.Once);
+    }
 }

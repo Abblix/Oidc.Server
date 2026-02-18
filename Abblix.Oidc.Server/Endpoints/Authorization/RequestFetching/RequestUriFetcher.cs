@@ -63,7 +63,8 @@ public class RequestUriFetcher(
     /// If both are present, it returns an error since only one should be used.
     /// Otherwise, it proceeds to fetch the request object from the `RequestUri` and returns the result.
     /// </remarks>
-    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        AuthorizationRequest request)
     {
         if (request is { Request: not null, RequestUri: not null })
         {
@@ -107,14 +108,8 @@ public class RequestUriFetcher(
         // SSRF validation is handled by the ISecureHttpFetcher decorator
         var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
-        if (contentResult.TryGetFailure(out var contentError))
-        {
-            return AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription);
-        }
-
-        var requestObject = contentResult.GetSuccess();
-
-        // Return the updated request with the fetched request object and nullify the redirect URI
-        return request with { RedirectUri = null, Request = requestObject };
+        return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
+            requestObject => request with { RedirectUri = null, Request = requestObject },
+            contentError => AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription));
     }
 }

@@ -108,6 +108,7 @@ internal class IdentityTokenService(
 		{
 			Header =
 			{
+				Type = JwtTypes.IdToken,
 				Algorithm = clientInfo.IdentityTokenSignedResponseAlgorithm,
 			},
 			Payload = new JsonWebTokenPayload(userInfo)

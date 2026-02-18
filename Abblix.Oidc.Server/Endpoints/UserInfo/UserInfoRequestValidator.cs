@@ -100,10 +100,10 @@ public class UserInfoRequestValidator(
 			jwtAccessToken = userInfoRequest.AccessToken;
 		}
 
-		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
+		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		if (result.TryGetFailure(out var error))
-			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
+			return new OidcError(ErrorCodes.InvalidGrant, error.ToString());
 
 		var token = result.GetSuccess();
 

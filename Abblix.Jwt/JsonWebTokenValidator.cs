@@ -20,216 +20,256 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Globalization;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Abblix.Jwt;
 
 /// <summary>
 /// Represents a validator for JSON Web Tokens (JWTs) which validates a JWT against specified validation parameters.
 /// </summary>
-public class JsonWebTokenValidator : IJsonWebTokenValidator
+/// <param name="timeProvider">Provides access to the current time for lifetime validation.</param>
+/// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
+/// <param name="signer">The JWS signer for validating signatures.</param>
+/// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
+internal class JsonWebTokenValidator(
+    TimeProvider timeProvider,
+    IJsonWebTokenEncryptor encryptor,
+    IJsonWebTokenSigner signer,
+    SigningAlgorithmsProvider signingAlgorithmsProvider) : IJsonWebTokenValidator
 {
     /// <summary>
-    /// Provides a collection of signing algorithms supported by the validator. This includes all algorithms recognized
-    /// by the JwtSecurityTokenHandler for inbound tokens, as well as an option to accept tokens without a signature.
-    /// This allows for flexibility in validating JWTs with various security requirements.
+    /// Provides a collection of signing algorithms supported by the validator.
+    /// Dynamically determined from registered signers in the dependency injection container.
     /// </summary>
-    public IEnumerable<string> SigningAlgorithmsSupported => JsonWebTokenAlgorithms.SigningAlgValuesSupported;
+    public IEnumerable<string> SigningAlgorithmsSupported => signingAlgorithmsProvider.Algorithms;
 
     /// <summary>
     /// Asynchronously validates a JWT string against specified validation parameters.
     /// </summary>
     /// <param name="jwt">The JWT string to validate.</param>
     /// <param name="parameters">The parameters defining the validation rules and requirements.</param>
-    /// <returns>A task representing the validation operation, with a result containing either a validated JsonWebToken or a JwtValidationError.</returns>
-    public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters)
-        => Task.FromResult(Validate(jwt, parameters));
+    /// <returns>A task representing the validation operation,
+    /// with a result containing either a validated JsonWebToken or a JwtValidationError.</returns>
+    public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters)
+    {
+        if (string.IsNullOrWhiteSpace(jwt))
+            return new JwtValidationError(JwtError.InvalidToken, "JWT is null or empty");
+
+        var jwtParts = jwt.Split('.');
+        return jwtParts.Length switch
+        {
+            3 => await ValidateJwsAsync(jwtParts, parameters),
+            5 => await DecryptJweAsync(jwtParts, parameters),
+            _ => new JwtValidationError(JwtError.InvalidToken, $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
+        };
+    }
 
     /// <summary>
-    /// Performs the actual validation of a JWT string based on the specified validation parameters.
+    /// Validates a JWS token from string parts.
+    /// Creates JsonWebToken only after successful validation.
     /// </summary>
-    /// <param name="jwt">The JWT string to validate.</param>
-    /// <param name="parameters">The validation parameters.</param>
-    /// <returns>The result of the JWT validation process, either indicating success or detailing any validation errors.</returns>
-    private static Result<JsonWebToken, JwtValidationError> Validate(string jwt, ValidationParameters parameters)
+    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateJwsAsync(
+        string[] jwtParts,
+        ValidationParameters parameters)
     {
-        var validationParameters = new TokenValidationParameters
+        return await ParseJws(jwtParts).BindAsync<JsonWebToken>(async token =>
         {
-            NameClaimType = JwtClaimTypes.Subject,
-            ValidateIssuer = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer),
-            ValidateAudience = parameters.Options.HasFlag(ValidationOptions.ValidateAudience),
-            RequireSignedTokens = parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens),
-            ValidateIssuerSigningKey = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey),
-            ValidateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime),
-            ClockSkew = parameters.ClockSkew,
+            var error = await ValidateSignatureAsync(token, jwtParts, parameters)
+                        ?? await ValidateIssuerAsync(token.Payload.Issuer, parameters)
+                        ?? await ValidateAudienceAsync(token.Payload.Audiences, parameters)
+                        ?? ValidateLifetime(token.Payload, parameters);
+
+            return error != null ? error : token;
+        });
+    }
+
+    /// <summary>
+    /// Parses JWS string parts into header, payload, and signature.
+    /// </summary>
+    private static Result<JsonWebToken, JwtValidationError> ParseJws(string[] jwtParts)
+    {
+        byte[] headerPart, payloadPart;
+        try
+        {
+            headerPart = HttpServerUtility.UrlTokenDecode(jwtParts[0]);
+            payloadPart = HttpServerUtility.UrlTokenDecode(jwtParts[1]);
+        }
+        catch
+        {
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWT format: base64url decoding failed");
+        }
+
+        if (!TryParseJsonObject(headerPart, out var headerObject))
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWS header: must be a JSON object");
+
+        if (!TryParseJsonObject(payloadPart, out var payloadObject))
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWS payload: must be a JSON object");
+
+        var token = new JsonWebToken
+        {
+            Header = new (headerObject),
+            Payload = new (payloadObject),
         };
 
-        if (validationParameters.ValidateIssuer)
-        {
-            var validateIssuer = parameters.ValidateIssuer
-                .NotNull(nameof(parameters.ValidateIssuer));
+        return token;
+    }
 
-            validationParameters.IssuerValidator = (issuer, _, _) =>
-                validateIssuer(issuer).Result ? issuer : null;
-        }
-
-        if (validationParameters.ValidateAudience)
-        {
-            var validateAudience = parameters.ValidateAudience
-                .NotNull(nameof(parameters.ValidateAudience));
-
-            validationParameters.AudienceValidator = (audiences, _, _) =>
-                validateAudience(audiences).Result;
-        }
-
-        if (validationParameters.ValidateIssuerSigningKey)
-        {
-            var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
-                .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
-
-            validationParameters.IssuerSigningKeyResolver = (_, securityToken, keyId, _) =>
-            {
-                var signingKeys = resolveIssuerSigningKeys(securityToken.Issuer);
-
-                if (keyId.HasValue())
-                    signingKeys = signingKeys.Where(key => key.KeyId == keyId);
-
-                return signingKeys.Select(key => key.ToSecurityKey()).ToListAsync().Result;
-            };
-        }
-
-        var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys;
-        if (resolveTokenDecryptionKeys != null)
-            validationParameters.TokenDecryptionKeyResolver = (_, securityToken, keyId, _) =>
-            {
-                var decryptionKeys = resolveTokenDecryptionKeys(securityToken.Issuer);
-
-                if (keyId.HasValue())
-                    decryptionKeys = decryptionKeys.Where(key => key.KeyId == keyId);
-
-                return decryptionKeys.Select(key => key.ToSecurityKey()).ToListAsync().Result;
-            };
-
-        var handler = new JwtSecurityTokenHandler();
-        SecurityToken token;
+    private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
+    {
+        var json = Encoding.UTF8.GetString(jwtPart);
         try
         {
-            handler.ValidateToken(jwt, validationParameters, out token);
+            jsonObject = JsonNode.Parse(json) as JsonObject;
         }
-        catch (Exception ex)
+        catch (JsonException)
         {
-            return new JwtValidationError(JwtError.InvalidToken, ex.Message);
+            jsonObject = null;
         }
-
-        var jwToken = (JwtSecurityToken)token;
-
-        try
-        {
-            var result = new JsonWebToken
-            {
-                Header =
-                {
-                    Type = jwToken.Header.Typ,
-                    Algorithm = jwToken.Header.Alg,
-                },
-                Payload =
-                {
-                    JwtId = jwToken.Id,
-                    IssuedAt = jwToken.IssuedAt,
-                    NotBefore = jwToken.ValidFrom,
-                    ExpiresAt = jwToken.ValidTo,
-                    Issuer = jwToken.Issuer,
-                    Audiences = jwToken.Audiences,
-                },
-            };
-
-            MergeClaims(jwToken.Claims, result.Payload.Json, JwtSecurityTokenHandlerConstants.ClaimTypesToExclude);
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            return new JwtValidationError(JwtError.InvalidToken, $"Invalid token claims: {ex.Message}");
-        }
+        return jsonObject is not null;
     }
 
     /// <summary>
-    /// Merges a set of claims into a <see cref="JsonObject"/>, excluding specified claim types.
+    /// Validates the JWS signature according to validation parameters.
     /// </summary>
-    /// <remarks>
-    /// Each claim is converted to a <see cref="JsonNode"/> using <c>ToJsonNode</c>.
-    /// - Claims with a single value are stored as a <see cref="JsonValue"/>.
-    /// - Claims with multiple values are stored in a <see cref="JsonArray"/>.
-    ///
-    /// Excluded claim types will be skipped entirely.
-    /// Ensure that returned <see cref="JsonNode"/> instances are not reused elsewhere in the JSON tree,
-    /// as <c>System.Text.Json.Nodes</c> does not allow a node to have more than one parent.
-    /// </remarks>
-    /// <param name="claims">The collection of claims to merge.</param>
-    /// <param name="json">The target <see cref="JsonObject"/> to populate with merged claims.</param>
-    /// <param name="claimTypesToExclude">An array of claim type identifiers that should be excluded from the merge.
-    /// </param>
-    /// <exception cref="InvalidOperationException">Thrown if a grouped claim contains no values,
-    /// which should not occur under normal circumstances.</exception>
-    private static void MergeClaims(IEnumerable<Claim> claims, JsonObject json, string[] claimTypesToExclude)
+    private async Task<JwtValidationError?> ValidateSignatureAsync(
+        JsonWebToken token,
+        string[] jwtParts,
+        ValidationParameters parameters)
     {
-        var claimGroups = claims
-            .Where(claim => !claimTypesToExclude.Contains(claim.Type))
-            .GroupBy(claim => claim.Type, claim => ToJsonNode(claim.ValueType, claim.Value));
+        // Per RFC 7515 Section 4.1.1, 'alg' parameter is REQUIRED
+        var algorithm = token.Header.Algorithm;
+        if (algorithm == null)
+            return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
 
-        foreach (var claimGroup in claimGroups)
+        if (SigningAlgorithms.None.Equals(algorithm, StringComparison.OrdinalIgnoreCase))
         {
-            using var enumerator = claimGroup.GetEnumerator();
-            if (!enumerator.MoveNext())
-                throw new InvalidOperationException("Claim group contains no claims.");
+            if (parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens))
+                return new JwtValidationError(JwtError.InvalidToken, "Unsigned tokens are not allowed");
 
-            var claimValue = enumerator.Current;
-            if (enumerator.MoveNext())
+            if (jwtParts[2].HasValue())
+                return new JwtValidationError(JwtError.InvalidToken, "Unsigned token must have empty signature");
+        }
+        else
+        {
+            var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey) ||
+                                 parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens);
+
+            if (shouldValidate)
             {
-                // convert values to array
-                var jsonArray = new JsonArray { claimValue };
-                do
-                {
-                    jsonArray.Add(enumerator.Current);
-                } while (enumerator.MoveNext());
+                var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
+                    .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
 
-                claimValue = jsonArray;
+                var issuer = token.Payload.Issuer;
+                if (issuer == null)
+                    return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
+
+                return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
             }
-            json[claimGroup.Key] = claimValue;
         }
+
+        return null;
     }
 
     /// <summary>
-    /// Creates a <see cref="JsonNode"/> representation of a claim value based on its type.
+    /// Decrypts a JWE token and validates the inner JWT.
     /// </summary>
-    /// <param name="valueType">The type of the claim value.</param>
-    /// <param name="value">The string representation of the claim value.</param>
-    /// <returns>A <see cref="JsonNode"/> representing the claim value.</returns>
-    private static JsonNode? ToJsonNode(string valueType, string value) => valueType switch
+    private async Task<Result<JsonWebToken, JwtValidationError>> DecryptJweAsync(
+        string[] jwtParts,
+        ValidationParameters parameters)
     {
-        JsonClaimValueTypes.Json => JsonNode.Parse(value).NotNull(nameof(value)),
+        var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys.NotNull(nameof(parameters.ResolveTokenDecryptionKeys));
+        var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
-        ClaimValueTypes.Boolean => JsonValue.Create(bool.Parse(value)),
-        ClaimValueTypes.Integer or ClaimValueTypes.Integer64 => JsonValue.Create(long.Parse(value)),
-        ClaimValueTypes.Integer32 => JsonValue.Create(int.Parse(value)),
-        ClaimValueTypes.Date or ClaimValueTypes.DateTime
-            => JsonValue.Create(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture)),
-        ClaimValueTypes.Time => JsonValue.Create(TimeSpan.Parse(value, CultureInfo.InvariantCulture)),
+        var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
+        return await result.BindAsync(innerJwt => ValidateAsync(innerJwt, parameters));
+    }
 
-        ClaimValueTypes.Double => JsonValue.Create(double.Parse(value, CultureInfo.InvariantCulture)),
-        ClaimValueTypes.HexBinary => JsonValue.Create(Convert.FromHexString(value)),
-        ClaimValueTypes.Base64Binary or ClaimValueTypes.Base64Octet
-            => JsonValue.Create(Convert.FromBase64String(value)),
+    /// <summary>
+    /// Validates the issuer claim according to validation parameters.
+    /// </summary>
+    private static async Task<JwtValidationError?> ValidateIssuerAsync(string? issuer, ValidationParameters parameters)
+    {
+        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer) ||
+                             parameters.Options.HasFlag(ValidationOptions.RequireIssuer);
 
-        ClaimValueTypes.UInteger32 => JsonValue.Create(uint.Parse(value, CultureInfo.InvariantCulture)),
-        ClaimValueTypes.UInteger64 => JsonValue.Create(ulong.Parse(value, CultureInfo.InvariantCulture)),
+        if (issuer != null)
+        {
+            if (shouldValidate)
+            {
+                var validateIssuer = parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer));
+                if (!await validateIssuer(issuer))
+                    return new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
+            }
+        }
+        else if (parameters.Options.HasFlag(ValidationOptions.RequireIssuer))
+        {
+            return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload");
+        }
 
-        // Default fallback: treat all other unknown types as string
-        _ => JsonValue.Create(value),
-    };
+        return null;
+    }
+
+    /// <summary>
+    /// Validates the audience claim according to validation parameters.
+    /// </summary>
+    private static async Task<JwtValidationError?> ValidateAudienceAsync(
+        IEnumerable<string> audiences,
+        ValidationParameters parameters)
+    {
+        var audiencesList = audiences.ToList();
+
+        if (parameters.Options.HasFlag(ValidationOptions.RequireAudience) && audiencesList.Count == 0)
+            return new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload");
+
+        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateAudience) ||
+                             parameters.Options.HasFlag(ValidationOptions.RequireAudience);
+
+        if (shouldValidate && audiencesList.Count > 0)
+        {
+            var validateAudience = parameters.ValidateAudience.NotNull(nameof(parameters.ValidateAudience));
+            if (!await validateAudience(audiencesList))
+            {
+                return new JwtValidationError(
+                    JwtError.InvalidToken, $"Invalid audience: {string.Join(", ", audiencesList)}");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Validates the lifetime claims (nbf and exp) according to validation parameters.
+    /// </summary>
+    private JwtValidationError? ValidateLifetime(JsonWebTokenPayload payload, ValidationParameters parameters)
+    {
+        if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
+            return null;
+
+        var notBefore = payload.NotBefore;
+        var expiresAt = payload.ExpiresAt;
+        if (!notBefore.HasValue && !expiresAt.HasValue)
+            return null;
+
+        var utcNow = timeProvider.GetUtcNow();
+
+        if (notBefore.HasValue)
+        {
+            var notBeforeUtc = notBefore.Value.ToUniversalTime();
+            if (utcNow.Add(parameters.ClockSkew) < notBeforeUtc)
+                return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
+        }
+
+        if (expiresAt.HasValue)
+        {
+            var expiresUtc = expiresAt.Value.ToUniversalTime();
+            if (expiresUtc <= utcNow.Subtract(parameters.ClockSkew))
+                return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
+        }
+
+        return null;
+    }
 }

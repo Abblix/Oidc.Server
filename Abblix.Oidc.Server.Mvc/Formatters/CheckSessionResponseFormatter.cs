@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net.Mime;
+using System.Security.Cryptography;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -29,10 +30,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
-/// Provides a response formatter for Check Session frames.
+/// Provides a response formatter for Check Session frames, generating a per-request CSP nonce
+/// to protect the inline script from XSS attacks.
 /// </summary>
 public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
 {
+    private const string NoncePlaceholder = "{{nonce}}";
+    private const int NonceByteLength = 16;
+
     /// <summary>
     /// Formats a response for a Check Session frame asynchronously.
     /// </summary>
@@ -40,14 +45,26 @@ public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
     /// <returns>A <see cref="Task"/> representing the asynchronous operation,
     /// with the formatted response as an <see cref="ActionResult"/>.</returns>
     public Task<ActionResult> FormatResponseAsync(CheckSessionResponse response)
-    {
-        var result = new ContentResult
-        {
-            StatusCode = StatusCodes.Status200OK,
-            ContentType = MediaTypeNames.Text.Html,
-            Content = response.HtmlContent,
-        };
+        => Task.FromResult<ActionResult>(new CheckSessionHtmlResult(response.HtmlContent));
 
-        return Task.FromResult<ActionResult>(result);
+    /// <summary>
+    /// An ActionResult that generates a fresh CSP nonce on each execution,
+    /// injects it into the HTML template, and sets the Content-Security-Policy header.
+    /// This allows the ActionResult to be cached while still producing unique nonces per request.
+    /// </summary>
+    private sealed class CheckSessionHtmlResult(string htmlTemplate) : ActionResult
+    {
+        public override Task ExecuteResultAsync(ActionContext context)
+        {
+            var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(NonceByteLength));
+            var htmlContent = htmlTemplate.Replace(NoncePlaceholder, nonce);
+
+            var response = context.HttpContext.Response;
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType = MediaTypeNames.Text.Html;
+            response.Headers["Content-Security-Policy"] = $"default-src 'none'; script-src 'nonce-{nonce}'";
+
+            return response.WriteAsync(htmlContent);
+        }
     }
 }

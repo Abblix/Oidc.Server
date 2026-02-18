@@ -76,12 +76,9 @@ public static class AggregationExtensions
     public static T? Lesser<T>(this T? currentValue, T? accumulatorValue)
         where T : struct, IComparable<T>
     {
-        if (currentValue.HasValue)
+        if (currentValue.HasValue && (!accumulatorValue.HasValue || currentValue.Value.CompareTo(accumulatorValue.Value) < 0))
         {
-            if (!accumulatorValue.HasValue || currentValue.Value.CompareTo(accumulatorValue.Value) < 0)
-            {
-                return currentValue;
-            }
+            return currentValue;
         }
 
         return accumulatorValue;
