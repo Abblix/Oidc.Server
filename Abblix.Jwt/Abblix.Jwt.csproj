@@ -17,12 +17,12 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Comprehensive JWT validation with support for JWT Bearer grants (RFC 7523), signature verification, custom claims, and audience validation. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.0</PackageReleaseNotes>
+    <PackageReleaseNotes>Custom JWT implementation replacing Microsoft.IdentityModel.Tokens, JWK operation capability validation, improved JWK serialization, and RFC 7523 audience validation fix. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.2</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>2.1.0</AssemblyVersion>
-    <FileVersion>2.1.0</FileVersion>
-    <PackageVersion>2.1</PackageVersion>
+    <AssemblyVersion>2.2.0</AssemblyVersion>
+    <FileVersion>2.2.0</FileVersion>
+    <PackageVersion>2.2</PackageVersion>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
@@ -36,8 +36,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.103" PrivateAssets="All" />
   </ItemGroup>
   
   <ItemGroup>
