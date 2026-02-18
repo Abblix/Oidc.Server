@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -55,6 +56,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
+[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
 public sealed class AuthenticationController : ControllerBase
 {
     /// <summary>

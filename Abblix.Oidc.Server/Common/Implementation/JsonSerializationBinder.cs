@@ -55,7 +55,7 @@ public class JsonSerializationBinder : IJsonObjectBinder
     /// It's designed to handle complex object graphs and can be used to easily populate models
     /// from JSON data or update existing models with new data.
     /// </remarks>
-    public Task<TModel?> BindModelAsync<TModel>(JsonObject properties, TModel? model)
+    public Task<TModel?> BindModelAsync<TModel>(JsonObject properties, TModel? model = null)
         where TModel : class
     {
         return Task.FromResult(BindModel(properties, model));

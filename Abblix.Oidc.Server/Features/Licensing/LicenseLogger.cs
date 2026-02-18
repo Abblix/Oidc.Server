@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -30,34 +32,49 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// A specialized logger for licensing checks, extending the standard logging functionality to include
 /// throttling capabilities for repetitive log messages.
 /// </summary>
+/// <remarks>
+/// This is a singleton that lives for the application lifetime. The internal timer is intentionally
+/// not disposed as the instance is never explicitly disposed.
+/// </remarks>
 internal class LicenseLogger: ILogger
 {
     private LicenseLogger()
     {
-        var dictionary = new ConcurrentDictionary<object, DateTimeOffset>();
-
-        _timer = new Timer(state =>
-            {
-                var dict = (ConcurrentDictionary<object, DateTimeOffset>)state!;
-                var utcNow = DateTimeOffset.UtcNow;
-                foreach (var item in dict)
-                {
-                    if (item.Value < utcNow)
-                        dict.TryRemove(item.Key, out _);
-                }
-            },
-            dictionary,
+        _timer = new Timer(
+            CleanupExpiredEntries,
+            _nextAllowedTimes,
             TimeSpan.FromMinutes(1),
             TimeSpan.FromMinutes(1));
+    }
 
-        _nextAllowedTimes = dictionary;
+    /// <summary>
+    /// Timer callback that removes expired throttle entries from the dictionary.
+    /// </summary>
+    /// <param name="state">The <see cref="ConcurrentDictionary{TKey,TValue}"/> containing throttle entries.</param>
+    /// <remarks>
+    /// This method is invoked periodically by the timer to clean up entries that have passed their throttle period,
+    /// preventing unbounded memory growth.
+    /// </remarks>
+    private static void CleanupExpiredEntries(object? state)
+    {
+        var nextAllowedTimes = (ConcurrentDictionary<object, DateTimeOffset>)state.NotNull(nameof(state));
+        var utcNow = DateTimeOffset.UtcNow;
+
+        var keysToRemove = nextAllowedTimes
+            .Where(kvp => kvp.Value < utcNow)
+            .Select(kvp => kvp.Key)
+            .ToArray();
+
+        foreach (var key in keysToRemove)
+        {
+            nextAllowedTimes.TryRemove(key, out _);
+        }
     }
 
     public static LicenseLogger Instance { get; } = new();
 
     /// <summary>
-    /// Logs a message if the specified conditions are met, implementing throttling to prevent excessive logging
-    /// of similar messages.
+    /// Logs a message by delegating to the underlying logger.
     /// </summary>
     /// <typeparam name="TState">The type of the object to log.</typeparam>
     /// <param name="logLevel">The severity level of the log message.</param>
@@ -65,6 +82,10 @@ internal class LicenseLogger: ILogger
     /// <param name="state">The state related to the log message.</param>
     /// <param name="exception">The exception related to the log message, if any.</param>
     /// <param name="formatter">A function to create a string message from the state and exception.</param>
+    /// <remarks>
+    /// This method does not implement throttling directly. Callers must use <see cref="IsAllowed"/> to check
+    /// if logging should be throttled before calling this method.
+    /// </remarks>
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         => _logger.Log(logLevel, eventId, state, exception, formatter);
 
@@ -87,14 +108,22 @@ internal class LicenseLogger: ILogger
 
     private const string LoggerName = "Abblix.Oidc.Server";
     private ILogger _logger = NullLogger.Instance;
-    private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes;
+    private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes = new();
+
+    [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Timer must be kept alive to prevent garbage collection")]
+    [SuppressMessage("SonarLint", "S4487:Unread private fields should be removed", Justification = "Timer must be kept alive to prevent garbage collection")]
     private readonly Timer _timer;
 
     /// <summary>
     /// Initializes the logger with a specific logger factory.
     /// </summary>
     /// <param name="loggerFactory">The factory used to create the underlying logger instance.</param>
-    internal void Init(ILoggerFactory loggerFactory) => _logger = loggerFactory.CreateLogger(LoggerName);
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="loggerFactory"/> is null.</exception>
+    internal void Init(ILoggerFactory loggerFactory)
+    {
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _logger = loggerFactory.CreateLogger(LoggerName);
+    }
 
     /// <summary>
     /// Determines whether a log write operation is allowed based on the specified key and period.
@@ -106,21 +135,30 @@ internal class LicenseLogger: ILogger
     /// <remarks>
     /// This method helps to throttle logging by allowing log messages to be written only if a specified period has elapsed
     /// since the last log write for a given key. This prevents flooding the log with repetitive messages.
+    /// Uses atomic operations to avoid race conditions in concurrent scenarios.
     /// </remarks>
     public bool IsAllowed(object key, DateTimeOffset utcNow, TimeSpan period)
     {
         var newTime = utcNow + period;
-        if (_nextAllowedTimes.TryAdd(key, newTime))
-        {
-            return true;
-        }
+        var wasAllowed = false;
 
-        if (_nextAllowedTimes.TryGetValue(key, out var nextAllowedTime) && nextAllowedTime < utcNow &&
-            _nextAllowedTimes.TryUpdate(key, newTime, nextAllowedTime))
-        {
-            return true;
-        }
+        _nextAllowedTimes.AddOrUpdate(
+            key,
+            _ =>
+            {
+                wasAllowed = true;
+                return newTime;
+            },
+            (_, existingTime) =>
+            {
+                if (existingTime < utcNow)
+                {
+                    wasAllowed = true;
+                    return newTime;
+                }
+                return existingTime;
+            });
 
-        return false;
+        return wasAllowed;
     }
 }

@@ -26,6 +26,13 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         string keyEncryptionAlgorithm,
         string contentEncryptionAlgorithm)
     {
+        // Validate that encryption key contains public key material
+        if (!encryptionKey.HasPublicKey)
+        {
+            throw new InvalidOperationException(
+                $"Encryption operation requires public key material, but key (kid={encryptionKey.KeyId}) contains no public key data.");
+        }
+
         // First, create the inner JWS (signed token) as the plaintext to encrypt
         var plaintext = Encoding.UTF8.GetBytes(innerJws);
 
@@ -155,6 +162,13 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         await foreach (var key in decryptionKeys)
         {
             keyFound = true;
+
+            // Validate that decryption key contains private key material
+            if (!key.HasPrivateKey)
+            {
+                throw new InvalidOperationException(
+                    $"Decryption operation requires private key material, but key (kid={key.KeyId}) contains only public key data.");
+            }
 
             if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey))
                 continue;

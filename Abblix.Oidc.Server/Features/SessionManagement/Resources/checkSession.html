@@ -1,7 +1,9 @@
-<!DOCTYPE>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <script type="application/javascript">
+    <meta charset="UTF-8">
+    <script nonce="{{nonce}}">
+        // eslint-disable-next-line no-restricted-globals
         if (window !== window.parent)
             window.addEventListener("message", receiveMessage, false);
 
@@ -34,7 +36,12 @@
             var data = new TextEncoder().encode(value);
             return crypto.subtle.digest("SHA-256", data).then(function(buffer)
             {
-                return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+                var bytes = new Uint8Array(buffer);
+                var binary = '';
+                for (var byte of bytes) {
+                    binary += String.fromCodePoint(byte);
+                }
+                return btoa(binary)
                     .replaceAll("+", "-")
                     .replaceAll("/", "_")
                     .replaceAll("=", "");
@@ -44,7 +51,7 @@
         function getCookieValue(name)
         {
             var cookies = parseCookies();
-            return cookies[name] ?? "";
+            return cookies[name] || "";
         }
 
         function parseCookies() {
