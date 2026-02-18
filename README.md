@@ -60,7 +60,7 @@ The library also supports Dependency Injection through the standard .NET DI cont
 - Operation capability validation for `JsonWebKey` classes
 - Bidirectional interoperability tests with `Microsoft.IdentityModel.Tokens`
 
-> See 📋[Release Notes](RELEASE_NOTES_v2.2.md) for full details.
+> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.2) for full details.
 
 ## 🎓 Certification
 
