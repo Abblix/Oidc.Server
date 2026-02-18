@@ -49,6 +49,15 @@ public static class ErrorFactory
 	}
 
 	/// <summary>
+	/// Creates an <see cref="AuthorizationRequestValidationError"/> for a general invalid request error,
+	/// without an associated validation context.
+	/// </summary>
+	/// <param name="description">A description of what was invalid about the request.</param>
+	/// <returns>An <see cref="AuthorizationRequestValidationError"/> with the specified error details.</returns>
+	public static AuthorizationRequestValidationError InvalidRequest(string description)
+		=> ValidationError(ErrorCodes.InvalidRequest, description);
+
+	/// <summary>
 	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid client error.
 	/// This error type is used when the client authentication fails or when the client is not authorized to perform
 	/// the requested operation. It may occur due to issues like incorrect client credentials, unauthorized grant types
@@ -59,15 +68,6 @@ public static class ErrorFactory
 	/// the error relates to an invalid client.</returns>
 	public static AuthorizationRequestValidationError InvalidClient(string description)
 		=> ValidationError(ErrorCodes.InvalidClient, description);
-
-	/// <summary>
-	/// Creates an <see cref="AuthorizationRequestValidationError"/> for a general invalid request error,
-	/// without an associated validation context.
-	/// </summary>
-	/// <param name="description">A description of what was invalid about the request.</param>
-	/// <returns>An <see cref="AuthorizationRequestValidationError"/> with the specified error details.</returns>
-	public static AuthorizationRequestValidationError InvalidRequest(string description)
-		=> ValidationError(ErrorCodes.InvalidRequest, description);
 
 	/// <summary>
 	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid request URI.

@@ -102,7 +102,7 @@ public class AuthenticationSchemeAdapter(
 			throw new InvalidOperationException($"There is no {JwtClaimTypes.AuthenticationTime} in the claims");
 		}
 
-		// TODO think about the support for a list of several user accounts below
+		// NOTE: Future enhancement - consider supporting multiple user accounts per session
 		var authSession = new AuthSession(
 			principal.FindFirstValue(JwtClaimTypes.Subject).NotNull(JwtClaimTypes.Subject),
 			sessionId,

@@ -20,20 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net.Mime;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
 /// Provides a response formatter for end-session requests, which is part of the OpenID Connect protocol.
 /// </summary>
-public class EndSessionResponseFormatter : IEndSessionResponseFormatter
+/// <param name="frontChannelLogoutService">Service for generating front-channel logout HTML responses.</param>
+public class EndSessionResponseFormatter(
+    IFrontChannelLogoutService frontChannelLogoutService) : IEndSessionResponseFormatter
 {
     /// <summary>
     /// Formats an end-session response asynchronously based on the provided response model.
@@ -48,13 +53,17 @@ public class EndSessionResponseFormatter : IEndSessionResponseFormatter
             onSuccess: FormatSuccessResponse,
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
 
-    private static ActionResult FormatSuccessResponse(EndSessionSuccess success)
+    private ActionResult FormatSuccessResponse(EndSessionSuccess success)
     {
         if (success.FrontChannelLogoutRequestUris.Count > 0)
         {
-            return new FrontChannelLogoutResult(
+            var response = frontChannelLogoutService.GetFrontChannelLogoutResponse(
                 success.PostLogoutRedirectUri,
                 success.FrontChannelLogoutRequestUris);
+
+            return new ContentResult { Content = response.HtmlContent, ContentType = MediaTypeNames.Text.Html }
+                .WithNoCacheHeaders()
+                .WithHeader(HeaderNames.ContentSecurityPolicy, GetContentSecurityPolicy(response));
         }
 
         if (success.PostLogoutRedirectUri != null)
@@ -64,4 +73,11 @@ public class EndSessionResponseFormatter : IEndSessionResponseFormatter
 
         return new NoContentResult();
     }
+
+    /// <summary>
+    /// Gets the Content-Security-Policy header value for this logout page.
+    /// </summary>
+    /// <param name="response"></param>
+    internal static string GetContentSecurityPolicy(FrontChannelLogoutResponse response)
+        => $"default-src 'none'; script-src 'nonce-{response.Nonce}'; style-src 'nonce-{response.Nonce}'; frame-src {string.Join(' ', response.FrameSources)}";
 }

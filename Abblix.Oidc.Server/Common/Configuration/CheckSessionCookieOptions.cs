@@ -39,10 +39,20 @@ public record CheckSessionCookieOptions
 	public string? Domain { get; set; }
 
 	/// <summary>
+	/// The path for the cookie. Can be set to the check_session_iframe endpoint path
+	/// (e.g., "/connect/checksession") to ensure the cookie is only sent to that endpoint,
+	/// or left as "/" for broader availability.
+	/// The default value is "/" (root path).
+	/// </summary>
+	public string Path { get; set; } = "/";
+
+	/// <summary>
 	/// The SameSite attribute for the cookie which asserts that a cookie must not be sent with cross-origin requests,
 	/// providing some protection against cross-site request forgery attacks (CSRF).
 	/// The default value is "None", which permits the cookie to be sent with cross-site requests.
 	/// Valid options are "None", "Lax", and "Strict".
+	/// Note: For OpenID Connect Session Management to work in modern browsers, SameSite must be "None"
+	/// to allow the cookie to be accessed from the check_session_iframe running in cross-origin context.
 	/// </summary>
 	public string SameSite { get; set; } = "None";
 }

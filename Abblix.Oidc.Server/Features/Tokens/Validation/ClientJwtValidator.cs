@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -45,12 +46,14 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
 /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
+/// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 public class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientJwksProvider) : IClientJwtValidator
+    IClientKeysProvider clientJwksProvider,
+    IIssuerProvider issuerProvider) : IClientJwtValidator
 {
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -123,19 +126,23 @@ public class ClientJwtValidator(
     }
 
     /// <summary>
-    /// Validates the audience by checking if it matches the request URI.
+    /// Validates the audience by checking if it matches either the request URI (token endpoint)
+    /// or the authorization server's issuer identifier.
+    /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, both values are acceptable.
     /// </summary>
-    /// <param name="audiences">The collection of audiences to validate against the request URI.</param>
+    /// <param name="audiences">The collection of audiences to validate against valid audience values.</param>
     /// <returns>A task that returns whether the audience is valid.</returns>
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
         var requestUri = requestInfoProvider.RequestUri;
-        var result = audiences.Contains(requestUri);
+        var issuer = issuerProvider.GetIssuer();
+
+        var result = audiences.Contains(requestUri) || audiences.Contains(issuer);
         if (!result)
         {
             logger.LogWarning(
-                "Audience validation failed, token audiences: {@Audiences}, actual requestUri: {RequestUri}",
-                audiences, requestUri);
+                "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}",
+                audiences, requestUri, issuer);
         }
 
         return Task.FromResult(result);

@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// criteria, including issuer validation and signature verification. Upon successful validation, it extracts and
 /// applies license details to configure application features and limits accordingly.
 /// </remarks>
-public class LicenseLoader
+public static class LicenseLoader
 {
     private const string ValidIssuer = "https://abblix.com";
     private const string ValidLicenseType = "urn:abblix.com:oidc.server:license";
