@@ -301,8 +301,8 @@ jobs:
           files: |
             nupkg/*.nupkg
             nupkg/*.snupkg
-          prerelease: ${{ needs.create-release.outputs.is_prerelease }}
-          make_latest: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
+          prerelease: ${{ steps.validate_inputs.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.validate_inputs.outputs.is_prerelease != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
