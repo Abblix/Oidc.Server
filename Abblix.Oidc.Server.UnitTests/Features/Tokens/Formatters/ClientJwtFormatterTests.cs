@@ -24,10 +24,12 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -59,13 +61,15 @@ public class ClientJwtFormatterTests
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
+        var options = Options.Create(new OidcOptions());
         _formatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeysProvider.Object,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            options);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-        _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = "RSA-OAEP" };
+        _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
         _clientInfo = new ClientInfo(ClientId);
     }
 
@@ -95,8 +99,8 @@ public class ClientJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, sig, _) => capturedSigningKey = sig)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -132,8 +136,8 @@ public class ClientJwtFormatterTests
             .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, _, enc) => capturedEncryptionKey = enc)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -168,8 +172,8 @@ public class ClientJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, _, enc) => capturedEncryptionKey = enc)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -202,7 +206,7 @@ public class ClientJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -245,7 +249,7 @@ public class ClientJwtFormatterTests
             .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -255,7 +259,7 @@ public class ClientJwtFormatterTests
         Assert.Equal(EncodedJwt, result);
         _serviceKeysProvider.Verify(p => p.GetSigningKeys(true), Times.Once);
         _clientKeysProvider.Verify(p => p.GetEncryptionKeys(_clientInfo), Times.Once);
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey), Times.Once);
+        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     /// <summary>
@@ -289,7 +293,7 @@ public class ClientJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -322,7 +326,7 @@ public class ClientJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null))
+            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("Signing key is required"));
 
         // Act & Assert

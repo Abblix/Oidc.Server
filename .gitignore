@@ -377,5 +377,5 @@ FodyWeavers.xsd
 .claude/
 TEST_*.md
 LICENSE-*.md
-RELEASE_NOTES*.txt
-RELEASE_NOTES*.md
+RELEASE_NOTES*
+*.DotSettings

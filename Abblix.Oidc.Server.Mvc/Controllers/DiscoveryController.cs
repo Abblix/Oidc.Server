@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -50,6 +51,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ApiController]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
+[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
 public sealed class DiscoveryController : ControllerBase
 {
 	/// <summary>

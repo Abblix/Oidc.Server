@@ -59,18 +59,30 @@ public static class EncryptionAlgorithms
 		/// AES Key Wrap with 128-bit key.
 		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 128-bit key.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string Aes128KW = "A128KW";
 
 		/// <summary>
 		/// AES Key Wrap with 192-bit key.
 		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 192-bit key.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string Aes192KW = "A192KW";
 
 		/// <summary>
 		/// AES Key Wrap with 256-bit key.
 		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 256-bit key.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string Aes256KW = "A256KW";
 
 		/// <summary>
@@ -83,24 +95,46 @@ public static class EncryptionAlgorithms
 		/// Elliptic Curve Diffie-Hellman Ephemeral Static key agreement.
 		/// This algorithm uses ECDH-ES to establish a shared secret for key encryption.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Requires custom implementation of Concat KDF (NIST SP 800-56A).
+		/// While .NET provides native ECDiffieHellman, the Concat KDF key derivation is not available.
+		/// </remarks>
 		public const string EcdhEs = "ECDH-ES";
 
 		/// <summary>
 		/// ECDH-ES with AES Key Wrap using 128-bit key.
 		/// Combines ECDH-ES key agreement with AES-128 Key Wrap.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Requires both:
+		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
+		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string EcdhEsAes128KW = "ECDH-ES+A128KW";
 
 		/// <summary>
 		/// ECDH-ES with AES Key Wrap using 192-bit key.
 		/// Combines ECDH-ES key agreement with AES-192 Key Wrap.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Requires both:
+		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
+		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string EcdhEsAes192KW = "ECDH-ES+A192KW";
 
 		/// <summary>
 		/// ECDH-ES with AES Key Wrap using 256-bit key.
 		/// Combines ECDH-ES key agreement with AES-256 Key Wrap.
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: Requires both:
+		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
+		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
+		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
+		/// </remarks>
 		public const string EcdhEsAes256KW = "ECDH-ES+A256KW";
 
 		/// <summary>

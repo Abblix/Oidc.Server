@@ -44,11 +44,14 @@ public class AutoPostFormatter : TextOutputFormatter
 	{
 		_parametersProvider = parametersProvider;
 		_action = action;
+		
 		SupportedMediaTypes.Add(MediaTypeNames.Text.Html);
 		SupportedEncodings.Add(Encoding.UTF8);
 	}
+
 	private readonly IParametersProvider _parametersProvider;
 	private readonly Uri _action;
+
 	/// <summary>
 	/// Writes the HTML content to the response body asynchronously.
 	/// This method overrides the base class implementation to write an HTML form with the specified parameters.
@@ -76,52 +79,91 @@ public class AutoPostFormatter : TextOutputFormatter
 	/// <param name="writer">The XML writer to write the HTML content.</param>
 	/// <param name="parameters">The collection of parameters to include in the form.</param>
 	/// <returns>A task that represents the asynchronous write operation.</returns>
-	private async Task WriteHtmlAsync(
-		XmlWriter writer,
-		IEnumerable<(string name, string? value)> parameters)
+	private async Task WriteHtmlAsync(XmlWriter writer, IEnumerable<(string name, string? value)> parameters)
 	{
 		await writer.WriteDocTypeAsync("html", null, null, null);
 		writer.WriteStartElement("html");
-		{
-			writer.WriteStartElement("head");
-			{
-				writer.WriteElementString("title", "Working...");
-			}
-			await writer.WriteEndElementAsync();
-
-			writer.WriteStartElement("body");
-			writer.WriteAttributeString("onload", "javascript:document.forms[0].submit()");
-			{
-				writer.WriteStartElement("form");
-				writer.WriteAttributeString("method", "POST");
-				writer.WriteAttributeString("action", _action.OriginalString);
-				{
-					foreach (var (name, value) in parameters)
-					{
-						if (string.IsNullOrEmpty(value))
-							continue;
-
-						writer.WriteStartElement("input");
-						writer.WriteAttributeString("type", "hidden");
-						writer.WriteAttributeString("name", name);
-						writer.WriteAttributeString("value", value);
-						await writer.WriteEndElementAsync();
-					}
-
-					writer.WriteStartElement("noscript");
-					{
-						writer.WriteElementString("p", "JavaScript is disabled. Click Submit to continue.");
-						writer.WriteStartElement("input");
-						writer.WriteAttributeString("type", "submit");
-						writer.WriteAttributeString("value", "Submit");
-						await writer.WriteEndElementAsync(); //input
-					}
-					await writer.WriteEndElementAsync(); //noscript
-				}
-				await writer.WriteEndElementAsync(); //form
-			}
-			await writer.WriteEndElementAsync(); //body
-		}
+		await WriteHeadAsync(writer);
+		await WriteBodyAsync(writer, parameters);
 		await writer.WriteEndElementAsync(); //html
+	}
+
+	/// <summary>
+	/// Asynchronously writes the HTML head element.
+	/// </summary>
+	/// <param name="writer">The XML writer to write the HTML content.</param>
+	/// <returns>A task that represents the asynchronous write operation.</returns>
+	private static async Task WriteHeadAsync(XmlWriter writer)
+	{
+		writer.WriteStartElement("head");
+		writer.WriteElementString("title", "Working...");
+		await writer.WriteEndElementAsync();
+	}
+
+	/// <summary>
+	/// Asynchronously writes the HTML body element with auto-submit form.
+	/// </summary>
+	/// <param name="writer">The XML writer to write the HTML content.</param>
+	/// <param name="parameters">The collection of parameters to include in the form.</param>
+	/// <returns>A task that represents the asynchronous write operation.</returns>
+	private async Task WriteBodyAsync(XmlWriter writer, IEnumerable<(string name, string? value)> parameters)
+	{
+		writer.WriteStartElement("body");
+		writer.WriteAttributeString("onload", "javascript:document.forms[0].submit()");
+		await WriteFormAsync(writer, parameters);
+		await writer.WriteEndElementAsync(); //body
+	}
+
+	/// <summary>
+	/// Asynchronously writes the HTML form element with hidden inputs.
+	/// </summary>
+	/// <param name="writer">The XML writer to write the HTML content.</param>
+	/// <param name="parameters">The collection of parameters to include in the form.</param>
+	/// <returns>A task that represents the asynchronous write operation.</returns>
+	private async Task WriteFormAsync(XmlWriter writer, IEnumerable<(string name, string? value)> parameters)
+	{
+		writer.WriteStartElement("form");
+		writer.WriteAttributeString("method", "POST");
+		writer.WriteAttributeString("action", _action.OriginalString);
+		await WriteHiddenInputsAsync(writer, parameters);
+		await WriteNoScriptAsync(writer);
+		await writer.WriteEndElementAsync(); //form
+	}
+
+	/// <summary>
+	/// Asynchronously writes hidden input elements for form parameters.
+	/// </summary>
+	/// <param name="writer">The XML writer to write the HTML content.</param>
+	/// <param name="parameters">The collection of parameters to include in the form.</param>
+	/// <returns>A task that represents the asynchronous write operation.</returns>
+	private static async Task WriteHiddenInputsAsync(XmlWriter writer, IEnumerable<(string name, string? value)> parameters)
+	{
+		foreach (var (name, value) in parameters)
+		{
+			if (string.IsNullOrEmpty(value))
+				continue;
+
+			writer.WriteStartElement("input");
+			writer.WriteAttributeString("type", "hidden");
+			writer.WriteAttributeString("name", name);
+			writer.WriteAttributeString("value", value);
+			await writer.WriteEndElementAsync();
+		}
+	}
+
+	/// <summary>
+	/// Asynchronously writes the noscript fallback element with submit button.
+	/// </summary>
+	/// <param name="writer">The XML writer to write the HTML content.</param>
+	/// <returns>A task that represents the asynchronous write operation.</returns>
+	private static async Task WriteNoScriptAsync(XmlWriter writer)
+	{
+		writer.WriteStartElement("noscript");
+		writer.WriteElementString("p", "JavaScript is disabled. Click Submit to continue.");
+		writer.WriteStartElement("input");
+		writer.WriteAttributeString("type", "submit");
+		writer.WriteAttributeString("value", "Submit");
+		await writer.WriteEndElementAsync(); //input
+		await writer.WriteEndElementAsync(); //noscript
 	}
 }

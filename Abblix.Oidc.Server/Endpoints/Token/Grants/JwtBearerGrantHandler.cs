@@ -165,9 +165,7 @@ public class JwtBearerGrantHandler(
 			assertion,
 			new()
 			{
-				Options = ValidationOptions.ValidateLifetime |
-				          ValidationOptions.ValidateIssuer |
-				          ValidationOptions.ValidateAudience,
+				Options = ValidationOptions.Default,
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,

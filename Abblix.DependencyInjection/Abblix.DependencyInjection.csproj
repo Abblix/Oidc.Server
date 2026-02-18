@@ -17,12 +17,12 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Advanced dependency injection patterns with service aliasing, composite services, and decorators for modern .NET applications. BREAKING: Dropped .NET 6/7, requires .NET 8+ and supports .NET 10. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.0</PackageReleaseNotes>
+    <PackageReleaseNotes>Code quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.2</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>2.1.0</AssemblyVersion>
-    <FileVersion>2.1.0</FileVersion>
-    <PackageVersion>2.1</PackageVersion>
+    <AssemblyVersion>2.2.0</AssemblyVersion>
+    <FileVersion>2.2.0</FileVersion>
+    <PackageVersion>2.2</PackageVersion>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
@@ -36,14 +36,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.103" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
     <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
-    <None Include="..\Nuget\README.md" Link="README.md" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -45,6 +46,7 @@ public class ClientJwtValidatorTests
     private const string ValidClientId = TestConstants.DefaultClientId;
     private const string AnotherClientId = "client_456";
     private const string RequestUri = "https://auth.example.com/token";
+    private const string Issuer = "https://auth.example.com";
     private const string ValidJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRfMTIzIn0.signature";
 
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
@@ -56,18 +58,21 @@ public class ClientJwtValidatorTests
     {
         var logger = new Mock<ILogger<ClientJwtValidator>>();
         var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
+        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
 
         requestInfoProvider.Setup(p => p.RequestUri).Returns(RequestUri);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
 
         _validator = new ClientJwtValidator(
             logger.Object,
             requestInfoProvider.Object,
             _tokenValidator.Object,
             _clientInfoProvider.Object,
-            _clientKeysProvider.Object);
+            _clientKeysProvider.Object,
+            issuerProvider.Object);
     }
 
     #region Audience Validation Tests
@@ -109,13 +114,56 @@ public class ClientJwtValidatorTests
         // Assert
         Assert.NotNull(capturedParams);
 
-        // Verify audience validation callback
+        // Verify audience validation callback accepts request URI
         var audienceValidationResult = await capturedParams!.ValidateAudience!([RequestUri]);
         Assert.True(audienceValidationResult);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects JWT when audience does not match request URI.
+    /// Verifies that ValidateAsync accepts JWT when audience matches the issuer identifier.
+    /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, the authorization server's
+    /// issuer identifier is an acceptable audience value in addition to the token endpoint URL.
+    /// This ensures compatibility with clients that use the issuer ID as the audience.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithIssuerAsAudience_ShouldReturnSuccess()
+    {
+        // Arrange
+        var token = CreateValidToken();
+        var clientInfo = CreateClientInfo(ValidClientId);
+
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>(async (_, p) =>
+            {
+                capturedParams = p;
+                if (p.ValidateIssuer != null)
+                    await p.ValidateIssuer(ValidClientId);
+            })
+            .ReturnsAsync(token);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        // Act
+        await _validator.ValidateAsync(ValidJwt);
+
+        // Assert
+        Assert.NotNull(capturedParams);
+
+        // Verify audience validation callback accepts issuer identifier
+        var audienceValidationResult = await capturedParams!.ValidateAudience!([Issuer]);
+        Assert.True(audienceValidationResult);
+    }
+
+    /// <summary>
+    /// Verifies that ValidateAsync rejects JWT when audience matches neither request URI nor issuer.
     /// Prevents token substitution attacks where client JWT from one server is used on another.
     /// </summary>
     [Fact]

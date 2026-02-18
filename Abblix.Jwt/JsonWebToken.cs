@@ -50,4 +50,10 @@ public record JsonWebToken
 	/// issuer, subject, and expiration time, as well as custom claims as required by the application.
 	/// </remarks>
 	public JsonWebTokenPayload Payload { get; init; } = new(new JsonObject());
+
+	public void Deconstruct(out JsonWebTokenHeader header, out JsonWebTokenPayload payload)
+	{
+		header = Header;
+		payload = Payload;
+	}
 }

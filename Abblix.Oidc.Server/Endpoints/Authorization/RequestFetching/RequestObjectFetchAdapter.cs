@@ -38,22 +38,20 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
+    /// The request object JWT is validated and its claims are merged into the authorization request.
+    /// Client identification is performed using the request parameter, JWT issuer claim, or JWT client_id claim,
+    /// with validation ensuring all present sources match.
     /// </summary>
     /// <param name="request">The authorization request to be processed.</param>
     /// <returns>
-    /// A task that returns a <see cref="FetchResult"/>
-    /// which either represents a successfully processed request or an error indicating issues with the request object.
+    /// A task that returns a <see cref="Result{AuthorizationRequest, AuthorizationRequestValidationError}"/>
+    /// which either represents a successfully processed request with merged JWT claims or an error indicating
+    /// issues with the request object validation (invalid JWT, client identification failure, or claim mismatch).
     /// </returns>
-    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        AuthorizationRequest request)
     {
         var fetchResult = await requestObjectFetcher.FetchAsync(request, request.Request);
-
-        if (fetchResult.TryGetSuccess(out var authorizationRequest))
-            return authorizationRequest;
-
-        if (fetchResult.TryGetFailure(out var error))
-            return ErrorFactory.ValidationError(error.Error, error.ErrorDescription);
-
-        throw new InvalidOperationException("Unexpected result state");
+        return fetchResult.MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
 }

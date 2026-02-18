@@ -37,6 +37,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// Unit tests for <see cref="ClientIdValidator"/> verifying client ID validation
 /// per OpenID Connect Dynamic Client Registration 1.0 specification.
 /// </summary>
+[Collection("License")]
 public class ClientIdValidatorTests
 {
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;

@@ -44,7 +44,7 @@ public abstract class ModelBinderBase : IModelBinder
 	/// <exception cref="ArgumentNullException">Thrown when the bindingContext is null.</exception>
 	public virtual Task BindModelAsync(ModelBindingContext bindingContext)
 	{
-		ArgumentNullException.ThrowIfNull(bindingContext, nameof(bindingContext));
+		ArgumentNullException.ThrowIfNull(bindingContext);
 
 		var modelValue = bindingContext.ValueProvider.GetValue(bindingContext.ModelName);
 		if (modelValue == ValueProviderResult.None)

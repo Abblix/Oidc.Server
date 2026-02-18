@@ -25,6 +25,7 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
@@ -37,10 +38,16 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// criteria, including issuer validation and signature verification. Upon successful validation, it extracts and
 /// applies license details to configure application features and limits accordingly.
 /// </remarks>
-public class LicenseLoader
+public static class LicenseLoader
 {
     private const string ValidIssuer = "https://abblix.com";
     private const string ValidLicenseType = "urn:abblix.com:oidc.server:license";
+
+    private static readonly IServiceProvider ServiceProvider = new ServiceCollection()
+        .AddSingleton(TimeProvider.System)
+        .AddLogging()
+        .AddJsonWebTokens()
+        .BuildServiceProvider();
 
     /// <summary>
     /// Asynchronously loads and validates the license JWT, applying the license details upon successful validation.
@@ -53,11 +60,12 @@ public class LicenseLoader
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public static async Task LoadAsync(string licenseJwt)
     {
-        var validationResult = await new JsonWebTokenValidator().ValidateAsync(
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var validationResult = await validator.ValidateAsync(
             licenseJwt,
             new ValidationParameters
             {
-                Options = ValidationOptions.ValidateIssuer |
+                Options = ValidationOptions.RequireIssuer |
                           ValidationOptions.RequireSignedTokens |
                           ValidationOptions.ValidateIssuerSigningKey,
 

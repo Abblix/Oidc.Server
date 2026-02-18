@@ -36,6 +36,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 /// that the method handles requests made with these two HTTP methods. It can be used to
 /// support scenarios where a resource can be fetched (GET) or submitted (POST) to the same URL.
 /// </remarks>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public class HttpGetOrPostAttribute : HttpMethodAttribute
 {
 	private static readonly IEnumerable<string> SupportedMethods = [Get, Post];

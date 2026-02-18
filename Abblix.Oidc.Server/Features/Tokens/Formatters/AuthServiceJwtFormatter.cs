@@ -22,7 +22,9 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -36,9 +38,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
+/// <param name="options">OIDC configuration options.</param>
 public class AuthServiceJwtFormatter(
 	IJsonWebTokenCreator jwtCreator,
-	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
+	IAuthServiceKeysProvider serviceKeysProvider,
+	IOptions<OidcOptions> options) : IAuthServiceJwtFormatter
 {
 	/// <summary>
 	/// Formats and signs a JWT for use by the authentication service, applying the appropriate cryptographic operations
@@ -63,7 +67,17 @@ public class AuthServiceJwtFormatter(
 		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
 			.FirstOrDefaultAsync();
 
+		var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
+			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+		var contentEncryptionAlgorithm = options.Value.DefaultContentEncryptionAlgorithm;
+
 		// Issue the JWT with the selected signing and encryption credentials
-		return await jwtCreator.IssueAsync(token, signingCredentials, encryptingCredentials);
+		return await jwtCreator.IssueAsync(
+			token,
+			signingCredentials,
+			encryptingCredentials,
+			keyEncryptionAlgorithm,
+			contentEncryptionAlgorithm);
 	}
 }

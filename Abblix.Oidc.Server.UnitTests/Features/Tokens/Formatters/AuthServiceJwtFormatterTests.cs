@@ -24,8 +24,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -55,11 +57,12 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
+        var options = Options.Create(new OidcOptions());
+        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, options);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
-        _encryptionKey = new RsaJsonWebKey { KeyId = "enc-key", Algorithm = "RSA-OAEP" };
+        _encryptionKey = new RsaJsonWebKey { KeyId = "enc-key", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
     }
 
     #region Signing Key Selection Tests
@@ -91,8 +94,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, sig, enc) =>
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, enc, _, _) =>
             {
                 capturedSigningKey = sig;
                 capturedEncryptionKey = enc;
@@ -131,8 +134,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, sig, _) => capturedSigningKey = sig)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -167,7 +170,7 @@ public class AuthServiceJwtFormatterTests
 
         // IssueAsync will be called with null signing key, which should fail
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null))
+            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("Signing key is required"));
 
         // Act & Assert
@@ -198,7 +201,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -238,8 +241,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(new[] { _encryptionKey }.ToAsyncEnumerable());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, _, enc) => capturedEncryptionKey = enc)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -275,8 +278,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, _, enc) => capturedEncryptionKey = enc)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -313,8 +316,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(new[] { _encryptionKey, secondEncryptionKey }.ToAsyncEnumerable());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((_, _, enc) => capturedEncryptionKey = enc)
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -351,7 +354,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -391,8 +394,8 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?>((t, _, _) => capturedToken = t)
+            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -425,14 +428,14 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
         await _formatter.FormatAsync(token);
 
         // Assert
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null), Times.Once);
+        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     #endregion
@@ -471,7 +474,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(new[] { _encryptionKey }.ToAsyncEnumerable());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -481,7 +484,7 @@ public class AuthServiceJwtFormatterTests
         Assert.Equal(EncodedJwt, result);
         _keysProvider.Verify(p => p.GetSigningKeys(true), Times.Once);
         _keysProvider.Verify(p => p.GetEncryptionKeys(false), Times.Once);
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey), Times.Once);
+        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     /// <summary>
@@ -517,7 +520,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -525,7 +528,7 @@ public class AuthServiceJwtFormatterTests
 
         // Assert
         Assert.Equal(EncodedJwt, result);
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null), Times.Once);
+        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     /// <summary>
@@ -560,7 +563,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -597,7 +600,7 @@ public class AuthServiceJwtFormatterTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null))
+            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("Signing key is required"));
 
         // Act & Assert

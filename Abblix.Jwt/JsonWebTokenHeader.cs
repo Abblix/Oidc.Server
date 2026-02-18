@@ -59,6 +59,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <remarks>
     /// The 'alg' parameter identifies the cryptographic algorithm used to secure the JWT.
     /// Common algorithms include HS256, RS256, and ES256. It is crucial for verifying the JWT integrity.
+    /// Per RFC 7515 Section 4.1.1, this parameter is REQUIRED.
     /// </remarks>
     public string? Algorithm
     {
@@ -78,5 +79,19 @@ public class JsonWebTokenHeader(JsonObject json)
     {
         get => Json.GetProperty<string>(JwtClaimTypes.KeyId);
         set => Json.SetProperty(JwtClaimTypes.KeyId, value);
+    }
+
+    /// <summary>
+    /// The content encryption algorithm used for JWE (JSON Web Encryption).
+    /// </summary>
+    /// <remarks>
+    /// The 'enc' parameter identifies the content encryption algorithm used to encrypt the plaintext
+    /// to produce the JWE ciphertext and authentication tag. Common algorithms include A128CBC-HS256,
+    /// A192CBC-HS384, A256CBC-HS512, A128GCM, A192GCM, and A256GCM.
+    /// </remarks>
+    public string? EncryptionAlgorithm
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.EncryptionAlgorithm);
+        set => Json.SetProperty(JwtClaimTypes.EncryptionAlgorithm, value);
     }
 }

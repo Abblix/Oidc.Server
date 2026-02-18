@@ -47,7 +47,7 @@ public class ClientInfoBuilder
     private string[] _clientSecrets = [TestConstants.DefaultClientSecret];
     private string _authMethod = ClientAuthenticationMethods.ClientSecretPost;
     private string[] _grantTypes = [GrantTypes.AuthorizationCode];
-    private Uri[] _redirectUris = [new Uri(TestConstants.DefaultRedirectUri)];
+    private Uri[] _redirectUris = [new(TestConstants.DefaultRedirectUri)];
     private TimeSpan _accessTokenExpiresIn = TestConstants.DefaultAccessTokenLifetime;
     private TimeSpan _authorizationCodeExpiresIn = TestConstants.DefaultAuthorizationCodeLifetime;
     private bool? _pkceRequired;

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -101,7 +102,7 @@ public class AuthenticationSchemeAdapter(
 			throw new InvalidOperationException($"There is no {JwtClaimTypes.AuthenticationTime} in the claims");
 		}
 
-		// TODO think about the support for a list of several user accounts below
+		// NOTE: Future enhancement - consider supporting multiple user accounts per session
 		var authSession = new AuthSession(
 			principal.FindFirstValue(JwtClaimTypes.Subject).NotNull(JwtClaimTypes.Subject),
 			sessionId,
@@ -149,30 +150,29 @@ public class AuthenticationSchemeAdapter(
 
 		// Add optional claims if present
 		if (!string.IsNullOrEmpty(authSession.AuthContextClassRef))
-			claims.Add(new Claim(JwtClaimTypes.AuthContextClassRef, authSession.AuthContextClassRef));
+			claims.Add(new (JwtClaimTypes.AuthContextClassRef, authSession.AuthContextClassRef));
 
 		// AuthenticationMethodReferences in claims (needed for session validation)
 		if (authSession is { AuthenticationMethodReferences.Count: > 0 })
-			claims.Add(new Claim(JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences)));
+			claims.Add(new (JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences)));
 
 		// Email claim from AuthSession (preserves external provider email or challenge email)
 		if (!string.IsNullOrEmpty(authSession.Email))
-			claims.Add(new Claim(JwtClaimTypes.Email, authSession.Email));
+			claims.Add(new (JwtClaimTypes.Email, authSession.Email));
 
 		// EmailVerified claim from AuthSession
 		if (authSession.EmailVerified.HasValue)
-			claims.Add(new Claim(JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
+			claims.Add(new (JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
 
 		// Additional claims from JsonObject - serialize each property
 		if (authSession.AdditionalClaims != null)
 		{
-			foreach (var (claimType, jsonValue) in authSession.AdditionalClaims)
+			foreach (var (claimType, jsonNode) in authSession.AdditionalClaims)
 			{
-				if (jsonValue == null)
+				if (jsonNode == null)
 					continue;
 
-				var claimValue = SerializeJsonValue(jsonValue);
-				claims.Add(new Claim(claimType, claimValue));
+				claims.Add(CreateClaim(claimType, jsonNode));
 			}
 		}
 
@@ -186,20 +186,54 @@ public class AuthenticationSchemeAdapter(
 	}
 
 	/// <summary>
-	/// Serializes a JsonNode to a string suitable for claim storage.
-	/// Primitives are converted to their string representation, complex types are JSON-serialized.
+	/// Creates a Claim from a JsonNode value.
+	/// Primitives are converted to their string representation with appropriate value type,
+	/// complex types are JSON-serialized.
 	/// </summary>
-	private static string SerializeJsonValue(JsonNode jsonValue)
+	private static Claim CreateClaim(string claimType, JsonNode claimValue)
 	{
-		return jsonValue.GetValue<JsonElement>() switch
-		{
-			{ ValueKind: JsonValueKind.String } element => element.GetString()!,
-			{ ValueKind: JsonValueKind.Number } element => element.ToString(),
-			{ ValueKind: JsonValueKind.True } => "true",
-			{ ValueKind: JsonValueKind.False } => "false",
-			{ ValueKind: JsonValueKind.Null } => "",
-			_ => jsonValue.ToJsonString(),
-		};
+		// Handle arrays and objects - serialize as JSON
+		if (claimValue is JsonArray or JsonObject)
+			return new (claimType, claimValue.ToJsonString(), ClaimValueTypes.String);
+
+		// Handle JsonValue<T> primitives
+		if (claimValue is not JsonValue jsonValue)
+			return new (claimType, claimValue.ToJsonString(), ClaimValueTypes.String);
+
+		// Try to get the underlying value type
+		if (jsonValue.TryGetValue<string>(out var stringValue))
+			return new (claimType, stringValue, ClaimValueTypes.String);
+
+		if (jsonValue.TryGetValue<bool>(out var boolValue))
+			return new (claimType, boolValue.ToString().ToLowerInvariant(), ClaimValueTypes.Boolean);
+
+		if (jsonValue.TryGetValue<int>(out var intValue))
+			return new (claimType, intValue.ToString(), ClaimValueTypes.Integer32);
+
+		if (jsonValue.TryGetValue<long>(out var longValue))
+			return new (claimType, longValue.ToString(), ClaimValueTypes.Integer64);
+
+		if (jsonValue.TryGetValue<float>(out var floatValue))
+			return new (claimType, floatValue.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Double);
+
+		if (jsonValue.TryGetValue<double>(out var doubleValue))
+			return new (claimType, doubleValue.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Double);
+
+		if (jsonValue.TryGetValue<decimal>(out var decimalValue))
+			return new (claimType, decimalValue.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Double);
+
+		// Using ISO 8601 round-trip format with full precision and timezone
+
+		// For DateTime: "2009-06-15T13:45:30.0000000" or "2009-06-15T13:45:30.0000000Z"
+		if (jsonValue.TryGetValue<DateTime>(out var dateTimeValue))
+			return new (claimType, dateTimeValue.ToString("O"), ClaimValueTypes.DateTime);
+
+		// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
+		if (jsonValue.TryGetValue<DateTimeOffset>(out var dateTimeOffsetValue))
+			return new (claimType, dateTimeOffsetValue.ToString("O"), ClaimValueTypes.DateTime);
+
+		// Fallback for any other JsonValue type
+		return new (claimType, claimValue.ToJsonString(), ClaimValueTypes.String);
 	}
 
 	/// <summary>
@@ -210,7 +244,7 @@ public class AuthenticationSchemeAdapter(
 
 	/// <summary>
 	/// Extracts additional claims from the principal, excluding standard OIDC claims.
-	/// Attempts to deserialize JSON values, falls back to string values.
+	/// Uses claim ValueType to preserve exact type information during round-trip serialization.
 	/// </summary>
 	private static JsonObject ExtractAdditionalClaims(ClaimsPrincipal principal)
 	{
@@ -218,55 +252,80 @@ public class AuthenticationSchemeAdapter(
 
 		foreach (var claim in principal.Claims)
 		{
-			if (IsStandardClaim(claim.Type))
+			var isStandardClaim = claim.Type is
+				JwtClaimTypes.Subject or
+				JwtClaimTypes.SessionId or
+				JwtClaimTypes.AuthenticationTime or
+				JwtClaimTypes.AuthContextClassRef or
+				JwtClaimTypes.Email or
+				JwtClaimTypes.EmailVerified or
+				JwtClaimTypes.AuthenticationMethodReferences;
+
+			if (isStandardClaim)
 				continue;
 
-			var jsonValue = TryParseJsonValue(claim.Value);
-			additionalClaims[claim.Type] = jsonValue;
+			additionalClaims[claim.Type] = TryParseJsonValue(claim);
 		}
 
 		return additionalClaims;
 	}
 
 	/// <summary>
-	/// Attempts to parse a claim value as JSON, falling back to a simple string value.
+	/// Parses a claim back to JsonNode using the claim's ValueType to preserve exact type information.
+	/// Falls back to JSON parsing for complex types, then string value if all else fails.
 	/// </summary>
-	private static JsonNode? TryParseJsonValue(string value)
+	private static JsonNode? TryParseJsonValue(Claim claim)
 	{
+		var value = claim.Value;
+
 		if (string.IsNullOrEmpty(value))
 			return null;
 
-		// Try parsing as JSON (for arrays/objects)
-		try
+		// Use ValueType to preserve exact type information from CreateClaim
+		switch (claim.ValueType)
 		{
-			return JsonNode.Parse(value);
-		}
-		catch (JsonException)
-		{
-			// Not JSON - try to detect type
-			if (bool.TryParse(value, out var boolValue))
+			case ClaimValueTypes.Boolean when bool.TryParse(value, out var boolValue):
 				return JsonValue.Create(boolValue);
 
-			if (long.TryParse(value, out var longValue))
+			case ClaimValueTypes.Integer32 when int.TryParse(value, out var intValue):
+				return JsonValue.Create(intValue);
+
+			case ClaimValueTypes.Integer64 when long.TryParse(value, out var longValue):
 				return JsonValue.Create(longValue);
 
-			if (double.TryParse(value, out var doubleValue))
+			// Try decimal first (highest precision), then double
+			case ClaimValueTypes.Double when decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue):
+				return JsonValue.Create(decimalValue);
+
+			case ClaimValueTypes.Double when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue):
 				return JsonValue.Create(doubleValue);
 
-			// Default to string
-			return JsonValue.Create(value);
+			// Parse ISO 8601 format back to DateTimeOffset (preserves timezone)
+			case ClaimValueTypes.DateTime when DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dateTimeOffsetValue):
+				return JsonValue.Create(dateTimeOffsetValue);
+
+			case ClaimValueTypes.DateTime when DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dateTimeValue):
+				return JsonValue.Create(dateTimeValue);
+
+			case ClaimValueTypes.String:
+			case ClaimValueTypes.Boolean:
+			case ClaimValueTypes.Integer32:
+			case ClaimValueTypes.Integer64:
+			case ClaimValueTypes.Double:
+			case ClaimValueTypes.DateTime:
+				return JsonValue.Create(value);
+
+			default:
+				// Try parsing as JSON for arrays/objects
+				try
+				{
+					return JsonNode.Parse(value);
+				}
+				catch (JsonException)
+				{
+					// Fall back to string
+					return JsonValue.Create(value);
+				}
 		}
 	}
-
-	private static bool IsStandardClaim(string claimType) => claimType switch
-	{
-		JwtClaimTypes.Subject => true,
-		JwtClaimTypes.SessionId => true,
-		JwtClaimTypes.AuthenticationTime => true,
-		JwtClaimTypes.AuthContextClassRef => true,
-		JwtClaimTypes.Email => true,
-		JwtClaimTypes.EmailVerified => true,
-		JwtClaimTypes.AuthenticationMethodReferences => true,
-		_ => false
-	};
 }
