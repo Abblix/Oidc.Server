@@ -49,7 +49,6 @@ public static class JsonWebKeyExtensions
 			var jwk = new EllipticCurveJsonWebKey
 			{
 				Usage = ExtractKeyUsage(certificate),
-				Algorithm = null, // Algorithm not determined from certificate alone
 				KeyId = certificate.Thumbprint,
 			}
 				.Apply(ecdsaPublicKey.ExportParameters(false))
@@ -72,7 +71,6 @@ public static class JsonWebKeyExtensions
 			var jwk = new RsaJsonWebKey
 			{
 				Usage = ExtractKeyUsage(certificate),
-				Algorithm = null, // Algorithm not determined from certificate alone
 				KeyId = certificate.Thumbprint,
 			}.Apply(rsaPublicKey.ExportParameters(false)).Apply(certificate);
 
@@ -160,6 +158,14 @@ public static class JsonWebKeyExtensions
 			EllipticCurveOids.P256 => EllipticCurveTypes.P256,
 			EllipticCurveOids.P384 => EllipticCurveTypes.P384,
 			EllipticCurveOids.P521 => EllipticCurveTypes.P521,
+			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
+		};
+
+		jwk.Algorithm ??= curveOid.Value switch
+		{
+			EllipticCurveOids.P256 => SigningAlgorithms.ES256,
+			EllipticCurveOids.P384 => SigningAlgorithms.ES384,
+			EllipticCurveOids.P521 => SigningAlgorithms.ES512,
 			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
 		};
 
