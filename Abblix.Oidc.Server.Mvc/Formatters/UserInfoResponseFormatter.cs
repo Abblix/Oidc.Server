@@ -24,10 +24,13 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -37,7 +40,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class UserInfoResponseFormatter(
     TimeProvider clock,
-    IClientJwtFormatter clientJwtFormatter) : IUserInfoResponseFormatter
+    IClientJwtFormatter clientJwtFormatter,
+    IIssuerProvider issuerProvider) : IUserInfoResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -57,8 +61,8 @@ public class UserInfoResponseFormatter(
     {
         return await response.MatchAsync(
             onSuccess: FormatSuccessAsync,
-            onFailure: error => Task.FromResult<ActionResult>(
-                new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => Task.FromResult(
+                error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer())));
     }
 
     private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)

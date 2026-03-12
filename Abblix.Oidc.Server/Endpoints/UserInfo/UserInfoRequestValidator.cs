@@ -67,14 +67,14 @@ public class UserInfoRequestValidator(
 			if (authorizationHeader.Scheme != TokenTypes.Bearer)
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 			}
 
 			if (userInfoRequest.AccessToken != null)
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 					$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
 			}
@@ -82,7 +82,7 @@ public class UserInfoRequestValidator(
 			if (authorizationHeader.Parameter == null)
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 			}
 
@@ -91,7 +91,7 @@ public class UserInfoRequestValidator(
 		else if (userInfoRequest.AccessToken == null)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
 		}
@@ -103,7 +103,7 @@ public class UserInfoRequestValidator(
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		if (result.TryGetFailure(out var error))
-			return new OidcError(ErrorCodes.InvalidGrant, error.ToString());
+			return new OidcError(ErrorCodes.InvalidToken, error.ToString());
 
 		var token = result.GetSuccess();
 
@@ -111,7 +111,7 @@ public class UserInfoRequestValidator(
 		if (tokenType != JwtTypes.AccessToken)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"Invalid token type: {tokenType}");
 		}
 
@@ -121,7 +121,7 @@ public class UserInfoRequestValidator(
 		if (clientInfo == null)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"The client '{authContext.ClientId}' is not found");
 		}
 

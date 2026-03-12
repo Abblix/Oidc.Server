@@ -246,4 +246,12 @@ public static class ErrorCodes
 	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
 	/// </summary>
 	public const string InvalidToken = "invalid_token";
+
+	/// <summary>
+	/// The request requires higher privileges than provided by the access token.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 403 (Forbidden)
+	/// and SHOULD include the <c>scope</c> attribute in the <c>WWW-Authenticate</c> header
+	/// listing the required scopes.
+	/// </summary>
+	public const string InsufficientScope = "insufficient_scope";
 }

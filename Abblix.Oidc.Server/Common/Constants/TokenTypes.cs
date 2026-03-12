@@ -28,6 +28,12 @@ namespace Abblix.Oidc.Server.Common.Constants;
 public static class TokenTypes
 {
     /// <summary>
+    /// Indicates the Basic authentication scheme per RFC 7617, where client credentials
+    /// are transmitted as a Base64-encoded <c>client_id:client_secret</c> pair.
+    /// </summary>
+    public const string Basic = "Basic";
+
+    /// <summary>
     /// Indicates the Bearer token type, often used in OAuth 2.0 for securing API requests.
     /// </summary>
     public const string Bearer = "Bearer";
