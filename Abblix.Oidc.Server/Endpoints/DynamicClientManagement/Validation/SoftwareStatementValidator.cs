@@ -51,9 +51,11 @@ public class SoftwareStatementValidator(
 
         if (string.IsNullOrEmpty(softwareStatement))
         {
-            return softwareStatementOptions.RequireSoftwareStatement
-                ? ErrorFactory.InvalidSoftwareStatement("A software_statement is required for client registration")
-                : null;
+            if (softwareStatementOptions.RequireSoftwareStatement)
+                return ErrorFactory.InvalidSoftwareStatement(
+                    "A software_statement is required for client registration");
+
+            return null;
         }
 
         if (softwareStatementOptions.TrustedIssuers.Length == 0)
@@ -69,14 +71,7 @@ public class SoftwareStatementValidator(
                       ~ValidationOptions.RequireAudience &
                       ~ValidationOptions.ValidateAudience,
 
-            ValidateIssuer = issuer =>
-            {
-                var trusted = FindTrustedIssuer(softwareStatementOptions, issuer) != null;
-                if (!trusted)
-                    logger.LogDebug("Software statement issuer {Issuer} is not trusted", issuer);
-                return Task.FromResult(trusted);
-            },
-
+            ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
             ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
         };
 
@@ -90,6 +85,38 @@ public class SoftwareStatementValidator(
         }
 
         return ValidateSoftwareId(softwareStatementOptions, result.GetSuccess());
+    }
+
+    /// <summary>
+    /// Checks whether the software statement issuer is in the configured trusted issuers list.
+    /// </summary>
+    private Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
+    {
+        var trusted = FindTrustedIssuer(statementOptions, issuer) != null;
+        if (!trusted)
+            logger.LogDebug("Software statement issuer {Issuer} is not trusted", issuer);
+        return Task.FromResult(trusted);
+    }
+
+    /// <summary>
+    /// Checks the software_id claim from the validated software statement against
+    /// the configured list of approved software identifiers.
+    /// </summary>
+    private static OidcError? ValidateSoftwareId(
+        SoftwareStatementOptions statementOptions,
+        JsonWebToken token)
+    {
+        if (statementOptions.ApprovedSoftwareIds is not { Count: > 0 })
+            return null;
+
+        var softwareId = token.Payload["software_id"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(softwareId) || !statementOptions.ApprovedSoftwareIds.Contains(softwareId))
+        {
+            return ErrorFactory.UnapprovedSoftwareStatement(
+                $"The software_id '{softwareId}' is not approved for registration");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -118,26 +145,5 @@ public class SoftwareStatementValidator(
         {
             yield return key;
         }
-    }
-
-    /// <summary>
-    /// Checks the software_id claim from the validated software statement against
-    /// the configured list of approved software identifiers.
-    /// </summary>
-    private static OidcError? ValidateSoftwareId(
-        SoftwareStatementOptions statementOptions,
-        JsonWebToken token)
-    {
-        if (statementOptions.ApprovedSoftwareIds is not { Count: > 0 })
-            return null;
-
-        var softwareId = token.Payload["software_id"]?.GetValue<string>();
-        if (string.IsNullOrEmpty(softwareId) || !statementOptions.ApprovedSoftwareIds.Contains(softwareId))
-        {
-            return ErrorFactory.UnapprovedSoftwareStatement(
-                $"The software_id '{softwareId}' is not approved for registration");
-        }
-
-        return null;
     }
 }
