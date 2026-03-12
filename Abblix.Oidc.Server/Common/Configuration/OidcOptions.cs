@@ -221,6 +221,23 @@ public record OidcOptions
 	public bool RequireSignedRequestObject { get; set; } = false;
 
 	/// <summary>
+	/// Determines whether the client registration endpoint requires an initial access token
+	/// in the Authorization header per RFC 7591 Section 3.
+	/// When <c>true</c>, POST requests to the registration endpoint must include a valid
+	/// Bearer token. When <c>false</c>, open registration is allowed.
+	/// </summary>
+	public bool RequireInitialAccessToken { get; set; } = false;
+
+	/// <summary>
+	/// The set of revoked initial access token identifiers (JWT subject claims).
+	/// Tokens whose subject appears in this set will be rejected during client registration.
+	/// For production use with large or dynamic revocation lists, replace
+	/// <see cref="Endpoints.DynamicClientManagement.Interfaces.IInitialAccessTokenRevocationProvider"/>
+	/// with a database- or cache-backed implementation.
+	/// </summary>
+	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
+
+	/// <summary>
 	/// Configuration options for JWT Bearer grant type (RFC 7523).
 	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
 	/// </summary>

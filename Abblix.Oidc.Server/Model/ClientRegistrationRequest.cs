@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -36,6 +37,13 @@ namespace Abblix.Oidc.Server.Model;
 /// </remarks>
 public record ClientRegistrationRequest
 {
+    /// <summary>
+    /// The Authorization header from the HTTP request, used for initial access token validation
+    /// per RFC 7591 Section 3. This is a transport-level property, not part of the registration metadata.
+    /// </summary>
+    [JsonIgnore]
+    public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
+
     /// <summary>
     /// Array of redirection URIs for the OP to redirect the End-User after getting authorization.
     /// </summary>
