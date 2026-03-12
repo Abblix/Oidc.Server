@@ -176,6 +176,17 @@ public static class ErrorCodes
 	/// </remarks>
 	public const string InvalidClientMetadata = "invalid_client_metadata";
 
+	/// <summary>
+	/// The software statement presented is invalid per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string InvalidSoftwareStatement = "invalid_software_statement";
+
+	/// <summary>
+	/// The software statement was valid but the software has not been approved
+	/// for use by this authorization server per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
+
 	#endregion
 
 	/// <summary>

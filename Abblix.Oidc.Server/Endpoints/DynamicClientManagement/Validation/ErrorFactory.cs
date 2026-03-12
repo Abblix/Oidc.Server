@@ -46,4 +46,20 @@ public static class ErrorFactory
     /// <returns>An error instance with the error code and description.</returns>
     public static OidcError InvalidClientMetadata(string description)
         => new(ErrorCodes.InvalidClientMetadata, description);
+
+    /// <summary>
+    /// Creates a validation error for an invalid software statement per RFC 7591 Section 3.2.2.
+    /// </summary>
+    /// <param name="description">The description of the error.</param>
+    /// <returns>An error instance with the error code and description.</returns>
+    public static OidcError InvalidSoftwareStatement(string description)
+        => new(ErrorCodes.InvalidSoftwareStatement, description);
+
+    /// <summary>
+    /// Creates a validation error for an unapproved software statement per RFC 7591 Section 3.2.2.
+    /// </summary>
+    /// <param name="description">The description of the error.</param>
+    /// <returns>An error instance with the error code and description.</returns>
+    public static OidcError UnapprovedSoftwareStatement(string description)
+        => new(ErrorCodes.UnapprovedSoftwareStatement, description);
 }

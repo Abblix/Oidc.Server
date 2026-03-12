@@ -437,6 +437,8 @@ public static class ServiceCollectionExtensions
                 .AddSingleton<IClientRegistrationContextValidator, RedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, SoftwareStatementValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>()
