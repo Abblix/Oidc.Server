@@ -229,4 +229,10 @@ public static class ErrorCodes
 	/// The binding message is invalid or unacceptable for use in the context of the given request.
 	/// </summary>
 	public const string InvalidBindingMessage = "invalid_binding_message";
+
+	/// <summary>
+	/// The access token provided is expired, revoked, malformed, or invalid for other reasons.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
+	/// </summary>
+	public const string InvalidToken = "invalid_token";
 }
