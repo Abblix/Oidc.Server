@@ -82,14 +82,14 @@ public class SoftwareStatementValidator(
 
         var result = await jwtValidator.ValidateAsync(softwareStatement, validationParameters);
 
-        return result.Match<OidcError?>(
-            token => ValidateSoftwareId(softwareStatementOptions, token),
-            error =>
-            {
-                logger.LogWarning("Software statement validation failed: {Error}", error.ErrorDescription);
-                return ErrorFactory.InvalidSoftwareStatement(
-                    $"The software_statement is invalid: {error.ErrorDescription}");
-            });
+        if (result.TryGetFailure(out var error))
+        {
+            logger.LogWarning("Software statement validation failed: {Error}", error.ErrorDescription);
+            return ErrorFactory.InvalidSoftwareStatement(
+                $"The software_statement is invalid: {error.ErrorDescription}");
+        }
+
+        return ValidateSoftwareId(softwareStatementOptions, result.GetSuccess());
     }
 
     /// <summary>
