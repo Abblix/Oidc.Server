@@ -338,6 +338,21 @@ public record ClientInfo(string ClientId)
     public string? TokenEndpointAuthSigningAlgorithm { get; set; }
 
     /// <summary>
+    /// The scope values the client is allowed to request per RFC 7591 Section 2.
+    /// </summary>
+    public string[]? AllowedScopes { get; set; }
+
+    /// <summary>
+    /// A unique identifier for the client software per RFC 7591 Section 2.
+    /// </summary>
+    public string? SoftwareId { get; set; }
+
+    /// <summary>
+    /// A version identifier for the client software per RFC 7591 Section 2.
+    /// </summary>
+    public string? SoftwareVersion { get; set; }
+
+    /// <summary>
     /// Expiration time for this dynamically registered client in distributed cache.
     /// If not set, the default expiration configured in the server settings is used.
     /// Implements pseudo-sliding expiration: TTL is reset on each access.

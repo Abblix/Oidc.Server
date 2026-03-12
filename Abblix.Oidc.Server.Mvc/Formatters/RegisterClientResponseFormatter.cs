@@ -80,7 +80,12 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 : null,
 
             InitiateLoginUri = request.InitiateLoginUri,
-            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod
+            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod,
+
+            Scope = request.Scope,
+            SoftwareId = request.SoftwareId,
+            SoftwareVersion = request.SoftwareVersion,
+            SoftwareStatement = request.SoftwareStatement,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

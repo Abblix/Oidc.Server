@@ -242,4 +242,9 @@ public record OidcOptions
 	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
 	/// </summary>
 	public JwtBearerOptions JwtBearer { get; set; } = new();
+
+	/// <summary>
+	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
+	/// </summary>
+	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();
 }

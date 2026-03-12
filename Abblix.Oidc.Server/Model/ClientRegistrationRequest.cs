@@ -388,6 +388,33 @@ public record ClientRegistrationRequest
     [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
     public bool BackChannelUserCodeParameter { get; set; } = false;
 
+    /// <summary>
+    /// A space-separated list of scope values the client will use per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(Parameters.Scope)]
+    [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    public string[]? Scope { get; set; }
+
+    /// <summary>
+    /// A unique identifier string assigned by the client developer or software publisher
+    /// to identify the client software per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(Parameters.SoftwareId)]
+    public string? SoftwareId { get; set; }
+
+    /// <summary>
+    /// A version identifier string for the client software per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(Parameters.SoftwareVersion)]
+    public string? SoftwareVersion { get; set; }
+
+    /// <summary>
+    /// A digitally signed or MACed JWT that asserts metadata values about the client software,
+    /// issued by a third-party software statement issuer per RFC 7591 Section 2.3.
+    /// </summary>
+    [JsonPropertyName(Parameters.SoftwareStatement)]
+    public string? SoftwareStatement { get; set; }
+
     public static class Parameters
     {
         public const string RedirectUris = "redirect_uris";
@@ -437,5 +464,9 @@ public record ClientRegistrationRequest
         public const string BackChannelClientNotificationEndpoint = "backchannel_client_notification_endpoint";
         public const string BackChannelAuthenticationRequestSigningAlg = "backchannel_authentication_request_signing_alg";
         public const string BackChannelUserCodeParameter = "backchannel_user_code_parameter";
+        public const string Scope = "scope";
+        public const string SoftwareId = "software_id";
+        public const string SoftwareVersion = "software_version";
+        public const string SoftwareStatement = "software_statement";
     }
 }
