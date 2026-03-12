@@ -151,7 +151,7 @@ public class UserInfoRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("user claims", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 

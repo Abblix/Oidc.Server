@@ -57,7 +57,7 @@ public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaim
 			request.ClientInfo);
 
 		if (userInfo == null)
-			return new OidcError(ErrorCodes.InvalidGrant, "The user claims aren't found");
+			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
 		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
