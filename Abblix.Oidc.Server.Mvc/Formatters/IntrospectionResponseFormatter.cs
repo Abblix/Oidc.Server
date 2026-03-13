@@ -24,9 +24,12 @@ using Abblix.Oidc.Server.Common;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -34,7 +37,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Provides a response formatter for introspection responses.
 /// </summary>
-public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
+public class IntrospectionResponseFormatter(
+    IIssuerProvider issuerProvider) : IIntrospectionResponseFormatter
 {
     /// <summary>
     /// Formats an introspection response asynchronously.
@@ -52,7 +56,7 @@ public class IntrospectionResponseFormatter : IIntrospectionResponseFormatter
     {
         return Task.FromResult(response.Match(
             onSuccess: FormatSuccess,
-            onFailure: error => new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer())));
     }
 
     private static ActionResult FormatSuccess(IntrospectionSuccess success)

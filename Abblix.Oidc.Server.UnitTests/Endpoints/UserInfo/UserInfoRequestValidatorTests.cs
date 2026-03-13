@@ -205,7 +205,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("'Basic' is not supported", error.ErrorDescription);
     }
 
@@ -226,7 +226,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("not in both sources", error.ErrorDescription);
     }
 
@@ -246,7 +246,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("none of them specified", error.ErrorDescription);
     }
 
@@ -267,7 +267,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("must be specified", error.ErrorDescription);
     }
 
@@ -297,7 +297,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Equal("Token is expired", error.ErrorDescription);
     }
 
@@ -327,7 +327,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("Invalid token type", error.ErrorDescription);
         Assert.Contains("id+jwt", error.ErrorDescription);
     }
@@ -366,7 +366,7 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("'unknown_client' is not found", error.ErrorDescription);
     }
 

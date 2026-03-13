@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -109,24 +110,63 @@ public static class ActionResultExtensions
 		=> new ActionResultDecorator(innerResult, SetNoCacheHeaders);
 
 	/// <summary>
-	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response.
-	/// Per RFC 6750 Section 3, Bearer token errors return 401 Unauthorized with a
-	/// <c>WWW-Authenticate</c> header. All other errors use the specified fallback status code.
+	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
+	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
+	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
+	/// All other errors use the specified fallback status code with a JSON body.
 	/// </summary>
 	/// <param name="error">The OIDC error to format.</param>
 	/// <param name="fallbackStatusCode">The HTTP status code to use for non-token errors.</param>
+	/// <param name="realm">Optional realm value identifying the protection space (typically the issuer URI).</param>
 	/// <returns>An <see cref="ActionResult"/> with the appropriate status code and headers.</returns>
-	public static ActionResult Format(this OidcError error, int fallbackStatusCode)
+	public static ActionResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
 	{
-		var response = new ErrorResponse(error.Error, error.ErrorDescription);
+		var challenge = FormatBearerChallenge(error, realm);
 
-		return error.Error switch
+		return (error.Error, fallbackStatusCode) switch
 		{
-			ErrorCodes.InvalidToken => new UnauthorizedObjectResult(response).WithHeader(
-				HeaderNames.WWWAuthenticate,
-				$"{TokenTypes.Bearer} error=\"{error.Error}\""),
+			(ErrorCodes.InvalidToken, _) => new UnauthorizedResult()
+				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
 
-			_ => new ObjectResult(response) { StatusCode = fallbackStatusCode }
+			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
+				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+
+			(_, StatusCodes.Status400BadRequest)
+				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+
+			(_, StatusCodes.Status401Unauthorized)
+				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+
+			_ => new ObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+				{ StatusCode = fallbackStatusCode },
 		};
+	}
+
+	/// <summary>
+	/// Builds a <c>WWW-Authenticate: Bearer</c> challenge value per RFC 6750 Section 3,
+	/// including optional realm, error, and error_description attributes.
+	/// </summary>
+	private static string FormatBearerChallenge(OidcError error, string? realm)
+	{
+		var sb = new StringBuilder(TokenTypes.Bearer);
+		var first = true;
+		Append(sb, ref first, "realm", realm);
+		Append(sb, ref first, "error", error.Error);
+		Append(sb, ref first, "error_description", error.ErrorDescription);
+		return sb.ToString();
+
+		static void Append(StringBuilder sb, ref bool first, string name, string? value)
+		{
+			if (string.IsNullOrEmpty(value))
+				return;
+
+			sb.Append(first ? " " : ", ")
+				.Append(name)
+				.Append("=\"")
+				.Append(value.Replace("\"", "'"))
+				.Append('"');
+
+			first = false;
+		}
 	}
 }

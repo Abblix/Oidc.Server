@@ -252,7 +252,7 @@ public sealed class AuthenticationController : ControllerBase
         var mappedAuthenticationRequest = authenticationRequest.Map();
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedAuthenticationRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedAuthenticationRequest, response);
+        return await formatter.FormatResponseAsync(mappedAuthenticationRequest, mappedClientRequest, response);
     }
 
     /// <summary>
