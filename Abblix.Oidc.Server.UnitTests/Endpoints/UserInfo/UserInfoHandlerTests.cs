@@ -138,7 +138,7 @@ public class UserInfoHandlerTests
         var userInfoRequest = CreateUserInfoRequest();
         var clientRequest = CreateClientRequest();
         var error = new OidcError(
-            ErrorCodes.InvalidGrant,
+            ErrorCodes.InvalidToken,
             "Access token is invalid or expired");
 
         _validator
@@ -268,7 +268,7 @@ public class UserInfoHandlerTests
         var userInfoRequest = CreateUserInfoRequest();
         var clientRequest = CreateClientRequest();
         var error = new OidcError(
-            ErrorCodes.InvalidGrant,
+            ErrorCodes.InvalidToken,
             "Access token is invalid");
 
         _validator
@@ -282,7 +282,7 @@ public class UserInfoHandlerTests
         Assert.True(result.TryGetFailure(out var failure));
         Assert.NotNull(failure.Error);
         Assert.NotEmpty(failure.Error);
-        Assert.Equal(ErrorCodes.InvalidGrant, failure.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, failure.Error);
     }
 
     /// <summary>
@@ -323,7 +323,7 @@ public class UserInfoHandlerTests
         // Arrange
         var userInfoRequest = CreateUserInfoRequest();
         var clientRequest = CreateClientRequest();
-        var error = new OidcError(ErrorCodes.InvalidGrant, "Token not authorized");
+        var error = new OidcError(ErrorCodes.InvalidToken, "Token not authorized");
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))

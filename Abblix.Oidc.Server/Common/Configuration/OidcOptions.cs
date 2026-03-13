@@ -226,7 +226,7 @@ public record OidcOptions
 	/// When <c>true</c>, POST requests to the registration endpoint must include a valid
 	/// Bearer token. When <c>false</c>, open registration is allowed.
 	/// </summary>
-	public bool RequireInitialAccessToken { get; set; } = false;
+	public bool RequireInitialAccessToken { get; set; } = true;
 
 	/// <summary>
 	/// The set of revoked initial access token identifiers (JWT subject claims).
