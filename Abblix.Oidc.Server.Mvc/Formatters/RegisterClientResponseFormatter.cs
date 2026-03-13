@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
@@ -59,7 +60,7 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
     {
         return Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
     }
 
     private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
@@ -79,7 +80,12 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 : null,
 
             InitiateLoginUri = request.InitiateLoginUri,
-            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod
+            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod,
+
+            Scope = request.Scope,
+            SoftwareId = request.SoftwareId,
+            SoftwareVersion = request.SoftwareVersion,
+            SoftwareStatement = request.SoftwareStatement,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

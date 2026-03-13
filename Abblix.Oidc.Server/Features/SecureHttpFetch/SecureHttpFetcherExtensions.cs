@@ -63,6 +63,7 @@ public static class SecureHttpFetcherExtensions
 
 				logger.LogWarning("JWKS for {EntityType} {EntityId} from {JwksUri} is empty or invalid",
 					entityType, entityId, jwksUri);
+
 				return AsyncEnumerable.Empty<JsonWebKey>();
 
 			},
@@ -70,6 +71,7 @@ public static class SecureHttpFetcherExtensions
 			{
 				logger.LogError("Failed to fetch JWKS for {EntityType} {EntityId} from {JwksUri}: {Error}",
 					entityType, entityId, jwksUri, error.ErrorDescription);
+
 				return AsyncEnumerable.Empty<JsonWebKey>();
 			});
 

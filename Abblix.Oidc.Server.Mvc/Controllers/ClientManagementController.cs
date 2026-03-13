@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -28,6 +29,7 @@ using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 
@@ -56,6 +58,8 @@ public class ClientManagementController : ControllerBase
     /// <param name="handler">The handler responsible for processing client registration requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client registration response.</param>
     /// <param name="request">The details of the client registration request.</param>
+    /// <param name="authorizationHeader">The optional initial access token from the Authorization header,
+    /// used to authenticate the registration request per RFC 7591 Section 3.</param>
     /// <returns>A task that returns an action result that includes
     /// the client registration response.</returns>
     /// <remarks>
@@ -69,9 +73,11 @@ public class ClientManagementController : ControllerBase
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
         [FromServices] IRegisterClientResponseFormatter formatter,
-        [FromBody] ClientRegistrationRequest request)
+        [FromBody] ClientRegistrationRequest request,
+        [FromHeader(Name = HttpRequestHeaders.Authorization)] AuthenticationHeaderValue? authorizationHeader)
     {
-        var clientRegistrationRequest = request.Map();
+        var clientRegistrationRequest = request.Map(authorizationHeader);
+
         var response = await handler.HandleAsync(clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
     }
@@ -127,7 +133,7 @@ public class ClientManagementController : ControllerBase
     {
         var updateRequest = new UpdateClientRequest(
             authorizationRequest.ToClientRequest(),
-            registrationRequest.Map());
+            registrationRequest.Map(null));
         var response = await handler.HandleAsync(updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
     }

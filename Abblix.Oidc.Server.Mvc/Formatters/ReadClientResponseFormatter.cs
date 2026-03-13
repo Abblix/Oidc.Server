@@ -21,10 +21,12 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
@@ -63,6 +65,6 @@ public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClient
                         })
                     : null
             }),
-            error => new NotFoundObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            error => error.Format(StatusCodes.Status404NotFound)));
     }
 }

@@ -101,4 +101,29 @@ public record ClientRegistrationResponse
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
     public string? TokenEndpointAuthMethod { get; init; }
+
+    /// <summary>
+    /// The registered scope values per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.Scope)]
+    [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    public string[]? Scope { get; init; }
+
+    /// <summary>
+    /// The software identifier per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareId)]
+    public string? SoftwareId { get; init; }
+
+    /// <summary>
+    /// The software version per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareVersion)]
+    public string? SoftwareVersion { get; init; }
+
+    /// <summary>
+    /// The software statement JWT echoed back per RFC 7591 Section 3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
+    public string? SoftwareStatement { get; init; }
 }

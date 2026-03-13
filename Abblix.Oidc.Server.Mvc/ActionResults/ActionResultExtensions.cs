@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
@@ -104,4 +107,26 @@ public static class ActionResultExtensions
 	/// <returns>A decorated <see cref="ActionResult"/> with comprehensive cache prevention headers.</returns>
 	public static ActionResult WithNoCacheHeaders(this ActionResult innerResult)
 		=> new ActionResultDecorator(innerResult, SetNoCacheHeaders);
+
+	/// <summary>
+	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response.
+	/// Per RFC 6750 Section 3, Bearer token errors return 401 Unauthorized with a
+	/// <c>WWW-Authenticate</c> header. All other errors use the specified fallback status code.
+	/// </summary>
+	/// <param name="error">The OIDC error to format.</param>
+	/// <param name="fallbackStatusCode">The HTTP status code to use for non-token errors.</param>
+	/// <returns>An <see cref="ActionResult"/> with the appropriate status code and headers.</returns>
+	public static ActionResult Format(this OidcError error, int fallbackStatusCode)
+	{
+		var response = new ErrorResponse(error.Error, error.ErrorDescription);
+
+		return error.Error switch
+		{
+			ErrorCodes.InvalidToken => new UnauthorizedObjectResult(response).WithHeader(
+				HeaderNames.WWWAuthenticate,
+				$"{TokenTypes.Bearer} error=\"{error.Error}\""),
+
+			_ => new ObjectResult(response) { StatusCode = fallbackStatusCode }
+		};
+	}
 }

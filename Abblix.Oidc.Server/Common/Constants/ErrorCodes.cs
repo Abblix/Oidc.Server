@@ -176,6 +176,17 @@ public static class ErrorCodes
 	/// </remarks>
 	public const string InvalidClientMetadata = "invalid_client_metadata";
 
+	/// <summary>
+	/// The software statement presented is invalid per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string InvalidSoftwareStatement = "invalid_software_statement";
+
+	/// <summary>
+	/// The software statement was valid but the software has not been approved
+	/// for use by this authorization server per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
+
 	#endregion
 
 	/// <summary>
@@ -229,4 +240,10 @@ public static class ErrorCodes
 	/// The binding message is invalid or unacceptable for use in the context of the given request.
 	/// </summary>
 	public const string InvalidBindingMessage = "invalid_binding_message";
+
+	/// <summary>
+	/// The access token provided is expired, revoked, malformed, or invalid for other reasons.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
+	/// </summary>
+	public const string InvalidToken = "invalid_token";
 }
