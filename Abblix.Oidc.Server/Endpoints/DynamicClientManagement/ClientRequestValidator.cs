@@ -53,7 +53,7 @@ public class ClientRequestValidator(
             request.ClientId.NotNull(nameof(request.ClientId)));
 
         if (headerErrorDescription != null)
-            return new OidcError(ErrorCodes.InvalidGrant, headerErrorDescription);
+            return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
         var clientInfo = await clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
         if (clientInfo == null)

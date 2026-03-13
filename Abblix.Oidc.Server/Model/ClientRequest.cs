@@ -43,6 +43,7 @@ public record ClientRequest
 	/// <summary>
 	/// The authorization header used for client authentication. This typically contains credentials like bearer tokens.
 	/// </summary>
+	[JsonIgnore]
 	public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
 
 	/// <summary>

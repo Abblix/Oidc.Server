@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -360,11 +361,14 @@ public record ClientRegistrationRequest
     /// object. This method is used to translate the request data into a format that can be processed by the core
     /// registration logic.
     /// </summary>
+    /// <param name="authorizationHeader"></param>
     /// <returns>A <see cref="Core.ClientRegistrationRequest"/> object populated with data from this request.</returns>
-    public Core.ClientRegistrationRequest Map()
+    public Core.ClientRegistrationRequest Map(AuthenticationHeaderValue? authorizationHeader)
     {
         return new Core.ClientRegistrationRequest
         {
+            AuthorizationHeader = authorizationHeader,
+
             Contacts = Contacts,
             ClientId = ClientId,
             Jwks = Jwks,

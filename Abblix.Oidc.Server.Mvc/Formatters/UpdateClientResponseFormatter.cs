@@ -23,9 +23,11 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
@@ -62,6 +64,6 @@ public class UpdateClientResponseFormatter(IUriResolver uriResolver) : IUpdateCl
                             })
                         : null
                 }),
-            error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            error => error.Format(StatusCodes.Status400BadRequest)));
     }
 }

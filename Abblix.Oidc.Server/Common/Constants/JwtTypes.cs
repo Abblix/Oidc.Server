@@ -59,4 +59,10 @@ public static class JwtTypes
 	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely registering clients.
 	/// </summary>
 	public const string RegistrationAccessToken = "registration+jwt";
+
+	/// <summary>
+	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
+	/// per RFC 7591 Section 3.
+	/// </summary>
+	public const string InitialAccessToken = "initial_access+jwt";
 }

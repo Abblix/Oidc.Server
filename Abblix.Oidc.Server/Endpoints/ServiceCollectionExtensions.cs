@@ -397,10 +397,12 @@ public static class ServiceCollectionExtensions
             .AddClientRegistrationContextValidators()
 
             .AddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>()
+            .AddDefaultInitialAccessTokenRevocationProvider()
             .AddTransient(newClientOptionsFactory)
 
             .AddScoped<IClientCredentialFactory, ClientCredentialFactory>()
             .AddScoped<IRegistrationAccessTokenService, RegistrationAccessTokenService>()
+            .AddScoped<IInitialAccessTokenService, InitialAccessTokenService>()
 
             .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
             .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
@@ -420,14 +422,23 @@ public static class ServiceCollectionExtensions
             .AddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
     }
 
+    private static IServiceCollection AddDefaultInitialAccessTokenRevocationProvider(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IInitialAccessTokenRevocationProvider, InitialAccessTokenRevocationProvider>();
+        return services;
+    }
+
     private static IServiceCollection AddClientRegistrationContextValidators(this IServiceCollection services)
     {
         return services
                 // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
+                .AddSingleton<IClientRegistrationContextValidator, InitialAccessTokenValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, ClientIdValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, RedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>()
+                .AddSingleton<IClientRegistrationContextValidator, SoftwareStatementValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
                 .AddSingleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>()

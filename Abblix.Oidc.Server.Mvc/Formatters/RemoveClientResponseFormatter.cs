@@ -23,8 +23,10 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -45,5 +47,5 @@ public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
     public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response)
         => Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new NoContentResult(),
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
 }
