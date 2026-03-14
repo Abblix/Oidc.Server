@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
@@ -51,6 +52,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ApiController]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
+[EnableCors(OidcConstants.CorsPolicyName)]
 [SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
 public sealed class DiscoveryController : ControllerBase
 {
