@@ -33,12 +33,12 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 public record PairwiseSubjectSettings
 {
     /// <summary>
-    /// A cryptographic salt used in HMAC computation for pairwise identifiers.
+    /// A base64-encoded cryptographic salt used in HMAC computation for pairwise identifiers.
     /// This value MUST be kept secret, generated once, and never changed
     /// (changing it would invalidate all existing pairwise identifiers).
-    /// Minimum recommended length: 32 bytes (256 bits).
+    /// Minimum recommended length: 32 bytes (256 bits) before encoding.
     /// </summary>
-    public required byte[] Salt { get; init; }
+    public required string Salt { get; init; }
 
     /// <summary>
     /// The HMAC algorithm used to compute pairwise subject identifiers.

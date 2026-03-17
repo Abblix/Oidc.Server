@@ -65,13 +65,13 @@ public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : IS
         {
             throw new InvalidOperationException(
                 $"PairwiseSubjectSettings must be configured to use pairwise subject identifiers " +
-                $"(client '{clientInfo.ClientId}' has SubjectType=pairwise)");
+                $"(client '{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType})");
         }
 
         var sector = clientInfo.SectorIdentifier ?? clientInfo.ClientId;
         var data = Encoding.UTF8.GetBytes($"{HttpUtility.UrlEncode(sector)}&{HttpUtility.UrlEncode(subject)}");
         var algorithm = settings.HashAlgorithm;
-        var salt = settings.Salt;
+        var salt = System.Convert.FromBase64String(settings.Salt);
 
         var hash = algorithm.Name switch
         {
