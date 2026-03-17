@@ -1,27 +1,28 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
 using System.Security.Cryptography;
 using System.Text;
+using System.Web;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -30,17 +31,10 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 
 /// <summary>
 /// Implements conversion of subject identifiers for end-users based on the subject type requested by the client.
+/// Uses HMAC-SHA256 with a server-side secret salt for pairwise identifiers, per OpenID Connect Core Section 8.1.
 /// </summary>
-/// <remarks>
-/// Subject identifiers can be either directly provided to the client (public) or transformed into a pairwise
-/// identifier to ensure user privacy across different clients. This implementation supports both "public" and
-/// "pairwise" subject types as defined by the OpenID Connect specification.
-/// </remarks>
-public class SubjectTypeConverter : ISubjectTypeConverter
+public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : ISubjectTypeConverter
 {
-    /// <summary>
-    /// The subject types supported by this converter.
-    /// </summary>
     public IEnumerable<string> SubjectTypesSupported
     {
         get
@@ -52,30 +46,42 @@ public class SubjectTypeConverter : ISubjectTypeConverter
 
     /// <summary>
     /// Converts the subject identifier based on the client's subject type.
-    /// For "pairwise" subject type clients, it generates a unique and stable subject identifier by hashing
-    /// the original subject identifier with the client's sector identifier or client ID.
-    /// For "public" subject type clients, it returns the original subject identifier.
+    /// For pairwise: HMAC(salt, UrlEncode(sector) + "&amp;" + UrlEncode(subject)) → base64url.
+    /// The HMAC algorithm is configurable via PairwiseSubjectSettings.HashAlgorithm (default: SHA256).
+    /// For public: returns the original subject identifier unchanged.
     /// </summary>
-    /// <param name="subject">The original subject identifier of the end-user.</param>
-    /// <param name="clientInfo">Information about the client for which the subject identifier is being transformed,
-    /// including the subject type and sector identifier if applicable.</param>
-    /// <returns>The transformed subject identifier for the end-user based on the client's subject type.</returns>
-    /// <remarks>
-    /// This method ensures that end-users are represented differently to different clients
-    /// (when using "pairwise" subject type) to enhance user privacy, or consistently represented to all clients
-    /// (when using "public" subject type) based on the client's configuration.
-    /// </remarks>
     public string Convert(string subject, ClientInfo clientInfo)
     {
-        switch (clientInfo.SubjectType)
+        return clientInfo.SubjectType switch
         {
-            case SubjectTypes.Pairwise:
-                var subjectBytes = Encoding.UTF8.GetBytes(subject + (clientInfo.SectorIdentifier ?? clientInfo.ClientId));
-                var hashData = SHA512.HashData(subjectBytes);
-                return HttpServerUtility.UrlTokenEncode(hashData);
+            SubjectTypes.Pairwise => ComputePairwiseSubject(subject, clientInfo),
+            _ => subject,
+        };
+    }
 
-            default:
-                return subject;
+    private string ComputePairwiseSubject(string subject, ClientInfo clientInfo)
+    {
+        if (settings == null)
+        {
+            throw new InvalidOperationException(
+                $"PairwiseSubjectSettings must be configured to use pairwise subject identifiers " +
+                $"(client '{clientInfo.ClientId}' has SubjectType=pairwise)");
         }
+
+        var sector = clientInfo.SectorIdentifier ?? clientInfo.ClientId;
+        var data = Encoding.UTF8.GetBytes($"{HttpUtility.UrlEncode(sector)}&{HttpUtility.UrlEncode(subject)}");
+        var algorithm = settings.HashAlgorithm;
+        var salt = settings.Salt;
+
+        var hash = algorithm.Name switch
+        {
+            nameof(HashAlgorithmName.SHA256) => HMACSHA256.HashData(salt, data),
+            nameof(HashAlgorithmName.SHA384) => HMACSHA384.HashData(salt, data),
+            nameof(HashAlgorithmName.SHA512) => HMACSHA512.HashData(salt, data),
+            nameof(HashAlgorithmName.SHA1) => HMACSHA1.HashData(salt, data),
+            _ => throw new NotSupportedException($"HMAC algorithm '{algorithm.Name}' is not supported"),
+        };
+
+        return HttpServerUtility.UrlTokenEncode(hash);
     }
 }
