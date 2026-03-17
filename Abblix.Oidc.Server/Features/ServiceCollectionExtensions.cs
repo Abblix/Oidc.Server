@@ -410,6 +410,21 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers pairwise subject identifier settings, enabling HMAC-based subject conversion
+    /// for clients with SubjectType=pairwise. The salt and hash algorithm are used to compute
+    /// stable, non-reversible per-client subject identifiers per OpenID Connect Core Section 8.1.
+    /// </summary>
+    /// <param name="services">The service collection to register settings into.</param>
+    /// <param name="settings">The pairwise subject settings containing the HMAC salt and algorithm.</param>
+    public static IServiceCollection AddPairwiseSubjectIdentifiers(
+        this IServiceCollection services,
+        PairwiseSubjectSettings settings)
+    {
+        services.AddSingleton(settings);
+        return services;
+    }
+
+    /// <summary>
     /// Adds request object fetching capabilities to the dependency injection container.
     /// Registers services required for processing JWT request objects, including their validation
     /// and binding to the appropriate request properties.
