@@ -82,7 +82,7 @@ public static class HttpServerUtility
 			return string.Empty;
 
 		if (input.Length < length.Value)
-			throw new ArgumentOutOfRangeException(nameof(length), length, $"The parameters has value more than actual length of input");
+			throw new ArgumentOutOfRangeException(nameof(length), length, "The parameters has value more than actual length of input");
 
 		unchecked
 		{
