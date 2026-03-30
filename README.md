@@ -13,6 +13,7 @@
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
+[![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
 
 ⭐ Star us on GitHub — your support motivates us a lot! 🙏😊

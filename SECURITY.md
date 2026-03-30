@@ -1,29 +1,47 @@
-# Reporting Security Issues
+# Security Policy
 
-## Introduction
+## Reporting a Vulnerability
 
-The security of our systems is our top priority. If you have discovered a security vulnerability in our project, we appreciate your cooperation in responsibly disclosing it to us.
+If you discover a security vulnerability in Abblix OIDC Server, please report it responsibly.
 
-## Please Follow These Steps:
+**Do NOT:**
+- Open a public GitHub issue
+- Discuss the vulnerability in GitHub Discussions or any public forum
+- Publish details before the issue is resolved
 
-1. **Do Not Report Security Vulnerabilities Publicly**
-   - Please **do not** disclose any details about the vulnerability in public forums, GitHub issues, or any other public channels. Such actions can potentially lead to misuse and could harm our users.
+**Instead, email us directly at [support@abblix.com](mailto:support@abblix.com)** with:
+- Description of the vulnerability and its potential impact
+- Steps to reproduce (environment, configuration, request sequence)
+- Any proof-of-concept code, if available
 
-2. **Email Us Directly**
-   - To report a security issue, please send an email directly to us at [support@abblix.com](mailto:support@abblix.com). Include as much information as possible about the vulnerability, including:
-     - The conditions on which the vulnerability can be reproduced.
-     - Any potential impacts of the vulnerability.
-     - How you found the vulnerability, if you'd like to share this.
+## Our Response
 
-## What Will Happen Next?
+- **Acknowledgement** — within 24 hours of your report
+- **Investigation** — our security team will assess severity and begin working on a fix
+- **Progress updates** — we will keep you informed as we work toward resolution
+- **Coordinated disclosure** — once resolved, we will coordinate with you on public disclosure to ensure all users are informed and protected
 
-- **Acknowledgement**: We will acknowledge your email within 24 hours.
-- **Investigation**: Our security team will investigate the issue and work to quickly address it.
-- **Communication**: We will keep you informed of our progress as we work to resolve the vulnerability.
-- **Disclosure**: Once the issue has been resolved, we will work with you to coordinate the disclosure of the vulnerability to ensure that all our users are adequately informed and protected.
+## Breach Notification
 
-## Our Commitment
+In the event of a confirmed data breach affecting Abblix Account (our hosted identity provider):
+- Users and the relevant authority of the Republic of Kazakhstan will be notified within 72 hours of discovery, as required by law
+- Notification will include the nature of the incident, measures taken, and recommended user actions
 
-We are committed to working with security researchers and the community to make our products safer. We appreciate your efforts in responsibly reporting any issues you find. We promise to handle your report with confidentiality and will not take any legal action against you as long as you adhere to these guidelines.
+## Safe Harbor
 
-Thank you for helping us keep our products and our users safe!
+We will not take legal action against researchers who report vulnerabilities in good faith and follow this policy. We ask that you:
+- Allow reasonable time for us to investigate and address the issue before any disclosure
+- Make a good-faith effort to avoid accessing or modifying other users' data
+- Do not degrade the availability of our services during testing
+
+## Security Updates
+
+Security updates, patches, and advisories are published on:
+- [GitHub Releases](https://github.com/Abblix/Oidc.Server/releases)
+- [abblix.com](https://www.abblix.com)
+- [docs.abblix.com](https://docs.abblix.com)
+
+## Contact
+
+- **Security reports:** [support@abblix.com](mailto:support@abblix.com)
+- **General inquiries:** [info@abblix.com](mailto:info@abblix.com)
