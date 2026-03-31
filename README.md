@@ -25,6 +25,12 @@
 
 🔥 Why OIDC Server is the best choice for authentication — find out in our [presentation](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf) 📑
 
+## Abblix Account
+
+💎 [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications — everything your users need, integrated into your website in minutes.
+
+👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service — all delivered by Abblix Account — fit into a client website.
+
 ## Table of Contents
 - [About](#-about)
 - [What's New](#-whats-new)
