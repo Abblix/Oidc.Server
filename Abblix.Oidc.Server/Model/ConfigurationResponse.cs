@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils.Json;
 using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Model;
@@ -30,6 +31,14 @@ namespace Abblix.Oidc.Server.Model;
 /// supported features, and more, enabling clients to dynamically configure themselves to utilize the provider's
 /// services.
 /// </summary>
+/// <remarks>
+/// Decorated with <see cref="JsonIgnoreNullsAttribute"/> so that all nullable optional properties are omitted
+/// from the serialized JSON when <c>null</c>, rather than emitted as <c>"field": null</c>.
+/// RFC 8414 §2 requires that optional metadata fields be absent when not applicable — some OIDC client libraries
+/// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
+/// fields they do not expect to be present.
+/// </remarks>
+[JsonIgnoreNulls]
 public record ConfigurationResponse
 {
     /// <summary>

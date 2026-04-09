@@ -32,12 +32,14 @@ using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -141,7 +143,16 @@ public static class ServiceCollectionExtensions
             .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
             .AddControllersAsServices()
             .Services
-            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>();
+            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>()
+            .PostConfigure<JsonOptions>(options =>
+            {
+                // WithAddedModifier attaches to the resolver already in place (set up by AddControllers),
+                // so the modifier runs within that resolver rather than in a separate chained one.
+                // A chained resolver would never be reached because the default resolver handles all types first.
+                options.JsonSerializerOptions.TypeInfoResolver =
+                    (options.JsonSerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+                    .WithAddedModifier(JsonIgnoreNullsModifier.Apply);
+            });
 
         return services;
     }
