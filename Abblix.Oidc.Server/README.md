@@ -21,7 +21,7 @@ Abblix OIDC Server implements a comprehensive suite of standards for authorizati
 
 ### OAuth 2.0
 - **The OAuth 2.0 Authorization Framework**: [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749)
-- **Bearer Token Usage**: [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750), **HTTP Authentication**: [RFC 7235](https://datatracker.ietf.org/doc/html/rfc7235)
+- **Bearer Token Usage**: [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750), **HTTP Authentication**: [RFC 9110, Section 11](https://datatracker.ietf.org/doc/html/rfc9110#section-11)
 - **Token Revocation**: [RFC 7009](https://datatracker.ietf.org/doc/html/rfc7009)
 - **Token Introspection**: [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662)
 - **Proof Key for Code Exchange (PKCE)**: [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)

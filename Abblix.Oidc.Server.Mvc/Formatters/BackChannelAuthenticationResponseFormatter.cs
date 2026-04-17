@@ -57,7 +57,7 @@ public class BackChannelAuthenticationResponseFormatter(
     /// This method formats successful authentication requests as <c>200 OK</c>,
     /// client-related errors as <c>401 Unauthorized</c> or <c>403 Forbidden</c>,
     /// and general errors as <c>400 Bad Request</c>.
-    /// Per RFC 7235 Section 3.1, all <c>401</c> responses include a <c>WWW-Authenticate</c> header
+    /// Per RFC 9110 Section 11.6.1, all <c>401</c> responses include a <c>WWW-Authenticate</c> header
     /// matching the client's authentication scheme per RFC 6749 Section 5.2.
     /// </remarks>
     public Task<ActionResult> FormatResponseAsync(
