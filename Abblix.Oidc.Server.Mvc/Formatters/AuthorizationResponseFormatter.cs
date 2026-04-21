@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
@@ -48,6 +49,7 @@ public class AuthorizationResponseFormatter(
     ISessionManagementService sessionManagementService,
     IUriResolver uriResolver,
     IIssuerProvider issuerProvider,
+    IAuthorizationMetadataProvider authorizationMetadata,
     IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
     /// <summary>
@@ -87,7 +89,7 @@ public class AuthorizationResponseFormatter(
                 var modelResponse = new AuthorizationResponse
                 {
                     State = response.Model.State,
-                    Issuer = issuerProvider.GetIssuer(),
+                    Issuer = authorizationMetadata.AuthorizationResponseIssParameterSupported ? issuerProvider.GetIssuer() : null,
                     Scope = string.Join(' ', response.Model.Scope),
                     Code = success.Code,
                     TokenType = success.TokenType,

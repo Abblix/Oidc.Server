@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -42,7 +43,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// included in error responses if applicable.</param>
 public class AuthorizationErrorFormatter(
     IParametersProvider parametersProvider,
-    IIssuerProvider issuerProvider) : IAuthorizationErrorFormatter
+    IIssuerProvider issuerProvider,
+    IAuthorizationMetadataProvider authorizationMetadata) : IAuthorizationErrorFormatter
 {
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,
@@ -60,7 +62,7 @@ public class AuthorizationErrorFormatter(
                 var response = new AuthorizationResponse
                 {
                     State = request.State,
-                    Issuer = issuerProvider.GetIssuer(),
+                    Issuer = authorizationMetadata.AuthorizationResponseIssParameterSupported ? issuerProvider.GetIssuer() : null,
                     Error = error.Error,
                     ErrorDescription = error.ErrorDescription,
                     ErrorUri = error.ErrorUri,
