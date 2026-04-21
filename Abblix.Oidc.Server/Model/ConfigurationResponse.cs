@@ -89,6 +89,8 @@ public record ConfigurationResponse
         // RFC 8705 mTLS endpoint aliases
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
         public const string AcrValuesSupported = "acr_values_supported";
+        // RFC 9207 Authorization Server Issuer Identification
+        public const string AuthorizationResponseIssParameterSupported = "authorization_response_iss_parameter_supported";
     }
 
     /// <summary>
@@ -353,4 +355,11 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AcrValuesSupported)]
     public IEnumerable<string>? AcrValuesSupported { get; init; }
+
+    /// <summary>
+    /// Indicates that the server includes the <c>iss</c> parameter in every authorization response per RFC 9207.
+    /// Clients that inspect this flag activate mix-up attack defenses.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationResponseIssParameterSupported)]
+    public bool? AuthorizationResponseIssParameterSupported { get; init; }
 }

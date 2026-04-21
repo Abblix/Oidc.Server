@@ -158,4 +158,9 @@ public record ConfigurationResponse
 	/// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.
 	/// </summary>
 	public IEnumerable<string>? AcrValuesSupported { get; init; }
+
+	/// <summary>
+	/// Indicates whether the server includes the <c>iss</c> parameter in authorization responses per RFC 9207.
+	/// </summary>
+	public bool? AuthorizationResponseIssParameterSupported { get; init; }
 }

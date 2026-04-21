@@ -56,4 +56,9 @@ public interface IAuthorizationMetadataProvider
 	/// Indicates whether the request parameter is supported in authorization requests.
 	/// </summary>
 	bool RequestParameterSupported { get; }
+
+	/// <summary>
+	/// Indicates whether the server includes the <c>iss</c> parameter in authorization responses per RFC 9207.
+	/// </summary>
+	bool AuthorizationResponseIssParameterSupported { get; }
 }

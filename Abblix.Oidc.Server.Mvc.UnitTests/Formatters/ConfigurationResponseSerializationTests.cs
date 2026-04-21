@@ -43,6 +43,30 @@ public class ConfigurationResponseSerializationTests
     }
 
     [Fact]
+    public void ConfigurationResponse_Rfc9207FlagSerializes()
+    {
+        var response = new ConfigurationResponse
+        {
+            Issuer = "https://example.com",
+            ScopesSupported = ["openid"],
+            ClaimsSupported = ["sub"],
+            GrantTypesSupported = ["authorization_code"],
+            ResponseTypesSupported = ["code"],
+            ResponseModesSupported = ["query"],
+            TokenEndpointAuthMethodsSupported = ["client_secret_post"],
+            IdTokenSigningAlgValuesSupported = ["RS256"],
+            SubjectTypesSupported = ["public"],
+            CodeChallengeMethodsSupported = ["S256"],
+            PromptValuesSupported = ["login"],
+            AuthorizationResponseIssParameterSupported = true,
+        };
+
+        var json = JsonSerializer.Serialize(response, BuildOptions());
+
+        Assert.Contains("\"authorization_response_iss_parameter_supported\":true", json);
+    }
+
+    [Fact]
     public void MtlsAliases_NullableFieldsOmittedWhenNull()
     {
         var aliases = new MtlsAliases(); // all properties null

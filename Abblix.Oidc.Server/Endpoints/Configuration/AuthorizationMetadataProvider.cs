@@ -48,4 +48,7 @@ public sealed class AuthorizationMetadataProvider(IAuthorizationHandler authoriz
 
 	/// <inheritdoc />
 	public bool RequestParameterSupported => authorizationHandler.Metadata.RequestParameterSupported;
+
+	/// <inheritdoc />
+	public bool AuthorizationResponseIssParameterSupported { get; init; } = true;
 }

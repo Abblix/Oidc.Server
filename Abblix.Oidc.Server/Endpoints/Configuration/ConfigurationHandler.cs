@@ -93,5 +93,7 @@ public sealed class ConfigurationHandler(
 		BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
 		AcrValuesSupported = acrMetadata.AcrValuesSupported,
+
+		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 	});
 }
