@@ -23,6 +23,11 @@ updates:
         patterns:
           - "Grpc.*"
           - "Google.Protobuf*"
+      analyzers:
+        patterns:
+          - "SonarAnalyzer.*"
+          - "Microsoft.CodeAnalysis.*"
+          - "StyleCop.*"
       test-infrastructure:
         patterns:
           - "xunit*"
