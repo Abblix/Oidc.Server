@@ -45,8 +45,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// This is an inherent limitation of testing static classes with mutable state.
 /// The tests verify correct behavior but are not completely independent.
 /// </remarks>
+[Collection("License")]
 public class LicenseCheckerTests
 {
+
     #region CheckClientLicense Tests
 
     /// <summary>
