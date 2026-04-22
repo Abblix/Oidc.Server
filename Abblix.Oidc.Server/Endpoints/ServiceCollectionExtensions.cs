@@ -78,12 +78,12 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddConfigurationEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>()
-            .AddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>()
-            .AddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>()
-            .AddScoped<IAcrMetadataProvider, AcrMetadataProvider>()
-            .AddScoped<IConfigurationHandler, ConfigurationHandler>();
+        services.TryAddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>();
+        services.TryAddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>();
+        services.TryAddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
+        services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
+        services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
+        return services;
     }
 
     /// <summary>
@@ -97,14 +97,17 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationEndpoint(this IServiceCollection services)
     {
-        return services
+        services
             .AddAuthorizationRequestFetchers()
-            .AddAuthorizationContextValidators()
-            .AddScoped<AuthorizationHandler>()
+            .AddAuthorizationContextValidators();
+
+        services.TryAddScoped<AuthorizationHandler>();
+        services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
+        services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
+
+        return services
             .AddAlias<IAuthorizationHandler, AuthorizationHandler>()
-            .AddAlias<IGrantTypeInformer, AuthorizationHandler>()
-            .AddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>()
-            .AddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
+            .AddAlias<IGrantTypeInformer, AuthorizationHandler>();
     }
 
     /// <summary>
@@ -117,16 +120,19 @@ public static class ServiceCollectionExtensions
     /// <returns>The updated IServiceCollection with the added authorization request fetchers.</returns>
     public static IServiceCollection AddAuthorizationRequestFetchers(this IServiceCollection services)
     {
+        // Add a JSON object binder as a singleton
+        services.TryAddSingleton<IJsonObjectBinder, JsonSerializationBinder>();
+
+        // Add individual authorization request fetchers as enumerable strategy set
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Scoped<IAuthorizationRequestFetcher, PushedRequestFetcher>(),
+            ServiceDescriptor.Scoped<IAuthorizationRequestFetcher, RequestUriFetcher>(),
+            ServiceDescriptor.Scoped<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>(),
+        });
+
+        // Compose the individual fetchers into a composite fetcher
         return services
-            // Add a JSON object binder as a singleton
-            .AddSingleton<IJsonObjectBinder, JsonSerializationBinder>()
-
-            // Add individual authorization request fetchers as singletons
-            .AddScoped<IAuthorizationRequestFetcher, PushedRequestFetcher>()
-            .AddScoped<IAuthorizationRequestFetcher, RequestUriFetcher>()
-            .AddScoped<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()
-
-            // Compose the individual fetchers into a composite fetcher
             .Compose<IAuthorizationRequestFetcher, Authorization.RequestFetching.CompositeRequestFetcher>();
     }
 
@@ -144,17 +150,19 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationContextValidators(this IServiceCollection services)
     {
-        return services
-            // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
-            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>()
-            .AddSingleton<IAuthorizationContextValidator, RedirectUriValidator>()
-            .AddSingleton<IAuthorizationContextValidator, FlowTypeValidator>()
-            .AddSingleton<IAuthorizationContextValidator, ResponseModeValidator>()
-            .AddSingleton<IAuthorizationContextValidator, NonceValidator>()
-            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>()
-            .AddSingleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>()
-            .AddSingleton<IAuthorizationContextValidator, PkceValidator>()
-            .Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
+        // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, FlowTypeValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, ResponseModeValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, PkceValidator>(),
+        });
+        return services.Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
     }
 
     /// <summary>
@@ -166,11 +174,11 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddPushedAuthorizationEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IPushedAuthorizationHandler, PushedAuthorizationHandler>(
-                Dependency.Override<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>())
-            .AddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>()
-            .AddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
+        services.TryAddScoped<IPushedAuthorizationHandler>(sp => sp.CreateService<PushedAuthorizationHandler>(
+            Dependency.Override<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()));
+        services.TryAddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>();
+        services.TryAddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
+        return services;
     }
 
     /// <summary>
@@ -211,15 +219,17 @@ public static class ServiceCollectionExtensions
     /// <returns>The modified service collection with the registered token context validators.</returns>
     public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
     {
-        return services
-            // Register individual validators that will participate in a composite pattern.
-            .AddSingleton<ITokenContextValidator, Token.Validation.ResourceValidator>()
-            .AddSingleton<ITokenContextValidator, Token.Validation.ScopeValidator>()
-            .AddSingleton<ITokenContextValidator, Token.Validation.ClientValidator>()
-            .AddSingleton<ITokenContextValidator, AuthorizationGrantValidator>()
-            // Combine all registered ITokenContextValidator into a single composite validator.
-            // This composite approach allows the application to apply multiple validation checks sequentially.
-            .Compose<ITokenContextValidator, TokenContextValidatorComposite>();
+        // Register individual validators that will participate in a composite pattern.
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
+        });
+        // Combine all registered ITokenContextValidator into a single composite validator.
+        // This composite approach allows the application to apply multiple validation checks sequentially.
+        return services.Compose<ITokenContextValidator, TokenContextValidatorComposite>();
     }
 
     /// <summary>
@@ -237,8 +247,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     public static IServiceCollection EnablePasswordGrant(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IAuthorizationGrantHandler, PasswordGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, PasswordGrantHandler>());
+        return services;
     }
 
     /// <summary>
@@ -257,7 +268,8 @@ public static class ServiceCollectionExtensions
         services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
             JwtBearerIssuerProvider.SecureHttpFetcherKey);
 
-        services.AddSingleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, JwtBearerGrantHandler>());
 
         return services;
     }
@@ -269,7 +281,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationCodeGrant(this IServiceCollection services)
     {
-        services.AddSingleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, AuthorizationCodeGrantHandler>());
         return services;
     }
 
@@ -280,7 +293,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddRefreshTokenGrant(this IServiceCollection services)
     {
-        services.AddSingleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, RefreshTokenGrantHandler>());
         return services;
     }
 
@@ -291,7 +305,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddClientCredentialsGrant(this IServiceCollection services)
     {
-        services.AddSingleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, ClientCredentialsGrantHandler>());
         return services;
     }
 
@@ -317,10 +332,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddRevocationEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IRevocationHandler, RevocationHandler>()
-            .AddScoped<IRevocationRequestValidator, RevocationRequestValidator>()
-            .AddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
+        services.TryAddScoped<IRevocationHandler, RevocationHandler>();
+        services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
+        services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
+        return services;
     }
 
     /// <summary>
@@ -332,10 +347,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddIntrospectionEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IIntrospectionHandler, IntrospectionHandler>()
-            .AddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>()
-            .AddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
+        services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
+        services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
+        services.TryAddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
+        return services;
     }
 
     /// <summary>
@@ -353,8 +368,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>, enabling further chaining of service registrations.</returns>
     public static IServiceCollection AddCheckSessionEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<ICheckSessionHandler, CheckSessionHandler>();
+        services.TryAddScoped<ICheckSessionHandler, CheckSessionHandler>();
+        return services;
     }
 
     /// <summary>
@@ -372,10 +387,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>, allowing for further service registration chaining.</returns>
      public static IServiceCollection AddUserInfoEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IUserInfoHandler, UserInfoHandler>()
-            .AddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>()
-            .AddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
+        services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
+        services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
+        services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
+        return services;
     }
 
     /// <summary>
@@ -393,33 +408,35 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Func<IServiceProvider, NewClientOptions> newClientOptionsFactory)
     {
-        return services
+        services
             .AddClientRegistrationContextValidators()
+            .AddDefaultInitialAccessTokenRevocationProvider();
 
-            .AddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>()
-            .AddDefaultInitialAccessTokenRevocationProvider()
-            .AddTransient(newClientOptionsFactory)
+        services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
+        services.TryAddTransient(newClientOptionsFactory);
 
-            .AddScoped<IClientCredentialFactory, ClientCredentialFactory>()
-            .AddScoped<IRegistrationAccessTokenService, RegistrationAccessTokenService>()
-            .AddScoped<IInitialAccessTokenService, InitialAccessTokenService>()
+        services.TryAddScoped<IClientCredentialFactory, ClientCredentialFactory>();
+        services.TryAddScoped<IRegistrationAccessTokenService, RegistrationAccessTokenService>();
+        services.TryAddScoped<IInitialAccessTokenService, InitialAccessTokenService>();
 
-            .AddScoped<IRegisterClientHandler, RegisterClientHandler>()
-            .AddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>()
-            .AddKeyedScoped<IRegisterClientRequestValidator, UpdateClientRegistrationValidator>(UpdateClientRequestValidator.RegistrationKey)
-            .AddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>()
+        services.TryAddScoped<IRegisterClientHandler, RegisterClientHandler>();
+        services.TryAddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>();
+        services.TryAddKeyedScoped<IRegisterClientRequestValidator, UpdateClientRegistrationValidator>(UpdateClientRequestValidator.RegistrationKey);
+        services.TryAddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>();
 
-            .AddScoped<IClientRequestValidator, ClientRequestValidator>()
+        services.TryAddScoped<IClientRequestValidator, ClientRequestValidator>();
 
-            .AddScoped<IReadClientHandler, ReadClientHandler>()
-            .AddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>()
+        services.TryAddScoped<IReadClientHandler, ReadClientHandler>();
+        services.TryAddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>();
 
-            .AddScoped<IUpdateClientHandler, UpdateClientHandler>()
-            .AddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>()
-            .AddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>()
+        services.TryAddScoped<IUpdateClientHandler, UpdateClientHandler>();
+        services.TryAddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>();
+        services.TryAddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>();
 
-            .AddScoped<IRemoveClientHandler, RemoveClientHandler>()
-            .AddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
+        services.TryAddScoped<IRemoveClientHandler, RemoveClientHandler>();
+        services.TryAddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
+
+        return services;
     }
 
     private static IServiceCollection AddDefaultInitialAccessTokenRevocationProvider(this IServiceCollection services)
@@ -430,24 +447,26 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddClientRegistrationContextValidators(this IServiceCollection services)
     {
-        return services
-                // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
-                .AddSingleton<IClientRegistrationContextValidator, InitialAccessTokenValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, ClientIdValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, RedirectUrisValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, GrantTypeValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, SoftwareStatementValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, SubjectTypeValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, CredentialsValidator>()
-                .AddSingleton<IClientRegistrationContextValidator, TlsClientAuthValidator>()
-                .Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
+        // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, GrantTypeValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),
+        });
+        return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }
 
     /// <summary>
@@ -459,21 +478,23 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddEndSessionEndpoint(this IServiceCollection services)
     {
-        return services
-                .AddEndSessionContextValidators()
-                .AddScoped<IEndSessionHandler, EndSessionHandler>()
-                .AddScoped<IEndSessionRequestValidator, EndSessionRequestValidator>()
-                .AddScoped<IEndSessionRequestProcessor, EndSessionRequestProcessor>();
+        services.AddEndSessionContextValidators();
+        services.TryAddScoped<IEndSessionHandler, EndSessionHandler>();
+        services.TryAddScoped<IEndSessionRequestValidator, EndSessionRequestValidator>();
+        services.TryAddScoped<IEndSessionRequestProcessor, EndSessionRequestProcessor>();
+        return services;
     }
 
     public static IServiceCollection AddEndSessionContextValidators(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IEndSessionContextValidator, IdTokenHintValidator>()
-            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>()
-            .AddSingleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>()
-            .AddSingleton<IEndSessionContextValidator, ConfirmationValidator>()
-            .Compose<IEndSessionContextValidator, EndSessionContextValidatorComposite>();
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, IdTokenHintValidator>(),
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>(),
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, ConfirmationValidator>(),
+        });
+        return services.Compose<IEndSessionContextValidator, EndSessionContextValidatorComposite>();
     }
 
     /// <summary>
@@ -484,27 +505,30 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddBackChannelAuthenticationEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddBackChannelAuthenticationContextValidators()
+        services.AddBackChannelAuthenticationContextValidators();
 
-            .AddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>()
-            .AddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>()
-            .AddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>()
-            .AddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
+        services.TryAddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>();
+        services.TryAddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>();
+        services.TryAddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>();
+        services.TryAddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
+
+        return services;
     }
 
     public static IServiceCollection AddBackChannelAuthenticationContextValidators(this IServiceCollection services)
     {
-        return services
-            // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
-            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ClientValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>()
-            .AddSingleton<IBackChannelAuthenticationContextValidator, PingModeValidator>()
-            .Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
+        // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),
+        });
+        return services.Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
     }
 
     /// <summary>
@@ -515,19 +539,21 @@ public static class ServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddDeviceAuthorizationEndpoint(this IServiceCollection services)
     {
-        return services
-            .AddDeviceAuthorizationContextValidators()
-            .AddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>()
-            .AddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>()
-            .AddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
+        services.AddDeviceAuthorizationContextValidators();
+        services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
+        services.TryAddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>();
+        services.TryAddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
+        return services;
     }
 
     public static IServiceCollection AddDeviceAuthorizationContextValidators(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>()
-            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>()
-            .AddSingleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>()
-            .Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>(),
+        });
+        return services.Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();
     }
 }

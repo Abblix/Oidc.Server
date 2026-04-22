@@ -56,6 +56,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 
@@ -76,17 +77,19 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientAuthentication(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IClientAuthenticator, NoneClientAuthenticator>()
-            .AddSingleton<IClientAuthenticator, ClientSecretPostAuthenticator>()
-            .AddSingleton<IClientAuthenticator, ClientSecretBasicAuthenticator>()
-            .AddSingleton<IClientAuthenticator, ClientSecretJwtAuthenticator>()
-            .AddSingleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>()
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IClientAuthenticator, NoneClientAuthenticator>(),
+            ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretPostAuthenticator>(),
+            ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretBasicAuthenticator>(),
+            ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretJwtAuthenticator>(),
+            ServiceDescriptor.Singleton<IClientAuthenticator, PrivateKeyJwtAuthenticator>(),
             // mTLS self-signed client authentication per RFC 8705
-            .AddSingleton<IClientAuthenticator, TlsClientAuthenticator>()
+            ServiceDescriptor.Singleton<IClientAuthenticator, TlsClientAuthenticator>(),
             // mTLS metadata-driven subject/SAN matching (tls_client_auth)
-            .AddSingleton<IClientAuthenticator, TlsMetadataClientAuthenticator>()
-            .Compose<IClientAuthenticator, CompositeClientAuthenticator>();
+            ServiceDescriptor.Singleton<IClientAuthenticator, TlsMetadataClientAuthenticator>(),
+        });
+        return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 
     /// <summary>
@@ -98,11 +101,11 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientInformation(this IServiceCollection services)
     {
+        services.TryAddSingleton<ClientInfoStorage>();
+        services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
         return services
-            .AddSingleton<ClientInfoStorage>()
             .AddAlias<IClientInfoProvider, ClientInfoStorage>()
-            .AddAlias<IClientInfoManager, ClientInfoStorage>()
-            .AddSingleton<IClientKeysProvider, ClientKeysProvider>();
+            .AddAlias<IClientInfoManager, ClientInfoStorage>();
     }
 
     /// <summary>
@@ -117,8 +120,8 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
-        services.AddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
-        services.AddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
+        services.TryAddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
+        services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
         return services.AddJsonWebTokens();
@@ -134,14 +137,14 @@ public static class ServiceCollectionExtensions
     /// <returns>The modified <see cref="IServiceCollection"/> with the issuer provider configured.</returns>
     public static IServiceCollection AddIssuer(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IIssuerProvider>(sp =>
-            {
-                var options = sp.GetRequiredService<IOptions<OidcOptions>>().Value;
-                return options.Issuer != null
-                    ? sp.CreateService<PreconfiguredIssuerProvider>()
-                    : sp.CreateService<RequestBasedIssuerProvider>();
-            });
+        services.TryAddSingleton<IIssuerProvider>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<OidcOptions>>().Value;
+            return options.Issuer != null
+                ? sp.CreateService<PreconfiguredIssuerProvider>()
+                : sp.CreateService<RequestBasedIssuerProvider>();
+        });
+        return services;
     }
 
     /// <summary>
@@ -165,9 +168,9 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBackChannelLogout(this IServiceCollection services)
     {
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
+        services.TryAddSingleton<ILogoutTokenService, LogoutTokenService>();
         return services
-            .AddScoped<ILogoutNotifier, BackChannelLogoutNotifier>()
-            .AddSingleton<ILogoutTokenService, LogoutTokenService>()
             .AddHttpClient<ILogoutTokenSender, BackChannelLogoutTokenSender>()
             .Services;
     }
@@ -179,9 +182,9 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>()
-            .AddScoped<ILogoutNotifier, FrontChannelLogoutNotifier>();
+        services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
+        return services;
     }
 
     /// <summary>
@@ -205,8 +208,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSessionManagement(this IServiceCollection services)
     {
+        services.TryAddScoped<ISessionManagementService, SessionManagementService>();
         return services
-            .AddScoped<ISessionManagementService, SessionManagementService>()
             .Decorate<IAuthorizationRequestProcessor, AuthorizationRequestProcessorDecorator>();
     }
 
@@ -251,8 +254,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddRefreshToken(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IRefreshTokenService, RefreshTokenService>();
+        services.TryAddSingleton<IRefreshTokenService, RefreshTokenService>();
+        return services;
     }
 
     /// <summary>
@@ -264,8 +267,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddAccessToken(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IAccessTokenService, AccessTokenService>();
+        services.TryAddSingleton<IAccessTokenService, AccessTokenService>();
+        return services;
     }
 
     /// <summary>
@@ -277,8 +280,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddIdentityToken(this IServiceCollection services)
     {
-        return services
-            .AddScoped<IIdentityTokenService, IdentityTokenService>();
+        services.TryAddScoped<IIdentityTokenService, IdentityTokenService>();
+        return services;
     }
 
     /// <summary>
@@ -288,11 +291,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>()
-
-            .AddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>()
-            .AddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
+        services.TryAddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>();
+        services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
+        services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
+        return services;
     }
 
     /// <summary>
@@ -310,9 +312,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddClientJwt(this IServiceCollection services)
     {
-        return services
-            .AddSingleton<IClientJwtValidator, ClientJwtValidator>()
-            .AddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
+        services.TryAddSingleton<IClientJwtValidator, ClientJwtValidator>();
+        services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
+        return services;
     }
 
     /// <summary>
@@ -330,9 +332,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddTokenRevocation(this IServiceCollection services)
     {
+        services.TryAddSingleton<ITokenRegistry, TokenRegistry>();
         return services
-            .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>()
-            .AddSingleton<ITokenRegistry, TokenRegistry>();
+            .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
     }
 
     /// <summary>
@@ -347,9 +349,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further configurations.</returns>
     public static IServiceCollection AddLicenseFromOptions(this IServiceCollection services)
     {
-        return services
-            .AddHostedService<LicenseLoadingService>()
-            .AddSingleton<ILicenseJwtProvider, OptionsLicenseJwtProvider>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IHostedService, LicenseLoadingService>());
+        services.TryAddSingleton<ILicenseJwtProvider, OptionsLicenseJwtProvider>();
+        return services;
     }
 
     /// <summary>
@@ -366,9 +369,13 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further configurations.</returns>
     public static IServiceCollection AddLicense(this IServiceCollection services, string licenseJwt)
     {
-        return services
-            .AddHostedService<LicenseLoadingService>()
-            .AddSingleton<ILicenseJwtProvider, StaticLicenseJwtProvider>(Dependency.Override(licenseJwt));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IHostedService, LicenseLoadingService>());
+        // Intentional replacement: AddLicense(jwt) is an explicit host opt-in that must override
+        // any ILicenseJwtProvider previously registered by AddLicenseFromOptions.
+        services.Replace(ServiceDescriptor.Singleton<ILicenseJwtProvider>(
+            sp => sp.CreateService<StaticLicenseJwtProvider>(Dependency.Override(licenseJwt))));
+        return services;
     }
 
     /// <summary>
@@ -420,7 +427,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         PairwiseSubjectSettings settings)
     {
-        services.AddSingleton(settings);
+        services.TryAddSingleton(settings);
         return services;
     }
 
@@ -490,7 +497,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient(nameof(HttpNotificationDeliveryService));
 
         // Register CIBA grant handler
-        services.AddSingleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>());
 
         return services;
     }
@@ -510,7 +518,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
 
         // Register Device Authorization grant handler
-        services.AddSingleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>());
 
         return services;
     }
@@ -551,8 +560,9 @@ public static class ServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
+
         services
-            .AddTransient<SsrfValidatingHttpMessageHandler>()
             .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
             {
                 var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;

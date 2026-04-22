@@ -38,6 +38,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using System.Text.Json.Serialization.Metadata;
 
@@ -87,45 +88,45 @@ public static class ServiceCollectionExtensions
 		services
 			.AddOidcControllers()
 			.ConfigureRoutesFallback()
-			.AddHttpContextAccessor()
+			.AddHttpContextAccessor();
 
-		    .AddSingleton<IParameterValidator, ParameterValidator>()
-			.AddSingleton<IParametersProvider, ParametersProvider>()
-		    .AddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>()
-			.AddScoped<IAuthSessionService, AuthenticationSchemeAdapter>()
-			.AddSingleton<IUriResolver, UriResolver>()
-			.AddScoped<IEndpointResolver, EndpointResolver>()
-			.AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
-			.AddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>()
-			.AddScoped<IAuthorizationErrorFormatter, AuthorizationErrorFormatter>()
-			.AddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>()
-			.AddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>()
-			.AddScoped<ITokenResponseFormatter, TokenResponseFormatter>()
-			.AddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>()
+		services.TryAddSingleton<IParameterValidator, ParameterValidator>();
+		services.TryAddSingleton<IParametersProvider, ParametersProvider>();
+		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>();
+		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
+		services.TryAddSingleton<IUriResolver, UriResolver>();
+		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
+		services.TryAddSingleton<IUrlHelperFactory, UrlHelperFactory>();
+		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
+		services.TryAddScoped<IAuthorizationErrorFormatter, AuthorizationErrorFormatter>();
+		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
+		services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
+		services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
+		services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
 
-			.AddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>()
-			.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>()
+		services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
+		services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
 
-			.AddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>()
-			.AddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>()
-			.AddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>()
-			.AddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>()
+		services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
+		services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
+		services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
+		services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
 
-			.AddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>()
-			.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>()
-			.AddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>()
+		services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
+		services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
+		services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
 
-			.AddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>()
-			.AddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>()
-			.AddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>()
-			.AddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>()
+		services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
+		services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
+		services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
+		services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
 
-			.Configure<MvcOptions>(options =>
-			{
-				options.OutputFormatters.Add(new StringOutputFormatter());
-				options.ModelBinderProviders.Insert(0, new CultureInfoBinder());
-				options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
-			});
+		services.Configure<MvcOptions>(options =>
+		{
+			options.OutputFormatters.Add(new StringOutputFormatter());
+			options.ModelBinderProviders.Insert(0, new CultureInfoBinder());
+			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
+		});
 
 	    return services;
     }
@@ -141,9 +142,12 @@ public static class ServiceCollectionExtensions
         services
             .AddControllers()
             .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
-            .AddControllersAsServices()
-            .Services
-            .AddSingleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>()
+            .AddControllersAsServices();
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>());
+
+        services
             .PostConfigure<JsonOptions>(options =>
             {
                 // WithAddedModifier attaches to the resolver already in place (set up by AddControllers),
