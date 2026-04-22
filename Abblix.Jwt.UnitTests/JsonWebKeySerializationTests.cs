@@ -32,6 +32,12 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JsonWebKeySerializationTests
 {
+    private const string RsaKeyId = "rsa-key-1";
+    private const string EcKeyId = "ec-key-1";
+    private const string CurveP256 = "P-256";
+    private const string OctKeyId = "oct-key-1";
+    private const string HmacAlgorithm = "HS256";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -47,7 +53,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Usage = "sig",
             Algorithm = "RS256",
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
@@ -88,10 +94,10 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new EllipticCurveJsonWebKey
         {
-            KeyId = "ec-key-1",
+            KeyId = EcKeyId,
             Usage = "sig",
             Algorithm = "ES256",
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x-coordinate"),
             Y = Encoding.UTF8.GetBytes("y-coordinate"),
             PrivateKey = Encoding.UTF8.GetBytes("private-key"),
@@ -106,7 +112,7 @@ public class JsonWebKeySerializationTests
         Assert.Equal("ec-key-1", jsonDoc.RootElement.GetProperty("kid").GetString());
         Assert.Equal("sig", jsonDoc.RootElement.GetProperty("use").GetString());
         Assert.Equal("ES256", jsonDoc.RootElement.GetProperty("alg").GetString());
-        Assert.Equal("P-256", jsonDoc.RootElement.GetProperty("crv").GetString());
+        Assert.Equal(CurveP256, jsonDoc.RootElement.GetProperty("crv").GetString());
         Assert.True(jsonDoc.RootElement.TryGetProperty("x", out _));
         Assert.True(jsonDoc.RootElement.TryGetProperty("y", out _));
         Assert.True(jsonDoc.RootElement.TryGetProperty("d", out _));
@@ -121,9 +127,9 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new OctetJsonWebKey
         {
-            KeyId = "oct-key-1",
+            KeyId = OctKeyId,
             Usage = "sig",
-            Algorithm = "HS256",
+            Algorithm = HmacAlgorithm,
             KeyValue = Encoding.UTF8.GetBytes("secret-value"),
         };
 
@@ -135,7 +141,7 @@ public class JsonWebKeySerializationTests
         Assert.Equal("oct", jsonDoc.RootElement.GetProperty("kty").GetString());
         Assert.Equal("oct-key-1", jsonDoc.RootElement.GetProperty("kid").GetString());
         Assert.Equal("sig", jsonDoc.RootElement.GetProperty("use").GetString());
-        Assert.Equal("HS256", jsonDoc.RootElement.GetProperty("alg").GetString());
+        Assert.Equal(HmacAlgorithm, jsonDoc.RootElement.GetProperty("alg").GetString());
         Assert.True(jsonDoc.RootElement.TryGetProperty("k", out _));
     }
 
@@ -184,7 +190,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var original = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Usage = "sig",
             Algorithm = "RS256",
             Exponent = [1, 0, 1],
@@ -225,10 +231,10 @@ public class JsonWebKeySerializationTests
         // Arrange
         var original = new EllipticCurveJsonWebKey
         {
-            KeyId = "ec-key-1",
+            KeyId = EcKeyId,
             Usage = "sig",
             Algorithm = "ES256",
-            Curve = "P-256",
+            Curve = CurveP256,
             X = [0x11, 0x22, 0x33],
             Y = [0x44, 0x55, 0x66],
             PrivateKey = [0x77, 0x88, 0x99],
@@ -258,9 +264,9 @@ public class JsonWebKeySerializationTests
         // Arrange
         var original = new OctetJsonWebKey
         {
-            KeyId = "oct-key-1",
+            KeyId = OctKeyId,
             Usage = "sig",
-            Algorithm = "HS256",
+            Algorithm = HmacAlgorithm,
             KeyValue = [0xAA, 0xBB, 0xCC, 0xDD],
         };
 
@@ -286,7 +292,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
             PrivateExponent = [0x12, 0x34],
@@ -321,7 +327,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
             PrivateExponent = [0x12, 0x34],
@@ -349,8 +355,8 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new EllipticCurveJsonWebKey
         {
-            KeyId = "ec-key-1",
-            Curve = "P-256",
+            KeyId = EcKeyId,
+            Curve = CurveP256,
             X = [0x11, 0x22],
             Y = [0x33, 0x44],
             PrivateKey = [0x55, 0x66],
@@ -379,8 +385,8 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new OctetJsonWebKey
         {
-            KeyId = "oct-key-1",
-            Algorithm = "HS256",
+            KeyId = OctKeyId,
+            Algorithm = HmacAlgorithm,
             KeyValue = [0xAA, 0xBB, 0xCC],
         };
 
@@ -431,7 +437,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var original = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
             Certificates =
@@ -465,7 +471,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
         };
@@ -489,7 +495,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new RsaJsonWebKey
         {
-            KeyId = "rsa-key-1",
+            KeyId = RsaKeyId,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
         };
@@ -512,8 +518,8 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new EllipticCurveJsonWebKey
         {
-            KeyId = "ec-key-1",
-            Curve = "P-256",
+            KeyId = EcKeyId,
+            Curve = CurveP256,
             X = [0x11, 0x22],
             Y = [0x33, 0x44],
         };
@@ -536,7 +542,7 @@ public class JsonWebKeySerializationTests
         // Arrange
         var key = new OctetJsonWebKey
         {
-            KeyId = "oct-key-1",
+            KeyId = OctKeyId,
             KeyValue = [0xAA, 0xBB, 0xCC],
         };
 

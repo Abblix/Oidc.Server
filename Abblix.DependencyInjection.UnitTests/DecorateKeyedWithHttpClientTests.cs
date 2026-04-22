@@ -12,6 +12,9 @@ namespace Abblix.DependencyInjection.UnitTests;
 /// </summary>
 public class DecorateKeyedWithHttpClientTests
 {
+    private const string TestKey = "TestKey";
+    private const string ExampleUrl = "http://example.com";
+
     public interface ITestFetcher
     {
         string Fetch(string url);
@@ -50,7 +53,7 @@ public class DecorateKeyedWithHttpClientTests
         // Act - Try to decorate with a keyed decorator (similar to AddAuthorizationGrants)
         var exception = Record.Exception(() =>
         {
-            services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>("TestKey");
+            services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>(TestKey);
         });
 
         // Assert
@@ -58,7 +61,7 @@ public class DecorateKeyedWithHttpClientTests
 
         // Verify the service can be resolved
         var serviceProvider = services.BuildServiceProvider();
-        var keyedService = serviceProvider.GetRequiredKeyedService<ITestFetcher>("TestKey");
+        var keyedService = serviceProvider.GetRequiredKeyedService<ITestFetcher>(TestKey);
         Assert.NotNull(keyedService);
         Assert.IsType<CachingTestFetcherDecorator>(keyedService);
     }
@@ -73,15 +76,15 @@ public class DecorateKeyedWithHttpClientTests
         services.AddTransient<ITestFetcher, TestFetcher>();
 
         // Decorate with keyed decorator
-        services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>("TestKey");
+        services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>(TestKey);
 
         // Act
         var serviceProvider = services.BuildServiceProvider();
-        var keyedService = serviceProvider.GetRequiredKeyedService<ITestFetcher>("TestKey");
-        var result = keyedService.Fetch("http://example.com");
+        var keyedService = serviceProvider.GetRequiredKeyedService<ITestFetcher>(TestKey);
+        var result = keyedService.Fetch(ExampleUrl);
 
         // Assert
-        Assert.Equal("Cached(Fetched: http://example.com)", result);
+        Assert.Equal($"Cached(Fetched: {ExampleUrl})", result);
     }
 
     [Fact]
@@ -93,12 +96,12 @@ public class DecorateKeyedWithHttpClientTests
         // Act
         var exception = Assert.Throws<System.InvalidOperationException>(() =>
         {
-            services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>("TestKey");
+            services.DecorateKeyed<ITestFetcher, CachingTestFetcherDecorator>(TestKey);
         });
 
         // Assert
         Assert.Contains("No service of type", exception.Message);
         Assert.Contains("ITestFetcher", exception.Message);
-        Assert.Contains("TestKey", exception.Message);
+        Assert.Contains(TestKey, exception.Message);
     }
 }
