@@ -39,6 +39,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// Unit tests for <see cref="ClientSecretAuthenticator"/> verifying client authentication
 /// per OAuth 2.0 and OpenID Connect specifications.
 /// </summary>
+[Collection("License")]
 public class ClientSecretAuthenticatorTests
 {
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
