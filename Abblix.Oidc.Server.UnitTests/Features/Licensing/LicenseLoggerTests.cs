@@ -461,10 +461,16 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
 
-        // Act & Assert - Should not throw
-        logger.LogInformation("Test message");
-        logger.LogWarning("Test warning");
-        logger.LogError("Test error");
+        // Act
+        var exception = Record.Exception(() =>
+        {
+            logger.LogInformation("Test message");
+            logger.LogWarning("Test warning");
+            logger.LogError("Test error");
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     #endregion
