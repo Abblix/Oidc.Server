@@ -34,6 +34,9 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JsonWebTokenValidationTests
 {
+    private const string IssuerUri = "https://issuer.example.com";
+    private const string TestAudience = "test-audience";
+
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
     private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
     private static readonly JsonWebKey WrongSigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
@@ -552,8 +555,8 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 ExpiresAt = issuedAt.AddHours(1),
             },
         };
@@ -730,9 +733,9 @@ public class JsonWebTokenValidationTests
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = "https://issuer.example.com",
+                Issuer = IssuerUri,
                 Subject = "test-user",
-                Audiences = ["test-audience"],
+                Audiences = [TestAudience],
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt.AddHours(1),
@@ -832,8 +835,8 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 NotBefore = baseTime,
                 ExpiresAt = baseTime.AddSeconds(1), // Add 1 second to ensure exp > nbf after rounding
             },
@@ -863,8 +866,8 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 NotBefore = DateTimeOffset.UtcNow.AddHours(1),
             },
         };

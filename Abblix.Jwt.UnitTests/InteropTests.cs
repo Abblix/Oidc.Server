@@ -46,6 +46,21 @@ namespace Abblix.Jwt.UnitTests;
 /// </remarks>
 public class InteropTests
 {
+	private const string SubjectId = "1234567890";
+	private const string IssuerUri = "https://issuer.example.com";
+	private const string AudienceUri = "https://audience.example.com";
+	private const string FullName = "John Doe";
+	private const string EmailClaim = "email";
+	private const string UserEmail = "john@example.com";
+	private const string AdminRole = "admin";
+	private const string TestUser = "test-user";
+	private const string AbblixIssuer = "https://abblix.com";
+	private const string TestAudience = "test-audience";
+	private const string MicrosoftUser = "microsoft-user";
+	private const string MicrosoftIssuer = "https://microsoft.com";
+	private const string AbblixApp = "abblix-app";
+	private const string ValidationFailed = "Validation failed";
+
 	private static readonly IServiceProvider ServiceProvider = CreateServiceProvider();
 
 	private static IServiceProvider CreateServiceProvider()
@@ -73,16 +88,16 @@ public class InteropTests
 			Header = { Type = "JWT" },
 			Payload =
 			{
-				Subject = "1234567890",
-				Issuer = "https://issuer.example.com",
-				Audiences = ["https://audience.example.com"],
+				Subject = SubjectId,
+				Issuer = IssuerUri,
+				Audiences = [AudienceUri],
 				IssuedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
 				ExpiresAt = new DateTime(2024, 12, 31, 23, 59, 59, DateTimeKind.Utc),
 			},
 		};
 
-		abblixToken.Payload.Json["name"] = "John Doe";
-		abblixToken.Payload.Json["email"] = "john@example.com";
+		abblixToken.Payload.Json["name"] = FullName;
+		abblixToken.Payload.Json[EmailClaim] = UserEmail;
 
 		// Abblix creates the token
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
@@ -94,11 +109,11 @@ public class InteropTests
 		// Assert - Verify Microsoft can read it
 		Assert.Equal("none", microsoftToken.Alg);
 		Assert.Equal("JWT", microsoftToken.Typ);
-		Assert.Equal("1234567890", microsoftToken.Subject);
-		Assert.Equal("https://issuer.example.com", microsoftToken.Issuer);
-		Assert.Contains("https://audience.example.com", microsoftToken.Audiences);
-		Assert.Equal("John Doe", microsoftToken.Claims.First(c => c.Type == "name").Value);
-		Assert.Equal("john@example.com", microsoftToken.Claims.First(c => c.Type == "email").Value);
+		Assert.Equal(SubjectId, microsoftToken.Subject);
+		Assert.Equal(IssuerUri, microsoftToken.Issuer);
+		Assert.Contains(AudienceUri, microsoftToken.Audiences);
+		Assert.Equal(FullName, microsoftToken.Claims.First(c => c.Type == "name").Value);
+		Assert.Equal(UserEmail, microsoftToken.Claims.First(c => c.Type == EmailClaim).Value);
 	}
 
 	[Fact]
@@ -108,12 +123,12 @@ public class InteropTests
 		var descriptor = new SecurityTokenDescriptor
 		{
 			Subject = new System.Security.Claims.ClaimsIdentity([
-				new System.Security.Claims.Claim("sub", "1234567890"),
-				new System.Security.Claims.Claim("name", "John Doe"),
-				new System.Security.Claims.Claim("email", "john@example.com")
+				new System.Security.Claims.Claim("sub", SubjectId),
+				new System.Security.Claims.Claim("name", FullName),
+				new System.Security.Claims.Claim(EmailClaim, UserEmail)
 			]),
-			Issuer = "https://issuer.example.com",
-			Audience = "https://audience.example.com",
+			Issuer = IssuerUri,
+			Audience = AudienceUri,
 			NotBefore = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
 			Expires = new DateTime(2024, 12, 31, 23, 59, 59, DateTimeKind.Utc),
 			SigningCredentials = null  // Unsigned token
@@ -132,11 +147,11 @@ public class InteropTests
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var token));
-		Assert.Equal("1234567890", token.Payload.Subject);
-		Assert.Equal("https://issuer.example.com", token.Payload.Issuer);
-		Assert.Contains("https://audience.example.com", token.Payload.Audiences);
-		Assert.Equal("John Doe", token.Payload.Json["name"]?.GetValue<string>());
-		Assert.Equal("john@example.com", token.Payload.Json["email"]?.GetValue<string>());
+		Assert.Equal(SubjectId, token.Payload.Subject);
+		Assert.Equal(IssuerUri, token.Payload.Issuer);
+		Assert.Contains(AudienceUri, token.Payload.Audiences);
+		Assert.Equal(FullName, token.Payload.Json["name"]?.GetValue<string>());
+		Assert.Equal(UserEmail, token.Payload.Json[EmailClaim]?.GetValue<string>());
 	}
 
 	[Fact]
@@ -147,12 +162,12 @@ public class InteropTests
 		{
 			Subject = new System.Security.Claims.ClaimsIdentity([
 				new System.Security.Claims.Claim("sub", "user123"),
-				new System.Security.Claims.Claim("roles", "admin"),
+				new System.Security.Claims.Claim("roles", AdminRole),
 				new System.Security.Claims.Claim("roles", "user"),  // Multiple values
 				new System.Security.Claims.Claim("age", "30"),
 				new System.Security.Claims.Claim("verified", "true")
 			]),
-			Issuer = "https://issuer.example.com",
+			Issuer = IssuerUri,
 			SigningCredentials = null
 		};
 
@@ -176,7 +191,7 @@ public class InteropTests
 		if (roles is System.Text.Json.Nodes.JsonArray rolesArray)
 		{
 			Assert.Equal(2, rolesArray.Count);
-			Assert.Contains("admin", rolesArray.Select(r => r?.GetValue<string>()));
+			Assert.Contains(AdminRole, rolesArray.Select(r => r?.GetValue<string>()));
 			Assert.Contains("user", rolesArray.Select(r => r?.GetValue<string>()));
 		}
 	}
@@ -189,8 +204,8 @@ public class InteropTests
 		{
 			Payload =
 			{
-				Subject = "test-user",
-				Issuer = "https://abblix.com",
+				Subject = TestUser,
+				Issuer = AbblixIssuer,
 				Audiences = ["aud1", "aud2", "aud3"],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
@@ -239,9 +254,9 @@ public class InteropTests
 			Header = { Type = "JWT" },
 			Payload =
 			{
-				Subject = "test-user",
-				Issuer = "https://abblix.com",
-				Audiences = ["test-audience"],
+				Subject = TestUser,
+				Issuer = AbblixIssuer,
+				Audiences = [TestAudience],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
 		};
@@ -257,9 +272,9 @@ public class InteropTests
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = microsoftKey,
 			ValidateIssuer = true,
-			ValidIssuer = "https://abblix.com",
+			ValidIssuer = AbblixIssuer,
 			ValidateAudience = true,
-			ValidAudience = "test-audience",
+			ValidAudience = TestAudience,
 			ValidateLifetime = true,
 			ClockSkew = TimeSpan.FromMinutes(5),
 		};
@@ -269,7 +284,7 @@ public class InteropTests
 		// Assert - Microsoft successfully validated Abblix's signature
 		Assert.True(result.IsValid, $"Validation failed for {abblixAlgorithm}: {result.Exception?.Message}");
 		Assert.NotNull(result.ClaimsIdentity);
-		Assert.Equal("test-user", result.ClaimsIdentity.FindFirst("sub")?.Value);
+		Assert.Equal(TestUser, result.ClaimsIdentity.FindFirst("sub")?.Value);
 
 		// Verify the algorithm used matches expectations
 		var microsoftToken = Assert.IsType<Microsoft.IdentityModel.JsonWebTokens.JsonWebToken>(result.SecurityToken);
@@ -288,10 +303,10 @@ public class InteropTests
 		var descriptor = new SecurityTokenDescriptor
 		{
 			Subject = new System.Security.Claims.ClaimsIdentity([
-				new System.Security.Claims.Claim("sub", "microsoft-user")
+				new System.Security.Claims.Claim("sub", MicrosoftUser)
 			]),
-			Issuer = "https://microsoft.com",
-			Audience = "abblix-app",
+			Issuer = MicrosoftIssuer,
+			Audience = AbblixApp,
 			Expires = DateTime.UtcNow.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
@@ -307,14 +322,14 @@ public class InteropTests
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
-			ValidateIssuer = iss => Task.FromResult(iss == "https://microsoft.com"),
+			ValidateIssuer = iss => Task.FromResult(iss == MicrosoftIssuer),
 			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
 		});
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var token),
-			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : "Validation failed");
-		Assert.Equal("microsoft-user", token.Payload.Subject);
+			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
+		Assert.Equal(MicrosoftUser, token.Payload.Subject);
 	}
 
 	#endregion
@@ -344,8 +359,8 @@ public class InteropTests
 			Payload =
 			{
 				Subject = "ec-test-user",
-				Issuer = "https://abblix.com",
-				Audiences = ["test-audience"],
+				Issuer = AbblixIssuer,
+				Audiences = [TestAudience],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
 		};
@@ -361,9 +376,9 @@ public class InteropTests
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = microsoftKey,
 			ValidateIssuer = true,
-			ValidIssuer = "https://abblix.com",
+			ValidIssuer = AbblixIssuer,
 			ValidateAudience = true,
-			ValidAudience = "test-audience",
+			ValidAudience = TestAudience,
 			ValidateLifetime = true,
 			ClockSkew = TimeSpan.FromMinutes(5),
 		};
@@ -395,8 +410,8 @@ public class InteropTests
 			Subject = new System.Security.Claims.ClaimsIdentity([
 				new System.Security.Claims.Claim("sub", "microsoft-ec-user")
 			]),
-			Issuer = "https://microsoft.com",
-			Audience = "abblix-app",
+			Issuer = MicrosoftIssuer,
+			Audience = AbblixApp,
 			Expires = DateTime.UtcNow.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
@@ -412,13 +427,13 @@ public class InteropTests
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
-			ValidateIssuer = iss => Task.FromResult(iss == "https://microsoft.com"),
+			ValidateIssuer = iss => Task.FromResult(iss == MicrosoftIssuer),
 			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
 		});
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var token),
-			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : "Validation failed");
+			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
 		Assert.Equal("microsoft-ec-user", token.Payload.Subject);
 	}
 
@@ -448,8 +463,8 @@ public class InteropTests
 			Payload =
 			{
 				Subject = "hmac-test-user",
-				Issuer = "https://abblix.com",
-				Audiences = ["test-audience"],
+				Issuer = AbblixIssuer,
+				Audiences = [TestAudience],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
 		};
@@ -465,9 +480,9 @@ public class InteropTests
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = microsoftKey,
 			ValidateIssuer = true,
-			ValidIssuer = "https://abblix.com",
+			ValidIssuer = AbblixIssuer,
 			ValidateAudience = true,
-			ValidAudience = "test-audience",
+			ValidAudience = TestAudience,
 			ValidateLifetime = true,
 			ClockSkew = TimeSpan.FromMinutes(5),
 		};
@@ -498,8 +513,8 @@ public class InteropTests
 			Subject = new System.Security.Claims.ClaimsIdentity([
 				new System.Security.Claims.Claim("sub", "microsoft-hmac-user")
 			]),
-			Issuer = "https://microsoft.com",
-			Audience = "abblix-app",
+			Issuer = MicrosoftIssuer,
+			Audience = AbblixApp,
 			Expires = DateTime.UtcNow.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
@@ -515,13 +530,13 @@ public class InteropTests
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
-			ValidateIssuer = iss => Task.FromResult(iss == "https://microsoft.com"),
+			ValidateIssuer = iss => Task.FromResult(iss == MicrosoftIssuer),
 			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
 		});
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var token),
-			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : "Validation failed");
+			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
 		Assert.Equal("microsoft-hmac-user", token.Payload.Subject);
 	}
 
@@ -591,15 +606,15 @@ public class InteropTests
 			Header = { Type = "JWT" },
 			Payload =
 			{
-				Subject = "test-user",
-				Issuer = "https://abblix.com",
-				Audiences = ["test-audience"],
+				Subject = TestUser,
+				Issuer = AbblixIssuer,
+				Audiences = [TestAudience],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
 		};
 
-		abblixToken.Payload.Json["name"] = "John Doe";
-		abblixToken.Payload.Json["role"] = "admin";
+		abblixToken.Payload.Json["name"] = FullName;
+		abblixToken.Payload.Json["role"] = AdminRole;
 
 		// Abblix creates signed and encrypted JWT
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
@@ -623,9 +638,9 @@ public class InteropTests
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = microsoftSignKey,
 			ValidateIssuer = true,
-			ValidIssuer = "https://abblix.com",
+			ValidIssuer = AbblixIssuer,
 			ValidateAudience = true,
-			ValidAudience = "test-audience",
+			ValidAudience = TestAudience,
 			ValidateLifetime = true,
 			TokenDecryptionKey = microsoftEncKey.Key,
 		};
@@ -636,9 +651,9 @@ public class InteropTests
 		Assert.True(result.IsValid,
 			$"Validation failed for {abblixKeyEncAlg}/{abblixContentEncAlg}: {result.Exception?.Message}");
 		Assert.NotNull(result.ClaimsIdentity);
-		Assert.Equal("test-user", result.ClaimsIdentity.FindFirst("sub")?.Value);
-		Assert.Equal("John Doe", result.ClaimsIdentity.FindFirst("name")?.Value);
-		Assert.Equal("admin", result.ClaimsIdentity.FindFirst("role")?.Value);
+		Assert.Equal(TestUser, result.ClaimsIdentity.FindFirst("sub")?.Value);
+		Assert.Equal(FullName, result.ClaimsIdentity.FindFirst("name")?.Value);
+		Assert.Equal(AdminRole, result.ClaimsIdentity.FindFirst("role")?.Value);
 	}
 
 	[Theory]
@@ -656,16 +671,16 @@ public class InteropTests
 		// Microsoft creates signed and encrypted JWT
 		var claims = new[]
 		{
-			new System.Security.Claims.Claim("sub", "microsoft-user"),
+			new System.Security.Claims.Claim("sub", MicrosoftUser),
 			new System.Security.Claims.Claim("name", "Jane Smith"),
-			new System.Security.Claims.Claim("email", "jane@example.com"),
+			new System.Security.Claims.Claim(EmailClaim, "jane@example.com"),
 		};
 
 		var descriptor = new SecurityTokenDescriptor
 		{
 			Subject = new System.Security.Claims.ClaimsIdentity(claims),
 			Issuer = "https://microsoft.example.com",
-			Audience = "abblix-app",
+			Audience = AbblixApp,
 			Expires = DateTime.UtcNow.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
@@ -690,7 +705,7 @@ public class InteropTests
 						  ValidationOptions.ValidateIssuerSigningKey,
 
 				ValidateIssuer = iss => Task.FromResult(iss == "https://microsoft.example.com"),
-				ValidateAudience = aud => Task.FromResult(aud.Contains("abblix-app")),
+				ValidateAudience = aud => Task.FromResult(aud.Contains(AbblixApp)),
 				ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
 				ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
 			});
@@ -699,10 +714,10 @@ public class InteropTests
 		Assert.True(validationResult.TryGetSuccess(out var token),
 			validationResult.TryGetFailure(out var error)
 				? $"Validation failed for {abblixKeyEncAlg}/{abblixContentEncAlg}: {error.Error} - {error.ErrorDescription}"
-				: "Validation failed");
-		Assert.Equal("microsoft-user", token.Payload.Subject);
+				: ValidationFailed);
+		Assert.Equal(MicrosoftUser, token.Payload.Subject);
 		Assert.Equal("Jane Smith", token.Payload.Json["name"]?.GetValue<string>());
-		Assert.Equal("jane@example.com", token.Payload.Json["email"]?.GetValue<string>());
+		Assert.Equal("jane@example.com", token.Payload.Json[EmailClaim]?.GetValue<string>());
 	}
 
 	[Theory]
@@ -720,15 +735,15 @@ public class InteropTests
 			Header = { Type = "JWT" },
 			Payload =
 			{
-				Subject = "test-user",
-				Issuer = "https://abblix.com",
-				Audiences = ["test-audience"],
+				Subject = TestUser,
+				Issuer = AbblixIssuer,
+				Audiences = [TestAudience],
 				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
 			},
 		};
 
-		abblixToken.Payload.Json["name"] = "John Doe";
-		abblixToken.Payload.Json["role"] = "admin";
+		abblixToken.Payload.Json["name"] = FullName;
+		abblixToken.Payload.Json["role"] = AdminRole;
 
 		// Abblix creates signed and encrypted JWT
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
@@ -747,8 +762,8 @@ public class InteropTests
 					  ValidationOptions.ValidateAudience |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
-			ValidateIssuer = iss => Task.FromResult(iss == "https://abblix.com"),
-			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
+			ValidateIssuer = iss => Task.FromResult(iss == AbblixIssuer),
+			ValidateAudience = aud => Task.FromResult(aud.Contains(TestAudience)),
 			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
 			ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
 		});
@@ -757,10 +772,10 @@ public class InteropTests
 		Assert.True(result.TryGetSuccess(out var token),
 			result.TryGetFailure(out var error)
 				? $"Validation failed for {keyEncAlg}/{contentEncAlg}: {error.Error} - {error.ErrorDescription}"
-				: "Validation failed");
-		Assert.Equal("test-user", token.Payload.Subject);
-		Assert.Equal("John Doe", token.Payload.Json["name"]?.GetValue<string>());
-		Assert.Equal("admin", token.Payload.Json["role"]?.GetValue<string>());
+				: ValidationFailed);
+		Assert.Equal(TestUser, token.Payload.Subject);
+		Assert.Equal(FullName, token.Payload.Json["name"]?.GetValue<string>());
+		Assert.Equal(AdminRole, token.Payload.Json["role"]?.GetValue<string>());
 	}
 
 	#endregion

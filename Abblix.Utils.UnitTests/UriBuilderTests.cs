@@ -30,18 +30,40 @@ namespace Abblix.Utils.UnitTests;
 /// </summary>
 public class UriBuilderTests
 {
+    private const string ExampleComPath = "https://example.com/path";
+    private const string AuthPath = "/auth";
+    private const string AuthCallbackPath = "/auth/callback";
+    private const string StateParam = "state";
+    private const string StateValue = "xyz789";
+    private const string ValueParam = "value";
+    private const string ParamName = "param";
+    private const string SetWebhookPath = "setWebhook";
+    private const string NewPath = "/new/path";
+    private const string PathValue = "/path";
+    private const string JwtHeaderPrefix = "eyJhbGc...";
+    private const string ExamplePageUri = "https://example.com/page";
+    private const string HttpExampleUri = "http://example.com/path";
+    private const string LocalhostHttpsUri = "https://localhost:5001/api";
+    private const string FtpExampleUri = "ftp://ftp.example.com/files";
+    private const string WebSocketUri = "ws://localhost:8080/socket";
+    private const string TelegramBotBaseUri = "https://api.telegram.org/bot123/";
+    private const string ExampleApiUsersUri = "https://example.com/api/users";
+    private const string ExampleOldPathUri = "https://example.com/old/path";
+    private const string ExampleCallbackUri = "https://example.com/callback";
+    private const string IPv6LocalhostUri = "https://[::1]:5000/api";
+
     /// <summary>
     /// Verifies that constructing with an absolute Uri creates a valid builder.
     /// </summary>
     [Fact]
     public void Constructor_WithAbsoluteUri_CreatesValidBuilder()
     {
-        var absoluteUri = new Uri("https://example.com/path");
+        var absoluteUri = new Uri(ExampleComPath);
         var builder = new UriBuilder(absoluteUri);
 
         Assert.NotNull(builder);
         Assert.True(builder.Uri.IsAbsoluteUri);
-        Assert.Equal("https://example.com/path", builder.Uri.ToString());
+        Assert.Equal(ExampleComPath, builder.Uri.ToString());
     }
 
     /// <summary>
@@ -50,12 +72,12 @@ public class UriBuilderTests
     [Fact]
     public void Constructor_WithRelativeUri_CreatesValidBuilder()
     {
-        var relativeUri = new Uri("/auth", UriKind.Relative);
+        var relativeUri = new Uri(AuthPath, UriKind.Relative);
         var builder = new UriBuilder(relativeUri);
 
         Assert.NotNull(builder);
         Assert.False(builder.Uri.IsAbsoluteUri);
-        Assert.Equal("/auth", builder.Uri.ToString());
+        Assert.Equal(AuthPath, builder.Uri.ToString());
     }
 
     /// <summary>
@@ -64,7 +86,7 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithQueryParameters_BuildsCorrectly()
     {
-        var absoluteUri = new Uri("https://example.com/path");
+        var absoluteUri = new Uri(ExampleComPath);
         var builder = new UriBuilder(absoluteUri)
         {
             Query =
@@ -86,7 +108,7 @@ public class UriBuilderTests
     [Fact]
     public void RelativeUri_WithQueryParameters_BuildsCorrectly()
     {
-        var relativeUri = new Uri("/auth", UriKind.Relative);
+        var relativeUri = new Uri(AuthPath, UriKind.Relative);
         var builder = new UriBuilder(relativeUri)
         {
             Query =
@@ -109,13 +131,13 @@ public class UriBuilderTests
     [Fact]
     public void RelativeUri_WithMultipleParameters_PreservesPath()
     {
-        var relativeUri = new Uri("/auth/callback", UriKind.Relative);
+        var relativeUri = new Uri(AuthCallbackPath, UriKind.Relative);
         var builder = new UriBuilder(relativeUri)
         {
             Query =
             {
                 ["code"] = "abc123",
-                ["state"] = "xyz789"
+                [StateParam] = StateValue
             }
         };
 
@@ -133,7 +155,7 @@ public class UriBuilderTests
         var relativeUri = new Uri("/page", UriKind.Relative);
         var builder = new UriBuilder(relativeUri)
         {
-            Query = { ["param"] = "value" },
+            Query = { [ParamName] = ValueParam },
             Fragment = { ["section"] = "top" }
         };
 
@@ -149,10 +171,10 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithFragment_BuildsCorrectly()
     {
-        var absoluteUri = new Uri("https://example.com/page");
+        var absoluteUri = new Uri(ExamplePageUri);
         var builder = new UriBuilder(absoluteUri)
         {
-            Query = { ["param"] = "value" },
+            Query = { [ParamName] = ValueParam },
             Fragment = { ["section"] = "top" }
         };
 
@@ -168,13 +190,13 @@ public class UriBuilderTests
     [Fact]
     public void ImplicitConversionToUri_WorksForRelativeUri()
     {
-        var relativeUri = new Uri("/auth", UriKind.Relative);
+        var relativeUri = new Uri(AuthPath, UriKind.Relative);
         var builder = new UriBuilder(relativeUri);
 
         Uri result = builder;
 
         Assert.False(result.IsAbsoluteUri);
-        Assert.Equal("/auth", result.ToString());
+        Assert.Equal(AuthPath, result.ToString());
     }
 
     /// <summary>
@@ -183,19 +205,19 @@ public class UriBuilderTests
     [Fact]
     public void ImplicitConversionToString_WorksForRelativeUri()
     {
-        var relativeUri = new Uri("/auth", UriKind.Relative);
+        var relativeUri = new Uri(AuthPath, UriKind.Relative);
         var builder = new UriBuilder(relativeUri);
 
         string result = builder;
 
-        Assert.Equal("/auth", result);
+        Assert.Equal(AuthPath, result);
     }
 
     /// <summary>
     /// Verifies that string constructor correctly handles various relative path formats.
     /// </summary>
     [Theory]
-    [InlineData("/path")]
+    [InlineData(PathValue)]
     [InlineData("/path/subpath")]
     [InlineData("/path/relative")]
     [InlineData("/auth/api/signin-oidc")]
@@ -214,7 +236,7 @@ public class UriBuilderTests
     /// </summary>
     [Theory]
     [InlineData("https://example.com", "https://example.com/")]
-    [InlineData("https://example.com/path", "https://example.com/path")]
+    [InlineData(ExampleComPath, ExampleComPath)]
     [InlineData("http://localhost:5000/auth", "http://localhost:5000/auth")]
     public void Constructor_WithAbsoluteUriString_CreatesAbsoluteUri(string absoluteUri, string expected)
     {
@@ -231,12 +253,12 @@ public class UriBuilderTests
     [Fact]
     public void Constructor_WithRelativePathString_WithQueryParameters()
     {
-        var builder = new UriBuilder("/auth/callback")
+        var builder = new UriBuilder(AuthCallbackPath)
         {
             Query =
             {
                 ["code"] = "abc123",
-                ["state"] = "xyz789"
+                [StateParam] = StateValue
             }
         };
 
@@ -309,10 +331,10 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithDefaultHttpsPort_OmitsPort()
     {
-        var absoluteUri = new Uri("https://example.com/path");
+        var absoluteUri = new Uri(ExampleComPath);
         var builder = new UriBuilder(absoluteUri)
         {
-            Query = { ["param"] = "value" }
+            Query = { [ParamName] = ValueParam }
         };
 
         var result = builder.Uri;
@@ -327,7 +349,7 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithDefaultHttpPort_OmitsPort()
     {
-        var absoluteUri = new Uri("http://example.com/path");
+        var absoluteUri = new Uri(HttpExampleUri);
         var builder = new UriBuilder(absoluteUri);
 
         var result = builder.Uri;
@@ -342,10 +364,10 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithNonDefaultPort_IncludesPort()
     {
-        var absoluteUri = new Uri("https://localhost:5001/api");
+        var absoluteUri = new Uri(LocalhostHttpsUri);
         var builder = new UriBuilder(absoluteUri)
         {
-            Query = { ["param"] = "value" }
+            Query = { [ParamName] = ValueParam }
         };
 
         var result = builder.Uri;
@@ -360,7 +382,7 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithDefaultFtpPort_OmitsPort()
     {
-        var absoluteUri = new Uri("ftp://ftp.example.com/files");
+        var absoluteUri = new Uri(FtpExampleUri);
         var builder = new UriBuilder(absoluteUri);
 
         var result = builder.Uri;
@@ -375,7 +397,7 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_WithNonStandardScheme_KeepsPort()
     {
-        var absoluteUri = new Uri("ws://localhost:8080/socket");
+        var absoluteUri = new Uri(WebSocketUri);
         var builder = new UriBuilder(absoluteUri);
 
         var result = builder.Uri;
@@ -385,27 +407,27 @@ public class UriBuilderTests
 
     /// <summary>
     /// Verifies that relative URIs without leading slash are correctly handled.
-    /// This is the Telegram webhook case: "setWebhook" should become a valid path.
+    /// This is the Telegram webhook case: SetWebhookPath should become a valid path.
     /// </summary>
     [Fact]
     public void Constructor_WithRelativePathWithoutLeadingSlash_CreatesValidUri()
     {
-        var builder = new UriBuilder("setWebhook");
+        var builder = new UriBuilder(SetWebhookPath);
 
         var result = builder.Uri;
         Assert.False(result.IsAbsoluteUri);
-        Assert.Equal("setWebhook", result.ToString());
+        Assert.Equal(SetWebhookPath, result.ToString());
     }
 
     /// <summary>
     /// Verifies that relative URIs without leading slash work correctly with query parameters.
     /// This reproduces the Telegram webhook registration issue where
-    /// new UriBuilder("setWebhook") { Query = { ["url"] = "..." } } should work.
+    /// new UriBuilder(SetWebhookPath) { Query = { ["url"] = "..." } } should work.
     /// </summary>
     [Fact]
     public void RelativeUri_WithoutLeadingSlash_WithQueryParameters_BuildsCorrectly()
     {
-        var builder = new UriBuilder("setWebhook")
+        var builder = new UriBuilder(SetWebhookPath)
         {
             Query = { ["url"] = "https://example.com/webhook" }
         };
@@ -424,8 +446,8 @@ public class UriBuilderTests
     [Fact]
     public void RelativeUri_WithoutLeadingSlash_CanBeCombinedWithBaseAddress()
     {
-        var baseAddress = new Uri("https://api.telegram.org/bot123/");
-        var relativeUri = new UriBuilder("setWebhook")
+        var baseAddress = new Uri(TelegramBotBaseUri);
+        var relativeUri = new UriBuilder(SetWebhookPath)
         {
             Query = { ["url"] = "https://example.com/webhook" }
         }.Uri;
@@ -444,7 +466,7 @@ public class UriBuilderTests
     [Fact]
     public void Path_GetFromAbsoluteUri_ReturnsCorrectPath()
     {
-        var builder = new UriBuilder("https://example.com/api/users");
+        var builder = new UriBuilder(ExampleApiUsersUri);
 
         var path = builder.Path;
 
@@ -457,11 +479,11 @@ public class UriBuilderTests
     [Fact]
     public void Path_GetFromRelativeUri_ReturnsCorrectPath()
     {
-        var builder = new UriBuilder("/auth/callback");
+        var builder = new UriBuilder(AuthCallbackPath);
 
         var path = builder.Path;
 
-        Assert.Equal("/auth/callback", path.Value);
+        Assert.Equal(AuthCallbackPath, path.Value);
     }
 
     /// <summary>
@@ -470,9 +492,9 @@ public class UriBuilderTests
     [Fact]
     public void Path_SetNewPath_UpdatesUri()
     {
-        var builder = new UriBuilder("https://example.com/old/path")
+        var builder = new UriBuilder(ExampleOldPathUri)
         {
-            Path = new PathString("/new/path")
+            Path = new PathString(NewPath)
         };
 
         var result = builder.Uri;
@@ -488,8 +510,8 @@ public class UriBuilderTests
     {
         var builder = new UriBuilder("/old/path")
         {
-            Query = { ["param"] = "value" },
-            Path = new PathString("/new/path")
+            Query = { [ParamName] = ValueParam },
+            Path = new PathString(NewPath)
         };
 
         var result = builder.Uri;
@@ -506,12 +528,12 @@ public class UriBuilderTests
         var builder = new UriBuilder("/old/path")
         {
             Fragment = { ["section"] = "top" },
-            Path = new PathString("/new/path")
+            Path = new PathString(NewPath)
         };
 
         var result = builder.Uri;
 
-        Assert.Contains("/new/path", result.ToString());
+        Assert.Contains(NewPath, result.ToString());
         Assert.Contains("#section=top", result.ToString());
     }
 
@@ -525,7 +547,7 @@ public class UriBuilderTests
     [Fact]
     public void Query_WithEmptyValue_BuildsCorrectly()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Query = { ["empty"] = string.Empty }
         };
@@ -541,7 +563,7 @@ public class UriBuilderTests
     [Fact]
     public void Fragment_WithEmptyValue_BuildsCorrectly()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Fragment = { ["empty"] = string.Empty }
         };
@@ -557,11 +579,11 @@ public class UriBuilderTests
     [Fact]
     public void Uri_WithoutQueryOrFragment_BuildsCorrectly()
     {
-        var builder = new UriBuilder("/path");
+        var builder = new UriBuilder(PathValue);
 
         var result = builder.Uri;
 
-        Assert.Equal("/path", result.ToString());
+        Assert.Equal(PathValue, result.ToString());
         Assert.DoesNotContain("?", result.ToString());
         Assert.DoesNotContain("#", result.ToString());
     }
@@ -576,14 +598,14 @@ public class UriBuilderTests
     [Fact]
     public void Fragment_WithOAuthImplicitFlowParameters_BuildsCorrectly()
     {
-        var builder = new UriBuilder("https://example.com/callback")
+        var builder = new UriBuilder(ExampleCallbackUri)
         {
             Fragment =
             {
-                ["access_token"] = "eyJhbGc...",
+                ["access_token"] = JwtHeaderPrefix,
                 ["token_type"] = "Bearer",
                 ["expires_in"] = "3600",
-                ["state"] = "xyz789"
+                [StateParam] = StateValue
             }
         };
 
@@ -605,9 +627,9 @@ public class UriBuilderTests
         {
             Fragment =
             {
-                ["id_token"] = "eyJhbGc...",
-                ["access_token"] = "eyJhbGc...",
-                ["state"] = "abc123"
+                ["id_token"] = JwtHeaderPrefix,
+                ["access_token"] = JwtHeaderPrefix,
+                [StateParam] = "abc123"
             }
         };
 
@@ -630,11 +652,11 @@ public class UriBuilderTests
             Query =
             {
                 ["code"] = "auth_code_123",
-                ["state"] = "xyz789"
+                [StateParam] = StateValue
             },
             Fragment =
             {
-                ["access_token"] = "eyJhbGc...",
+                ["access_token"] = JwtHeaderPrefix,
                 ["token_type"] = "Bearer"
             }
         };
@@ -680,7 +702,7 @@ public class UriBuilderTests
     [Fact]
     public void Query_WithSpaces_EncodesAsPlus()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Query = { ["text"] = "hello world" }
         };
@@ -697,7 +719,7 @@ public class UriBuilderTests
     [Fact]
     public void Query_WithUnicodeCharacters_PreservesUnicode()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Query = { ["name"] = "José García" }
         };
@@ -721,9 +743,9 @@ public class UriBuilderTests
     [Fact]
     public void Uri_AccessedMultipleTimes_ReturnsConsistentResults()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
-            Query = { ["param"] = "value" }
+            Query = { [ParamName] = ValueParam }
         };
 
         var result1 = builder.Uri;
@@ -738,7 +760,7 @@ public class UriBuilderTests
     [Fact]
     public void Uri_AfterQueryModification_ReflectsChanges()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Query = { ["param1"] = "value1" }
         };
@@ -757,7 +779,7 @@ public class UriBuilderTests
     [Fact]
     public void Uri_AfterFragmentModification_ReflectsChanges()
     {
-        var builder = new UriBuilder("/path")
+        var builder = new UriBuilder(PathValue)
         {
             Fragment = { ["section1"] = "top" }
         };
@@ -796,7 +818,7 @@ public class UriBuilderTests
     {
         var builder = new UriBuilder("/")
         {
-            Query = { ["param"] = "value" }
+            Query = { [ParamName] = ValueParam }
         };
 
         var result = builder.Uri;
@@ -837,7 +859,7 @@ public class UriBuilderTests
     [Fact]
     public void Constructor_WithIPv6Address_CreatesValidUri()
     {
-        var builder = new UriBuilder("https://[::1]:5000/api");
+        var builder = new UriBuilder(IPv6LocalhostUri);
 
         var result = builder.Uri;
 
@@ -877,12 +899,12 @@ public class UriBuilderTests
     [Fact]
     public void AbsoluteUri_ProducesSameResultAsSystemUriBuilder()
     {
-        var systemBuilder = new System.UriBuilder("https://example.com/path")
+        var systemBuilder = new System.UriBuilder(ExampleComPath)
         {
             Query = "param1=value1&param2=value2"
         };
 
-        var ourBuilder = new UriBuilder("https://example.com/path")
+        var ourBuilder = new UriBuilder(ExampleComPath)
         {
             Query =
             {

@@ -50,9 +50,10 @@ public class CompositeBinarySerializer(
         {
             return protobufSerializer.Serialize(obj);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
             logger.LogWarning(
+                ex,
                 "Type {TypeName} is not supported for protobuf serialization, falling back to JSON",
                 typeof(T).FullName);
             return jsonSerializer.Serialize(obj);
@@ -71,9 +72,10 @@ public class CompositeBinarySerializer(
         {
             return protobufSerializer.Deserialize<T>(bytes);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
             logger.LogWarning(
+                ex,
                 "Type {TypeName} is not supported for protobuf deserialization, falling back to JSON",
                 typeof(T).FullName);
             return jsonSerializer.Deserialize<T>(bytes);

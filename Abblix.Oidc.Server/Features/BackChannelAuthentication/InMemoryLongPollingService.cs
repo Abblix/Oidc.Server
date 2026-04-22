@@ -104,9 +104,10 @@ public class InMemoryLongPollingService(
                 authenticationRequestId);
             return false;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
             logger.LogDebug(
+                ex,
                 "Long-polling request cancelled for auth_req_id: {AuthReqId}",
                 authenticationRequestId);
             throw;
