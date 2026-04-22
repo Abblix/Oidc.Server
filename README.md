@@ -7,7 +7,7 @@
 [![security rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
+[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
 [![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
