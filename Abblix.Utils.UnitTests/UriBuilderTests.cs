@@ -837,7 +837,7 @@ public class UriBuilderTests
     [Fact]
     public void Constructor_WithIPv6Address_CreatesValidUri()
     {
-        var builder = new UriBuilder("http://[::1]:5000/api");
+        var builder = new UriBuilder("https://[::1]:5000/api");
 
         var result = builder.Uri;
 
