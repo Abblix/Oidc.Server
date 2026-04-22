@@ -405,7 +405,6 @@ public class RequestObjectFetcherTests
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((string jwt, ValidationOptions _) =>
             {
-                var payload = jwt == jwt1 ? payload1 : payload2;
                 var token = jwt == jwt1 ? token1 : token2;
                 return new ValidJsonWebToken(token, new ClientInfo("test-client"));
             });

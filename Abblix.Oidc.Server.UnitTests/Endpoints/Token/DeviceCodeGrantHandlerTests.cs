@@ -353,7 +353,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
         _parameterValidator.Verify(
