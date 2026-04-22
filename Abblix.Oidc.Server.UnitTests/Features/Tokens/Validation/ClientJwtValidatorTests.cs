@@ -347,7 +347,7 @@ public class ClientJwtValidatorTests
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
-                    await p.ValidateIssuer(ValidClientId);
+                    await p.ValidateIssuer(unknownIssuer);
             })
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Unknown issuer"));
 
@@ -568,7 +568,7 @@ public class ClientJwtValidatorTests
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
-                    await p.ValidateIssuer(ValidClientId);
+                    await p.ValidateIssuer(unknownIssuer);
             })
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Unknown issuer"));
 
