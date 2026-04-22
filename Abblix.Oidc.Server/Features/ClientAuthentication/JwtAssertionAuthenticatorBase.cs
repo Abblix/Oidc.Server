@@ -98,7 +98,7 @@ public abstract class JwtAssertionAuthenticatorBase(
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogWarning("The error while getting subject: {Message}", ex.Message);
+            logger.LogWarning(ex, "The error while getting subject: {Message}", ex.Message);
             return null;
         }
 

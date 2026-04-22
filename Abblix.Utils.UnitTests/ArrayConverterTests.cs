@@ -38,7 +38,7 @@ public class ArrayConverterTests
     /// <summary>
     /// A custom JSON converter for string elements used for testing the ArrayConverter.
     /// </summary>
-    private class CustomElementConverter : JsonConverter<string>
+    private sealed class CustomElementConverter : JsonConverter<string>
     {
         public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
             => reader.GetString();

@@ -35,6 +35,18 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JsonWebTokenClaimsTests
 {
+    private const string RolesClaim = "roles";
+    private const string OpenIdScope = "openid";
+    private const string ScopeClaim = "scope";
+    private const string ProfileScope = "profile";
+    private const string EmailScope = "email";
+    private const string StreetKey = "street";
+    private const string StreetValue = "123 Main St";
+    private const string AddressClaim = "address";
+    private const string CustomTimeClaim = "custom_time";
+    private const string ColorsClaim = "colors";
+    private const string GreenColor = "green";
+
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig);
     private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Enc);
 
@@ -195,11 +207,11 @@ public class JsonWebTokenClaimsTests
     {
         var token = CreateToken();
         var values = new[] { "single_value" };
-        token.Payload.Json.SetArrayOrString("roles", values);
+        token.Payload.Json.SetArrayOrString(RolesClaim, values);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings("roles").ToArray();
+        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings(RolesClaim).ToArray();
         Assert.Equal(values, actualValues);
     }
 
@@ -213,11 +225,11 @@ public class JsonWebTokenClaimsTests
     {
         var token = CreateToken();
         var values = new[] { "admin", "user", "moderator" };
-        token.Payload.Json.SetArrayOrString("roles", values);
+        token.Payload.Json.SetArrayOrString(RolesClaim, values);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings("roles").ToArray();
+        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings(RolesClaim).ToArray();
         Assert.Equal(values, actualValues);
     }
 
@@ -230,11 +242,11 @@ public class JsonWebTokenClaimsTests
     public async Task ArrayClaim_EmptyArray_RoundTrip_IsRemovedFromPayload()
     {
         var token = CreateToken();
-        token.Payload.Json.SetArrayOrString("roles", []);
+        token.Payload.Json.SetArrayOrString(RolesClaim, []);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        Assert.False(roundTripToken.Payload.Json.ContainsKey("roles"));
+        Assert.False(roundTripToken.Payload.Json.ContainsKey(RolesClaim));
     }
 
     /// <summary>
@@ -254,11 +266,11 @@ public class JsonWebTokenClaimsTests
             "scope with spaces",
             "unicode_role_世界"
         };
-        token.Payload.Json.SetArrayOrString("roles", values);
+        token.Payload.Json.SetArrayOrString(RolesClaim, values);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings("roles").ToArray();
+        var actualValues = roundTripToken.Payload.Json.GetArrayOfStrings(RolesClaim).ToArray();
         Assert.Equal(values, actualValues);
     }
 
@@ -300,37 +312,37 @@ public class JsonWebTokenClaimsTests
 
     /// <summary>
     /// Verifies that space-separated string claims with single value round-trip correctly.
-    /// Tests OAuth 2.0 "scope" claim format per RFC 6749 Section 3.3.
-    /// Single scope is stored as simple string (e.g., "openid").
+    /// Tests OAuth 2.0 ScopeClaim claim format per RFC 6749 Section 3.3.
+    /// Single scope is stored as simple string (e.g., OpenIdScope).
     /// </summary>
     [Fact]
     public async Task SpaceSeparatedStringClaim_SingleValue_RoundTrip_PreservesValue()
     {
         var token = CreateToken();
-        var scopes = new[] { "openid" };
-        token.Payload.Json.SetSpaceSeparatedStrings("scope", scopes);
+        var scopes = new[] { OpenIdScope };
+        token.Payload.Json.SetSpaceSeparatedStrings(ScopeClaim, scopes);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings("scope").ToArray();
+        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings(ScopeClaim).ToArray();
         Assert.Equal(scopes, actualScopes);
     }
 
     /// <summary>
     /// Verifies that space-separated string claims with multiple values round-trip correctly.
-    /// Tests OAuth 2.0 "scope" claim with multiple scopes (e.g., "openid profile email").
+    /// Tests OAuth 2.0 ScopeClaim claim with multiple scopes (e.g., "openid profile email").
     /// Per RFC 6749, scopes are space-delimited, case-sensitive strings.
     /// </summary>
     [Fact]
     public async Task SpaceSeparatedStringClaim_MultipleValues_RoundTrip_PreservesValues()
     {
         var token = CreateToken();
-        var scopes = new[] { "openid", "profile", "email", "phone" };
-        token.Payload.Json.SetSpaceSeparatedStrings("scope", scopes);
+        var scopes = new[] { OpenIdScope, ProfileScope, EmailScope, "phone" };
+        token.Payload.Json.SetSpaceSeparatedStrings(ScopeClaim, scopes);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings("scope").ToArray();
+        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings(ScopeClaim).ToArray();
         Assert.Equal(scopes, actualScopes);
     }
 
@@ -342,11 +354,11 @@ public class JsonWebTokenClaimsTests
     public async Task SpaceSeparatedStringClaim_EmptyArray_RoundTrip_IsRemovedFromPayload()
     {
         var token = CreateToken();
-        token.Payload.Json.SetSpaceSeparatedStrings("scope", []);
+        token.Payload.Json.SetSpaceSeparatedStrings(ScopeClaim, []);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings("scope").ToArray();
+        var actualScopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings(ScopeClaim).ToArray();
         Assert.Empty(actualScopes);
     }
 
@@ -361,18 +373,18 @@ public class JsonWebTokenClaimsTests
         var token = CreateToken();
         var address = new JsonObject
         {
-            { "street", "123 Main St" },
+            { StreetKey, StreetValue },
             { "city", "Springfield" },
             { "state", "IL" },
             { "zip", "62701" }
         };
-        token.Payload["address"] = address;
+        token.Payload[AddressClaim] = address;
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualAddress = roundTripToken.Payload.Json["address"] as JsonObject;
+        var actualAddress = roundTripToken.Payload.Json[AddressClaim] as JsonObject;
         Assert.NotNull(actualAddress);
-        Assert.Equal("123 Main St", actualAddress["street"]?.GetValue<string>());
+        Assert.Equal(StreetValue, actualAddress[StreetKey]?.GetValue<string>());
         Assert.Equal("Springfield", actualAddress["city"]?.GetValue<string>());
         Assert.Equal("IL", actualAddress["state"]?.GetValue<string>());
         Assert.Equal("62701", actualAddress["zip"]?.GetValue<string>());
@@ -391,11 +403,11 @@ public class JsonWebTokenClaimsTests
         {
             { "name", "John Doe" },
             { "age", 30 },
-            { "email", "john@example.com" },
+            { EmailScope, "john@example.com" },
             {
-                "address", new JsonObject
+                AddressClaim, new JsonObject
                 {
-                    { "street", "456 Oak Ave" },
+                    { StreetKey, "456 Oak Ave" },
                     { "city", "New York" },
                     {
                         "coordinates", new JsonObject
@@ -407,18 +419,18 @@ public class JsonWebTokenClaimsTests
                 }
             }
         };
-        token.Payload["profile"] = userProfile;
+        token.Payload[ProfileScope] = userProfile;
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualProfile = roundTripToken.Payload.Json["profile"] as JsonObject;
+        var actualProfile = roundTripToken.Payload.Json[ProfileScope] as JsonObject;
         Assert.NotNull(actualProfile);
         Assert.Equal("John Doe", actualProfile["name"]?.GetValue<string>());
         Assert.Equal(30, actualProfile["age"]?.GetValue<int>());
 
-        var actualAddress = actualProfile["address"] as JsonObject;
+        var actualAddress = actualProfile[AddressClaim] as JsonObject;
         Assert.NotNull(actualAddress);
-        Assert.Equal("456 Oak Ave", actualAddress["street"]?.GetValue<string>());
+        Assert.Equal("456 Oak Ave", actualAddress[StreetKey]?.GetValue<string>());
 
         var actualCoords = actualAddress["coordinates"] as JsonObject;
         Assert.NotNull(actualCoords);
@@ -533,11 +545,11 @@ public class JsonWebTokenClaimsTests
     {
         var token = CreateToken();
         var testTime = new DateTimeOffset(2024, 11, 6, 12, 30, 45, TimeSpan.Zero);
-        token.Payload.Json.SetUnixTimeSeconds("custom_time", testTime);
+        token.Payload.Json.SetUnixTimeSeconds(CustomTimeClaim, testTime);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        var actualTime = roundTripToken.Payload.Json.GetUnixTimeSeconds("custom_time");
+        var actualTime = roundTripToken.Payload.Json.GetUnixTimeSeconds(CustomTimeClaim);
         Assert.NotNull(actualTime);
         Assert.Equal(testTime.ToUnixTimeSeconds(), actualTime.Value.ToUnixTimeSeconds());
     }
@@ -550,12 +562,12 @@ public class JsonWebTokenClaimsTests
     public async Task DateTimeClaim_NullValue_RoundTrip_IsRemovedFromPayload()
     {
         var token = CreateToken();
-        token.Payload.Json.SetUnixTimeSeconds("custom_time", null);
+        token.Payload.Json.SetUnixTimeSeconds(CustomTimeClaim, null);
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
-        Assert.False(roundTripToken.Payload.Json.ContainsKey("custom_time"));
-        Assert.Null(roundTripToken.Payload.Json.GetUnixTimeSeconds("custom_time"));
+        Assert.False(roundTripToken.Payload.Json.ContainsKey(CustomTimeClaim));
+        Assert.Null(roundTripToken.Payload.Json.GetUnixTimeSeconds(CustomTimeClaim));
     }
 
     /// <summary>
@@ -579,7 +591,7 @@ public class JsonWebTokenClaimsTests
         token.Payload.ExpiresAt = issuedAt.AddHours(1);
         token.Payload.ClientId = "client_abc";
         token.Payload.SessionId = "session_xyz";
-        token.Payload.Scope = ["openid", "profile"];
+        token.Payload.Scope = [OpenIdScope, ProfileScope];
         token.Payload.IdentityProvider = "https://idp.example.com";
         token.Payload.AuthenticationTime = issuedAt.AddMinutes(-5);
         token.Payload.Nonce = "nonce_value";
@@ -657,17 +669,17 @@ public class JsonWebTokenClaimsTests
         token.Payload["bool_claim"] = true;
         token.Payload["double_claim"] = 3.14159;
 
-        token.Payload.Json.SetArrayOrString("roles", ["admin", "user", "moderator"]);
-        token.Payload.Json.SetSpaceSeparatedStrings("scope", ["openid", "profile", "email"]);
+        token.Payload.Json.SetArrayOrString(RolesClaim, ["admin", "user", "moderator"]);
+        token.Payload.Json.SetSpaceSeparatedStrings(ScopeClaim, [OpenIdScope, ProfileScope, EmailScope]);
 
-        token.Payload["address"] = new JsonObject
+        token.Payload[AddressClaim] = new JsonObject
         {
-            { "street", "123 Main St" },
+            { StreetKey, StreetValue },
             { "city", "Springfield" },
             { "coordinates", new JsonObject { { "lat", 40.7128 }, { "lng", -74.0060 } } }
         };
 
-        token.Payload["colors"] = new JsonArray("red", "green", "blue");
+        token.Payload[ColorsClaim] = new JsonArray("red", GreenColor, "blue");
 
         token.Payload["mixed_array"] = new JsonArray
         {
@@ -684,18 +696,18 @@ public class JsonWebTokenClaimsTests
         Assert.Equal(42, roundTripToken.Payload.Json.GetProperty<int>("int_claim"));
         Assert.True(roundTripToken.Payload.Json.GetProperty<bool>("bool_claim"));
 
-        var roles = roundTripToken.Payload.Json.GetArrayOfStrings("roles").ToArray();
+        var roles = roundTripToken.Payload.Json.GetArrayOfStrings(RolesClaim).ToArray();
         Assert.Equal(new[] { "admin", "user", "moderator" }, roles);
 
-        var scopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings("scope").ToArray();
-        Assert.Equal(new[] { "openid", "profile", "email" }, scopes);
+        var scopes = roundTripToken.Payload.Json.GetSpaceSeparatedStrings(ScopeClaim).ToArray();
+        Assert.Equal(new[] { OpenIdScope, ProfileScope, EmailScope }, scopes);
 
-        var address = roundTripToken.Payload.Json["address"] as JsonObject;
+        var address = roundTripToken.Payload.Json[AddressClaim] as JsonObject;
         Assert.NotNull(address);
-        Assert.Equal("123 Main St", address["street"]?.GetValue<string>());
+        Assert.Equal(StreetValue, address[StreetKey]?.GetValue<string>());
 
-        var colors = roundTripToken.Payload.Json.GetArrayOfStrings("colors").ToArray();
-        Assert.Equal(new[] { "red", "green", "blue" }, colors);
+        var colors = roundTripToken.Payload.Json.GetArrayOfStrings(ColorsClaim).ToArray();
+        Assert.Equal(new[] { "red", GreenColor, "blue" }, colors);
     }
 
     /// <summary>
@@ -709,19 +721,19 @@ public class JsonWebTokenClaimsTests
         var token = CreateToken();
 
         // Create a JsonArray with null elements
-        token.Payload.Json["colors"] = new JsonArray
+        token.Payload.Json[ColorsClaim] = new JsonArray
         {
             "red",
             null,
-            "green",
+            GreenColor,
             null,
             "blue"
         };
 
-        var result = token.Payload.Json.GetArrayOfStrings("colors").ToArray();
+        var result = token.Payload.Json.GetArrayOfStrings(ColorsClaim).ToArray();
 
         Assert.Equal(3, result.Length);
-        Assert.Equal(["red", "green", "blue"], result);
+        Assert.Equal(["red", GreenColor, "blue"], result);
     }
 
     private static JsonWebToken CreateToken()
