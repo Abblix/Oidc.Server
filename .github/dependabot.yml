@@ -22,11 +22,13 @@ updates:
       grpc:
         patterns:
           - "Grpc.*"
+          - "Google.Protobuf*"
       test-infrastructure:
         patterns:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
           - "Moq"
+          - "coverlet.*"
     ignore:
       - dependency-name: "Microsoft.AspNetCore.Http.Abstractions"
         # 2.3.9 is the last standalone release; 3.x moved into the ASP.NET Core
