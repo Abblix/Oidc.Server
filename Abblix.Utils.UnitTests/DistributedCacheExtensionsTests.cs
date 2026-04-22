@@ -185,7 +185,7 @@ public class DistributedCacheExtensionsTests
 		const string key = "cancellation-key";
 		var value = Encoding.UTF8.GetBytes("cancellation-value");
 		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
-		var cts = new CancellationTokenSource();
+		using var cts = new CancellationTokenSource();
 
 		// Act - verify method accepts cancellation token without throwing
 		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: cts.Token);
