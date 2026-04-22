@@ -506,7 +506,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKeys.Length, resolvedKeys.Length);
 
         _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo), Times.Once);
@@ -547,7 +547,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
 
@@ -581,7 +581,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
 
         // Verify GetSigningKeys was never called for unknown client

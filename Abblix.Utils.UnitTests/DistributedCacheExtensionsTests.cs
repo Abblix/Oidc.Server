@@ -46,17 +46,17 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "test-key";
 		var value = Encoding.UTF8.GetBytes("test-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 
 		// Act
-		var result = await cache.TryGetAndRemoveAsync(key);
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.NotNull(result);
 		Assert.Equal(value, result);
 
 		// Verify value was removed
-		var afterRemove = await cache.GetAsync(key);
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
 		Assert.Null(afterRemove);
 	}
 
@@ -68,7 +68,7 @@ public class DistributedCacheExtensionsTests
 		const string key = "nonexistent-key";
 
 		// Act
-		var result = await cache.TryGetAndRemoveAsync(key);
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.Null(result);
@@ -81,11 +81,11 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "concurrent-key";
 		var value = Encoding.UTF8.GetBytes("concurrent-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 
 		// Act - simulate race condition with 10 concurrent threads
 		var tasks = Enumerable.Range(0, 10)
-			.Select(_ => cache.TryGetAndRemoveAsync(key))
+			.Select(_ => cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken))
 			.ToArray();
 
 		var results = await Task.WhenAll(tasks);
@@ -99,7 +99,7 @@ public class DistributedCacheExtensionsTests
 		Assert.Equal(9, results.Count(r => r == null));
 
 		// Verify value was removed
-		var afterRemove = await cache.GetAsync(key);
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
 		Assert.Null(afterRemove);
 	}
 
@@ -110,21 +110,21 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "lock-expiry-key";
 		var value = Encoding.UTF8.GetBytes("lock-expiry-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 
 		// Act
-		var result = await cache.TryGetAndRemoveAsync(key);
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Assert - operation succeeded
 		Assert.NotNull(result);
 		Assert.Equal(value, result);
 
 		// Wait for lock to expire (5 seconds + buffer)
-		await Task.Delay(TimeSpan.FromSeconds(6));
+		await Task.Delay(TimeSpan.FromSeconds(6), TestContext.Current.CancellationToken);
 
 		// Verify lock was cleaned up (either explicitly or via expiration)
 		var lockKey = $"lock:{key}";
-		var lockValue = await cache.GetAsync(lockKey);
+		var lockValue = await cache.GetAsync(lockKey, TestContext.Current.CancellationToken);
 		Assert.Null(lockValue);
 	}
 
@@ -137,12 +137,12 @@ public class DistributedCacheExtensionsTests
 		const string key2 = "key2";
 		var value1 = Encoding.UTF8.GetBytes("value1");
 		var value2 = Encoding.UTF8.GetBytes("value2");
-		await cache.SetAsync(key1, value1);
-		await cache.SetAsync(key2, value2);
+		await cache.SetAsync(key1, value1, TestContext.Current.CancellationToken);
+		await cache.SetAsync(key2, value2, TestContext.Current.CancellationToken);
 
 		// Act - concurrent operations on different keys
-		var task1 = cache.TryGetAndRemoveAsync(key1);
-		var task2 = cache.TryGetAndRemoveAsync(key2);
+		var task1 = cache.TryGetAndRemoveAsync(key1, cancellationToken: TestContext.Current.CancellationToken);
+		var task2 = cache.TryGetAndRemoveAsync(key2, cancellationToken: TestContext.Current.CancellationToken);
 		var results = await Task.WhenAll(task1, task2);
 
 		// Assert - both should succeed independently
@@ -152,8 +152,8 @@ public class DistributedCacheExtensionsTests
 		Assert.Equal(value2, results[1]);
 
 		// Verify both values were removed
-		Assert.Null(await cache.GetAsync(key1));
-		Assert.Null(await cache.GetAsync(key2));
+		Assert.Null(await cache.GetAsync(key1, TestContext.Current.CancellationToken));
+		Assert.Null(await cache.GetAsync(key2, TestContext.Current.CancellationToken));
 	}
 
 	[Fact]
@@ -163,17 +163,17 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "empty-key";
 		var emptyValue = Array.Empty<byte>();
-		await cache.SetAsync(key, emptyValue);
+		await cache.SetAsync(key, emptyValue, TestContext.Current.CancellationToken);
 
 		// Act
-		var result = await cache.TryGetAndRemoveAsync(key);
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.NotNull(result);
 		Assert.Empty(result);
 
 		// Verify value was removed
-		var afterRemove = await cache.GetAsync(key);
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
 		Assert.Null(afterRemove);
 	}
 
@@ -184,7 +184,7 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "cancellation-key";
 		var value = Encoding.UTF8.GetBytes("cancellation-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 		var cts = new CancellationTokenSource();
 
 		// Act - verify method accepts cancellation token without throwing
@@ -203,7 +203,7 @@ public class DistributedCacheExtensionsTests
 
 		// Act & Assert
 		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-			await cache!.TryGetAndRemoveAsync("key"));
+			await cache!.TryGetAndRemoveAsync("key", cancellationToken: TestContext.Current.CancellationToken));
 	}
 
 	[Fact]
@@ -214,7 +214,7 @@ public class DistributedCacheExtensionsTests
 
 		// Act & Assert
 		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-			await cache.TryGetAndRemoveAsync(null!));
+			await cache.TryGetAndRemoveAsync(null!, cancellationToken: TestContext.Current.CancellationToken));
 	}
 
 	[Fact]
@@ -224,11 +224,11 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "high-concurrency-key";
 		var value = Encoding.UTF8.GetBytes("high-concurrency-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 
 		// Act - simulate high concurrency with 100 threads
 		var tasks = Enumerable.Range(0, 100)
-			.Select(_ => cache.TryGetAndRemoveAsync(key))
+			.Select(_ => cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken))
 			.ToArray();
 
 		var results = await Task.WhenAll(tasks);
@@ -249,11 +249,11 @@ public class DistributedCacheExtensionsTests
 		var cache = CreateCache();
 		const string key = "sequential-key";
 		var value = Encoding.UTF8.GetBytes("sequential-value");
-		await cache.SetAsync(key, value);
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
 
 		// Act
-		var firstResult = await cache.TryGetAndRemoveAsync(key);
-		var secondResult = await cache.TryGetAndRemoveAsync(key);
+		var firstResult = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+		var secondResult = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.NotNull(firstResult);
