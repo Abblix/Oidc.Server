@@ -269,11 +269,7 @@ public class LicenseLoggerTests
     /// <summary>
     /// Verifies that concurrent calls with same key result in only one allowed call.
     /// </summary>
-    // Exposes a real race in LicenseLogger.IsAllowed: ConcurrentDictionary.AddOrUpdate
-    // may invoke its factory lambdas multiple times during CAS retries, but the method
-    // sets wasAllowed=true inside the factory without atomic commit. Fix requires
-    // rewriting IsAllowed with explicit TryAdd / TryUpdate loop. Tracked as follow-up.
-    [Fact(Skip = "Surfaces race condition in LicenseLogger.IsAllowed; fix is out of scope for MTP migration.")]
+    [Fact]
     public void IsAllowed_ConcurrentCallsSameKey_OnlyOneAllowed()
     {
         // Arrange

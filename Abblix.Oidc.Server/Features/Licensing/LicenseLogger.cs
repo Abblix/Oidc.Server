@@ -140,25 +140,25 @@ internal class LicenseLogger: ILogger
     public bool IsAllowed(object key, DateTimeOffset utcNow, TimeSpan period)
     {
         var newTime = utcNow + period;
-        var wasAllowed = false;
 
-        _nextAllowedTimes.AddOrUpdate(
-            key,
-            _ =>
+        // Use explicit CAS primitives rather than AddOrUpdate's delegate form:
+        // AddOrUpdate may invoke its factory lambdas on retry after a failed CAS,
+        // and any side effect set inside the factory (e.g. wasAllowed=true) then
+        // leaks into the update branch, incorrectly signalling a successful grant.
+        while (true)
+        {
+            if (_nextAllowedTimes.TryGetValue(key, out var existingTime))
             {
-                wasAllowed = true;
-                return newTime;
-            },
-            (_, existingTime) =>
-            {
-                if (existingTime < utcNow)
-                {
-                    wasAllowed = true;
-                    return newTime;
-                }
-                return existingTime;
-            });
+                if (existingTime >= utcNow)
+                    return false;
 
-        return wasAllowed;
+                if (_nextAllowedTimes.TryUpdate(key, newTime, existingTime))
+                    return true;
+            }
+            else if (_nextAllowedTimes.TryAdd(key, newTime))
+            {
+                return true;
+            }
+        }
     }
 }
