@@ -4,4 +4,11 @@
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
+
+  <!-- MTP0001 is raised by Microsoft.Testing.Platform when VSTest-specific MSBuild
+       properties (VSTestTestAdapterPath, VSTestTestCaseFilter) are set by the .NET
+       SDK's test-project defaults. MTP ignores them; the warning is informational. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <NoWarn>$(NoWarn);MTP0001</NoWarn>
+  </PropertyGroup>
 </Project>

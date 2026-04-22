@@ -194,7 +194,7 @@ public class LicenseLoadingServiceTests
             yield return "test.license.jwt";
         }
 
-        var provider = new MockLicenseJwtProvider(SlowLicenses());
+        var provider = new MockLicenseJwtProvider(SlowLicenses(TestContext.Current.CancellationToken));
         var service = new LicenseLoadingService(loggerFactory, provider);
         var cts = new CancellationTokenSource();
 

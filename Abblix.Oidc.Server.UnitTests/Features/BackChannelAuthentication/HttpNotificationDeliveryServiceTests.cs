@@ -91,7 +91,7 @@ public class HttpNotificationDeliveryServiceTests
             h => h == $"Bearer {ClientNotificationToken}");
 
         // Verify payload
-        var content = await capturedRequest.Content!.ReadAsStringAsync();
+        var content = await capturedRequest.Content!.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var deserializedPayload = JsonSerializer.Deserialize<JsonElement>(content);
         Assert.Equal(AuthReqId, deserializedPayload.GetProperty("auth_req_id").GetString());
     }

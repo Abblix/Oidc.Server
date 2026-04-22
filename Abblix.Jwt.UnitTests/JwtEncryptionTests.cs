@@ -112,7 +112,7 @@ public class JwtEncryptionTests
         var address = result.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
         Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
 
-        await Task.Delay(expiresIn);
+        await Task.Delay(expiresIn, TestContext.Current.CancellationToken);
 
         var result2 = await validator.ValidateAsync(jwt, parameters);
         Assert.True(result2.TryGetFailure(out var error));

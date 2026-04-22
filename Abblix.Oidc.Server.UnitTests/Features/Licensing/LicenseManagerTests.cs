@@ -196,7 +196,7 @@ public class LicenseManagerTests
                     exceptions.Add(ex);
                 }
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         var writeTask = Task.Run(() =>
         {
@@ -217,7 +217,7 @@ public class LicenseManagerTests
                     exceptions.Add(ex);
                 }
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         await Task.WhenAll(readTask, writeTask);
 

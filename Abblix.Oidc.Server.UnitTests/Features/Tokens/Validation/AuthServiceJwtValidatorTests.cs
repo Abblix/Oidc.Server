@@ -463,7 +463,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKeys.Length, resolvedKeys.Length);
     }
 
@@ -498,7 +498,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveTokenDecryptionKeys!(null!).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveTokenDecryptionKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(encryptionKeys.Length, resolvedKeys.Length);
 
         // Verify GetEncryptionKeys was called with includePrivate=true
@@ -532,7 +532,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync();
+        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
 

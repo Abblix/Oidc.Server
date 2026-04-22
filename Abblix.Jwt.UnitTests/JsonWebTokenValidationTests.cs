@@ -131,7 +131,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);
@@ -186,7 +186,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime;
@@ -840,7 +840,7 @@ public class JsonWebTokenValidationTests
         };
 
         var jwt = await IssueToken(token, SigningKey);
-        await Task.Delay(100); // Token already expired (created 2 minutes ago)
+        await Task.Delay(100, TestContext.Current.CancellationToken); // Token already expired (created 2 minutes ago)
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);
