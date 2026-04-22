@@ -17,7 +17,7 @@
        instead of waiting for a CI scan. PrivateAssets=all keeps the analyzer
        out of the NuGet graph we ship to consumers. -->
   <ItemGroup>
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.23.0.137933">
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.24.0.138807">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
     </PackageReference>
