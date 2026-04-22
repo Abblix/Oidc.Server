@@ -385,7 +385,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(resources, scopes, out var definitions, out _);
 
         // Assert
         Assert.True(result);

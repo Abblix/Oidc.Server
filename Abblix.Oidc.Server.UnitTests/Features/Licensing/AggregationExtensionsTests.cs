@@ -107,6 +107,8 @@ public class AggregationExtensionsTests
     [InlineData(200, 100, 200)]
     [InlineData(-10, -50, -10)]
     [InlineData(50, 50, 50)] // Equal values
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S4144",
+        Justification = "Shares implementation with Greater_CurrentValueLarger by design; adds the equality edge case which is the behaviour under test.")]
     public void Greater_AccumulatorLargerOrEqual_ReturnsAccumulatorValue(int accumulatorValue, int currentValue, int expected)
     {
         // Arrange & Act
@@ -207,6 +209,8 @@ public class AggregationExtensionsTests
     [InlineData(100, 200, 100)]
     [InlineData(-50, -10, -50)]
     [InlineData(50, 50, 50)] // Equal values
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S4144",
+        Justification = "Shares implementation with Lesser_CurrentValueSmaller by design; adds the equality edge case which is the behaviour under test.")]
     public void Lesser_AccumulatorSmallerOrEqual_ReturnsAccumulatorValue(int accumulatorValue, int currentValue, int expected)
     {
         // Arrange & Act

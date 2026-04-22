@@ -261,8 +261,8 @@ public class BackChannelAuthenticationRequestValidatorTests
         var scopeDefinitions = new[]
         {
             new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()),
-            new ScopeDefinition("profile", new[] { "name", "given_name", "family_name" }),
-            new ScopeDefinition("email", new[] { "email", "email_verified" })
+            new ScopeDefinition("profile", "name", "given_name", "family_name"),
+            new ScopeDefinition("email", "email", "email_verified")
         };
 
         _contextValidator

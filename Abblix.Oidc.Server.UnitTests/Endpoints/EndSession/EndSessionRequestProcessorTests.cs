@@ -401,7 +401,7 @@ public class EndSessionRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Single(response.FrontChannelLogoutRequestUris);
-        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris.First().ToString());
+        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
     }
 
     /// <summary>

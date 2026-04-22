@@ -267,7 +267,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { "custom:read" };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(scopes, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -308,7 +308,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, Scopes.OpenId }; // Duplicate
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(scopes, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -447,7 +447,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.Email, Scopes.Profile, Scopes.OpenId };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(scopes, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);

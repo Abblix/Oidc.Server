@@ -275,6 +275,8 @@ public class BackChannelAuthenticationValidatorTests
     /// Per OIDC CIBA, signing algorithm is optional.
     /// </summary>
     [Fact]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S4144",
+        Justification = "Separate CIBA scenarios that happen to share identical setup; names document distinct spec requirements.")]
     public async Task ValidateAsync_WithoutSigningAlg_ShouldReturnNull()
     {
         // Arrange

@@ -196,7 +196,7 @@ public class LicenseLoadingServiceTests
 
         var provider = new MockLicenseJwtProvider(SlowLicenses(TestContext.Current.CancellationToken));
         var service = new LicenseLoadingService(loggerFactory, provider);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act - Cancel before enumeration completes
         cts.CancelAfter(10);
@@ -216,10 +216,10 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
         var service = new LicenseLoadingService(loggerFactory, provider);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act - Should complete immediately (no enumeration needed)
-        cts.Cancel();
+        await cts.CancelAsync();
         await service.StartAsync(cts.Token);
 
         // Assert - Completes without throwing because provider returns null
@@ -241,7 +241,7 @@ public class LicenseLoadingServiceTests
         var provider = new MockLicenseJwtProvider(null);
 
         // Act
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        _ = new LicenseLoadingService(loggerFactory, provider);
 
         // Assert - LicenseLogger.Instance should be initialized
         // We can verify this by checking if IsEnabled returns expected value
@@ -269,9 +269,8 @@ public class LicenseLoadingServiceTests
         // - Validates and applies license before accepting requests
 
         // Usage Pattern 2: Testing with StaticLicenseJwtProvider
-        // var provider = new StaticLicenseJwtProvider("test.jwt");
-        // var service = new LicenseLoadingService(loggerFactory, provider);
-        // await service.StartAsync(CancellationToken.None);
+        // - Instantiate StaticLicenseJwtProvider with a known test JWT
+        // - Construct LicenseLoadingService and invoke StartAsync during test setup
         // - Useful for integration tests with known test licenses
 
         // Usage Pattern 3: No License (Free Tier)

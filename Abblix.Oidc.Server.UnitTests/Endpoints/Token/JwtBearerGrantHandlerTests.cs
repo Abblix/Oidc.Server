@@ -598,6 +598,8 @@ public class JwtBearerGrantHandlerTests
 		Mock<ISessionIdGenerator> SessionIdGenerator,
 		Mock<TimeProvider> TimeProvider);
 
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S1172",
+		Justification = "allowedAlgorithms is kept for call-site symmetry with SetupTrustedIssuer; tests set algorithms on the trusted issuer, not the handler.")]
 	private static (JwtBearerGrantHandler Handler, Mocks Mocks) CreateHandler(
 		Func<string>? sessionIdFactory = null,
 		DateTimeOffset? fixedTime = null,
