@@ -492,7 +492,8 @@ public class DistributedCacheStorageTests
         // Act
         await _storage.GetAsync<TestData>(key, removeOnRetrieval: false);
 
-        // Assert - MockBehavior.Strict ensures no unexpected calls to Deserialize
+        // Assert - Deserialize must not be called when cache returns null
+        _serializer.Verify(s => s.Deserialize<TestData>(It.IsAny<byte[]>()), Times.Never);
     }
 
     /// <summary>

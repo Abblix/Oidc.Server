@@ -198,7 +198,7 @@ public class LicenseManagerTests
             }
         }, TestContext.Current.CancellationToken);
 
-        var writeTask = Task.Run(() =>
+        var writeTask = Task.Run(async () =>
         {
             try
             {
@@ -207,7 +207,14 @@ public class LicenseManagerTests
                 {
                     manager.AddLicense(CreateLicense(-1 - counter, 10 + counter));
                     counter++;
-                    Thread.Sleep(10);
+                    try
+                    {
+                        await Task.Delay(10, cancellationSource.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }
             catch (Exception ex)
