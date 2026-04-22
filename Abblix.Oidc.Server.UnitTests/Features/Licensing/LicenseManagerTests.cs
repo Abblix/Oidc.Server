@@ -176,7 +176,7 @@ public class LicenseManagerTests
         manager.AddLicense(activeLicense);
 
         var exceptions = new List<Exception>();
-        var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         // Act - Concurrent reads and writes
         var readTask = Task.Run(() =>

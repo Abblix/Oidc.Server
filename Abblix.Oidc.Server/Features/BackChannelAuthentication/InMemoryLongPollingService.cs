@@ -104,12 +104,9 @@ public class InMemoryLongPollingService(
                 authenticationRequestId);
             return false;
         }
-        catch (OperationCanceledException ex)
+        catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
         {
-            logger.LogDebug(
-                ex,
-                "Long-polling request cancelled for auth_req_id: {AuthReqId}",
-                authenticationRequestId);
+            // Filter logs without catching; the exception continues to propagate with the original stack trace.
             throw;
         }
         finally
@@ -118,6 +115,16 @@ public class InMemoryLongPollingService(
             // Note: If bag is empty after removal, it will be cleaned up on next NotifyStatusChangeAsync
             tcs.TrySetCanceled(cancellationToken);
         }
+    }
+
+    // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
+    private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
+    {
+        logger.LogDebug(
+            ex,
+            "Long-polling request cancelled for auth_req_id: {AuthReqId}",
+            authenticationRequestId);
+        return false;
     }
 
     /// <summary>

@@ -61,7 +61,7 @@ public class MappersTests
     public void TokenInfoMapper_ToProto_PreservesAllFields()
     {
         // Arrange
-        var tokenInfo = new TokenInfo("jwt-abc123", DateTimeOffset.Parse("2025-12-31T23:59:59.123Z"));
+        var tokenInfo = new TokenInfo("jwt-abc123", DateTimeOffset.Parse("2025-12-31T23:59:59.123Z", CultureInfo.InvariantCulture));
 
         // Act
         var proto = tokenInfo.ToProto();

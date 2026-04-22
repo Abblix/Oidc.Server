@@ -38,7 +38,7 @@ public class TlsClientAuthValidatorTests
 {
     private readonly TlsClientAuthValidator _validator = new();
 
-    private ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
+    private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
         => new(request);
 
     /// <summary>
@@ -261,6 +261,8 @@ public class TlsClientAuthValidatorTests
     [InlineData("2001:0db8:85a3:0000:0000:8a2e:0370:7334")]
     [InlineData("::1")]
     [InlineData("fe80::1")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S4144",
+        Justification = "IPv6 variant of the IPv4 validation test; implementations are structurally identical but cover distinct address families per RFC 8705.")]
     public async Task ValidateAsync_WithValidIPv6_ShouldReturnNull(string ip)
     {
         // Arrange

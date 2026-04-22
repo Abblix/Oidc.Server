@@ -847,7 +847,7 @@ public class ClientJwtValidatorTests
         var result = await _validator.ValidateAsync(ValidJwt);
 
         // Assert
-        Assert.True(result.TryGetSuccess(out var validToken));
+        Assert.True(result.TryGetSuccess(out _));
         _tokenValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
     }
 

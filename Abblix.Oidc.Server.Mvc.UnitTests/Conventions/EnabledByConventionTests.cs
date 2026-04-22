@@ -136,9 +136,9 @@ public class EnabledByConventionTests
 
         // Assert
         Assert.Single(application.Controllers);
-        var remainingController = application.Controllers.First();
+        var remainingController = application.Controllers[0];
         Assert.Single(remainingController.Actions);
-        Assert.Equal("OtherAction", remainingController.Actions.First().ActionName);
+        Assert.Equal("OtherAction", remainingController.Actions[0].ActionName);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public class EnabledByConventionTests
 
         // Assert
         Assert.Single(application.Controllers);
-        var remainingController = application.Controllers.First();
+        var remainingController = application.Controllers[0];
         Assert.Equal(2, remainingController.Actions.Count);
     }
 

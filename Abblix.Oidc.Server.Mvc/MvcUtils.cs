@@ -22,9 +22,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -100,33 +98,5 @@ public static class MvcUtils
 		}
 
 		return value;
-	}
-
-	/// <summary>
-	/// Converts errors contained within a <see cref="ModelStateDictionary"/> to an <see cref="Exception"/>.
-	/// </summary>
-	/// <param name="modelState">The ModelStateDictionary containing validation errors.</param>
-	/// <returns>An <see cref="Exception"/> encapsulating the model state errors.</returns>
-	/// <remarks>
-	/// This method is useful for aggregating model state errors into a single exception that can be thrown or logged,
-	/// providing a summary of all validation issues encountered.
-	/// </remarks>
-	private static Exception ToException(this ModelStateDictionary modelState)
-	{
-		var errorMessages =
-			from entry in modelState.Values
-			from error in entry.Errors
-			select GetErrorMessage(error);
-
-		return new InvalidOperationException(string.Join(Environment.NewLine, errorMessages))
-		{
-			Data = { { nameof(modelState), modelState } },
-		};
-
-		static string? GetErrorMessage(ModelError error)
-		{
-			var errorMessage = error.ErrorMessage;
-			return errorMessage.HasValue() ? errorMessage : error.Exception?.Message;
-		}
 	}
 }
