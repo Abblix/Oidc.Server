@@ -11,4 +11,15 @@
   <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
     <NoWarn>$(NoWarn);MTP0001</NoWarn>
   </PropertyGroup>
+
+  <!-- SonarCloud's C# ruleset runs locally at build time via this analyzer.
+       Closes the feedback loop so Sonar findings surface in `dotnet build`
+       instead of waiting for a CI scan. PrivateAssets=all keeps the analyzer
+       out of the NuGet graph we ship to consumers. -->
+  <ItemGroup>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.23.0.137933">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 </Project>
