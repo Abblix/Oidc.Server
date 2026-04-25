@@ -210,7 +210,12 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         bool TryDecryptBy<TJsonWebKey>(TJsonWebKey jwk, [NotNullWhen(true)] out byte[]? decryptedKey)
             where TJsonWebKey : JsonWebKey
         {
-            var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            var keyEncryptor = serviceProvider.GetKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            if (keyEncryptor == null)
+            {
+                decryptedKey = null;
+                return false;
+            }
             return keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out decryptedKey);
         }
     }
@@ -227,7 +232,9 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         byte[] ciphertext,
         byte[] authTag)
     {
-        var contentDecryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(encAlgorithm);
+        var contentDecryptor = serviceProvider.GetKeyedService<IDataEncryptor>(encAlgorithm);
+        if (contentDecryptor == null)
+            return null;
 
         var aad = Encoding.ASCII.GetBytes(headerPart);
 

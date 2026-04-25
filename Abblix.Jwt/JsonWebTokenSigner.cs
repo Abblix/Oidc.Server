@@ -170,8 +170,8 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
 
         bool ValidateBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var dataSigner = serviceProvider.GetRequiredKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
-            return dataSigner.Verify(jwk, data, signature);
+            var dataSigner = serviceProvider.GetKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
+            return dataSigner != null && dataSigner.Verify(jwk, data, signature);
         }
     }
 }
