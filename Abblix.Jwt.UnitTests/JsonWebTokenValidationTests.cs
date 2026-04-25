@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -873,6 +874,34 @@ public class JsonWebTokenValidationTests
         };
 
         var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that a JWS specifying an algorithm not registered for the resolved key type
+    /// fails validation gracefully instead of leaking the DI resolution exception.
+    /// Concretely: a token with header alg=HS256 against an RsaJsonWebKey has no
+    /// IDataSigner&lt;RsaJsonWebKey&gt; registered for "HS256", so GetRequiredKeyedService
+    /// would throw. Per the IJsonWebTokenValidator contract, validation must return a
+    /// Result.Failure with JwtError.InvalidToken — never an unhandled exception.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithAlgorithmUnsupportedForResolvedKeyType_FailsValidation()
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = """{"alg":"HS256","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = HttpServerUtility.UrlTokenEncode(Encoding.UTF8.GetBytes(headerJson));
+        var payloadEnc = HttpServerUtility.UrlTokenEncode(Encoding.UTF8.GetBytes(payloadJson));
+        var sigEnc = HttpServerUtility.UrlTokenEncode(new byte[32]);
+        var jwt = $"{headerEnc}.{payloadEnc}.{sigEnc}";
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);
