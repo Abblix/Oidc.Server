@@ -72,8 +72,8 @@ jobs:
             echo "Previous version: $PREVIOUS_VERSION"
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
 
   build-and-test:
     needs: versioning
@@ -148,7 +148,7 @@ jobs:
           cd getting-started/OpenIDProviderApp
           dotnet run &
           APP_PID=$!
-          for i in {1..30}; do
+          for _ in {1..30}; do
             if curl -fsS http://localhost:5000 >/dev/null 2>&1 \
                || curl -fsS http://localhost:5000/.well-known/openid-configuration >/dev/null 2>&1; then
               echo "App is responding"
@@ -180,9 +180,9 @@ jobs:
           INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
         run: |
           if [ "$INPUT_PRE_RELEASE" = "true" ]; then
-            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
           else
-            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -226,17 +226,19 @@ jobs:
             echo "## Initial Release" > CHANGELOG.md
           fi
 
-          echo "" >> CHANGELOG.md
-          echo "## NuGet Packages" >> CHANGELOG.md
-          for pkg in nupkg/*.nupkg; do
-            basename=$(basename "$pkg" .nupkg)
-            echo "- $basename" >> CHANGELOG.md
-          done
+          {
+            echo ""
+            echo "## NuGet Packages"
+            for pkg in nupkg/*.nupkg; do
+              basename=$(basename "$pkg" .nupkg)
+              echo "- $basename"
+            done
 
-          echo "" >> CHANGELOG.md
-          echo "Available on:" >> CHANGELOG.md
-          echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)" >> CHANGELOG.md
-          echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)" >> CHANGELOG.md
+            echo ""
+            echo "Available on:"
+            echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)"
+            echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)"
+          } >> CHANGELOG.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
