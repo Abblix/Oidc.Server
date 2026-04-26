@@ -344,6 +344,7 @@ jobs:
   update-getting-started:
     needs: [versioning, create-release, publish-nuget-org]
     runs-on: ubuntu-latest
+    environment: update-sample
     permissions:
       contents: read
     if: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
