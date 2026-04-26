@@ -28,17 +28,17 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore Abblix.Oidc.sln
+        run: dotnet restore Abblix.Oidc.slnx
 
       - name: Build
-        run: dotnet build Abblix.Oidc.sln --configuration Release --no-restore
+        run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test Abblix.Oidc.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        run: dotnet test Abblix.Oidc.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
       - name: Upload test results
         if: always()

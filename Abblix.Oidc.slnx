@@ -1,0 +1,23 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitattributes" />
+    <File Path=".github/workflows/enhanced-release.yml" />
+    <File Path=".github/workflows/pr-tests.yml" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Project Path="Abblix.DependencyInjection.UnitTests/Abblix.DependencyInjection.UnitTests.csproj" />
+  <Project Path="Abblix.DependencyInjection/Abblix.DependencyInjection.csproj" />
+  <Project Path="Abblix.Jwt.UnitTests/Abblix.Jwt.UnitTests.csproj" />
+  <Project Path="Abblix.Jwt/Abblix.Jwt.csproj" />
+  <Project Path="Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />
+  <Project Path="Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
+  <Project Path="Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
+  <Project Path="Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
+  <Project Path="Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
+  <Project Path="Abblix.Utils/Abblix.Utils.csproj" />
+</Solution>
