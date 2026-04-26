@@ -22,9 +22,18 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   versioning:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
@@ -32,47 +41,47 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - name: Get version from project files or input
+      - name: Resolve version
         id: set_version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            # Use explicit version from input
-            VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "Error: invalid version format: $INPUT_VERSION"
+              exit 1
+            fi
+            VERSION="$INPUT_VERSION"
             echo "Using explicit version: $VERSION"
           else
-            # Extract version from project file
             VERSION=$(grep -oP '<PackageVersion>\K[^<]+' Abblix.Oidc.Server/Abblix.Oidc.Server.csproj || echo "")
             if [ -z "$VERSION" ]; then
-              echo "Error: Could not extract version from project files"
+              echo "Error: could not extract version from project files"
+              exit 1
+            fi
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "Error: invalid version format from project file: $VERSION"
               exit 1
             fi
             echo "Using project file version: $VERSION"
           fi
-          
-          # Get previous version from latest git tag
+
           PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$PREVIOUS_VERSION" ]; then
-            PREVIOUS_VERSION=${PREVIOUS_VERSION#v}  # Remove 'v' prefix if present
+            PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
             echo "Previous version: $PREVIOUS_VERSION"
           fi
-          
-          # Check if tag already exists
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists - using existing tag"
-          else
-            echo "Creating new tag v$VERSION"
-            git config user.name "GitHub Actions"
-            git config user.email "actions@github.com"
-            git tag -a "v$VERSION" -m "Release v$VERSION"
-            git push origin "v$VERSION"
-          fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
 
   build-and-test:
     needs: versioning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup .NET
@@ -82,11 +91,11 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --no-restore -c Release -p:AssemblyVersion=${{ needs.versioning.outputs.version }}.0 -p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet build --no-restore -c Release -p:AssemblyVersion="$VERSION.0" -p:PackageVersion="$VERSION"
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg -p:AssemblyVersion=${{ needs.versioning.outputs.version }}.0 -p:PackageVersion=${{ needs.versioning.outputs.version }}
+        run: dotnet pack --no-build -c Release -o nupkg -p:AssemblyVersion="$VERSION.0" -p:PackageVersion="$VERSION"
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -98,6 +107,10 @@ jobs:
   test-getting-started:
     needs: [versioning, build-and-test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
     steps:
       - name: Checkout main repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -124,8 +137,7 @@ jobs:
       - name: Update package references
         run: |
           cd getting-started
-          # Update OpenIDProviderApp to use new version
-          sed -i 's/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="[^"]*"/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="${{ needs.versioning.outputs.version }}"/g' OpenIDProviderApp/OpenIDProviderApp.csproj
+          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
       - name: Test GettingStarted builds
         run: |
           cd getting-started
@@ -134,115 +146,40 @@ jobs:
       - name: Test OpenIDProviderApp runs
         run: |
           cd getting-started/OpenIDProviderApp
-          timeout 30s dotnet run &
-          sleep 10
-          # Basic health check - just verify it starts (uses HTTP for local testing)
-          curl http://localhost:5000 || echo "Expected - no default route"
-
-  publish-github-packages:
-    needs: [versioning, build-and-test, test-getting-started, create-release]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-      - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        with:
-          dotnet-version: '10.0'
-      - name: List packages to be published
-        run: |
-          echo "📦 Packages ready for publishing to GitHub Packages:"
-          for pkg in nupkg/*.nupkg; do
-            echo "  - $(basename "$pkg")"
+          dotnet run &
+          APP_PID=$!
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5000 >/dev/null 2>&1 \
+               || curl -fsS http://localhost:5000/.well-known/openid-configuration >/dev/null 2>&1; then
+              echo "App is responding"
+              break
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "App process died before responding"
+              exit 1
+            fi
+            sleep 1
           done
-          echo ""
-          echo "🎯 Publishing destination: https://nuget.pkg.github.com/Abblix/index.json"
-      - name: Publish to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "📤 Publishing to GitHub Packages..."
-          for pkg in nupkg/*.nupkg; do
-            echo "Publishing $(basename "$pkg") to GitHub Packages..."
-            dotnet nuget push "$pkg" \
-              --api-key "$GITHUB_TOKEN" \
-              --source https://nuget.pkg.github.com/Abblix/index.json \
-              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
-          done
-          echo "✅ GitHub Packages publishing completed"
-      - name: Verify publication
-        run: |
-          echo "🔍 Verification: https://github.com/Abblix/Oidc.Server/packages"
-          echo "📋 Published packages:"
-          for pkg in nupkg/*.nupkg; do
-            PACKAGE_NAME=$(basename "$pkg" .nupkg)
-            echo "  - $PACKAGE_NAME"
-          done
-
-  publish-nuget-org:
-    needs: [versioning, build-and-test, test-getting-started, create-release]
-    runs-on: ubuntu-latest
-    environment: publish-packages
-    steps:
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-      - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        with:
-          dotnet-version: '10.0'
-      - name: List packages to be published
-        run: |
-          echo "📦 Packages ready for publishing to NuGet.org:"
-          for pkg in nupkg/*.nupkg; do
-            echo "  - $(basename "$pkg")"
-          done
-          echo ""
-          echo "🎯 Publishing destination: https://api.nuget.org/v3/index.json"
-          echo ""
-          echo "⚠️  This step requires manual approval in GitHub Actions."
-          echo "🔄 Publishing will begin after approval..."
-      - name: Publish to NuGet.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          echo "📤 Publishing to NuGet.org..."
-          for pkg in nupkg/*.nupkg; do
-            echo "Publishing $(basename "$pkg") to NuGet.org..."
-            dotnet nuget push "$pkg" \
-              --api-key "$NUGET_API_KEY" \
-              --source https://api.nuget.org/v3/index.json \
-              --skip-duplicate || echo "⚠️  Package $(basename "$pkg") may already exist"
-          done
-          echo "✅ NuGet.org publishing completed"
-      - name: Verify publication
-        run: |
-          echo "🔍 Verification: https://www.nuget.org/packages?q=Abblix"
-          echo "⏳ Wait 5-15 minutes for package indexing to complete"
-          echo ""
-          echo "📋 Published packages:"
-          for pkg in nupkg/*.nupkg; do
-            PACKAGE_NAME=$(basename "$pkg" .nupkg)
-            echo "  - $PACKAGE_NAME"
-          done
+          kill "$APP_PID" 2>/dev/null || true
 
   create-release:
     needs: [versioning, build-and-test, test-getting-started]
     runs-on: ubuntu-latest
-    environment: release-approval  # This creates a manual approval gate
+    environment: release-approval
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+      PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
     outputs:
       is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
     steps:
       - name: Validate and normalize inputs
         id: validate_inputs
+        env:
+          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
         run: |
-          # Convert user input to validated boolean to avoid security issues
-          if [ "${{ github.event.inputs.pre_release }}" = "true" ]; then
+          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
@@ -255,39 +192,47 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
+      - name: Create or verify tag
+        run: |
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists - using existing tag"
+          else
+            echo "Creating new tag v$VERSION"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git push origin "v$VERSION"
+          fi
       - name: Generate changelog
         id: changelog
         run: |
-          # Check if we have a signed tag and use its message
-          if git tag -v "v${{ needs.versioning.outputs.version }}" >/dev/null 2>&1; then
+          if git tag -v "v$VERSION" >/dev/null 2>&1; then
             echo "Using signed tag message as release notes"
-            git tag -l --format='%(contents)' "v${{ needs.versioning.outputs.version }}" > CHANGELOG.md
-          elif [ -n "${{ needs.versioning.outputs.previous_version }}" ]; then
-            # Generate changelog between versions with proper git references
-            echo "## Changes since v${{ needs.versioning.outputs.previous_version }}" > CHANGELOG.md
+            git tag -l --format='%(contents)' "v$VERSION" > CHANGELOG.md
+          elif [ -n "$PREVIOUS_VERSION" ]; then
+            echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
             echo "" >> CHANGELOG.md
-            
-            # Use git log with proper tag references
-            PREV_TAG="v${{ needs.versioning.outputs.previous_version }}"
-            CURR_TAG="v${{ needs.versioning.outputs.version }}"
-            
+
+            PREV_TAG="v$PREVIOUS_VERSION"
+            CURR_TAG="v$VERSION"
+
             if git rev-parse "$PREV_TAG" >/dev/null 2>&1 && git rev-parse "$CURR_TAG" >/dev/null 2>&1; then
-              git log --oneline "$PREV_TAG..$CURR_TAG" --pretty=format:"- %s" >> CHANGELOG.md || echo "- Various improvements and fixes" >> CHANGELOG.md
+              git log --oneline "$PREV_TAG..$CURR_TAG" --pretty=format:"- %s" >> CHANGELOG.md \
+                || echo "- Various improvements and fixes" >> CHANGELOG.md
             else
               echo "- Various improvements and fixes" >> CHANGELOG.md
             fi
           else
             echo "## Initial Release" > CHANGELOG.md
           fi
-          
-          # Add package info
+
           echo "" >> CHANGELOG.md
-          echo "## 📦 NuGet Packages" >> CHANGELOG.md
+          echo "## NuGet Packages" >> CHANGELOG.md
           for pkg in nupkg/*.nupkg; do
             basename=$(basename "$pkg" .nupkg)
             echo "- $basename" >> CHANGELOG.md
           done
-          
+
           echo "" >> CHANGELOG.md
           echo "Available on:" >> CHANGELOG.md
           echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)" >> CHANGELOG.md
@@ -306,24 +251,117 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-github-packages:
+    needs: [versioning, build-and-test, test-getting-started, create-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.0'
+      - name: List packages to be published
+        run: |
+          echo "Packages ready for publishing to GitHub Packages:"
+          for pkg in nupkg/*.nupkg; do
+            echo "  - $(basename "$pkg")"
+          done
+          echo "Publishing destination: https://nuget.pkg.github.com/Abblix/index.json"
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to GitHub Packages..."
+            dotnet nuget push "$pkg" \
+              --api-key "$GITHUB_TOKEN" \
+              --source https://nuget.pkg.github.com/Abblix/index.json \
+              --skip-duplicate
+          done
+          echo "GitHub Packages publishing completed"
+      - name: Verify publication
+        run: |
+          echo "Verification: https://github.com/Abblix/Oidc.Server/packages"
+          echo "Published packages:"
+          for pkg in nupkg/*.nupkg; do
+            PACKAGE_NAME=$(basename "$pkg" .nupkg)
+            echo "  - $PACKAGE_NAME"
+          done
+
+  publish-nuget-org:
+    needs: [versioning, build-and-test, test-getting-started, create-release]
+    runs-on: ubuntu-latest
+    environment: publish-packages
+    permissions:
+      contents: read
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.0'
+      - name: List packages to be published
+        run: |
+          echo "Packages ready for publishing to NuGet.org:"
+          for pkg in nupkg/*.nupkg; do
+            echo "  - $(basename "$pkg")"
+          done
+          echo "Publishing destination: https://api.nuget.org/v3/index.json"
+          echo "This step requires manual approval in GitHub Actions."
+      - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to NuGet.org..."
+            dotnet nuget push "$pkg" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+          echo "NuGet.org publishing completed"
+      - name: Verify publication
+        run: |
+          echo "Verification: https://www.nuget.org/packages?q=Abblix"
+          echo "Wait 5-15 minutes for package indexing to complete"
+          echo "Published packages:"
+          for pkg in nupkg/*.nupkg; do
+            PACKAGE_NAME=$(basename "$pkg" .nupkg)
+            echo "  - $PACKAGE_NAME"
+          done
+
   update-getting-started:
     needs: [versioning, create-release, publish-nuget-org]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
     steps:
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
       - name: Update package references to released version
         run: |
-          # Update to use the published version from NuGet.org
-          sed -i 's/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="[^"]*"/<PackageReference Include="Abblix.Oidc.Server.Mvc" Version="${{ needs.versioning.outputs.version }}"/g' OpenIDProviderApp/OpenIDProviderApp.csproj
+          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git commit -m "Update Abblix packages to v${{ needs.versioning.outputs.version }}" || exit 0
+          git commit -m "Update Abblix packages to v$VERSION" || exit 0
           git push
