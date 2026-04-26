@@ -6,10 +6,7 @@ on:
       - '.github/workflows/**'
       - '.github/scripts/lint-no-inline-secrets.py'
   push:
-    branches: [master]
-    paths:
-      - '.github/workflows/**'
-      - '.github/scripts/lint-no-inline-secrets.py'
+    branches: [master, develop]
   workflow_dispatch:
 
 permissions:
