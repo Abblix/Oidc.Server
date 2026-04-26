@@ -145,6 +145,17 @@ Please feel free to contribute by [submitting an issue](https://github.com/Abbli
 
 We appreciate your support and look forward to making our product even better with your help!
 
+### Pre-commit hooks (one-time setup per clone)
+
+If you plan to send a pull request, set up local hooks once:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+After this, `git commit` automatically runs `actionlint` and a custom secrets-interpolation check on any change to `.github/workflows/`. The same checks run in CI as a backstop, so the worst case is a 1–2 minute round-trip; pre-commit just makes it faster.
+
 ## 📃 License
 
 This product is distributed under a proprietary license. See📋[License Agreement](LICENSE.md) for details.
