@@ -32,9 +32,10 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
-/// Processes user information requests by retrieving and formatting user information based on the provided request.
-/// This class is integral in handling requests to the UserInfo endpoint, ensuring that the returned user information
-/// adheres to requested scopes and complies with OAuth 2.0 and OpenID Connect standards.
+/// Default <see cref="IUserInfoRequestProcessor"/>: assembles the UserInfo claims set from
+/// <see cref="IUserClaimsProvider"/>, filtered by the access token's authorized scopes and any
+/// <c>userinfo</c> entry of the OIDC Core §5.5 <c>claims</c> request. Returns
+/// <see cref="ErrorCodes.InvalidToken"/> if no claims are produced for the subject.
 /// </summary>
 public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
 {

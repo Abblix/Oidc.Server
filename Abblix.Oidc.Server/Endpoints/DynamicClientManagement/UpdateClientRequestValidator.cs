@@ -29,25 +29,27 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Validates update client requests by checking authentication and ensuring client exists per RFC 7592.
+/// Validates an RFC 7592 §2.2 update request: authenticates the registration access token and
+/// confirms the client exists, then validates the supplied replacement metadata via the
+/// update-specific keyed <see cref="IRegisterClientRequestValidator"/>. Also enforces the
+/// RFC 7592 §2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
 /// </summary>
-/// <param name="clientRequestValidator">Validator for client authentication via registration_access_token.</param>
-/// <param name="registrationRequestValidator">Validator for client registration metadata (keyed service).</param>
+/// <param name="clientRequestValidator">Validator for the registration access token.</param>
+/// <param name="registrationRequestValidator">Update-flow metadata validator
+/// (keyed by <see cref="RegistrationKey"/>).</param>
 public class UpdateClientRequestValidator(
     IClientRequestValidator clientRequestValidator,
     [FromKeyedServices(UpdateClientRequestValidator.RegistrationKey)] IRegisterClientRequestValidator registrationRequestValidator)
     : IUpdateClientRequestValidator
 {
     /// <summary>
-    /// Service key for the update-specific registration validator.
+    /// DI service key under which the update-specific
+    /// <see cref="IRegisterClientRequestValidator"/> is registered, allowing the same
+    /// validator interface to be used for both register and update flows.
     /// </summary>
     public const string RegistrationKey = nameof(UpdateClientRequestValidator);
 
-    /// <summary>
-    /// Validates an update client request asynchronously per RFC 7592 Section 2.2.
-    /// </summary>
-    /// <param name="request">The update request to validate.</param>
-    /// <returns>A task that returns the validation result.</returns>
+    /// <inheritdoc />
     public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(UpdateClientRequest request)
     {
         // First validate client authentication (registration_access_token)

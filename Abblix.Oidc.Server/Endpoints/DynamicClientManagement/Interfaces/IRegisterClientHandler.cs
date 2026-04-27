@@ -26,25 +26,22 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Defines a contract for handling dynamic client registration requests in compliance with OAuth 2.0 and
-/// OpenID Connect protocols.
+/// Handles <c>POST</c> requests to the registration endpoint per RFC 7591 §3 and the
+/// OpenID Connect Dynamic Client Registration 1.0 specification, validating supplied
+/// metadata and provisioning a new client.
 /// </summary>
 public interface IRegisterClientHandler
 {
     /// <summary>
-    /// Asynchronously processes a client registration request, validating its content and, if valid,
-    /// registering the client with the authorization server.
+    /// Validates the supplied client metadata and, on success, creates the client record,
+    /// generates credentials, and issues the registration access token used for later
+    /// management operations (RFC 7592).
     /// </summary>
-    /// <param name="clientRegistrationRequest">The client registration request containing the necessary parameters
-    /// for registering a new client, such as client metadata.</param>
-    /// <returns>A task that results in a Result containing either the successful
-    /// registration details of the new client or an error response indicating the reasons for registration failure.
+    /// <param name="clientRegistrationRequest">The client metadata payload as defined in
+    /// RFC 7591 §2 and OIDC Dynamic Client Registration 1.0.</param>
+    /// <returns>
+    /// A successful response per RFC 7591 §3.2.1 (containing <c>client_id</c>,
+    /// <c>client_secret</c>, <c>registration_access_token</c>, etc.) or an error per §3.2.2.
     /// </returns>
-    /// <remarks>
-    /// This method is responsible for the entire lifecycle of a client registration request, from initial validation
-    /// against the OAuth 2.0 and OpenID Connect specifications to processing the request and generating a response.
-    /// It ensures that all registered clients adhere to the protocol's requirements and the authorization server's
-    /// policies.
-    /// </remarks>
     Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
 }

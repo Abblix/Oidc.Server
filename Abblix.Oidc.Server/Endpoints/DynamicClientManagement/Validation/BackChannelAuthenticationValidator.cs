@@ -28,28 +28,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates backchannel authentication configurations during client registration.
-/// This class ensures that the backchannel token delivery mode and notification endpoint
-/// meet the requirements of the CIBA (Client-Initiated Backchannel Authentication) protocol.
-/// Additionally, it checks for the presence of supported signing algorithms.
+/// Validates CIBA-related metadata (OpenID Connect Client-Initiated Backchannel Authentication 1.0 §4):
+/// the consistency between <c>backchannel_token_delivery_mode</c> and
+/// <c>backchannel_client_notification_endpoint</c>, and that
+/// <c>backchannel_authentication_request_signing_alg</c> is on the server's supported list.
 /// </summary>
-/// <param name="jwtValidator">The service responsible for validating JWT signing algorithms.</param>
+/// <param name="jwtValidator">Source of supported JWT signing algorithms.</param>
 public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValidator) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Asynchronously validates the client registration context, returning any errors found during validation.
-    /// </summary>
-    /// <param name="context">The context containing the client registration request.</param>
-    /// <returns>A task that represents the result of the validation, either an error or null if valid.</returns>
+    /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
-    /// Validates the backchannel token delivery mode, notification endpoints, and signing algorithms specified
-    /// in the client registration request.
+    /// Applies the CIBA consistency rules: <c>poll</c> must not include a notification endpoint;
+    /// <c>ping</c> and <c>push</c> must include one; the signing algorithm, when present, must
+    /// be supported.
     /// </summary>
-    /// <param name="context">The context containing the client registration request.</param>
-    /// <returns>A validation error if the request is invalid, or null if the request is valid.</returns>
     private OidcError? Validate(ClientRegistrationValidationContext context)
     {
         switch (context.Request)

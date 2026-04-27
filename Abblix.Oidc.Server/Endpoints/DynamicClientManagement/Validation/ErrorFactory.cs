@@ -26,8 +26,9 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// A static factory class for creating instances of `AuthError`.
-/// It provides methods to generate validation errors with specific error codes and descriptions.
+/// Builds <see cref="OidcError"/> instances using the error codes RFC 7591 §3.2.2 reserves
+/// for dynamic client registration: <c>invalid_redirect_uri</c>, <c>invalid_client_metadata</c>,
+/// <c>invalid_software_statement</c>, and <c>unapproved_software_statement</c>.
 /// </summary>
 public static class ErrorFactory
 {

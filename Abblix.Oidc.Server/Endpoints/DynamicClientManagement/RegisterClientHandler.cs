@@ -28,35 +28,21 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles dynamic registration of clients in accordance with OAuth 2.0 and OpenID Connect specifications.
-/// This class validates and processes incoming client registration requests, issuing client identifiers and
-/// client secrets as appropriate.
+/// Default implementation of <see cref="IRegisterClientHandler"/> that runs validation
+/// (RFC 7591 §2 metadata + OIDC DCR 1.0) followed by processing (credential issuance,
+/// persistence, and registration access token generation per RFC 7591 §3.2.1 / RFC 7592 §3).
 /// </summary>
-/// <param name="validator">The validator responsible for ensuring that client registration requests meet
-/// the required criteria.</param>
-/// <param name="processor">The processor responsible for the actual registration of the client,
-/// generating client identifiers and secrets.</param>
+/// <param name="validator">Validator for the raw registration metadata.</param>
+/// <param name="processor">Processor that persists the client and constructs the response.</param>
 public class RegisterClientHandler(
     IRegisterClientRequestValidator validator,
     IRegisterClientRequestProcessor processor) : IRegisterClientHandler
 {
     /// <summary>
-    /// Asynchronously handles a client registration request, validating the request and processing it to register
-    /// the client.
+    /// Validates the registration metadata, then provisions the client and returns the
+    /// RFC 7591 §3.2.1 success response or an error per §3.2.2.
     /// </summary>
-    /// <param name="clientRegistrationRequest">The client registration request containing the necessary information
-    /// for registering a new client.</param>
-    /// <returns>A task that results in a Result containing the outcome of
-    /// the registration process.
-    /// This could be a successful response with client details or an error response indicating the reasons for failure.
-    /// </returns>
-    /// <exception cref="UnexpectedTypeException">Thrown if the validation result is of an unexpected type,
-    /// indicating an implementation error.</exception>
-    /// <remarks>
-    /// This method is central to the dynamic client registration feature, allowing clients to register themselves
-    /// with the authorization server without direct administrative intervention. It supports the OpenID Connect
-    /// Dynamic Client Registration specification, ensuring compliance and interoperability.
-    /// </remarks>
+    /// <param name="clientRegistrationRequest">The client metadata payload.</param>
     public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
         var validationResult = await validator.ValidateAsync(clientRegistrationRequest);

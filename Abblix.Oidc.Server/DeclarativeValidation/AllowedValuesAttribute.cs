@@ -23,22 +23,29 @@
 namespace Abblix.Oidc.Server.DeclarativeValidation;
 
 /// <summary>
-/// An attribute to specify allowed values for a property, field, or parameter.
+/// Restricts a string-valued (or string-array-valued) property, field, or parameter to a fixed set of
+/// allowed values. Typically used to constrain protocol parameters such as <c>response_type</c>,
+/// <c>grant_type</c>, or <c>code_challenge_method</c> to the values defined by the relevant specification.
+/// Validators consuming this attribute should reject any value not present in <see cref="AllowedValues"/>;
+/// null values are not flagged here.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public class AllowedValuesAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AllowedValuesAttribute"/> class with the allowed values.
+    /// Creates an <see cref="AllowedValuesAttribute"/> declaring the set of accepted values.
     /// </summary>
-    /// <param name="allowedValues">The list of allowed values.</param>
+    /// <param name="allowedValues">
+    /// The complete set of acceptable string values; comparison is performed using the validator's configured
+    /// string comparison, typically ordinal.
+    /// </param>
     public AllowedValuesAttribute(params string[] allowedValues)
     {
         AllowedValues = allowedValues;
     }
 
     /// <summary>
-    /// The list of allowed values.
+    /// The set of acceptable string values declared at attribute construction.
     /// </summary>
     public string[] AllowedValues { get; }
 }

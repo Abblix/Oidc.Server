@@ -30,23 +30,19 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class validates the subject type in a client registration request. It checks if the subject type is pairwise,
-/// and if so, verifies the sector identifier URI and its content. It also ensures that all redirect URIs use the HTTPS scheme.
-/// If any validation fails, it returns a AuthError.
+/// Validates the OIDC Core §8 <c>subject_type</c> metadata and computes the pairwise sector
+/// identifier per OIDC Core §8.1: when <c>pairwise</c> is requested, either a supplied
+/// <c>sector_identifier_uri</c> (HTTPS, JSON document of redirect URIs) is dereferenced and
+/// cross-checked against the registered <c>redirect_uris</c>, or all redirect URIs must
+/// share a single host. The resolved host is stored on the context for later persistence.
 /// </summary>
-/// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs.</param>
-/// <param name="logger">The logger for logging purposes.</param>
+/// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
+/// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>
 public class SubjectTypeValidator(
     ISecureHttpFetcher secureHttpFetcher,
     ILogger<SubjectTypeValidator> logger): IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Validates the subject type in the client registration request.
-    /// </summary>
-    /// <param name="context">The validation context containing client registration data.</param>
-    /// <returns>
-    /// A AuthError if any validation fails, or null if the request is valid.
-    /// </returns>
+    /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var request = context.Request;

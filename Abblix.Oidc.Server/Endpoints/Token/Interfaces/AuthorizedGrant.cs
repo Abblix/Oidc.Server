@@ -27,18 +27,18 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Represents the successful result of an authorized grant operation,
-/// encapsulating the details of the authentication session and the authorization context.
+/// The (authentication-session, authorization-context) pair from which the token endpoint mints
+/// access, refresh and ID tokens. Produced by an <see cref="Grants.IAuthorizationGrantHandler"/> and
+/// carried through token issuance.
 /// </summary>
-/// <param name="AuthSession">The authentication session associated with the grant, detailing the user's authenticated
-/// state.</param>
-/// <param name="Context">The context of the authorization process, providing specific details such as the client ID,
-/// requested scopes, and any other relevant authorization parameters.</param>
+/// <param name="AuthSession">The user's authentication session (subject, sid, auth_time, idp).</param>
+/// <param name="Context">The authorization decision (client_id, scope, resources, requested claims,
+/// confirmation binding) inherited by the issued tokens.</param>
 public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Context)
 {
     /// <summary>
-    /// An array of tokens that have been issued as part of this grant. This may include access tokens, refresh tokens
-    /// or other types of tokens depending on the authorization flow and client request.
+    /// Tokens already issued from this grant. Tracked for the authorization-code reuse defense:
+    /// if the same code is presented twice, every previously issued token is revoked by JTI.
     /// </summary>
     public TokenInfo[]? IssuedTokens { get; init; }
 }

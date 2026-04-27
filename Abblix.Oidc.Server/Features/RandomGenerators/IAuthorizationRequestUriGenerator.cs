@@ -23,12 +23,16 @@
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Provides a mechanism to generate unique request URIs for storing and retrieving authorization requests.
+/// Produces unique, unguessable request URIs used to reference stored authorization request objects,
+/// such as those handled by Pushed Authorization Requests (RFC 9126) via the <c>request_uri</c> parameter.
+/// Implementations must derive the URI from a high-entropy, cryptographically secure random value to prevent
+/// an attacker from guessing or enumerating active authorization requests.
 /// </summary>
 public interface IAuthorizationRequestUriGenerator
 {
     /// <summary>
-    /// Generates a unique URI to be used as an identifier for an authorization request.
+    /// Generates a unique, unpredictable URI suitable for use as the <c>request_uri</c> reference for a
+    /// previously stored authorization request.
     /// </summary>
     /// <returns>A unique URI that serves as the identifier for a specific authorization request.</returns>
     Uri GenerateRequestUri();

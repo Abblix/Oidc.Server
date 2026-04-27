@@ -31,6 +31,11 @@ using CookieOptions = Microsoft.AspNetCore.Http.CookieOptions;
 
 namespace Abblix.Oidc.Server.Mvc.ActionResults;
 
+/// <summary>
+/// Composable post-processing helpers for <see cref="ActionResult"/> instances returned from OIDC controllers.
+/// Each extension wraps the original result so it still executes its own pipeline, while attaching headers,
+/// cookies, or formatting OAuth errors as RFC-compliant HTTP responses.
+/// </summary>
 public static class ActionResultExtensions
 {
 	/// <summary>

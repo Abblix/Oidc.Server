@@ -28,15 +28,19 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Represents a valid introspection request result.
+/// Output of <see cref="IIntrospectionRequestValidator"/> handed to the processor: pairs the
+/// original request with either the parsed token (active branch) or a <c>null</c> token
+/// (inactive branch produced via <see cref="InvalidToken"/>, used so token-level failures
+/// flow through the same processing path without disclosing why per RFC 7662 §2.2).
 /// </summary>
 public record ValidIntrospectionRequest
 {
 	/// <summary>
-	/// Initializes a new instance of the <see cref="ValidIntrospectionRequest"/> class.
+	/// Active-branch constructor: the token authenticated, was issued to this client and
+	/// passed validation.
 	/// </summary>
 	/// <param name="model">The introspection request model.</param>
-	/// <param name="token">The JSON Web Token to introspect.</param>
+	/// <param name="token">The parsed JWT to be reported as <c>active=true</c>.</param>
 	public ValidIntrospectionRequest(IntrospectionRequest model, JsonWebToken token)
 	{
 		Model = model;

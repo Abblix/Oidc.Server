@@ -25,17 +25,18 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class represents a composite validator for client registration requests.
-/// It aggregates multiple validation steps and executes them sequentially.
+/// Composite that runs the configured chain of <see cref="IClientRegistrationContextValidator"/>
+/// steps in order and short-circuits on the first failure, mirroring RFC 7591 §3.2.2 which
+/// requires the server to reject a registration on the first invalid metadata field.
 /// </summary>
-/// <param name="validationSteps">The array of validation steps to be executed.</param>
+/// <param name="validationSteps">The validation steps to execute, in order.</param>
 public class ClientRegistrationContextValidatorComposite(IClientRegistrationContextValidator[] validationSteps) : IClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates the client registration request by executing each validation step in the specified order.
+    /// Runs each step until one returns an error or all succeed.
     /// </summary>
-    /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A AuthError if any validation step fails, or null if the request is valid.</returns>
+    /// <param name="context">The shared validation context.</param>
+    /// <returns>The first error produced, or <c>null</c> when every step passes.</returns>
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         foreach (var validationStep in validationSteps)

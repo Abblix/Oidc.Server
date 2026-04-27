@@ -28,8 +28,10 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Generates unique request URIs for authorization requests based on configured options.
-/// This implementation uses cryptographic randomness to ensure that each URI is unique and secure.
+/// Default <see cref="IAuthorizationRequestUriGenerator"/> implementation. Appends a URL-safe Base64 encoded
+/// block of cryptographically secure random bytes (length governed by <see cref="OidcOptions.RequestUriLength"/>)
+/// to <see cref="RequestUrn.Prefix"/>, producing the <c>urn:</c>-style <c>request_uri</c> values used by
+/// Pushed Authorization Requests (RFC 9126).
 /// </summary>
 public class AuthorizationRequestUriGenerator(IOptions<OidcOptions> options) : IAuthorizationRequestUriGenerator
 {

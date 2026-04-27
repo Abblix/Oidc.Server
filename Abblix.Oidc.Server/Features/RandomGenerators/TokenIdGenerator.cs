@@ -27,15 +27,16 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Generates a new identifier for a JSON Web Token (JWT). This class uses a cryptographic-strength random number
-/// generator to create a unique and secure identifier for each token. The generated identifier is then encoded using
-/// HTTP URL encoding to ensure it is safe to transmit in URL contexts.
+/// Default <see cref="ITokenIdGenerator"/> implementation. Draws random bytes from a cryptographically
+/// secure source (<see cref="System.Security.Cryptography.RandomNumberGenerator"/> via <c>CryptoRandom</c>)
+/// using the byte count configured in <see cref="OidcOptions.TokenIdLength"/>, then URL-safe Base64 encodes
+/// the result so the resulting <c>jti</c> value can travel safely through HTTP transports.
 /// </summary>
 public class TokenIdGenerator(IOptions<OidcOptions> options) : ITokenIdGenerator
 {
 	/// <summary>
-	/// Creates a new unique identifier for a JWT. This method generates a 32-byte random number and encodes it using
-	/// HTTP URL-safe Base64 encoding, resulting in a string suitable for use as a JWT ID.
+	/// Produces a new <c>jti</c> value from cryptographically secure random bytes, sized per
+	/// <see cref="OidcOptions.TokenIdLength"/> and URL-safe Base64 encoded.
 	/// </summary>
 	/// <returns>A URL-safe, randomly generated unique identifier for a JWT.</returns>
 	public string GenerateTokenId()

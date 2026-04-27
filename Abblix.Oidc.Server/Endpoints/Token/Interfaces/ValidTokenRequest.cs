@@ -50,6 +50,10 @@ public record ValidTokenRequest(
     ResourceDefinition[] Resources,
     X509Certificate2? ClientCertificate = null)
 {
+    /// <summary>
+    /// Builds the validated request from a populated <see cref="TokenValidationContext"/>, taking
+    /// the mutual-TLS client certificate (if any) from the transport-level client request.
+    /// </summary>
     public ValidTokenRequest(TokenValidationContext context)
         : this(
             context.Request,

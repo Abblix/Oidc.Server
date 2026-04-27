@@ -26,10 +26,11 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a client-initiated backchannel authentication request, typically used in the CIBA (Client-Initiated
-/// Backchannel Authentication) flow as part of OpenID Connect. This request allows a client to request user
-/// authentication through a backchannel communication, which involves the authorization server interacting with
-/// the user asynchronously.
+/// Parameters of a Client-Initiated Backchannel Authentication (CIBA) request as defined in
+/// OpenID Connect Client-Initiated Backchannel Authentication Flow Core 1.0 §7. The client posts these to
+/// the <c>backchannel_authentication_endpoint</c> to ask the OP to authenticate the end-user asynchronously
+/// (out of band, on a separate device); the OP returns a <c>auth_req_id</c> the client then redeems
+/// at the token endpoint via the <c>urn:openid:params:grant-type:ciba</c> grant.
 /// </summary>
 public record BackChannelAuthenticationRequest
 {

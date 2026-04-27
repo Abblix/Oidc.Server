@@ -25,15 +25,21 @@ using System.Net.Http.Headers;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Provides an interface for validating registration access tokens.
+/// Validates the registration access token presented on calls to the client configuration
+/// endpoint per RFC 7592 §3. Verifies the bearer token from the <c>Authorization</c> header
+/// is bound to the requested <c>client_id</c>.
 /// </summary>
 public interface IRegistrationAccessTokenValidator
 {
     /// <summary>
-    /// Validates the registration access token asynchronously.
+    /// Validates the bearer token, ensuring it is well-formed, of the expected type, and
+    /// authorized to manage the specified client.
     /// </summary>
-    /// <param name="header">The authentication header containing the token.</param>
-    /// <param name="clientId">The client ID associated with the token.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the validation result (token or null).</returns>
+    /// <param name="header">The HTTP <c>Authorization</c> header carrying the bearer token.</param>
+    /// <param name="clientId">The <c>client_id</c> targeted by the management request.</param>
+    /// <returns>
+    /// <c>null</c> when the token is valid for the client; otherwise a human-readable description
+    /// of the validation failure.
+    /// </returns>
     Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId);
 }

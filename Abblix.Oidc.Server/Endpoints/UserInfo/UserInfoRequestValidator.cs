@@ -37,12 +37,15 @@ using static Abblix.Oidc.Server.Model.UserInfoRequest;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
-/// Validates user information requests by verifying the access token and ensuring the request conforms to expected standards.
-/// Implements the <see cref="IUserInfoRequestValidator"/> interface.
+/// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form/query parameter, but not both),
+/// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
+/// resolves the originating authentication session, authorization context and client.
 /// </summary>
-/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
-/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
-/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+/// <param name="jwtValidator">Validates access-token JWTs issued by this authorization server.</param>
+/// <param name="accessTokenService">Resolves an <see cref="AuthSession"/> and
+/// <see cref="AuthorizationContext"/> from the access token.</param>
+/// <param name="clientInfoProvider">Loads the <see cref="ClientInfo"/> for the token's client.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,

@@ -42,19 +42,14 @@ public class AuthorizationRequestProcessorDecorator(
 {
 
     /// <summary>
-    /// Asynchronously processes an authorization request by delegating to the encapsulated authorization request processor,
-    /// and then enriches the authorization response with session state information when session management is enabled and applicable.
+    /// Delegates to the wrapped processor and, when session management is enabled and the response is a successful
+    /// OpenID Connect authentication, attaches the OIDC Session Management 1.0 <c>session_state</c> value so the
+    /// client's <c>check_session_iframe</c> can detect session changes.
     /// </summary>
     /// <param name="request">The authorization request to be processed, expected to be a valid and authenticated request.</param>
     /// <returns>
-    /// A task that returns an <see cref="AuthorizationResponse"/>
-    /// that may include session state information to be used by the client for session management purposes.
+    /// The inner processor's <see cref="AuthorizationResponse"/>, with <c>session_state</c> populated when applicable.
     /// </returns>
-    /// <remarks>
-    /// This method ensures that responses to OpenID Connect authorization requests include session state information as by
-    /// the OpenID Connect session management specification. This allows clients to implement mechanisms for detecting session changes
-    /// and managing user sessions effectively.
-    /// </remarks>
     public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
     {
         var response = await inner.ProcessAsync(request);

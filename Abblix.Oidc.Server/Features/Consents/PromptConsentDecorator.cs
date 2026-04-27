@@ -27,22 +27,22 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Consents;
 
 /// <summary>
-/// A decorator for the <see cref="IUserConsentsProvider"/> that enforces the prompt for consent when required.
-/// This class intercepts the consent retrieval process to inject mandatory consent prompts based on the authorization
-/// request details.
+/// Honours the OIDC Core §3.1.2.1 <c>prompt=consent</c> parameter by short-circuiting the wrapped
+/// <see cref="IUserConsentsProvider"/>: when the client explicitly requests consent re-confirmation,
+/// every requested scope and resource is forced into the pending bucket so the consent UI is shown
+/// even if the user previously granted it. For any other prompt value the decorator delegates to the
+/// inner provider unchanged.
 /// </summary>
-/// <param name="inner">The inner <see cref="IUserConsentsProvider"/> to delegate calls to when no explicit
-/// prompting is necessary.</param>
+/// <param name="inner">The wrapped consent provider used when <c>prompt=consent</c> is not requested.</param>
 public class PromptConsentDecorator(IUserConsentsProvider inner) : IUserConsentsProvider
 {
     /// <summary>
-    /// Retrieves user consents, injecting a mandatory prompt for consent if specified by the authorization request.
+    /// If the authorization request carries <c>prompt=consent</c>, returns all requested scopes and
+    /// resources as <see cref="UserConsents.Pending"/> to force a fresh consent prompt; otherwise
+    /// delegates to the wrapped provider.
     /// </summary>
-    /// <param name="request">The validated authorization request containing details that may require user interaction
-    /// for consent.</param>
-    /// <param name="authSession">The current authentication session that might affect how consents are handled.</param>
-    /// <returns>A task that resolves to an instance of <see cref="UserConsents"/>, which will include any consents
-    /// that are pending based on the authorization request parameters.</returns>
+    /// <param name="request">The validated authorization request whose <c>prompt</c> parameter drives the decision.</param>
+    /// <param name="authSession">The current authentication session forwarded to the inner provider.</param>
     public async Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
         => request.Model.Prompt switch
         {

@@ -28,11 +28,11 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the signing algorithms specified for ID tokens and user info responses in a client registration request.
-/// This class checks if the requested signing algorithms are supported by the JWT creator, ensuring compliance
-/// with security standards.
+/// Validates the OIDC DCR 1.0 §2 algorithms a client requests for tokens this server signs:
+/// <c>id_token_signed_response_alg</c> and <c>userinfo_signed_response_alg</c>. Each must
+/// appear in the server's set of supported signing algorithms.
 /// </summary>
-/// <param name="jwtCreator">The service responsible for creating signed JWTs.</param>
+/// <param name="jwtCreator">Source of supported signing algorithms for outbound tokens.</param>
 public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) : SyncClientRegistrationContextValidator
 {
     /// <summary>

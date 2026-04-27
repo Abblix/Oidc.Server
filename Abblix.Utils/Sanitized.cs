@@ -47,7 +47,8 @@ public readonly record struct Sanitized
     }
 
     /// <summary>
-    /// Gets the source object that will be sanitized when converted to string.
+    /// The original, untrusted value. Sanitization is applied lazily inside <see cref="ToString"/>; reading this
+    /// property directly bypasses sanitization and exposes raw input.
     /// </summary>
     public object? Source { get; init; }
 

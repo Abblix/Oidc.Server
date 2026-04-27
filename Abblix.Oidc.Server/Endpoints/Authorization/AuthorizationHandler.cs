@@ -41,6 +41,7 @@ public class AuthorizationHandler(
     IAuthorizationRequestValidator validator,
     IAuthorizationRequestProcessor processor) : IAuthorizationHandler
 {
+    /// <inheritdoc />
     public AuthorizationEndpointMetadata Metadata => new()
     {
         RequestParameterSupported = true,
@@ -48,8 +49,10 @@ public class AuthorizationHandler(
     };
 
     /// <summary>
-    /// The grant types supported by the authorization endpoint.
-    /// Returns "implicit" if the endpoint supports implicit response types (token, id_token, or token id_token).
+    /// Grant types contributed by the authorization endpoint to the <c>grant_types_supported</c>
+    /// discovery list. The implicit family is unconditionally included because this handler
+    /// supports <c>response_type=token</c>, <c>id_token</c> and their combinations; the
+    /// <c>authorization_code</c> grant is contributed instead by the token endpoint.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported
     {

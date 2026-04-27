@@ -23,25 +23,28 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Enumerates the different types of JWT-related errors.
+/// High-level categories of JWT processing failures returned by the validator and by callers
+/// that consume validated tokens. Pair with <see cref="JwtValidationError.ErrorDescription"/>
+/// for a human-readable explanation.
 /// </summary>
 public enum JwtError
 {
 	/// <summary>
-	/// Indicates that the token is invalid.
-	/// This can be due to various reasons such as incorrect format, signature issues, or payload inconsistencies.
+	/// The token cannot be accepted: malformed serialization, missing required header
+	/// parameters, signature mismatch, expired lifetime, wrong issuer or audience, etc.
 	/// </summary>
 	InvalidToken,
 
 	/// <summary>
-	/// Indicates that the token has already been used.
-	/// This error is typically encountered in scenarios where tokens are meant for single use, such as one-time authorization tokens.
+	/// The token is well-formed and otherwise valid, but it has already been redeemed
+	/// in a context that allows only single use (for example, an authorization code or a
+	/// one-time login link).
 	/// </summary>
 	TokenAlreadyUsed,
 
 	/// <summary>
-	/// Indicates that the token has been revoked.
-	/// A revoked token is no longer valid for use, typically due to security reasons or changes in the access rights of the user.
+	/// The token has been explicitly revoked by the issuer (for example, after sign-out,
+	/// password change, or administrative action) and must no longer be honored.
 	/// </summary>
 	TokenRevoked,
 }

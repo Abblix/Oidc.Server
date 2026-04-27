@@ -28,12 +28,13 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the signing algorithms specified for request objects, backchannel authentication requests,
-/// and token endpoints in a client registration request.
-/// This class ensures that the requested signing algorithms are supported by the JWT validator,
-/// maintaining compliance with security standards.
+/// Validates the algorithms a client commits to using on inbound JWTs the server will verify:
+/// <c>request_object_signing_alg</c> (OIDC Core §6.1),
+/// <c>backchannel_authentication_request_signing_alg</c> (CIBA §4), and
+/// <c>token_endpoint_auth_signing_alg</c> (RFC 7591 §2 / OIDC Core §9). Each must appear in
+/// the server's set of supported verification algorithms.
 /// </summary>
-/// <param name="jwtValidator">The service responsible for validating signing algorithms used in JWTs.</param>
+/// <param name="jwtValidator">Source of supported signing algorithms for inbound JWTs.</param>
 public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : SyncClientRegistrationContextValidator
 {
     /// <summary>

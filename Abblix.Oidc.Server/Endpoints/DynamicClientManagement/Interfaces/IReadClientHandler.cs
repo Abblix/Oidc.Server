@@ -27,23 +27,17 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Defines a contract for handling requests to read client configurations, as part of client management in OAuth 2.0
-/// and OpenID Connect frameworks.
+/// Handles <c>GET</c> requests to the client configuration endpoint per RFC 7592 §2.1,
+/// returning the registered metadata of the authenticated client.
 /// </summary>
 public interface IReadClientHandler
 {
     /// <summary>
-    /// Asynchronously handles a request to retrieve a client's configuration details.
+    /// Validates the registration access token, then retrieves the current configuration of
+    /// the addressed client. Returns either the client's metadata or an OIDC error suitable
+    /// for the response body.
     /// </summary>
-    /// <param name="clientRequest">The client request containing the necessary information to identify the client
-    /// whose configuration is to be read.</param>
-    /// <returns>A task that returns the client's configuration details or an error response.</returns>
-    /// <remarks>
-    /// This method processes the incoming request to read a client's configuration. It first validates the request
-    /// to ensure that it meets the necessary criteria and that the client specified in the request exists and is
-    /// accessible by the requester. Upon successful validation, the method retrieves and returns the client's
-    /// configuration details. If the request is invalid or if the client cannot be found, an appropriate error
-    /// response is generated.
-    /// </remarks>
+    /// <param name="clientRequest">The incoming request including the registration access token
+    /// and target <c>client_id</c>.</param>
     Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
 }

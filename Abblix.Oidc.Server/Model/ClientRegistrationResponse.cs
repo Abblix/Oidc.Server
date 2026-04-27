@@ -27,7 +27,9 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents the client registration response as defined in the OpenID Connect specification.
+/// The response returned from the client registration endpoint per RFC 7591 §3.2.1 and OIDC Dynamic Client
+/// Registration §3.2, echoing the registered metadata together with server-issued credentials and the URL
+/// of the client configuration endpoint (RFC 7592) for subsequent management operations.
 /// </summary>
 public record ClientRegistrationResponse
 {

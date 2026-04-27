@@ -29,10 +29,11 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates Redirect URIs in a client registration request.
-/// This internal class checks if the URIs are absolute, do not contain fragments,
-/// and comply with security requirements based on the application type.
-/// If any validation fails, it returns a AuthError.
+/// Validates <c>redirect_uris</c> in a registration request per RFC 7591 §2 and the
+/// per-application-type rules of OIDC DCR 1.0 §2: required when the client uses
+/// <c>authorization_code</c>, <c>implicit</c>, or <c>refresh_token</c>; absolute and
+/// fragment-free; Web clients use <c>https</c> and not localhost; Native clients use
+/// a custom scheme or <c>http://localhost</c>.
 /// </summary>
 internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 {
@@ -44,15 +45,9 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     ];
 
     /// <summary>
-    /// Validates Redirect URIs in the client registration request.
-    /// This method ensures that the registered Redirect URIs meet the necessary criteria
-    /// required by the OAuth 2.0 and OpenID Connect specifications.
+    /// Returns an <c>invalid_redirect_uri</c> error on the first non-conforming entry,
+    /// or <c>null</c> when every URI passes.
     /// </summary>
-    /// <param name="context">The validation context containing client registration data.</param>
-    /// <returns>
-    /// A <see cref="OidcError"/> if any validation fails,
-    /// or null if the request is valid.
-    /// </returns>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;

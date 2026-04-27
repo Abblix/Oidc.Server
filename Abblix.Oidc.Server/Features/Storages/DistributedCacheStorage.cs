@@ -86,7 +86,7 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	/// </summary>
 	/// <param name="key">The key of the object to remove.</param>
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
-	/// <returns>A task that completes when the operation finishes.of removing the object.</returns>
+	/// <returns>A task that completes when the removal has been issued to the cache.</returns>
 	public Task RemoveAsync(string key, CancellationToken? token = null)
 		=> cache.RemoveAsync(key, token ?? CancellationToken.None);
 }

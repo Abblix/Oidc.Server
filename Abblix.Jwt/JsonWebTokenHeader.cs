@@ -35,7 +35,8 @@ namespace Abblix.Jwt;
 public class JsonWebTokenHeader(JsonObject json)
 {
     /// <summary>
-    /// The underlying JSON object representing the JWT header.
+    /// The underlying mutable JSON object backing the strongly-typed accessors on this header.
+    /// Use this when reading or writing custom header parameters that are not modeled as properties.
     /// </summary>
     public JsonObject Json { get; } = json;
 

@@ -29,27 +29,26 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 
 /// <summary>
-/// Handles the backchannel authentication process for a CIBA (Client-Initiated Backchannel Authentication) request.
-/// This handler coordinates the fetching, validation, and processing of the authentication request.
+/// Default <see cref="IBackChannelAuthenticationHandler"/> implementation that drives the CIBA endpoint
+/// pipeline as fetch (request object resolution) -&gt; validation -&gt; processing, short-circuiting on the
+/// first error so that subsequent stages never see invalid input.
 /// </summary>
-/// <param name="fetcher">The service responsible for fetching and validating the initial authentication request.
-/// </param>
-/// <param name="validator">The service responsible for validating the fetched authentication request.</param>
-/// <param name="processor">The service responsible for processing the validated authentication request and
-/// generating the response.</param>
+/// <param name="fetcher">Resolves the effective request, in particular substituting parameters carried in
+/// a signed Request Object per CIBA Core 1.0 §7.1.1.</param>
+/// <param name="validator">Validates the resolved request against client metadata and protocol rules.</param>
+/// <param name="processor">Persists the authentication request and produces the
+/// <c>auth_req_id</c>/<c>expires_in</c>/<c>interval</c> response.</param>
 public class BackChannelAuthenticationHandler(
     IBackChannelAuthenticationRequestFetcher fetcher,
     IBackChannelAuthenticationRequestValidator validator,
     IBackChannelAuthenticationRequestProcessor processor) : IBackChannelAuthenticationHandler
 {
     /// <summary>
-    /// Handles the entire backchannel authentication process by first fetching the request, then validating it,
-    /// and finally processing it to generate an appropriate response.
+    /// Runs the fetch-validate-process pipeline for a CIBA request and returns the resulting success
+    /// payload or an <see cref="OidcError"/> from the first failing stage.
     /// </summary>
-    /// <param name="request">The initial backchannel authentication request to be processed.</param>
-    /// <param name="clientRequest">The client request information associated with the authentication request.</param>
-    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/> that indicates the outcome of the process.
-    /// </returns>
+    /// <param name="request">The parsed CIBA authentication request as received on the wire.</param>
+    /// <param name="clientRequest">Transport metadata used for client authentication and validation.</param>
     public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)

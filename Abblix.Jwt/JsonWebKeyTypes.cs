@@ -23,26 +23,27 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Provides constants for the types of JSON Web Keys (JWK) as defined in the JWK specifications.
-/// These constants are used to identify the cryptographic algorithm family used by the key.
+/// Values for the JWK "kty" parameter (RFC 7517 Section 4.1, RFC 7518 Section 6.1) identifying
+/// the cryptographic family a key belongs to. Used as the discriminator when deserializing a
+/// <see cref="JsonWebKey"/> into the correct concrete subtype.
 /// </summary>
 public static class JsonWebKeyTypes
 {
 	/// <summary>
-	/// Represents an Elliptic Curve cryptographic key.
-	/// This type is used for keys that employ elliptic curve cryptography (ECC) algorithms.
+	/// Elliptic Curve key (RFC 7518 Section 6.2). Maps to <see cref="EllipticCurveJsonWebKey"/>;
+	/// usable with the ES256/ES384/ES512 signing algorithms.
 	/// </summary>
 	public const string EllipticCurve = "EC";
 
 	/// <summary>
-	/// Represents a RSA cryptographic key.
-	/// This type is used for keys that employ RSA cryptography algorithms.
+	/// RSA key (RFC 7518 Section 6.3). Maps to <see cref="RsaJsonWebKey"/>;
+	/// usable with the RS*/PS* signing algorithms and RSA-OAEP/RSA1_5 key encryption.
 	/// </summary>
 	public const string Rsa = "RSA";
 
 	/// <summary>
-	/// Represents an Octet Sequence (symmetric) cryptographic key.
-	/// This type is used for symmetric keys such as those used in HMAC algorithms.
+	/// Symmetric (Octet Sequence) key (RFC 7518 Section 6.4). Maps to <see cref="OctetJsonWebKey"/>;
+	/// usable with HS* signing, AES-GCM key wrap, and direct key agreement.
 	/// </summary>
 	public const string Octet = "oct";
 }

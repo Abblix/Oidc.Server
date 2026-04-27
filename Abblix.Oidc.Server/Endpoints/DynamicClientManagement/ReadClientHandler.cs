@@ -39,19 +39,11 @@ public class ReadClientHandler(
     IReadClientRequestProcessor processor) : IReadClientHandler
 {
     /// <summary>
-    /// Processes a client configuration read request.
+    /// Validates the registration access token and resolves the addressed client, then delegates
+    /// to the processor to build the read-client response per RFC 7592 §2.1.
     /// </summary>
-    /// <param name="clientRequest">The client request containing details necessary for fetching the client information,
-    /// such as the client identifier.</param>
-    /// <returns>A task that results in a <see cref="ReadClientResponse"/>, which could be the requested client data or
-    /// an error response.</returns>
-    /// <exception cref="UnexpectedTypeException">Thrown if the validation result does not match expected types.
-    /// </exception>
-    /// <remarks>
-    /// This method serves as a critical part of dynamic client management, allowing for the secure retrieval of client
-    /// configurations. It ensures that only valid requests are processed, safeguarding against unauthorized access
-    /// to client information.
-    /// </remarks>
+    /// <param name="clientRequest">The incoming RFC 7592 read request.</param>
+    /// <returns>The current client metadata or an error result.</returns>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await validator.ValidateAsync(clientRequest);

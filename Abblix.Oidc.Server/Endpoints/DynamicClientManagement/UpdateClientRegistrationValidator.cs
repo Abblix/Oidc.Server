@@ -29,18 +29,16 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Validates client registration requests for UPDATE operations per RFC 7592.
-/// Uses the same validation pipeline as registration but sets Operation to Update.
+/// Variant of <see cref="RegisterClientRequestValidator"/> used by the RFC 7592 §2.2 update flow.
+/// Wraps the request in a <see cref="ClientRegistrationValidationContext"/> with
+/// <see cref="DynamicClientOperation.Update"/> so steps such as <c>ClientIdValidator</c>
+/// require the client to already exist instead of forbidding it.
 /// </summary>
-/// <param name="validator">The client registration context validator.</param>
+/// <param name="validator">Composite validator for the metadata pipeline.</param>
 public class UpdateClientRegistrationValidator(IClientRegistrationContextValidator validator)
 	: IRegisterClientRequestValidator
 {
-	/// <summary>
-	/// Validates a client registration request for UPDATE operation.
-	/// </summary>
-	/// <param name="request">The client registration request to validate.</param>
-	/// <returns>A task representing the asynchronous operation. The task result contains the validation result.</returns>
+	/// <inheritdoc />
 	public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
 	{
 		var context = new ClientRegistrationValidationContext(request)

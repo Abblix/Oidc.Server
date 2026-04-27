@@ -34,14 +34,21 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// </summary>
 public class PingModeGrantProcessor : IBackChannelGrantProcessor
 {
-    // Ping mode clients are allowed to poll the token endpoint
+    /// <summary>
+    /// Ping mode clients are allowed to call the token endpoint after the ping notification arrives,
+    /// so this always returns <c>null</c> (no error).
+    /// </summary>
     public OidcError? ValidateTokenEndpointAccess() => null;
 
+    /// <summary>
+    /// Returns the authorized grant without removing it from storage; ping mode permits the client
+    /// to retrieve tokens once the ping notification arrives, while keeping the entry available
+    /// until it expires.
+    /// </summary>
     public Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // In ping mode, keep tokens in storage (allows single notification, multiple retrievals)
         return Task.FromResult<Result<AuthorizedGrant, OidcError>>(request.AuthorizedGrant);
     }
 }

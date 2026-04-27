@@ -51,18 +51,16 @@ internal sealed class JsonWebTokenCreator(
     /// <param name="signingKey">The signing key as a JsonWebKey to sign the JWT.</param>
     /// <param name="encryptionKey">Optional encryption key as a JsonWebKey to encrypt the JWT.</param>
     /// <param name="keyEncryptionAlgorithm">
-    /// Key encryption algorithm for JWE. Defaults to RSA-OAEP-256.
-    /// Specifies how the Content Encryption Key (CEK) is encrypted with the recipient's public key.
-    /// Per RFC 7518 Section 4 (Key Management Algorithms).
-    /// Common values: RSA-OAEP-256, RSA-OAEP, RSA1_5, ECDH-ES, A128KW, A256KW.
-    /// Only used when encryptionKey is provided.
+    /// JWE key management algorithm ("alg") that protects the Content Encryption Key with the
+    /// recipient's key (RFC 7518 Section 4). Defaults to <c>RSA-OAEP-256</c>.
+    /// Supported values are listed on <see cref="EncryptionAlgorithms.KeyManagement"/>;
+    /// only used when <paramref name="encryptionKey"/> is provided.
     /// </param>
     /// <param name="contentEncryptionAlgorithm">
-    /// Content encryption algorithm for JWE. Defaults to A256CBC-HS512.
-    /// Specifies how the JWT payload is encrypted using the CEK.
-    /// Per RFC 7518 Section 5 (Content Encryption Algorithms).
-    /// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
-    /// Only used when encryptionKey is provided.
+    /// JWE content encryption algorithm ("enc") that encrypts the payload with the CEK
+    /// (RFC 7518 Section 5). Defaults to <c>A256CBC-HS512</c>.
+    /// Supported values are listed on <see cref="EncryptionAlgorithms.ContentEncryption"/>;
+    /// only used when <paramref name="encryptionKey"/> is provided.
     /// </param>
     /// <returns>A task that returns the JWT as a string.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the specified date time values cause an overflow.</exception>

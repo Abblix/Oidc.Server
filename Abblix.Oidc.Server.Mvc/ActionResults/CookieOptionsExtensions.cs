@@ -25,6 +25,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.Mvc.ActionResults;
 
+/// <summary>
+/// Maps the framework-agnostic <see cref="Common.CookieOptions"/> used by the core library
+/// to the ASP.NET Core <see cref="CookieOptions"/> consumed by <see cref="IResponseCookies"/>.
+/// </summary>
 public static class CookieOptionsExtensions
 {
     /// <summary>

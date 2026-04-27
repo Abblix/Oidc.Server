@@ -29,29 +29,19 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Provides validation for client registration requests to ensure they meet the system's criteria for client
-/// registrations. Utilizes an underlying context validator for comprehensive evaluation of request parameters.
+/// Default validator for new-client registration (POST), wrapping the request in a
+/// <see cref="ClientRegistrationValidationContext"/> with
+/// <see cref="DynamicClientOperation.Register"/> and delegating to the configured
+/// <see cref="IClientRegistrationContextValidator"/> pipeline.
 /// </summary>
-/// <param name="validator">An implementation of <see cref="IClientRegistrationContextValidator"/> used to assess
-/// the validity of registration requests based on predefined criteria and the system's registration policies.</param>
+/// <param name="validator">Composite validator that runs the individual metadata checks.</param>
 public class RegisterClientRequestValidator(IClientRegistrationContextValidator validator) : IRegisterClientRequestValidator
 {
     /// <summary>
-    /// Asynchronously validates a client registration request against the system's registration policies and criteria.
+    /// Runs the validator pipeline and, on success, returns the typed valid request together
+    /// with the resolved sector identifier.
     /// </summary>
-    /// <param name="request">The <see cref="ClientRegistrationRequest"/> containing the details of the client seeking
-    /// registration.</param>
-    /// <returns>
-    /// A task that returns a <see cref="Result{ValidClientRegistrationRequest, AuthError}"/>,
-    /// containing either a <see cref="ValidClientRegistrationRequest"/> on success or a <see cref="OidcError"/>
-    /// detailing any validation issues.
-    /// </returns>
-    /// <remarks>
-    /// This method orchestrates the validation process by creating a validation context from the provided request
-    /// and passing it to the context validator for evaluation. It ensures that only requests fulfilling all necessary
-    /// conditions are considered valid, thus maintaining the integrity and security of the client registration process.
-    /// </remarks>
-
+    /// <param name="request">The raw registration request.</param>
     public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);

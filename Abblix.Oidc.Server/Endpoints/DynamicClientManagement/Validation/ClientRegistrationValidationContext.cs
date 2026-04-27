@@ -25,20 +25,22 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Represents a validation context used during the client registration validation process.
-/// It contains information about the client registration request and the sector identifier.
+/// Mutable state shared by the validation pipeline. Carries the original
+/// <see cref="ClientRegistrationRequest"/> alongside derived values that earlier steps
+/// compute and later steps (or the processor) consume.
 /// </summary>
 public record ClientRegistrationValidationContext(ClientRegistrationRequest Request)
 {
 	/// <summary>
-	/// The sector identifier associated with the client.
+	/// The pairwise sector identifier (host) resolved by <c>SubjectTypeValidator</c> per
+	/// OIDC Core §8.1. <c>null</c> when the client does not request pairwise subjects.
 	/// </summary>
 	public string? SectorIdentifier { get; set; }
 
 	/// <summary>
-	/// The type of registration operation being performed.
-	/// For Update operations, client_id validation ensures the client exists.
-	/// For Register operations, it ensures the client doesn't exist.
+	/// Whether the pipeline is running for a new registration (RFC 7591 §3) or for an
+	/// update of an existing client (RFC 7592 §2.2). Steps such as
+	/// <see cref="ClientIdValidator"/> branch on this value.
 	/// </summary>
 	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;
 }

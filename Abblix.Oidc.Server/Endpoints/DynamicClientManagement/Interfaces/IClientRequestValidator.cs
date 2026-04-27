@@ -27,14 +27,16 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Represents an interface for validating client requests in the context of OpenID Connect.
+/// Validates a request against the client configuration endpoint (RFC 7592 §2-§4).
+/// Confirms that the bearer registration access token authorizes the operation on the
+/// referenced <c>client_id</c> and that the client still exists.
 /// </summary>
 public interface IClientRequestValidator
 {
     /// <summary>
-    /// Validates a client request asynchronously and returns a result of type Result&lt;ValidClientRequest, AuthError&gt;.
+    /// Validates the request, returning the resolved <see cref="ValidClientRequest"/> on success
+    /// or an <see cref="OidcError"/> describing the rejection.
     /// </summary>
-    /// <param name="request">The client request to validate.</param>
-    /// <returns>A task representing the validation result.</returns>
+    /// <param name="request">The client management request to validate.</param>
     Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request);
 }

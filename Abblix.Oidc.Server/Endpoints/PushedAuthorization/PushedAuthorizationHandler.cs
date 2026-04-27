@@ -31,8 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// Handles the processing of Pushed Authorization Requests (PAR) by validating the requests and then processing
 /// them if valid. This class acts as an intermediary between the validation and processing stages of the PAR workflow.
 /// </summary>
-/// <param name="fetcher">э
-/// An instance of <see cref="IAuthorizationRequestFetcher"/> used to retrieve request objects.</param>
+/// <param name="fetcher">
+/// An instance of <see cref="IAuthorizationRequestFetcher"/> used to resolve <c>request</c> /
+/// <c>request_uri</c> JAR payloads before validation.</param>
 /// <param name="validator">An instance of <see cref="IPushedAuthorizationRequestValidator"/> used for validating
 /// pushed authorization requests.</param>
 /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing

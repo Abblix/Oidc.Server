@@ -26,22 +26,19 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Consents;
 
 /// <summary>
-/// Implements the very basic consent service not requiring any consents.
+/// Default no-op consent provider that auto-grants every requested scope and resource and never marks
+/// consent as pending. Suitable for trusted first-party deployments and as the starting placeholder
+/// during integration; replace with a host-supplied implementation to honour OIDC Core §3.1.2.4
+/// (authorization server obtains end-user consent).
 /// </summary>
-/// /// <remarks>
-/// This implementation assumes that no consents are necessary for any operations, effectively bypassing
-/// consent-related checks and workflows. If your application requires user consent for accessing specific scopes
-/// or resources, replace this service with a custom implementation that appropriately handles such requirements.
-/// </remarks>
 public class NullConsentService : IUserConsentsProvider
 {
 	/// <summary>
-	/// Retrieves the user consents for a given authorization request and authentication session.
+	/// Returns a <see cref="UserConsents"/> with every requested scope and resource pre-granted and
+	/// nothing pending, so the authorization flow can proceed without prompting the user.
 	/// </summary>
 	/// <param name="request">The validated authorization request for which to retrieve consents.</param>
 	/// <param name="authSession">The authentication session associated with the request.</param>
-	/// <returns>A task that resolves to an instance of <see cref="UserConsents"/>, containing details about
-	/// the consents granted by the user. This implementation automatically assumes all consents are granted.</returns>
 	public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
 	{
 		var userConsents = new UserConsents { Granted = new(request.Scope, request.Resources) };
@@ -49,13 +46,11 @@ public class NullConsentService : IUserConsentsProvider
 	}
 
 	/// <summary>
-	/// Determines whether consent is required for a given authorization request and authentication session.
+	/// Returns <c>false</c> for every request because <see cref="GetUserConsentsAsync"/> grants
+	/// everything up-front and leaves <see cref="UserConsents.Pending"/> empty.
 	/// </summary>
 	/// <param name="request">The validated authorization request that might require consent.</param>
-	/// <param name="authSession">The authentication session associated with the request,
-	/// containing user-specific data.</param>
-	/// <returns>A task that resolves to a boolean indicating whether user consent is needed. This implementation
-	/// always returns false, suggesting consent is never required.</returns>
+	/// <param name="authSession">The authentication session associated with the request.</param>
 	public async Task<bool> IsConsentRequired(ValidAuthorizationRequest request, AuthSession authSession)
 	{
 		var userConsents = await GetUserConsentsAsync(request, authSession);

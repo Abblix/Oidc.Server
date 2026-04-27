@@ -23,19 +23,20 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Provides constants for specifying the intended usage of a public key.
-/// This class defines different types of public key usages for cryptographic operations,
-/// typically used in JSON Web Key (JWK) specifications and related contexts.
+/// Values for the JWK "use" parameter (RFC 7517 Section 4.2), declaring whether a key is
+/// intended for signing or encryption. Lets clients pick the right key from a JWK Set
+/// when a JWKS contains keys for both purposes.
 /// </summary>
 public static class PublicKeyUsages
 {
 	/// <summary>
-	/// Indicates that the public key is intended for use in digital signature operations.
+	/// Key is intended for digital signature or MAC operations (JWS).
 	/// </summary>
 	public const string Signature = "sig";
 
 	/// <summary>
-	/// Indicates that the public key is intended for use in encryption operations.
+	/// Key is intended for encryption operations (JWE), either as a key-encryption key or,
+	/// for symmetric keys, as the content-encryption key in direct mode.
 	/// </summary>
 	public const string Encryption = "enc";
 }

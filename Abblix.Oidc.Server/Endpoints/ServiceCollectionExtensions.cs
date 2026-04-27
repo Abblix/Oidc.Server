@@ -65,6 +65,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
+/// <summary>
+/// Extension methods that register endpoint pipelines (handler + validator + processor + per-step
+/// validators / fetchers / grant handlers) for the OAuth 2.0 / OpenID Connect endpoints exposed by
+/// this library: configuration, authorization (with PAR), token, userinfo, revocation, introspection,
+/// check-session, end-session, dynamic client management, CIBA backchannel and RFC 8628 device
+/// authorization. Use <c>TryAdd*</c> so that host pre-registrations win.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>

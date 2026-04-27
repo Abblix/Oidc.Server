@@ -25,11 +25,19 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Abblix.Oidc.Server.Mvc.Binders;
 
 /// <summary>
-/// Binds the client X.509 certificate from HttpContext.Connection.ClientCertificate.
-/// Note: Use ForwardedClientCertificateMiddleware to populate the certificate from reverse proxy headers.
+/// Model binder that supplies the negotiated TLS client X.509 certificate to an action parameter,
+/// enabling support for mutual-TLS client authentication and certificate-bound access tokens (RFC 8705).
+/// Reads from <see cref="Microsoft.AspNetCore.Http.ConnectionInfo.ClientCertificate"/>, falling back
+/// to <see cref="Microsoft.AspNetCore.Http.ConnectionInfo.GetClientCertificateAsync"/> for renegotiation.
+/// When the server is fronted by a reverse proxy that terminates TLS, register
+/// <c>CertificateForwardingMiddleware</c> beforehand so the forwarded header is hydrated into the connection.
 /// </summary>
 public class ClientCertificateBinder : IModelBinder
 {
+    /// <summary>
+    /// Resolves the client certificate for the current connection and assigns it as the binding result.
+    /// The result is null when no certificate is present, which is the expected case for non-mTLS clients.
+    /// </summary>
     public async Task BindModelAsync(ModelBindingContext bindingContext)
     {
         var connection = bindingContext.HttpContext.Connection;

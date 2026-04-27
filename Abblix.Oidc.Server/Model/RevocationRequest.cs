@@ -27,8 +27,8 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to revoke a token, typically used in OAuth 2.0 token revocation scenarios.
-/// Inherits from <see cref="ClientRequest"/>.
+/// Parameters of an OAuth 2.0 token revocation request (RFC 7009 §2.1) sent to the
+/// <c>revocation_endpoint</c>. Client authentication is required and is supplied alongside this payload.
 /// </summary>
 public record RevocationRequest
 {
@@ -39,15 +39,16 @@ public record RevocationRequest
 	}
 
 	/// <summary>
-	/// The token that the client wants to revoke.
+	/// The <c>token</c> parameter (RFC 7009 §2.1): the access token or refresh token string the client
+	/// is asking the authorization server to revoke. Required.
 	/// </summary>
 	[JsonPropertyName(Parameters.Token)]
 	[Required]
 	public string Token { get; set; } = null!;
 
 	/// <summary>
-	/// A hint about the type of the token submitted for revocation.
-	/// This property can help the authorization server to optimize the revocation process.
+	/// The optional <c>token_type_hint</c> (RFC 7009 §2.1) advising whether <see cref="Token"/> is an
+	/// <c>access_token</c> or <c>refresh_token</c>, allowing the server to look it up faster.
 	/// </summary>
 	[JsonPropertyName(Parameters.TokenTypeHint)]
 	public string? TokenTypeHint { get; set; }

@@ -35,16 +35,23 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// </summary>
 public class PushModeGrantProcessor : IBackChannelGrantProcessor
 {
-    // Push mode clients should never poll the token endpoint
+    /// <summary>
+    /// Push mode delivers tokens directly to the client's notification endpoint, so any call to the
+    /// token endpoint with a push-mode <c>auth_req_id</c> is a protocol error and is rejected with
+    /// <c>invalid_grant</c>.
+    /// </summary>
     public OidcError ValidateTokenEndpointAccess() => new(
         ErrorCodes.InvalidGrant,
         "Push mode clients receive tokens via push delivery and must not poll the token endpoint");
 
+    /// <summary>
+    /// Defensive fallback that returns <c>invalid_grant</c>. In practice this method is unreachable
+    /// because <see cref="ValidateTokenEndpointAccess"/> short-circuits push-mode token-endpoint requests.
+    /// </summary>
     public Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // This should never be reached since ValidateTokenEndpointAccess() always returns an error for push mode
         return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
             new OidcError(
                 ErrorCodes.InvalidGrant,
