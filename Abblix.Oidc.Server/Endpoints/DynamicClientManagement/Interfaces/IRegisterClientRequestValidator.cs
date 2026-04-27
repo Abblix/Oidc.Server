@@ -27,14 +27,16 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Provides an interface for validating client registration requests.
+/// Validates client metadata supplied to the registration endpoint per RFC 7591 §2 and
+/// OpenID Connect Dynamic Client Registration 1.0. Produces a typed
+/// <see cref="ValidClientRegistrationRequest"/> on success or an <see cref="OidcError"/>
+/// describing the rejected metadata field.
 /// </summary>
 public interface IRegisterClientRequestValidator
 {
     /// <summary>
-    /// Validates the given client registration request asynchronously.
+    /// Validates the request and returns either the typed valid form or the first error encountered.
     /// </summary>
-    /// <param name="request">The client registration request to validate.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the validation result.</returns>
+    /// <param name="request">The raw registration request to validate.</param>
     Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request);
 }

@@ -25,24 +25,22 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
-/// Implements the mechanism for notifying clients of logout events through the front-channel,
-/// typically by redirecting the user's browser to a client-specific logout URL.
+/// Implements OpenID Connect Front-Channel Logout 1.0 notification by collecting per-client logout URIs
+/// (with <c>iss</c> and <c>sid</c> appended when the client requires session identifiers) into the
+/// <see cref="LogoutContext"/>. The end-session endpoint later renders these URIs as iframes so each
+/// client receives the logout signal through the user agent.
 /// </summary>
 public class FrontChannelLogoutNotifier: ILogoutNotifier
 {
     /// <summary>
-    /// Asynchronously notifies a client about a logout event by constructing and storing
-    /// the front-channel logout URI, which can be used to redirect the user's browser
-    /// to perform the logout process on the client's side.
+    /// Builds the client's front-channel logout URI (appending <c>iss</c> and <c>sid</c> when the
+    /// client's <c>frontchannel_logout_session_required</c> is set) and adds it to
+    /// <see cref="LogoutContext.FrontChannelLogoutRequestUris"/> for later iframe rendering.
+    /// Throws <see cref="InvalidOperationException"/> if the client requires <c>sid</c> but the
+    /// context has no session identifier.
     /// </summary>
     /// <param name="clientInfo">Information about the client that needs to be notified of the logout event.</param>
     /// <param name="logoutContext">Contextual information about the logout event, including the session ID and issuer.</param>
-    /// <returns>A task that represents the asynchronous notification operation.</returns>
-    /// <remarks>
-    /// This method constructs a logout URI based on the client's configuration for front-channel logout,
-    /// including necessary parameters such as issuer and session ID if by the client.
-    /// It then adds the constructed URI to a collection for later use, typically for redirection.
-    /// </remarks>
     public Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
     {
         NotifyClient(clientInfo, logoutContext);

@@ -26,7 +26,10 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Features.ScopeManagement;
 
 /// <summary>
-/// Defines a contract for managing and retrieving scope definitions.
+/// Registry of OAuth 2.0 scope definitions known to the authorization server (RFC 6749 §3.3),
+/// including the OIDC standard scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>address</c>,
+/// <c>phone</c>, <c>offline_access</c>; OIDC Core §5.4) and any host-defined custom scopes.
+/// Implements <see cref="IEnumerable{T}"/> so callers may iterate the full registered set.
 /// </summary>
 public interface IScopeManager: IEnumerable<ScopeDefinition>
 {

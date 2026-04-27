@@ -23,87 +23,91 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Provides constants for various signing algorithms used in JWT and cryptographic operations.
+/// JWS signing algorithm identifiers ("alg" header values) defined in RFC 7518 Section 3.
+/// Used to indicate how a JWT was signed and to look up the matching signer or verifier.
 /// </summary>
 public static class SigningAlgorithms
 {
 	/// <summary>
-	/// Represents the "none" signing algorithm.
-	/// This value is used when no digital signature or MAC operation is performed on the JWT.
-	/// It is important to use this algorithm with caution as it implies that the JWT is unprotected.
+	/// Unsecured JWS ("none") per RFC 7515 Section 6: no digital signature or MAC is applied.
+	/// The token's integrity is therefore not protected; callers must reject unsigned tokens
+	/// unless integrity is guaranteed by another channel.
 	/// </summary>
 	public const string None = "none";
 
 	/// <summary>
-	/// Represents the RS256 (RSA Signature with SHA-256) signing algorithm.
-	/// This algorithm is commonly used for creating JWT signatures using RSA keys with SHA-256 hashing.
+	/// RSASSA-PKCS1-v1_5 with SHA-256 (RFC 7518 Section 3.3). Backed by .NET <c>RSA</c>
+	/// with <c>RSASignaturePadding.Pkcs1</c>. Widely deployed default for OIDC ID tokens.
 	/// </summary>
 	public const string RS256 = "RS256";
 
 	/// <summary>
-	/// Represents the RS384 (RSA Signature with SHA-384) signing algorithm.
-	/// This algorithm enhances security by using SHA-384 for the hashing process while signing JWTs.
+	/// RSASSA-PKCS1-v1_5 with SHA-384 (RFC 7518 Section 3.3). Same construction as RS256
+	/// with a stronger hash; backed by .NET <c>RSA</c> with <c>RSASignaturePadding.Pkcs1</c>.
 	/// </summary>
 	public const string RS384 = "RS384";
 
 	/// <summary>
-	/// Represents the RS512 (RSA Signature with SHA-512) signing algorithm.
-	/// This algorithm provides a higher level of security by using SHA-512 for signing JWTs.
+	/// RSASSA-PKCS1-v1_5 with SHA-512 (RFC 7518 Section 3.3). Same construction as RS256
+	/// with SHA-512; backed by .NET <c>RSA</c> with <c>RSASignaturePadding.Pkcs1</c>.
 	/// </summary>
 	public const string RS512 = "RS512";
 
 	/// <summary>
-	/// Represents the PS256 (RSA PSS Signature with SHA-256) signing algorithm.
-	/// This algorithm is similar to RS256 but uses RSA PSS (Probabilistic Signature Scheme) for improved security.
+	/// RSASSA-PSS with SHA-256 and MGF1 (RFC 7518 Section 3.5). Backed by .NET <c>RSA</c>
+	/// with <c>RSASignaturePadding.Pss</c>. Preferred over RS256 when both sides support PSS,
+	/// because PSS has a tighter security reduction.
 	/// </summary>
 	public const string PS256 = "PS256";
 
 	/// <summary>
-	/// Represents the PS384 (RSA PSS Signature with SHA-384) signing algorithm.
-	/// This algorithm enhances security by using SHA-384 in conjunction with RSA PSS for signing.
+	/// RSASSA-PSS with SHA-384 and MGF1 (RFC 7518 Section 3.5). Backed by .NET <c>RSA</c>
+	/// with <c>RSASignaturePadding.Pss</c>.
 	/// </summary>
 	public const string PS384 = "PS384";
 
 	/// <summary>
-	/// Represents the PS512 (RSA PSS Signature with SHA-512) signing algorithm.
-	/// This algorithm offers a higher level of security by using SHA-512 with RSA PSS for signing.
+	/// RSASSA-PSS with SHA-512 and MGF1 (RFC 7518 Section 3.5). Backed by .NET <c>RSA</c>
+	/// with <c>RSASignaturePadding.Pss</c>.
 	/// </summary>
 	public const string PS512 = "PS512";
 
 	/// <summary>
-	/// Represents the ES256 (Elliptic Curve Signature with SHA-256) signing algorithm.
-	/// This algorithm uses the ECDSA (Elliptic Curve Digital Signature Algorithm) with SHA-256 hashing,
-	/// offering a compact signature size and high security, making it suitable for JWT signing.
+	/// ECDSA on curve P-256 with SHA-256 (RFC 7518 Section 3.4). Backed by .NET <c>ECDsa</c>
+	/// using <c>DSASignatureFormat.IeeeP1363FixedFieldConcatenation</c>.
+	/// Produces 64-byte signatures and is significantly smaller than RSA equivalents.
 	/// </summary>
 	public const string ES256 = "ES256";
 
 	/// <summary>
-	/// Represents the ES384 (Elliptic Curve Signature with SHA-384) signing algorithm.
-	/// This algorithm uses ECDSA with SHA-384, providing enhanced security for signing JWTs.
+	/// ECDSA on curve P-384 with SHA-384 (RFC 7518 Section 3.4). Backed by .NET <c>ECDsa</c>
+	/// in IEEE P1363 format; produces 96-byte signatures.
 	/// </summary>
 	public const string ES384 = "ES384";
 
 	/// <summary>
-	/// Represents the ES512 (Elliptic Curve Signature with SHA-512) signing algorithm.
-	/// This algorithm provides a very high level of security using SHA-512 in ECDSA for JWT signing.
+	/// ECDSA on curve P-521 with SHA-512 (RFC 7518 Section 3.4). Backed by .NET <c>ECDsa</c>
+	/// in IEEE P1363 format; produces 132-byte signatures.
+	/// Note that the curve is P-521 (521 bits) although the algorithm name is "ES512".
 	/// </summary>
 	public const string ES512 = "ES512";
 
 	/// <summary>
-	/// Represents the HS256 (HMAC with SHA-256) signing algorithm.
-	/// This algorithm uses a shared secret key along with SHA-256 hashing to sign JWTs.
+	/// HMAC with SHA-256 (RFC 7518 Section 3.2). Backed by .NET <c>HMACSHA256</c> with
+	/// constant-time signature comparison. Requires a shared symmetric key of at least 256 bits.
+	/// Suitable only when issuer and verifier can both be trusted with the secret.
 	/// </summary>
 	public const string HS256 = "HS256";
 
 	/// <summary>
-	/// Represents the HS384 (HMAC with SHA-384) signing algorithm.
-	/// This algorithm enhances security by using SHA-384 for signing JWTs with a shared secret key.
+	/// HMAC with SHA-384 (RFC 7518 Section 3.2). Backed by .NET <c>HMACSHA384</c>;
+	/// requires a shared symmetric key of at least 384 bits.
 	/// </summary>
 	public const string HS384 = "HS384";
 
 	/// <summary>
-	/// Represents the HS512 (HMAC with SHA-512) signing algorithm.
-	/// This algorithm provides a higher level of security using SHA-512 with HMAC for signing JWTs.
+	/// HMAC with SHA-512 (RFC 7518 Section 3.2). Backed by .NET <c>HMACSHA512</c>;
+	/// requires a shared symmetric key of at least 512 bits.
 	/// </summary>
 	public const string HS512 = "HS512";
 }

@@ -28,8 +28,14 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// Manages resource definitions, ensuring they are registered and retrievable based on their URIs.
+/// In-memory <see cref="IResourceManager"/> backed by <see cref="OidcOptions.Resources"/>. Indexes
+/// the configured <see cref="ResourceDefinition"/> entries by their absolute URI for O(1) lookup
+/// during RFC 8707 resource indicator validation.
 /// </summary>
+/// <remarks>
+/// The dictionary is built once at construction time from the snapshot of options; subsequent
+/// changes to the options instance are not reflected.
+/// </remarks>
 /// <param name="options">The OIDC options containing resource definitions to be registered.</param>
 public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
 {

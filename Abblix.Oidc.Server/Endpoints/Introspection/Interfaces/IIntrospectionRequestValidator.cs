@@ -29,16 +29,23 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Represents a contract for validating introspection request properties and authenticating the initiating client.
+/// Authenticates the calling client (RFC 7662 §2.1, "the protected resource calls the
+/// introspection endpoint using an HTTP request") and validates the supplied <c>token</c>.
+/// Implementations are expected to coerce token problems (expired, signed by a different
+/// issuer, audience mismatch, issued to another client) into a non-disclosing
+/// <c>active=false</c> result via <see cref="ValidIntrospectionRequest.InvalidToken"/>.
 /// </summary>
 public interface IIntrospectionRequestValidator
 {
 	/// <summary>
-	/// Validates the provided introspection request and authenticates the client.
+	/// Authenticates the caller and validates the introspected token.
 	/// </summary>
-	/// <param name="introspectionRequest">The IntrospectionRequest to be validated.</param>
-	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
-	/// <returns>An Result&lt;ValidIntrospectionRequest, AuthError&gt; indicating the result of the validation.</returns>
+	/// <param name="introspectionRequest">Wire-level request carrying the <c>token</c> to introspect.</param>
+	/// <param name="clientRequest">Carrier of the client's authentication credentials.</param>
+	/// <returns>
+	/// A <see cref="ValidIntrospectionRequest"/> on success (with <c>Token</c> set or null);
+	/// an <see cref="OidcError"/> only when the caller itself cannot be authenticated.
+	/// </returns>
 	Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest);

@@ -30,11 +30,18 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
-/// Represents an authorization request that has passed validation, encapsulating all necessary information
-/// resolved during its validation.
+/// Output of <see cref="IAuthorizationRequestValidator"/> handed to
+/// <see cref="IAuthorizationRequestProcessor"/>. Snapshot of the data resolved during
+/// validation: the wire-level request, the authenticated client, the negotiated response
+/// mode (per OAuth 2.0 Multiple Response Types / Form Post), and the materialized scope and
+/// resource definitions ready for consent and token issuance.
 /// </summary>
 public record ValidAuthorizationRequest
 {
+	/// <summary>
+	/// Snapshots the validated state from the shared <see cref="AuthorizationValidationContext"/>
+	/// once the validator pipeline has completed.
+	/// </summary>
 	public ValidAuthorizationRequest(AuthorizationValidationContext context)
 	{
 		ResponseMode = context.ResponseMode;

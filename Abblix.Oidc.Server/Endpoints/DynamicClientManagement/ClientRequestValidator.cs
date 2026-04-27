@@ -31,21 +31,18 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// This class is responsible for validating client requests by checking the authorization header and client existence.
-/// It implements the IClientRequestValidator interface. It uses an IClientInfoProvider to retrieve client information
-/// and an IRegistrationAccessTokenValidator to validate the authorization header.
+/// Default <see cref="IClientRequestValidator"/> for the RFC 7592 client configuration endpoint.
+/// First verifies the registration access token is bound to the requested <c>client_id</c>, then
+/// loads the corresponding <see cref="Features.ClientInformation.ClientInfo"/> from storage and
+/// rejects the request when no record exists.
 /// </summary>
-/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="registrationAccessTokenValidator">Validator for registration access tokens.</param>
+/// <param name="clientInfoProvider">Store consulted for the addressed client.</param>
+/// <param name="registrationAccessTokenValidator">Validator for the bearer registration access token.</param>
 public class ClientRequestValidator(
     IClientInfoProvider clientInfoProvider,
     IRegistrationAccessTokenValidator registrationAccessTokenValidator) : IClientRequestValidator
 {
-    /// <summary>
-    /// Validates a client request asynchronously by checking the authorization header and client existence.
-    /// </summary>
-    /// <param name="request">The client request to validate.</param>
-    /// <returns>A task that returns the validation result.</returns>
+    /// <inheritdoc />
     public async Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request)
     {
         var headerErrorDescription = await registrationAccessTokenValidator.ValidateAsync(

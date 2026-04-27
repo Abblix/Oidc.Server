@@ -28,7 +28,10 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 namespace Abblix.Oidc.Server.Common.Interfaces;
 
 /// <summary>
-/// Represents an interface for authenticating user credentials.
+/// Validates a username and password pair against the host's user store and produces an authorized grant
+/// when the credentials are correct. Used by the Resource Owner Password Credentials grant
+/// (<c>grant_type=password</c>) at the token endpoint, so the host can plug its own identity backend
+/// behind the OAuth flow.
 /// </summary>
 public interface IUserCredentialsAuthenticator
 {

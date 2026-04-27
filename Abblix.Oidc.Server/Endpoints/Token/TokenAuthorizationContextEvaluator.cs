@@ -29,18 +29,14 @@ using System.Security.Cryptography;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Evaluates <see cref="AuthorizationContext"/> instances based on token requests.
+/// Default <see cref="ITokenAuthorizationContextEvaluator"/>: narrows the originally granted scope and
+/// resource sets to the intersection with what the token request asks for (RFC 6749 §6 / RFC 8707 §2.2),
+/// and, when the client authenticated via mTLS, derives the RFC 8705 §3 <c>cnf.x5t#S256</c> certificate
+/// thumbprint to bind the issued tokens.
 /// </summary>
 public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEvaluator
 {
-    /// <summary>
-    /// Evaluates and constructs a new <see cref="AuthorizationContext"/> by refining and reconciling the scopes
-    /// and resources from the original authorization request based on the current token request.
-    /// </summary>
-    /// <param name="request">The valid token request that contains the original authorization grant and any additional
-    /// token-specific requests.</param>
-    /// <returns>An updated <see cref="AuthorizationContext"/> that reflects the actual scopes and resources that
-    /// should be considered during the token issuance process.</returns>
+    /// <inheritdoc />
     public AuthorizationContext EvaluateAuthorizationContext(ValidTokenRequest request)
     {
         var authContext = request.AuthorizedGrant.Context;

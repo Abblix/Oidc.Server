@@ -44,11 +44,9 @@ public record ClientInfo(string ClientId)
     public string ClientId { get; set; } = ClientId;
 
     /// <summary>
-    /// Classifies the client based on its ability to securely maintain a client secret.
-    /// This classification is derived from the TokenEndpointAuthMethod:
-    /// - Public: when TokenEndpointAuthMethod is 'none' (no client authentication)
-    /// - Confidential: for all other authentication methods (secrets, keys, certificates)
-    /// Setting this property validates consistency with TokenEndpointAuthMethod.
+    /// Classifies the client based on its ability to securely maintain a client secret. Derived from
+    /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
+    /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.
     /// </summary>
     public ClientType ClientType
         => ClientAuthenticationMethods.None.Equals(TokenEndpointAuthMethod, StringComparison.Ordinal)
@@ -160,9 +158,10 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// Describes how the client authenticates to the token endpoint.
-    /// Common methods include client_secret_basic and client_secret_post.
-    /// Changing this value invalidates the cached ClientType.
+    /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
+    /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
+    /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
+    /// Drives the value of <see cref="ClientType"/>.
     /// </summary>
     public string TokenEndpointAuthMethod { get; set; } = ClientAuthenticationMethods.ClientSecretBasic;
 

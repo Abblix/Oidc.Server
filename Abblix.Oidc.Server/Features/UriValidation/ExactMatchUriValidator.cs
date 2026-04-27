@@ -25,13 +25,21 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// Validates a URI based on an exact match against a predefined value, disregarding the query and fragment parts.
+/// Implements the simple-string-comparison matching rule for redirect URIs (RFC 6749 §3.1.2.2):
+/// the candidate URI must equal a single registered absolute URI. Optionally strips the query
+/// and fragment from the candidate before comparison to accommodate clients that append
+/// dynamic query parameters at runtime.
 /// </summary>
 public sealed class ExactMatchUriValidator : IUriValidator
 {
 	/// <summary>
-	/// Validates a URI based on an exact match against a predefined value, disregarding the query and fragment parts.
+	/// Creates a validator that accepts exactly <paramref name="validUri"/>.
 	/// </summary>
+	/// <param name="validUri">The single registered absolute URI to match against.</param>
+	/// <param name="ignoreQueryAndFragment">When <c>true</c>, the candidate URI's query and
+	/// fragment are stripped before comparison; otherwise comparison is exact, including those
+	/// components.</param>
+	/// <exception cref="ArgumentException"><paramref name="validUri"/> is not an absolute URI.</exception>
 	public ExactMatchUriValidator(Uri validUri, bool ignoreQueryAndFragment = false)
 	{
 		if (validUri is not { IsAbsoluteUri: true })

@@ -197,7 +197,7 @@ public class ClientSecretJwtAuthenticator(
     /// Creates a symmetric JSON Web Key for HMAC signature validation.
     /// </summary>
     /// <param name="algorithm">The HMAC algorithm identifier (e.g., HS256, HS384, HS512).</param>
-    /// <param name="secret"></param>
+    /// <param name="secret">UTF-8 bytes of the client secret used as the HMAC key.</param>
     /// <returns>A JSON Web Key configured for the specified HMAC algorithm.</returns>
     private static OctetJsonWebKey CreateSymmetricKey(string algorithm, byte[] secret)
         => new() { Algorithm = algorithm, KeyValue = secret };

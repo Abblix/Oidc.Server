@@ -29,8 +29,11 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.ScopeManagement;
 
 /// <summary>
-/// Manages the registration and retrieval of scope definitions, providing a mechanism to validate requested scopes
-/// against predefined or configured scopes.
+/// In-memory <see cref="IScopeManager"/> that seeds the registry with the six OIDC Core §5.4
+/// standard scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>address</c>, <c>phone</c>,
+/// <c>offline_access</c>) and merges any host-defined scopes from
+/// <see cref="OidcOptions.Scopes"/>. Lookups are case-sensitive (RFC 6749 §3.3 treats scope
+/// values as case-sensitive strings) and host-defined scopes do not override the standard ones.
 /// </summary>
 /// <param name="options">The options containing OIDC configuration, including additional custom scopes.</param>
 public class ScopeManager(IOptions<OidcOptions> options) : IScopeManager
@@ -65,6 +68,9 @@ public class ScopeManager(IOptions<OidcOptions> options) : IScopeManager
     public bool TryGet(string scope, [MaybeNullWhen(false)] out ScopeDefinition definition)
         => _scopes.TryGetValue(scope, out definition);
 
+    /// <summary>
+    /// Iterates over all registered scope definitions in unspecified order.
+    /// </summary>
     public IEnumerator<ScopeDefinition> GetEnumerator() => _scopes.Values.GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

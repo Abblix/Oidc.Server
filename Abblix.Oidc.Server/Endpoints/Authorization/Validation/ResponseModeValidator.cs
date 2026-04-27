@@ -31,18 +31,16 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// This class is responsible for validating the response mode specified in the authorization request
-/// as part of the SyncAuthorizationRequestValidationStep process.
+/// Verifies that an explicit <c>response_mode</c> is compatible with the OAuth 2.0 flow
+/// derived from <c>response_type</c> (OAuth 2.0 Multiple Response Types §2.1, OAuth 2.0
+/// Form Post Response Mode). For the authorization-code flow any of <c>query</c>,
+/// <c>fragment</c>, <c>form_post</c> is allowed; flows that issue tokens at the
+/// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
+/// must not appear in the URL query string.
 /// </summary>
-/// <param name="logger">The logger to be used for logging purposes.</param>
 public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
-	/// <summary>
-	/// Validates the response mode specified in the authorization request against the allowed
-	/// response modes for the detected flow type.
-	/// </summary>
-	/// <param name="context">The validation context containing client information.</param>
-	/// <returns>An AuthorizationRequestValidationError if the validation fails, or null if the request is valid.</returns>
+	/// <inheritdoc />
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
 		var responseMode = context.Request.ResponseMode;

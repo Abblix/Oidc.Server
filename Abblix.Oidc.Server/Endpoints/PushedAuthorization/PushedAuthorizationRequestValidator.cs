@@ -54,7 +54,8 @@ public class PushedAuthorizationRequestValidator(
     /// and ensures that the request is legitimately associated with the authenticated client.
     /// </summary>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
-    /// <param name="clientRequest"></param>
+    /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
+    /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 §2.</param>
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(

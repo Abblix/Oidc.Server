@@ -28,30 +28,20 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Manages the removal of registered clients from the authorization server, ensuring that requests for client
-/// unregistration are handled securely and in accordance with OAuth 2.0 and OpenID Connect standards.
+/// Default implementation of <see cref="IRemoveClientHandler"/> that authenticates the
+/// registration access token via <see cref="IClientRequestValidator"/> and, on success,
+/// delegates to the processor to delete the client per RFC 7592 §2.3.
 /// </summary>
-/// <param name="validator">The service used to validate incoming client removal requests.</param>
-/// <param name="processor">The service responsible for processing validated removal requests and unregistering
-/// the client.</param>
+/// <param name="validator">Validator for the registration access token and target client.</param>
+/// <param name="processor">Processor that performs the actual deletion.</param>
 public class RemoveClientHandler(
     IClientRequestValidator validator,
     IRemoveClientRequestProcessor processor) : IRemoveClientHandler
 {
     /// <summary>
-    /// Asynchronously processes a request to remove a registered client, ensuring the request is valid and authorized
-    /// before proceeding with client unregistration.
+    /// Validates the request, then deletes the addressed client per RFC 7592 §2.3.
     /// </summary>
-    /// <param name="clientRequest">The client request containing necessary information for identifying and removing
-    /// the specified client.</param>
-    /// <returns>A task that results in a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>, which encapsulates the outcome of
-    /// the removal process, including success or error information.</returns>
-    /// <remarks>
-    /// This method follows a two-step process: first, validating the removal request to ensure it meets all
-    /// required criteria and is authorized; second, if validation succeeds, processing the request to unregister
-    /// the client from the system. This approach ensures that client removal is managed securely and aligns with
-    /// best practices in client management within OAuth 2.0 and OpenID Connect frameworks.
-    /// </remarks>
+    /// <param name="clientRequest">The DELETE request authenticated by a registration access token.</param>
     public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
     {
         var validationResult = await validator.ValidateAsync(clientRequest);

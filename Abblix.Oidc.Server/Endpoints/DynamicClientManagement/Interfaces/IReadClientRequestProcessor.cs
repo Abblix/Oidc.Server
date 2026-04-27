@@ -27,14 +27,16 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Represents an interface for processing read client requests in the context of OpenID Connect.
+/// Builds the RFC 7592 §2.1 read-client response from a request that has already been validated.
+/// Reads stored metadata, formats it for the wire, and issues a fresh
+/// <c>registration_access_token</c> as recommended by RFC 7592 §3.
 /// </summary>
 public interface IReadClientRequestProcessor
 {
     /// <summary>
-    /// Processes a read client request asynchronously and returns a ReadClientResponse.
+    /// Produces the response payload for the addressed client, including its current metadata
+    /// and a refreshed registration access token.
     /// </summary>
-    /// <param name="request">The valid client request to process.</param>
-    /// <returns>A task representing the processing result.</returns>
+    /// <param name="request">A request whose authentication and target client have been validated.</param>
     Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
 }

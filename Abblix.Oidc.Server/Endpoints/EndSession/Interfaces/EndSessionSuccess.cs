@@ -23,17 +23,24 @@
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Represents a successful response for ending a user's session.
+/// Result of a successful RP-initiated logout (OpenID Connect RP-Initiated Logout 1.0 §3).
+/// Carries the post-logout redirect target (with <c>state</c> already appended when present)
+/// and the set of front-channel logout URIs the user agent must visit so each affected
+/// client can clear its own session.
 /// </summary>
 public record EndSessionSuccess(Uri? PostLogoutRedirectUri, IList<Uri> FrontChannelLogoutRequestUris)
 {
 	/// <summary>
-	/// The URI to which the user should be redirected after successfully logging out (optional).
+	/// Validated <c>post_logout_redirect_uri</c> with <c>state</c> appended when supplied,
+	/// or <c>null</c> when the client did not request one (the OP then renders its own
+	/// "logged out" page).
 	/// </summary>
 	public Uri? PostLogoutRedirectUri { get; init; } = PostLogoutRedirectUri;
 
 	/// <summary>
-	/// Gets a list of front-channel logout request URIs to be initiated after logging out.
+	/// Front-channel logout URIs (OpenID Connect Front-Channel Logout 1.0) collected from
+	/// every client that participated in the ended session, to be loaded in the user agent
+	/// so each RP can clear local state.
 	/// </summary>
 	public IList<Uri> FrontChannelLogoutRequestUris { get; init; } = FrontChannelLogoutRequestUris;
 }

@@ -35,6 +35,10 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// </summary>
 public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : ISubjectTypeConverter
 {
+    /// <summary>
+    /// The two OIDC Core §8 subject types this converter implements: <c>public</c> (passes the local
+    /// subject through unchanged) and <c>pairwise</c> (HMAC-derived per-sector identifier).
+    /// </summary>
     public IEnumerable<string> SubjectTypesSupported
     {
         get

@@ -27,17 +27,18 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
 /// <summary>
-/// Defines a contract for fetching and validating backchannel authentication requests in the context of
-/// CIBA (Client-Initiated Backchannel Authentication) flows.
+/// Resolves a CIBA request by enriching the raw incoming model with parameters obtained from
+/// out-of-band sources, most notably a signed JWT Request Object. The validation pipeline runs
+/// against the resolved request, not the raw one.
 /// </summary>
 public interface IBackChannelAuthenticationRequestFetcher
 {
     /// <summary>
-    /// Asynchronously fetches and validates a backchannel authentication request. This method handles the retrieval
-    /// and any necessary validation or processing to ensure that the request is ready for further handling.
+    /// Resolves the effective <see cref="BackChannelAuthenticationRequest"/>, merging in parameters from
+    /// any external source the implementation knows how to read.
     /// </summary>
-    /// <param name="request">The backchannel authentication request to be fetched and validated.</param>
-    /// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationRequest, AuthError}"/>
-    /// indicating whether the fetch was successful or if it resulted in an error.</returns>
+    /// <param name="request">The raw backchannel authentication request as parsed from the wire.</param>
+    /// <returns>The resolved request on success, or an <see cref="OidcError"/> describing why fetching
+    /// or signature/structure validation of the external source failed.</returns>
     Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request);
 }

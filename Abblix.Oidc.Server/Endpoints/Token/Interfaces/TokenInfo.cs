@@ -23,8 +23,9 @@
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Contains information about an issued token.
+/// Identity of an issued token, recorded against an authorization grant so that the token can be
+/// revoked by JTI if the grant is later invalidated (for example when an authorization code is reused).
 /// </summary>
-/// <param name="JwtId">The unique identifier of the JWT.</param>
-/// <param name="ExpiresAt">The expiration time of the token, if applicable.</param>
+/// <param name="JwtId">The token's <c>jti</c> claim.</param>
+/// <param name="ExpiresAt">When the token expires; used to expire the revocation record alongside the token itself.</param>
 public record TokenInfo(string JwtId, DateTimeOffset ExpiresAt);

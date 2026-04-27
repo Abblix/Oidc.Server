@@ -28,10 +28,10 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the authentication method specified for the token endpoint in a client registration request.
-/// This validator ensures that the provided authentication method is supported by the OpenID provider.
+/// Validates that the requested <c>token_endpoint_auth_method</c> (RFC 7591 §2) is one this
+/// server announces in <c>token_endpoint_auth_methods_supported</c> on its discovery document.
 /// </summary>
-/// <param name="clientAuthenticator">The client authenticator used to validate authentication methods.</param>
+/// <param name="clientAuthenticator">Source of supported client authentication methods.</param>
 public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthenticator) : SyncClientRegistrationContextValidator
 {
     /// <summary>

@@ -27,10 +27,15 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 
 /// <summary>
-/// Represents a validated device authorization request with resolved client information.
+/// A device authorization request (RFC 8628 §3.1) that has passed all validators, paired with the
+/// authenticated client and the scope/resource sets resolved against the provider's catalog.
 /// </summary>
 public record ValidDeviceAuthorizationRequest
 {
+    /// <summary>
+    /// Builds the validated request snapshot from a populated <see cref="DeviceAuthorizationValidationContext"/>,
+    /// flattening scope and resource definitions to their wire-form identifiers.
+    /// </summary>
     public ValidDeviceAuthorizationRequest(DeviceAuthorizationValidationContext context)
     {
         Model = context.Request;

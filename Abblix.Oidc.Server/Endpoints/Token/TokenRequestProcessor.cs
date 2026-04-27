@@ -31,14 +31,15 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Processes token requests in compliance with OAuth 2.0 and OpenID Connect standards,
-/// handling various types of token requests such as authorization code and refresh token.
-/// Generates the appropriate token responses including access tokens, refresh tokens, and ID tokens.
+/// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 §5.1),
+/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 §11),
+/// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 §3.1.3.3, with <c>at_hash</c>
+/// computed from the issued access token).
 /// </summary>
-/// <param name="accessTokenService">Service for creating and managing access tokens.</param>
-/// <param name="refreshTokenService">Service for creating and managing refresh tokens.</param>
-/// <param name="identityTokenService">Service for creating and managing ID tokens in OpenID Connect flows.</param>
-/// <param name="tokenContextEvaluator">Service for building the authorization context from a token request.</param>
+/// <param name="accessTokenService">Issues access-token JWTs.</param>
+/// <param name="refreshTokenService">Issues refresh-token JWTs, rolling the previous one for refresh-token grants.</param>
+/// <param name="identityTokenService">Issues ID tokens.</param>
+/// <param name="tokenContextEvaluator">Narrows scopes/resources and computes mTLS confirmation binding.</param>
 public class TokenRequestProcessor(
 	IAccessTokenService accessTokenService,
 	IRefreshTokenService refreshTokenService,

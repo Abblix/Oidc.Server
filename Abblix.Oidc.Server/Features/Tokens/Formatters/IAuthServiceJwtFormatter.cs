@@ -25,9 +25,10 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 /// <summary>
-/// Defines the interface for formatting and signing JSON Web Tokens (JWTs) within the authentication service.
-/// Implementations of this interface are responsible for processing tokens, such as access tokens, refresh tokens,
-/// and Registration Access Tokens, by applying the necessary cryptographic operations to produce a valid JWT.
+/// Serializes a <see cref="JsonWebToken"/> minted by the authorization server itself (access
+/// tokens, refresh tokens, Registration Access Tokens) into a compact JWS form (RFC 7515) using
+/// the server's signing keys, optionally wrapping the result in a JWE (RFC 7516) when an
+/// encryption key is available.
 /// </summary>
 public interface IAuthServiceJwtFormatter
 {

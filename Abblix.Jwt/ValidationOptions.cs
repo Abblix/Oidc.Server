@@ -52,7 +52,8 @@ public enum ValidationOptions
 	ValidateAudience = 1 << 3,
 
 	/// <summary>
-	/// Requires that the JWT has a valid signature.
+	/// Rejects tokens issued with the unsecured "none" algorithm, ensuring that every accepted
+	/// token carries a signature or MAC.
 	/// </summary>
 	RequireSignedTokens = 1 << 4,
 

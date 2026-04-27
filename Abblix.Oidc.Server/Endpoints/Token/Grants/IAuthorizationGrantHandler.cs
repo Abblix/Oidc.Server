@@ -31,20 +31,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 
 /// <summary>
-/// Defines the interface for handling specific types of authorization grants within an OAuth 2.0 or OpenID Connect
-/// context. Implementations of this interface are responsible for processing authorization requests based on
-/// the supported grant type, validating the request, and generating appropriate authorization responses.
+/// Strategy contract for resolving the <c>grant_type</c>-specific portion of an OAuth 2.0 token
+/// request (RFC 6749 §4) into an <see cref="AuthorizedGrant"/>: an authentication session plus the
+/// <see cref="AuthorizationContext"/> (subject, scope, resources, claims) that the issued tokens
+/// will inherit. Each implementation advertises the grant types it owns via
+/// <see cref="IGrantTypeInformer.GrantTypesSupported"/>.
 /// </summary>
 public interface IAuthorizationGrantHandler : IGrantTypeInformer
 {
 	/// <summary>
-	/// Processes an authorization request asynchronously, validates the request against the supported grant type,
-	/// and generates a response indicating the authorization result.
+	/// Resolves the grant-specific input from <paramref name="request"/> (authorization code,
+	/// refresh token, device code, client credentials, JWT assertion, etc.) into the
+	/// <see cref="AuthorizedGrant"/> that will drive token issuance, or an <see cref="OidcError"/>
+	/// such as <c>invalid_grant</c>, <c>authorization_pending</c>, or <c>slow_down</c>.
 	/// </summary>
-	/// <param name="request">The authorization request containing the required parameters for the grant type.</param>
-	/// <param name="clientInfo">Client information associated with the request, used for validation and
-	/// to generate the authorization response.</param>
-	/// <returns>A task that returns a <see cref="Result{AuthorizedGrant, AuthError}"/> with the authorization outcome,
-	/// including any tokens or error messages.</returns>
+	/// <param name="request">The token request (already authenticated against the client).</param>
+	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was
+	/// issued to the same client that is now redeeming it.</param>
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
 }

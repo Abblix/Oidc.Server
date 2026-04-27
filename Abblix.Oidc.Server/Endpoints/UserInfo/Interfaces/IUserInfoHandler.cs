@@ -27,9 +27,9 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Defines a contract for handling UserInfo requests within an OAuth 2.0 and OpenID Connect framework.
-/// It outlines the necessary operations for processing such requests, ensuring they adhere to security
-/// and protocol standards.
+/// Endpoint contract for the OpenID Connect UserInfo endpoint (OIDC Core 1.0 §5.3),
+/// which returns claims about the authenticated end-user identified by the bearer access
+/// token presented per RFC 6750.
 /// </summary>
 public interface IUserInfoHandler
 {

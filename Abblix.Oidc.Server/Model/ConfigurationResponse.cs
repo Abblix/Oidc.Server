@@ -26,10 +26,10 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents the configuration response detailing the capabilities and endpoints of the OpenID Connect provider.
-/// This response includes information about the provider's issuer identifier, key sets, supported endpoints,
-/// supported features, and more, enabling clients to dynamically configure themselves to utilize the provider's
-/// services.
+/// The OpenID Provider discovery document returned by the <c>/.well-known/openid-configuration</c> endpoint,
+/// as defined by OpenID Connect Discovery 1.0 §3 and OAuth 2.0 Authorization Server Metadata (RFC 8414).
+/// Its content lists the provider's endpoints, supported algorithms, response types, scopes, and feature flags
+/// so that relying parties can configure themselves dynamically.
 /// </summary>
 /// <remarks>
 /// Decorated with <see cref="JsonIgnoreNullsAttribute"/> so that all nullable optional properties are omitted

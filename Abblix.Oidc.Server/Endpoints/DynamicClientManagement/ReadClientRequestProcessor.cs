@@ -29,31 +29,16 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles the processing of requests to retrieve stored client information, ensuring that such requests
-/// are valid and authorized. This class serves as a bridge between the request validation and the actual
-/// retrieval of client details from the system's data store.
+/// Builds the RFC 7592 §2.1 read-client response from stored client metadata. The
+/// <c>client_secret</c> is intentionally omitted because secrets are persisted only as
+/// hashes; a fresh <c>registration_access_token</c> is issued so the client can keep using
+/// the management endpoint after the read.
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
     TimeProvider clock) : IReadClientRequestProcessor
 {
-    /// <summary>
-    /// Asynchronously retrieves the details of a client based on a valid request.
-    /// This method ensures that only authorized and valid requests lead to the disclosure of client information.
-    /// </summary>
-    /// <param name="request">A <see cref="ValidClientRequest"/> object containing the identification details
-    /// of the client whose information is being requested.</param>
-    /// <returns>
-    /// A <see cref="Task"/> that, upon completion, yields a <see cref="ReadClientSuccessfulResponse"/> containing the details
-    /// of the client. The response includes information such as the client's ID, redirect URIs, and the URL for
-    /// initiating login, among other possible client configuration details.
-    /// </returns>
-    /// <remarks>
-    /// This method is essential for supporting features like dynamic client registration and management in OAuth 2.0
-    /// and OpenID Connect ecosystems. It allows clients or administrators to query the system for the configuration
-    /// of registered clients, facilitating transparency and ease of management. Note that sensitive information,
-    /// like client secrets, are not directly retrievable to maintain security.
-    /// </remarks>
+    /// <inheritdoc />
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
         var client = request.ClientInfo;

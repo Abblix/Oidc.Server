@@ -23,7 +23,9 @@
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// Defines a contract for URI validation.
+/// Decides whether a URI received from a client is acceptable for a given OAuth/OIDC use,
+/// most commonly the redirect URI matching rules of RFC 6749 §3.1.2 and the loopback /
+/// custom-scheme accommodations of RFC 8252 (OAuth 2.0 for Native Apps).
 /// </summary>
 public interface IUriValidator
 {

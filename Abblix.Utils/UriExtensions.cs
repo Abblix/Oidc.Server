@@ -23,8 +23,9 @@
 namespace Abblix.Utils;
 
 /// <summary>
-/// The UriExtensions class provides extension methods for the Uri class,
-/// facilitating the manipulation of query strings and fragment parts of a URI.
+/// Helpers for adding parameters to a URI's query or fragment and for extracting standard parts (origin, trailing
+/// slash). Empty or null parameter values are dropped rather than serialized as bare keys, matching the OAuth
+/// 2.0 / OpenID Connect convention for absent parameters.
 /// </summary>
 public static class UriExtensions
 {

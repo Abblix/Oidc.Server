@@ -28,15 +28,14 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
-/// Represents a state where the user is authenticated but requires consent for further authorization.
-/// This record is used to encapsulate the details needed to prompt the user for consent.
+/// Outcome signalling that the user is authenticated but has not yet granted every scope or
+/// resource the client is asking for, so the host must show its consent UI for the deltas in
+/// <see cref="RequiredUserConsents"/>. Maps to OpenID Connect Core 1.0 §3.1.2.6
+/// <c>consent_required</c> when <c>prompt=none</c>.
 /// </summary>
-/// <param name="Model">The model of the authorization request prompting the need for user consent.</param>
-/// <param name="AuthSession">The authentication session associated with the user, detailing their authenticated state.
-/// </param>
-/// <param name="RequiredUserConsents">
-/// Defines the consents that are pending and require user approval.
-/// This includes the specific scopes and resources that need user consent before proceeding with the authorization
-/// process. </param>
+/// <param name="Model">The authorization request that produced the pending-consent state.</param>
+/// <param name="AuthSession">The user's current authenticated session.</param>
+/// <param name="RequiredUserConsents">The scopes and resources that are still missing
+/// approval; everything not listed here is already granted.</param>
 public record ConsentRequired(AuthorizationRequest Model, AuthSession AuthSession, ConsentDefinition RequiredUserConsents)
     : AuthorizationResponse(Model);

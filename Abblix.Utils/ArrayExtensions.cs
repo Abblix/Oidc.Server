@@ -23,7 +23,9 @@
 namespace Abblix.Utils;
 
 /// <summary>
-/// Provides extension methods for arrays.
+/// Allocation-explicit array helpers: each operation returns a freshly allocated array sized to the result.
+/// Prefer these over LINQ when the caller needs a concrete <c>T[]</c> without an extra <c>ToArray()</c> step,
+/// or when copying byte buffers via <see cref="Buffer.BlockCopy"/> matters.
 /// </summary>
 public static class ArrayExtensions
 {

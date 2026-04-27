@@ -29,21 +29,18 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// The Authorization Server MUST validate the Token Request as follows:
-///
-/// - Authenticate the Client if it was issued Client Credentials or if it uses another Client Authentication method.
-/// - Ensure the Authorization Code was issued to the authenticated Client.
-/// - Verify that the Authorization Code is valid.
-/// - If possible, verify that the Authorization Code has not been previously used.
-/// - Ensure that the redirect_uri parameter value is identical to the redirect_uri parameter value
-///		that was included in the initial Authorization Request.
-///		If the redirect_uri parameter value is not present when there is only one registered redirect_uri value,
-///		the Authorization Server MAY return an error (since the Client should have included the parameter)
-///		or MAY proceed without an error (since OAuth 2.0 permits the parameter to be omitted in this case).
-/// - Verify that the Authorization Code used was issued in response to an OpenID Connect Authentication Request
-/// (so that an ID Token will be returned from the Token Endpoint).
+/// Validates an incoming OAuth 2.0 token request (RFC 6749 §3.2) against the rules required by the
+/// requested <c>grant_type</c>: client authentication, grant ownership (e.g. an authorization code
+/// MUST have been issued to the authenticated client per OIDC Core 1.0 §3.1.3.2), redirect URI
+/// equivalence for code exchange, scope and resource (RFC 8707) consistency, and PKCE verifier
+/// matching (RFC 7636 §4.5) where applicable.
 /// </summary>
 public interface ITokenRequestValidator
 {
+	/// <summary>
+	/// Validates the request and returns a <see cref="ValidTokenRequest"/> ready for token issuance,
+	/// or an <see cref="OidcError"/> using one of the codes from RFC 6749 §5.2 (e.g. <c>invalid_grant</c>,
+	/// <c>invalid_client</c>, <c>unsupported_grant_type</c>).
+	/// </summary>
 	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
 }

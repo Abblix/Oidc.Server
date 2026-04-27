@@ -23,22 +23,27 @@
 namespace Abblix.Oidc.Server.DeclarativeValidation;
 
 /// <summary>
-/// An attribute to indicate that a property, field, or parameter should represent an absolute URI.
+/// Marks a <see cref="Uri"/>-typed property, field, or parameter as having to be an absolute URI.
+/// Relative URIs and values that do not parse as absolute are treated as invalid by validators that
+/// honor this attribute; null values are not flagged here, leave that to <see cref="System.ComponentModel.DataAnnotations.RequiredAttribute"/>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public class AbsoluteUriAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AbsoluteUriAttribute"/> class with an optional scheme.
+    /// Creates an <see cref="AbsoluteUriAttribute"/> optionally constrained to a specific scheme.
     /// </summary>
-    /// <param name="requireScheme">The scheme for the absolute URI (e.g., "https").</param>
+    /// <param name="requireScheme">
+    /// When provided, validation additionally requires the URI scheme (e.g. "https") to match this value.
+    /// </param>
     public AbsoluteUriAttribute(string? requireScheme = null)
     {
         RequireScheme = requireScheme;
     }
 
     /// <summary>
-    /// The scheme for the absolute URI.
+    /// The required URI scheme (e.g. "https"), or <c>null</c> when any scheme is acceptable
+    /// as long as the URI is absolute.
     /// </summary>
     public string? RequireScheme { get; init; }
 }

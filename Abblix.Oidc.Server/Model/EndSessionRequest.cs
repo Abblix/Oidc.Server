@@ -28,7 +28,8 @@ using Abblix.Oidc.Server.DeclarativeValidation;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to end a user session, commonly used in OpenID Connect logout scenarios.
+/// Parameters of an RP-initiated logout request to the OpenID Provider's <c>end_session_endpoint</c>,
+/// as defined in OpenID Connect RP-Initiated Logout 1.0.
 /// </summary>
 public record EndSessionRequest
 {
@@ -44,44 +45,56 @@ public record EndSessionRequest
 	}
 
 	/// <summary>
-	/// The ID token hint. A previously issued ID token passed to the logout endpoint to hint about the End-User's current authenticated session.
+	/// The <c>id_token_hint</c>: a previously issued ID Token whose subject identifies the end-user whose
+	/// session should be terminated. Recommended by RP-Initiated Logout to authenticate the logout request
+	/// and to scope which session is logged out.
 	/// </summary>
 	[JsonPropertyName(Parameters.IdTokenHint)]
 	public string? IdTokenHint { get; set; }
 
 	/// <summary>
-	/// The logout hint. An optional parameter used to indicate the login identifier or username the user might have used.
+	/// The <c>logout_hint</c>: an opaque hint about the end-user's login identifier (such as username or email)
+	/// the OpenID Provider may use to identify the session to terminate when an ID Token hint is unavailable.
 	/// </summary>
 	[JsonPropertyName(Parameters.LogoutHint)]
 	public string? LogoutHint { get; set; }
 
 	/// <summary>
-	/// The client identifier for which the logout request is made.
+	/// The <c>client_id</c> of the relying party initiating the logout, allowing the OP to validate
+	/// <see cref="PostLogoutRedirectUri"/> against the URIs registered for that client.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientId)]
 	public string? ClientId { get; set; }
 
 	/// <summary>
-	/// The state parameter to maintain state between the logout request and the callback to the client after logout.
+	/// The opaque <c>state</c> value returned unchanged when the user agent is sent back to
+	/// <see cref="PostLogoutRedirectUri"/>, used by the relying party to correlate request and callback.
 	/// </summary>
 	[JsonPropertyName(Parameters.State)]
 	public string? State { get; set; }
 
 	/// <summary>
-	/// The URL to which the user should be redirected after logout. This URI must be registered with the authorization server.
+	/// The <c>post_logout_redirect_uri</c>: an absolute URI, pre-registered with the OP, to which the
+	/// user agent is redirected once logout completes.
 	/// </summary>
 	[JsonPropertyName(Parameters.PostLogoutRedirectUri)]
 	[AbsoluteUri]
 	public Uri? PostLogoutRedirectUri { get; set; }
 
 	/// <summary>
-	/// The preferred user interface locales for the logout page, represented as a list of <see cref="CultureInfo"/>.
+	/// The <c>ui_locales</c> preference list of BCP 47 language tags hinting how the logout confirmation
+	/// page should be localized.
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
 	public IEnumerable<CultureInfo>? UiLocales { get; set; }
 
 	/// <summary>
-	/// A boolean value indicating whether the end session has been confirmed. Typically used in interactive logout confirmation scenarios.
+	/// Carries the End-User's answer to the logout confirmation prompt that the OP is required to display
+	/// per OIDC RP-Initiated Logout 1.0 §2 ("the OP SHOULD ask the End-User whether to log out ... MUST ask ...
+	/// if an id_token_hint was not provided"). When <c>true</c>, the user has explicitly approved logout in
+	/// the interactive UI; when <c>null</c> or <c>false</c>, the request is treated as not-yet-confirmed and
+	/// the OP renders the confirmation screen. Encoded via the <see cref="Parameters.Confirmed"/> form field
+	/// rather than a wire parameter defined by the specification.
 	/// </summary>
 	[JsonPropertyName(Parameters.Confirmed)]
 	public bool? Confirmed { get; set; }

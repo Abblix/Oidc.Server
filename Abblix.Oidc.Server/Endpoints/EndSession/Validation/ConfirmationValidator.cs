@@ -27,16 +27,15 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Represents a validator for end-session requests requiring user confirmation.
+/// Enforces the end-user confirmation step described in OpenID Connect RP-Initiated Logout 1.0 §2:
+/// when the request omits <c>id_token_hint</c> the OP cannot trust that the user really
+/// initiated the logout, so a UI confirmation must precede the call. This validator surfaces
+/// <see cref="ErrorCodes.ConfirmationRequired"/> until the host echoes back
+/// <c>confirmed=true</c>.
 /// </summary>
 public class ConfirmationValidator:  IEndSessionContextValidator
 {
-    /// <summary>
-    /// Validates the end-session request for confirmation.
-    /// </summary>
-    /// <param name="context">The end-session validation context.</param>
-    /// <returns>A task representing the asynchronous operation.
-    /// The result is a validation error if confirmation is missing; otherwise, null.</returns>
+    /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 

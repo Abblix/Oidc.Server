@@ -27,9 +27,9 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
 /// <summary>
-/// A composite fetcher that combines multiple <see cref="IBackChannelAuthenticationRequestFetcher"/> instances.
-/// It iterates through each fetcher to process a backchannel authentication request, allowing for a flexible and
-/// extensible mechanism to fetch and validate requests from different sources or formats.
+/// Chains multiple <see cref="IBackChannelAuthenticationRequestFetcher"/> instances, feeding each one's
+/// output into the next so that distinct sources or formats (for example, the signed Request Object) can
+/// progressively enrich the request. Returns the first failure without invoking the remaining fetchers.
 /// </summary>
 public class CompositeRequestFetcher(IBackChannelAuthenticationRequestFetcher[] fetchers) : IBackChannelAuthenticationRequestFetcher
 {

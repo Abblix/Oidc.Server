@@ -25,16 +25,15 @@ using System.Text.Json.Serialization;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Represents a JSON Web Key Set (JWKS) as defined by the JSON Web Key (JWK) specifications.
-/// A JWKS is a set of keys containing the public keys used to verify any JSON Web Token (JWT) issued by the authorization server.
+/// A JSON Web Key Set (JWK Set) per RFC 7517 Section 5: a JSON document containing an array
+/// of JSON Web Keys. Authorization servers publish their JWK Set at the <c>jwks_uri</c>
+/// endpoint so that relying parties can discover the keys used to validate or encrypt tokens.
 /// </summary>
 public record JsonWebKeySet(JsonWebKey[] Keys)
 {
     /// <summary>
-    /// Gets an array of <see cref="JsonWebKey"/> objects representing the cryptographic keys.
+    /// The keys belonging to this JWK Set. Serialized to the JSON "keys" member.
+    /// Each entry is a polymorphic <see cref="JsonWebKey"/> resolved by its "kty" parameter.
     /// </summary>
-    /// <remarks>
-    /// The 'keys' property in a JWKS is an array of JWK objects. Each JWK object within the array is a JSON object representing a single public key.
-    /// </remarks>
     [JsonPropertyName("keys")] public JsonWebKey[] Keys { get; init; } = Keys;
 }

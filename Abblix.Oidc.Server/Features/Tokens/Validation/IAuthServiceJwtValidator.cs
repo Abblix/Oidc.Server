@@ -26,11 +26,10 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
 /// <summary>
-/// Validates JWT issued by the OpenID service using specified options.
+/// Validates JWTs minted by this authorization server itself (its own access tokens, refresh
+/// tokens and Registration Access Tokens), checking signature against the server's signing
+/// keys, issuer equality, and audience membership against the configured client registry.
 /// </summary>
-/// <returns>
-/// Returns parsed model of JWT in case of success or detailed error otherwise.
-/// </returns>
 public interface IAuthServiceJwtValidator
 {
 	/// <summary>

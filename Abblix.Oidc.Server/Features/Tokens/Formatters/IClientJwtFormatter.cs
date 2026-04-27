@@ -26,8 +26,10 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 /// <summary>
-/// Formats JWTs (JSON Web Tokens) issued to clients of the authentication service.
-/// Implements the formatting of JWT object model to a string format according RFC 7519.
+/// Serializes a JWT addressed to a specific client (ID Token, Logout Token, etc.) into compact
+/// form: signed as a JWS (RFC 7515) with the server's signing key chosen by the JWT's header
+/// algorithm, then optionally wrapped in a JWE (RFC 7516) encrypted to the client's registered
+/// public key per the client's <c>id_token_encrypted_response_alg</c>/<c>_enc</c> metadata.
 /// </summary>
 public interface IClientJwtFormatter
 {

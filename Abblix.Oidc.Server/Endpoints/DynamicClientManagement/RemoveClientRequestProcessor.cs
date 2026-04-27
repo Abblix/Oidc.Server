@@ -28,31 +28,19 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles the backend logic for processing requests to remove clients from the system. This processor uses the provided
-/// client information manager to execute the removal operation.
+/// Performs the storage-level deregistration of a client through the configured
+/// <see cref="IClientInfoManager"/> per RFC 7592 §2.3.
 /// </summary>
-/// <param name="clientInfoManager">An instance of <see cref="IClientInfoManager"/> used to interact with and
-/// manage client information, facilitating the removal of clients based on their identifiers.</param>
-/// <param name="clock">Provides the current time for timestamping the removal operation.</param>
+/// <param name="clientInfoManager">Store used to remove the client record.</param>
+/// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     TimeProvider clock) : IRemoveClientRequestProcessor
 {
     /// <summary>
-    /// Asynchronously executes the process of removing a client based on the provided request.
-    /// This method ensures the client specified in the request is removed from the system,
-    /// reflecting changes in the client registry.
+    /// Deletes the addressed client and returns the recorded removal timestamp.
     /// </summary>
-    /// <param name="request">An instance of <see cref="ValidClientRequest"/> containing the details of
-    /// the client to be removed, including its unique identifier.</param>
-    /// <returns>A task that, upon completion, yields a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/> indicating the successful
-    /// removal of the client.</returns>
-    /// <remarks>
-    /// This method calls upon the <see cref="IClientInfoManager"/> to remove the specified client.
-    /// It is expected that the request passed to this method has been validated beforehand,
-    /// ensuring that the client exists and the initiator of the request has the authority to perform
-    /// the removal operation.
-    /// </remarks>
+    /// <param name="request">A request whose authentication and target client have been validated.</param>
     public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
         var clientId = request.ClientInfo.ClientId;

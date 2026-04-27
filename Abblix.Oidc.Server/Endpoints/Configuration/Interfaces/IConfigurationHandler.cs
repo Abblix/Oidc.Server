@@ -23,13 +23,14 @@
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
-/// Defines the contract for handling OpenID Connect discovery configuration requests.
+/// Builds the discovery document served at <c>/.well-known/openid-configuration</c>
+/// per OpenID Connect Discovery 1.0 §3 and RFC 8414 (OAuth 2.0 Authorization Server Metadata).
 /// </summary>
 public interface IConfigurationHandler
 {
 	/// <summary>
-	/// Handles the configuration request by building discovery metadata.
+	/// Builds the framework-agnostic discovery payload. Endpoint URLs are filled in by the
+	/// hosting layer because they depend on routing.
 	/// </summary>
-	/// <returns>Framework-agnostic configuration response with metadata but without endpoint URLs.</returns>
 	Task<ConfigurationResponse> HandleAsync();
 }

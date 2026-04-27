@@ -30,12 +30,18 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Implements operations with refresh tokens.
+/// Issues and consumes OAuth 2.0 refresh tokens (RFC 6749 §6) used to obtain renewed access
+/// tokens without re-prompting the user. Implementations apply the configured absolute and
+/// sliding expiration policies and may revoke the previous refresh token when reuse is
+/// disallowed.
 /// </summary>
 public interface IRefreshTokenService
 {
 	/// <summary>
-	/// Creates a new refresh token using specified parameters.
+	/// Issues a refresh token for the supplied authentication session and authorization context.
+	/// When <paramref name="refreshToken"/> is non-null the call represents a refresh-token
+	/// rotation and the previous token may be revoked according to the client's policy. Returns
+	/// <c>null</c> when expiration policies have already elapsed and no new token can be issued.
 	/// </summary>
 	Task<EncodedJsonWebToken?> CreateRefreshTokenAsync(
 		AuthSession authSession,
@@ -44,7 +50,8 @@ public interface IRefreshTokenService
 		JsonWebToken? refreshToken);
 
 	/// <summary>
-	/// Authenticates a user by refresh token.
+	/// Reconstructs the <see cref="AuthorizedGrant"/> represented by a previously issued refresh
+	/// token, or returns an <see cref="OidcError"/> when the token cannot be honored.
 	/// </summary>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
 }

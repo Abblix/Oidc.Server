@@ -26,10 +26,14 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// Provides an interface for managing and retrieving resource definitions. This interface is essential for
-/// ensuring that requests for resources are validated against registered and recognized definitions, supporting
-/// the enforcement of policies related to resource access and permissions.
+/// Looks up <see cref="ResourceDefinition"/> entries registered for the authorization server,
+/// supporting validation of the <c>resource</c> parameter defined by RFC 8707 (Resource Indicators
+/// for OAuth 2.0) at the authorization, token, and PAR endpoints.
 /// </summary>
+/// <remarks>
+/// Acts as the registry that decides whether a requested resource URI corresponds to an audience
+/// the server is willing to mint tokens for, and which scopes that resource accepts.
+/// </remarks>
 public interface IResourceManager
 {
     /// <summary>

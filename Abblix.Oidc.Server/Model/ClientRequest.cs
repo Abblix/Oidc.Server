@@ -27,8 +27,10 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents an abstract model of a request made by a client via a server-to-server call.
-/// This record includes all headers and properties that can be used for authentication in various ways.
+/// Carries the OAuth 2.0 client authentication material common to back-channel endpoints (token,
+/// introspection, revocation): credentials passed in the request body per RFC 6749 §2.3.1, JWT-based
+/// client assertions per RFC 7521/7523, and the mTLS client certificate per RFC 8705.
+/// Concrete request DTOs typically expose these values alongside their endpoint-specific parameters.
 /// </summary>
 public record ClientRequest
 {
@@ -41,32 +43,36 @@ public record ClientRequest
 	}
 
 	/// <summary>
-	/// The authorization header used for client authentication. This typically contains credentials like bearer tokens.
+	/// The HTTP <c>Authorization</c> header from the inbound request, captured for transport-level
+	/// authentication schemes such as <c>Basic</c> (client_secret_basic) or <c>Bearer</c>. Not serialized.
 	/// </summary>
 	[JsonIgnore]
 	public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
 
 	/// <summary>
-	/// The client identifier as registered in the authorization server.
-	/// It is unique to the client and used to identify it in the authentication process.
+	/// The OAuth 2.0 <c>client_id</c> identifying the registered client (RFC 6749 §2.3.1).
+	/// May be <c>null</c> when the client is identified solely by an Authorization header or a client assertion.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientId)]
 	public string? ClientId { get; set; }
 
 	/// <summary>
-	/// The client secret, a confidential string used to authenticate the client with the authorization server.
+	/// The OAuth 2.0 <c>client_secret</c> presented in the request body for the
+	/// <c>client_secret_post</c> authentication method (RFC 6749 §2.3.1).
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientSecret)]
 	public string? ClientSecret { get; set; }
 
 	/// <summary>
-	/// The assertion type for the client authentication. This is typically used with JWT bearer tokens.
+	/// The <c>client_assertion_type</c>, which for JWT bearer client assertions equals
+	/// <c>urn:ietf:params:oauth:client-assertion-type:jwt-bearer</c> per RFC 7521 §4.2 / RFC 7523 §2.2.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientAssertionType)]
 	public string? ClientAssertionType { get; set; }
 
 	/// <summary>
-	/// The client assertion, often a JWT, used as a credential to authenticate the client to the authorization server.
+	/// The <c>client_assertion</c>: a signed JWT used to authenticate the client via
+	/// <c>private_key_jwt</c> or <c>client_secret_jwt</c> (RFC 7523 §2.2, OIDC Core §9).
 	/// </summary>
     [JsonPropertyName(Parameters.ClientAssertion)]
     public string? ClientAssertion { get; set; }

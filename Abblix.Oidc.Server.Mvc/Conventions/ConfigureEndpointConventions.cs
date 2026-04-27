@@ -27,11 +27,17 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Mvc.Conventions;
 
 /// <summary>
-/// Post-configures MVC options to add the EnabledBy convention.
+/// Registers <see cref="EnabledByConvention"/> with MVC so that controller and action methods
+/// decorated with <c>[EnabledBy]</c> are filtered out of the application model when the corresponding
+/// OIDC endpoint flag is disabled in <see cref="OidcOptions.EnabledEndpoints"/>.
+/// Runs as a post-configuration step on <see cref="MvcOptions"/>, after the host-supplied configuration.
 /// </summary>
 internal class ConfigureEndpointConventions(IOptions<OidcOptions> oidcOptions)
     : IPostConfigureOptions<MvcOptions>
 {
+    /// <summary>
+    /// Adds the <see cref="EnabledByConvention"/> instance to the MVC application model conventions.
+    /// </summary>
     public void PostConfigure(string? name, MvcOptions options)
     {
         options.Conventions.Add(new EnabledByConvention(oidcOptions));

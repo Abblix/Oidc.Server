@@ -29,8 +29,10 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents an authorization request model containing the necessary properties
-/// for an OpenID Connect or OAuth 2.0 authorization request.
+/// The set of parameters carried by an OAuth 2.0 / OpenID Connect authorization request to the
+/// <c>authorization_endpoint</c> as defined in RFC 6749 §4.1.1 and OpenID Connect Core 1.0 §3.1.2.1.
+/// Parameters are bound from query string, form body, or a Request Object passed via
+/// <see cref="Request"/> / <see cref="RequestUri"/> (OIDC Core §6).
 /// </summary>
 public record AuthorizationRequest
 {
@@ -50,7 +52,9 @@ public record AuthorizationRequest
     public RequestedClaims? Claims { get; init; }
 
 	/// <summary>
-	/// The requested response types.
+	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:
+	/// <c>code</c> for authorization code, <c>token</c> for the implicit grant access token, <c>id_token</c> for the
+	/// hybrid/implicit ID token. Multiple values are space-separated and represented here as an array.
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
@@ -58,101 +62,117 @@ public record AuthorizationRequest
     public string[]? ResponseType { get; init; }
 
 	/// <summary>
-	/// The client ID of the requesting client.
+	/// The OAuth 2.0 <c>client_id</c> identifying the relying party that issued the request,
+	/// per RFC 6749 §4.1.1. Required for any conformant authorization request.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientId)]
 	public string? ClientId { get; init; }
 
 	/// <summary>
-	/// The redirect URI where the response should be sent.
+	/// The OAuth 2.0 <c>redirect_uri</c> (RFC 6749 §3.1.2) where the authorization response is delivered.
+	/// Must be an absolute URI and must exactly match one of the redirect URIs pre-registered for the client.
 	/// </summary>
 	[JsonPropertyName(Parameters.RedirectUri)]
     [AbsoluteUri]
     public Uri? RedirectUri { get; init; }
 
 	/// <summary>
-	/// The optional state parameter to maintain state between the request and the callback.
+	/// The opaque <c>state</c> value (RFC 6749 §4.1.1) returned unchanged in the authorization response
+	/// so the client can correlate request and response and protect against cross-site request forgery.
 	/// </summary>
 	[JsonPropertyName(Parameters.State)]
     public string? State { get; init; }
 
 	/// <summary>
-	/// The requested response mode.
+	/// The OAuth 2.0 <c>response_mode</c> parameter (OAuth 2.0 Multiple Response Types / OAuth 2.0 Form Post Response Mode)
+	/// selecting how the authorization response is delivered: <c>query</c>, <c>fragment</c>, or <c>form_post</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseMode)]
     [AllowedValues(ResponseModes.FormPost, ResponseModes.Fragment, ResponseModes.Query)]
     public string? ResponseMode { get; init; }
 
 	/// <summary>
-	/// The nonce value used to associate the client session with an ID token.
+	/// The OIDC <c>nonce</c> (OIDC Core §3.1.2.1) bound into the issued ID Token to prevent token replay.
+	/// Required for the implicit and hybrid flows; recommended for the authorization code flow.
 	/// </summary>
 	[JsonPropertyName(Parameters.Nonce)]
     public string? Nonce { get; init; }
 
 	/// <summary>
-	/// Specifies how the authorization server displays the authentication and consent UI.
+	/// The OIDC <c>display</c> parameter (OIDC Core §3.1.2.1) hinting how the authentication and consent UI
+	/// should be rendered: <c>page</c>, <c>popup</c>, <c>touch</c>, or <c>wap</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.Display)]
     [AllowedValues(DisplayModes.Page, DisplayModes.Popup, DisplayModes.Touch, DisplayModes.Wap)]
     public string? Display { get; init; }
 
 	/// <summary>
-	/// The prompt parameter, which specifies whether the authorization server prompts the user for
-	/// re-authentication and consent.
+	/// The OIDC <c>prompt</c> parameter (OIDC Core §3.1.2.1) controlling whether the authorization server
+	/// re-prompts for authentication and consent. Values: <c>none</c>, <c>login</c>, <c>consent</c>,
+	/// <c>select_account</c>, and the registration extension <c>create</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.Prompt)]
     [AllowedValues(Prompts.Create, Prompts.Consent, Prompts.Login, Prompts.None, Prompts.SelectAccount)]
     public string? Prompt { get; init; }
 
 	/// <summary>
-	/// Specifies the allowable elapsed time since the last user authentication.
+	/// The OIDC <c>max_age</c> parameter (OIDC Core §3.1.2.1) bounding the elapsed time since the last
+	/// active end-user authentication. Serialized as an integer number of seconds.
 	/// </summary>
 	[JsonPropertyName(Parameters.MaxAge)]
 	[JsonConverter(typeof(TimeSpanSecondsConverter))]
     public TimeSpan? MaxAge { get; init; }
 
 	/// <summary>
-	/// The UI locales requested for the user interface.
+	/// The OIDC <c>ui_locales</c> parameter (OIDC Core §3.1.2.1), a preference-ordered list of BCP 47 language tags
+	/// that the client wishes the authorization UI to be rendered in.
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
     public CultureInfo[]? UiLocales { get; init; }
 
 	/// <summary>
-	/// The claims locales requested for the authorization response.
+	/// The OIDC <c>claims_locales</c> parameter (OIDC Core §5.2), preference-ordered BCP 47 language tags
+	/// the client prefers when claims are returned in localized form.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClaimsLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
     public CultureInfo[]? ClaimsLocales { get; init; }
 
 	/// <summary>
-	/// The ID token hint, which can be used to pre-fill the authentication and consent UI.
+	/// The OIDC <c>id_token_hint</c> (OIDC Core §3.1.2.1), a previously issued ID Token used as a hint about
+	/// the end-user's current or past authenticated session, typically combined with <c>prompt=none</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.IdTokenHint)]
     public string? IdTokenHint { get; init; }
 
 	/// <summary>
-	/// The login hint, which can be used to pre-fill the authentication UI.
+	/// The OIDC <c>login_hint</c> (OIDC Core §3.1.2.1) suggesting the login identifier (such as an email or phone)
+	/// that the authorization server should use to pre-fill the authentication UI.
 	/// </summary>
 	[JsonPropertyName(Parameters.LoginHint)]
     public string? LoginHint { get; init; }
 
 	/// <summary>
-	/// The Authentication Context Class References requested.
+	/// The OIDC <c>acr_values</c> (OIDC Core §3.1.2.1), a preference-ordered list of Authentication Context Class
+	/// Reference values that the client requests the authorization server to satisfy during authentication.
 	/// </summary>
 	[JsonPropertyName(Parameters.AcrValues)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
     public string[]? AcrValues { get; init; }
 
 	/// <summary>
-	/// The code challenge, which is used in the PKCE extension for public clients.
+	/// The PKCE <c>code_challenge</c> (RFC 7636 §4.3), a high-entropy value derived from the client-held
+	/// <c>code_verifier</c> using <see cref="CodeChallengeMethod"/>. Required for public clients to defend
+	/// the authorization code against interception.
 	/// </summary>
 	[JsonPropertyName(Parameters.CodeChallenge)]
     public string? CodeChallenge { get; init; }
 
 	/// <summary>
-	/// The code challenge method, which specifies the method used to derive the code challenge from the code
-	/// verifier.
+	/// The PKCE <c>code_challenge_method</c> (RFC 7636 §4.3) declaring how <see cref="CodeChallenge"/> was
+	/// derived from the code verifier. <c>S256</c> is required by current best-practice profiles; <c>plain</c>
+	/// is supported only for legacy compatibility.
 	/// </summary>
 	[JsonPropertyName(Parameters.CodeChallengeMethod)]
     [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]

@@ -23,22 +23,26 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Contains the refresh token options.
+/// Lifetime and reuse policy for refresh tokens issued by the token endpoint. Combines an absolute ceiling
+/// with an optional sliding window so long-running sessions stay alive only while the client keeps using them.
 /// </summary>
 public record struct RefreshTokenOptions()
 {
 	/// <summary>
-	/// Sets the absolute period of expiration for refresh tokens.
+	/// Hard upper bound on a refresh token's lifetime, measured from the moment it was issued.
+	/// The token is rejected once this period elapses, regardless of how recently it was used.
 	/// </summary>
 	public TimeSpan AbsoluteExpiresIn { get; init; } = TimeSpan.FromHours(8);
 
 	/// <summary>
-	/// Sets the sliding (call-to-call relative) period of expiration for refresh tokens.
+	/// Optional sliding window: each successful refresh extends the token's expiration by this amount,
+	/// up to the absolute ceiling. Set to <c>null</c> to disable sliding behavior.
 	/// </summary>
 	public TimeSpan? SlidingExpiresIn { get; init; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// Allows to reuse refresh tokens after the first usage.
+	/// When <c>true</c>, a refresh token may be redeemed multiple times until it expires. When <c>false</c>,
+	/// each refresh rotates the token: the previous value is invalidated as soon as a new one is issued.
 	/// </summary>
 	public bool AllowReuse { get; init; } = true;
 }

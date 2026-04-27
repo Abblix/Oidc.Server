@@ -26,21 +26,25 @@ using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfa
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 
 /// <summary>
-/// Represents the response to a pushed authorization request. This response includes the URI
-/// where the authorization request is stored and the duration for which the request will remain valid.
+/// Successful response from the Pushed Authorization Request endpoint (RFC 9126 §2.2):
+/// the opaque <c>request_uri</c> the client must echo to the authorization endpoint, and
+/// the lifetime <c>expires_in</c> in seconds after which the server may discard the
+/// stored request payload.
 /// </summary>
 public record PushedAuthorizationResponse(AuthorizationRequest Model, Uri RequestUri, TimeSpan ExpiresIn)
     : AuthorizationResponse(Model)
 {
     /// <summary>
-    /// The URI where the authorization request is stored.
-    /// This URI is used by the client to refer to the authorization request in subsequent operations.
+    /// RFC 9126 §2.2 <c>request_uri</c>: a one-time-use, server-generated reference to the
+    /// stored authorization request, to be passed by the client on the redirect to the
+    /// authorization endpoint instead of the parameters themselves.
     /// </summary>
     public Uri RequestUri { get; init; } = RequestUri;
 
     /// <summary>
-    /// The duration for which the authorization request is considered valid.
-    /// After this period, the request may no longer be retrievable or usable.
+    /// RFC 9126 §2.2 <c>expires_in</c>: lifetime of <see cref="RequestUri"/>; once it elapses
+    /// the authorization server is free to invalidate the entry and reject any subsequent
+    /// authorization request that references it.
     /// </summary>
     public TimeSpan ExpiresIn { get; init; } = ExpiresIn;
 };

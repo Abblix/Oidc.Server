@@ -25,8 +25,9 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to retrieve user information, typically used in OpenID Connect flows.
-/// Inherits from <see cref="ClientRequest"/>.
+/// Parameters of a request to the OIDC <c>userinfo_endpoint</c> (OIDC Core §5.3). The access token
+/// is normally presented in the HTTP <c>Authorization</c> header per RFC 6750 §2.1, but RFC 6750 §2.2
+/// also permits the form-encoded <c>access_token</c> body parameter modeled here.
 /// </summary>
 public record UserInfoRequest
 {

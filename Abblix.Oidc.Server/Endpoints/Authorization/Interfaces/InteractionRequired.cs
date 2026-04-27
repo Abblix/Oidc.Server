@@ -27,7 +27,12 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
-/// Means that a current user is logged in, but some additional interaction with him is to continue
+/// Outcome signalling that an end-user is signed in but additional UI interaction (a step-up,
+/// missing claim, MFA challenge or similar) must complete before the authorization request
+/// can be fulfilled. Maps to OpenID Connect Core 1.0 §3.1.2.6
+/// <c>interaction_required</c> when <c>prompt=none</c>.
 /// </summary>
+/// <param name="Model">The authorization request that triggered the interaction.</param>
+/// <param name="User">The current user, exposed so the host UI can address the prompt to them.</param>
 public record InteractionRequired(AuthorizationRequest Model, ClaimsPrincipal User)
     : AuthorizationResponse(Model);

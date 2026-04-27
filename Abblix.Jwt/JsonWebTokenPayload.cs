@@ -35,7 +35,8 @@ namespace Abblix.Jwt;
 public class JsonWebTokenPayload(JsonObject json)
 {
 	/// <summary>
-	/// The underlying JSON object representing the JWT payload.
+	/// The underlying mutable JSON object backing the strongly-typed accessors on this payload.
+	/// Use this for custom claims that are not exposed as named properties on this class.
 	/// </summary>
 	public JsonObject Json { get; } = json;
 

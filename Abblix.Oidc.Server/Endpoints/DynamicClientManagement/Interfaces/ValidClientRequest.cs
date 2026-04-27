@@ -26,6 +26,9 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Represents a valid client request along with client information.
+/// A client configuration endpoint request (RFC 7592) that has been authenticated via the
+/// registration access token, paired with the resolved <see cref="ClientInfo"/> from storage.
 /// </summary>
+/// <param name="Model">The original request.</param>
+/// <param name="ClientInfo">The currently stored configuration of the addressed client.</param>
 public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo);

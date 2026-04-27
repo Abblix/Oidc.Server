@@ -29,19 +29,17 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class validates Post Logout Redirect URIs in a client registration request. It checks if the URIs are absolute,
-/// do not contain fragments, and comply with security requirements based on the application type.
-/// If any validation fails, it returns a AuthError.
+/// Validates the OpenID Connect RP-Initiated Logout 1.0 <c>post_logout_redirect_uris</c>:
+/// each URI must be absolute, fragment-free, and consistent with the OIDC DCR 1.0 §2
+/// scheme rules for the declared <c>application_type</c> (Web = <c>https</c>,
+/// non-localhost; Native = custom scheme or <c>http://localhost</c>).
 /// </summary>
 public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates Post Logout Redirect URIs in the client registration request.
+    /// Returns an <c>invalid_redirect_uri</c> error on the first non-conforming entry,
+    /// or <c>null</c> when every URI passes the rules above.
     /// </summary>
-    /// <param name="context">The validation context containing client registration data.</param>
-    /// <returns>
-    /// A AuthError if any validation fails, or null if the request is valid.
-    /// </returns>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;

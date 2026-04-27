@@ -23,30 +23,35 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Provides constants for JWT claim types.
+/// Names of the JWT claims and JOSE header parameters used by this library, including the
+/// registered claims from RFC 7519 Section 4.1, common OpenID Connect claims, and several
+/// extensions (token exchange, security event tokens, etc.).
+/// Use these constants whenever reading from or writing to a <see cref="JsonWebTokenHeader"/>
+/// or <see cref="JsonWebTokenPayload"/> by raw name.
 /// </summary>
 public static class JwtClaimTypes
 {
     /// <summary>
-    /// The 'typ' claim represents the type of the JWT.
+    /// "typ" header parameter (RFC 7515 Section 4.1.9): the media type of the JWT,
+    /// for example "JWT" or "at+jwt" for OAuth 2.0 access tokens (RFC 9068).
     /// </summary>
     public const string Type = "typ";
 
     /// <summary>
-    /// The 'alg' (algorithm) claim identifies the cryptographic algorithm used to secure the JWT.
-    /// It is typically found in the JWT header.
+    /// "alg" header parameter (RFC 7515 Section 4.1.1, RFC 7516 Section 4.1.1): identifies the
+    /// signing or key management algorithm. REQUIRED in both JWS and JWE headers.
     /// </summary>
     public const string Algorithm = "alg";
 
     /// <summary>
-    /// The 'kid' (key ID) claim is a hint indicating which key was used to secure the JWT.
-    /// It is typically found in the JWT header and helps identify the key in a JWKS.
+    /// "kid" header parameter (RFC 7515 Section 4.1.4, RFC 7516 Section 4.1.6): selects which
+    /// key from a JWK Set produced the JWT, allowing key rotation without ambiguity.
     /// </summary>
     public const string KeyId = "kid";
 
     /// <summary>
-    /// The 'enc' (encryption algorithm) claim identifies the content encryption algorithm used for JWE.
-    /// It is typically found in the JWE header.
+    /// "enc" header parameter (RFC 7516 Section 4.1.2): identifies the JWE content encryption
+    /// algorithm applied to the payload.
     /// </summary>
     public const string EncryptionAlgorithm = "enc";
 

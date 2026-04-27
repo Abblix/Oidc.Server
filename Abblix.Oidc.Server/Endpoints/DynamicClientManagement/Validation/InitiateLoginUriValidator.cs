@@ -26,18 +26,15 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class is responsible for validating the Initiate Login URI specified in the client registration request.
-/// It ensures that the URI is an absolute HTTPS URI.
+/// Validates the OIDC DCR 1.0 §2 <c>initiate_login_uri</c>: when supplied it must be an
+/// absolute URI using the <c>https</c> scheme.
 /// </summary>
 public class InitiateLoginUriValidator: SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates the Initiate Login URI specified in the client registration request.
+    /// Returns an <c>invalid_client_metadata</c> error if <c>initiate_login_uri</c> is relative
+    /// or non-HTTPS; <c>null</c> when absent or compliant.
     /// </summary>
-    /// <param name="context">The validation context containing client registration data.</param>
-    /// <returns>
-    /// A AuthError if the validation fails, or null if the request is valid.
-    /// </returns>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var model = context.Request;

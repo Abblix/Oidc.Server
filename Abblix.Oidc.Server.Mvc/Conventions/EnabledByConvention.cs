@@ -38,6 +38,12 @@ namespace Abblix.Oidc.Server.Mvc.Conventions;
 /// </remarks>
 public class EnabledByConvention(IOptions<OidcOptions> options) : IApplicationModelConvention
 {
+    /// <summary>
+    /// Walks the MVC application model and removes any controller or action whose
+    /// <see cref="EnabledByAttribute"/> targets an endpoint flag that is not set in
+    /// <see cref="OidcOptions.EnabledEndpoints"/>. Removed entries are not registered as routes,
+    /// so requests to them produce a routing 404 (no handler) rather than a runtime filter rejection.
+    /// </summary>
     public void Apply(ApplicationModel application)
     {
         var controllersToRemove = new List<ControllerModel>();

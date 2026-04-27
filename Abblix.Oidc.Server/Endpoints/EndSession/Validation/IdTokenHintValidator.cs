@@ -29,17 +29,15 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Validates the ID token hint in the context of an end-session request.
-/// This validator checks if the ID token hint provided in the request is valid and matches the expected audience (client).
+/// Validates the <c>id_token_hint</c> parameter (OpenID Connect RP-Initiated Logout 1.0 §2):
+/// verifies signature/issuer/audience but deliberately accepts expired tokens (since the
+/// hint's role is to identify a no-longer-active session), then either populates
+/// <c>ClientId</c> from the token's audience when the request omitted it, or asserts that
+/// an explicitly supplied <c>client_id</c> matches that audience.
 /// </summary>
-/// <param name="jwtValidator">The JWT validator used to validate ID tokens.</param>
 public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Validates the ID token hint.
-    /// </summary>
-    /// <param name="context">The end-session validation context.</param>
-    /// <returns>An error if validation fails, null if successful.</returns>
+    /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         var request = context.Request;

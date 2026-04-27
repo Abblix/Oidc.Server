@@ -27,9 +27,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// A JSON converter that handles deserialization and serialization of a JSON value
-/// that could either be a single string or an array of strings.
+/// Reads and writes a JSON value that may be either a single element of <typeparamref name="T"/> or an array of
+/// such elements, exposing it uniformly to .NET as <c>T[]</c>. On write, a single-element array is emitted as a bare
+/// scalar (not an array), matching the OAuth 2.0 / OpenID Connect convention used for parameters such as
+/// <c>aud</c> and <c>response_type</c>.
 /// </summary>
+/// <typeparam name="T">The element type. A converter for <typeparamref name="T"/> must be available in the
+/// serializer options.</typeparam>
 public class SingleOrArrayConverter<T> : JsonConverter<T[]>
 {
     /// <summary>

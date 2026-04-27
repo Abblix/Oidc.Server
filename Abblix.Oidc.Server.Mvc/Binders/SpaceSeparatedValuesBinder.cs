@@ -25,11 +25,15 @@ using Microsoft.Extensions.Primitives;
 namespace Abblix.Oidc.Server.Mvc.Binders;
 
 /// <summary>
-/// A model binder that converts a space-separated string into an array of strings.
+/// Binds a single space-separated request value into a string array.
+/// Mirrors the wire format used by OAuth 2.0 / OpenID Connect for parameters such as
+/// <c>scope</c>, <c>response_type</c>, <c>prompt</c>, <c>acr_values</c>, and <c>ui_locales</c>
+/// (RFC 6749 § 3.3 and OIDC Core 1.0 § 3.1.2.1).
 /// </summary>
 /// <remarks>
-/// This binder is useful for processing query parameters or other data represented as a single string
-/// with values separated by spaces. It splits the input string by spaces and converts the result into an array.
+/// Tokens are split on the ASCII space character; consecutive spaces produce no empty entries.
+/// Other whitespace (tab, newline) is preserved as part of a token, matching the literal
+/// SP delimiter required by the specifications.
 /// </remarks>
 public class SpaceSeparatedValuesBinder : ModelBinderBase
 {
