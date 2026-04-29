@@ -1,0 +1,70 @@
+name: PR tests
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # Library projects multi-target net8/9/10; tests run on net10. Install all
+      # three SDKs so referenced framework assemblies resolve during build of
+      # the older TFMs and so the test runner finds net10 at execute time.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore Abblix.Oidc.sln
+
+      - name: Build
+        run: dotnet build Abblix.Oidc.sln --configuration Release --no-restore
+
+      # MTP-native invocation: VSTest flags are silently ignored under
+      # Microsoft.Testing.Platform. After `--` we pass MTP arguments — TRX
+      # report + cobertura coverage via Microsoft.Testing.Extensions.CodeCoverage.
+      - name: Test
+        run: |
+          dotnet test Abblix.Oidc.sln --configuration Release --no-build -- \
+            --report-trx --report-trx-filename test-results.trx \
+            --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml \
+            --results-directory ./TestResults
+
+      # `dotnet test <sln> -- --results-directory ./TestResults` resolves the
+      # path PER TEST PROJECT (each MTP runner uses its own working directory),
+      # not at solution root. Files land at <Project>/TestResults/.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: '**/TestResults/**'
+          retention-days: 7
