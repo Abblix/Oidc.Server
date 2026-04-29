@@ -37,6 +37,24 @@ public static class EnumerableExtensions
 		=> value ?? [];
 
 	/// <summary>
+	/// Forces a sequence to be evaluated once and returns the result as a non-lazy
+	/// <see cref="IReadOnlyCollection{T}"/> that callers can iterate any number of times.
+	/// Use at any site that needs to enumerate the same <see cref="IEnumerable{T}"/> more than once
+	/// (cost estimate + actual call, log + record, etc.) — a lazy LINQ pipeline or an iterator
+	/// method passed by an upstream caller would otherwise re-execute its source per enumeration.
+	/// </summary>
+	/// <remarks>
+	/// Skips the allocation when <paramref name="source"/> is already a concrete collection
+	/// (<c>T[]</c>, <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, etc.) — only lazy /
+	/// iterator-method sources pay for a one-shot copy.
+	/// </remarks>
+	/// <typeparam name="T">The type of elements in the sequence.</typeparam>
+	/// <param name="source">The sequence to materialize.</param>
+	/// <returns>A non-lazy collection holding all elements of <paramref name="source"/>.</returns>
+	public static IReadOnlyCollection<T> Materialize<T>(this IEnumerable<T> source)
+		=> source as IReadOnlyCollection<T> ?? [..source];
+
+	/// <summary>
 	/// Traverses a hierarchy upwards, starting from a specific item and moving to its parent, grandparent, etc.,
 	/// as determined by a parent selector function.
 	/// </summary>
