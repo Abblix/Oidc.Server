@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
@@ -56,7 +57,7 @@ public class ClientSecretJwtAuthenticatorTests
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
-    private readonly Mock<TimeProvider> _clock;
+    private readonly FakeTimeProvider _clock;
     private readonly Mock<ITokenRegistry> _tokenRegistry;
     private readonly ClientSecretJwtAuthenticator _authenticator;
 
@@ -66,7 +67,7 @@ public class ClientSecretJwtAuthenticatorTests
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
-        _clock = new Mock<TimeProvider>();
+        _clock = new FakeTimeProvider();
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
 
         _requestInfoProvider
@@ -78,7 +79,7 @@ public class ClientSecretJwtAuthenticatorTests
             _tokenValidator.Object,
             _clientInfoProvider.Object,
             _requestInfoProvider.Object,
-            _clock.Object,
+            _clock,
             _tokenRegistry.Object);
     }
 
@@ -175,7 +176,7 @@ public class ClientSecretJwtAuthenticatorTests
     {
         // Arrange
         var jwtId = "unique-jwt-id-123";
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        var expiresAt = _clock.GetUtcNow().AddMinutes(5);
         var jwt = "valid.jwt.token";
 
         var clientInfo = new ClientInfo(ClientId)
@@ -211,10 +212,6 @@ public class ClientSecretJwtAuthenticatorTests
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         var request = new ClientRequest
         {
@@ -275,7 +272,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", DateTimeOffset.UtcNow.AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -298,10 +295,6 @@ public class ClientSecretJwtAuthenticatorTests
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         var request = new ClientRequest
         {
@@ -332,7 +325,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, "different-subject", [RequestUri], "jti", DateTimeOffset.UtcNow.AddMinutes(5));
+        var token = CreateMockToken(ClientId, "different-subject", [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -355,10 +348,6 @@ public class ClientSecretJwtAuthenticatorTests
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         var request = new ClientRequest
         {
@@ -389,7 +378,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], null, DateTimeOffset.UtcNow.AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [RequestUri], null, _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -412,10 +401,6 @@ public class ClientSecretJwtAuthenticatorTests
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         var request = new ClientRequest
         {

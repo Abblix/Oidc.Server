@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
@@ -64,8 +65,7 @@ public class LogoutTokenServiceTests
         var logger = new Mock<ILogger<LogoutTokenService>>();
         _currentTime = new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         _subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         _jwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
@@ -78,7 +78,7 @@ public class LogoutTokenServiceTests
 
         _service = new LogoutTokenService(
             logger.Object,
-            timeProvider.Object,
+            timeProvider,
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
             _tokenIdGenerator.Object);

@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -270,12 +271,11 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
     public async Task ExpiredClientSecret_ShouldReturnNull()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
-        var timeProvider = new Mock<TimeProvider>();
-        timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
+        var timeProvider = new FakeTimeProvider();
+        var now = timeProvider.GetUtcNow();
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        var authenticator = CreateAuthenticator(clientInfoProvider, timeProvider.Object);
+        var authenticator = CreateAuthenticator(clientInfoProvider, timeProvider);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -338,12 +338,11 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
     public async Task MultipleSecrets_OneValid_ShouldAuthenticate()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
-        var timeProvider = new Mock<TimeProvider>();
-        timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
+        var timeProvider = new FakeTimeProvider();
+        var now = timeProvider.GetUtcNow();
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        var authenticator = CreateAuthenticator(clientInfoProvider, timeProvider.Object);
+        var authenticator = CreateAuthenticator(clientInfoProvider, timeProvider);
 
         var clientInfo = new ClientInfo(ClientId)
         {

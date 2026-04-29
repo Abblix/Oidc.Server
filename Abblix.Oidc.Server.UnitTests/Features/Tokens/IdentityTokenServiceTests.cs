@@ -35,6 +35,7 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -66,15 +67,14 @@ public class IdentityTokenServiceTests
         var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
 
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         _jwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
 
         _service = new IdentityTokenService(
             issuerProvider.Object,
-            timeProvider.Object,
+            timeProvider,
             _jwtFormatter.Object,
             _userClaimsProvider.Object);
     }
