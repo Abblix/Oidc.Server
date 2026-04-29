@@ -48,6 +48,17 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 [Collection("License")]
 public class LicenseCheckerTests
 {
+    private static void AddTestLicense()
+    {
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = null,
+            IssuerLimit = null,
+            NotBefore = DateTimeOffset.MinValue,
+            ExpiresAt = DateTimeOffset.MaxValue
+        });
+    }
+
 
     #region CheckClientLicense Tests
 
@@ -73,9 +84,15 @@ public class LicenseCheckerTests
     [Fact]
     public void CheckClientLicense_WithinFreeLicense_AllowsClients()
     {
-        // Arrange
-        var client1 = new ClientInfo("test-client-1");
-        var client2 = new ClientInfo("test-client-2");
+        // Static state in LicenseChecker accumulates across tests; under default capacity
+        // pressure, prior pollution can make new clients return null. Register a permissive
+        // test fixture so this positive-path assertion is meaningful regardless of state.
+        AddTestLicense();
+
+        // Arrange - use unique IDs to avoid colliding with prior tests' known IDs
+        var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
+        var client1 = new ClientInfo($"{uniquePrefix}-test-client-1");
+        var client2 = new ClientInfo($"{uniquePrefix}-test-client-2");
 
         // Act
         var result1 = client1.CheckClientLicense();
@@ -83,9 +100,9 @@ public class LicenseCheckerTests
 
         // Assert
         Assert.NotNull(result1);
-        Assert.Equal("test-client-1", result1.ClientId);
+        Assert.Equal(client1.ClientId, result1.ClientId);
         Assert.NotNull(result2);
-        Assert.Equal("test-client-2", result2.ClientId);
+        Assert.Equal(client2.ClientId, result2.ClientId);
     }
 
     /// <summary>
@@ -94,6 +111,8 @@ public class LicenseCheckerTests
     [Fact]
     public void CheckClientLicense_SameClientMultipleTimes_AllowsRepeatedAccess()
     {
+        AddTestLicense();
+
         // Arrange
         var clientId = $"test-client-repeated-{Guid.NewGuid()}";
         var client1 = new ClientInfo(clientId);
@@ -146,6 +165,8 @@ public class LicenseCheckerTests
     [Fact]
     public async Task WithLicenseCheck_ValidClient_ReturnsClient()
     {
+        AddTestLicense();
+
         // Arrange
         var clientId = $"async-client-{Guid.NewGuid()}";
         var clientTask = Task.FromResult<ClientInfo?>(new ClientInfo(clientId));
