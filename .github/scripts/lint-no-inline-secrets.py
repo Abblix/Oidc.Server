@@ -24,6 +24,7 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+from typing import Iterator
 
 import yaml
 
@@ -50,39 +51,42 @@ PATTERN = re.compile(
 WORKFLOWS_DIR = pathlib.Path(".github/workflows")
 
 
+def _iter_job_runs(job_name: str, job: dict) -> Iterator[tuple[str, str, str]]:
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return
+    for idx, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        run = step.get("run")
+        if not isinstance(run, str):
+            continue
+        yield job_name, step.get("name") or f"step #{idx}", run
+
+
+def _iter_run_blocks(doc: object) -> Iterator[tuple[str, str, str]]:
+    if not isinstance(doc, dict):
+        return
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return
+    for job_name, job in jobs.items():
+        if isinstance(job, dict):
+            yield from _iter_job_runs(job_name, job)
+
+
 def scan_file(path: pathlib.Path) -> list[str]:
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         return [f"{path}: YAML parse error: {exc}"]
 
-    if not isinstance(doc, dict):
-        return []
-
-    violations: list[str] = []
-    jobs = doc.get("jobs") or {}
-    if not isinstance(jobs, dict):
-        return []
-
-    for job_name, job in jobs.items():
-        if not isinstance(job, dict):
-            continue
-        steps = job.get("steps") or []
-        if not isinstance(steps, list):
-            continue
-        for idx, step in enumerate(steps):
-            if not isinstance(step, dict):
-                continue
-            run = step.get("run")
-            if not isinstance(run, str):
-                continue
-            for match in PATTERN.finditer(run):
-                step_label = step.get("name") or f"step #{idx}"
-                violations.append(
-                    f'{path}: job "{job_name}" / {step_label}: '
-                    f'inline "{match.group(0)}" inside run:'
-                )
-    return violations
+    return [
+        f'{path}: job "{job_name}" / {step_label}: '
+        f'inline "{match.group(0)}" inside run:'
+        for job_name, step_label, run in _iter_run_blocks(doc)
+        for match in PATTERN.finditer(run)
+    ]
 
 
 def main() -> int:
