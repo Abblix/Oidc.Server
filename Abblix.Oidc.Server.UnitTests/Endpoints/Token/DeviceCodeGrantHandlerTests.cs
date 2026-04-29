@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using StoredDeviceAuthorizationRequest = Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest;
@@ -62,8 +63,7 @@ public class DeviceCodeGrantHandlerTests
     {
         _storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Strict);
         _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
         {
@@ -80,7 +80,7 @@ public class DeviceCodeGrantHandlerTests
         _handler = new DeviceCodeGrantHandler(
             _storage.Object,
             _parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options);
     }
 

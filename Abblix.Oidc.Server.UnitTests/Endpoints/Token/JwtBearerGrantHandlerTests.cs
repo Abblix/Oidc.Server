@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -596,7 +597,7 @@ public class JwtBearerGrantHandlerTests
 		Mock<IJwtBearerIssuerProvider> IssuerProvider,
 		Mock<IRequestInfoProvider> RequestInfoProvider,
 		Mock<ISessionIdGenerator> SessionIdGenerator,
-		Mock<TimeProvider> TimeProvider);
+		FakeTimeProvider TimeProvider);
 
 	[System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S1172",
 		Justification = "allowedAlgorithms is kept for call-site symmetry with SetupTrustedIssuer; tests set algorithms on the trusted issuer, not the handler.")]
@@ -616,15 +617,13 @@ public class JwtBearerGrantHandlerTests
 		var issuerProvider = new Mock<IJwtBearerIssuerProvider>(MockBehavior.Strict);
 		var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
 		var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
-		var timeProvider = new Mock<TimeProvider>();
+		var timeProvider = fixedTime.HasValue
+			? new FakeTimeProvider(fixedTime.Value)
+			: new FakeTimeProvider();
 
 		sessionIdGenerator
 			.Setup(g => g.GenerateSessionId())
 			.Returns(sessionIdFactory ?? (() => "session_123"));
-
-		timeProvider
-			.Setup(t => t.GetUtcNow())
-			.Returns(fixedTime ?? DateTimeOffset.UtcNow);
 
 		var options = new JwtBearerOptions { RequireJti = requireJti ?? false };
 		if (strictAudienceValidation.HasValue)
@@ -663,7 +662,7 @@ public class JwtBearerGrantHandlerTests
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
-			timeProvider.Object,
+			timeProvider,
 			logger.Object);
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));

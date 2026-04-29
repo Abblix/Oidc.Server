@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -60,8 +61,7 @@ public class AccessTokenServiceTests
         var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
 
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
@@ -70,7 +70,7 @@ public class AccessTokenServiceTests
 
         _service = new AccessTokenService(
             issuerProvider.Object,
-            timeProvider.Object,
+            timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object);
     }
