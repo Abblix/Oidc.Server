@@ -36,6 +36,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -63,8 +64,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
         {
@@ -79,7 +79,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _handler = new BackChannelAuthenticationGrantHandler(
             _storage.Object,
             _parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider);
     }
@@ -686,8 +686,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -705,7 +704,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);
@@ -780,8 +779,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -799,7 +797,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);
@@ -889,8 +887,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
         {
@@ -906,7 +903,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider); // Status notifier is null
 
@@ -948,8 +945,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -968,7 +964,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);

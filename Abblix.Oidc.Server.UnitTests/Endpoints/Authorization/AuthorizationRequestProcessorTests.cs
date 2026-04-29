@@ -38,6 +38,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -54,7 +55,7 @@ public class AuthorizationRequestProcessorTests
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
-    private readonly Mock<TimeProvider> _timeProvider;
+    private readonly FakeTimeProvider _timeProvider;
     private readonly AuthorizationRequestProcessor _processor;
 
     public AuthorizationRequestProcessorTests()
@@ -64,7 +65,7 @@ public class AuthorizationRequestProcessorTests
         _authorizationCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
-        _timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+        _timeProvider = new FakeTimeProvider();
 
         _processor = new AuthorizationRequestProcessor(
             _authSessionService.Object,
@@ -72,7 +73,7 @@ public class AuthorizationRequestProcessorTests
             _authorizationCodeService.Object,
             _accessTokenService.Object,
             _identityTokenService.Object,
-            _timeProvider.Object);
+            _timeProvider);
     }
 
     private static ValidAuthorizationRequest CreateRequest(
@@ -550,14 +551,12 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithMaxAge_ShouldFilterOldSessions()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var maxAge = TimeSpan.FromMinutes(30);
         var request = CreateRequest(maxAge: maxAge);
 
         var oldSession = CreateAuthSession("old", authTime: now - TimeSpan.FromHours(1));
         var recentSession = CreateAuthSession("recent", authTime: now - TimeSpan.FromMinutes(10));
-
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -1034,14 +1033,12 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithMaxAgeExcludingAllSessions_ShouldReturnLoginRequired()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var maxAge = TimeSpan.FromMinutes(30);
         var request = CreateRequest(maxAge: maxAge);
 
         var oldSession1 = CreateAuthSession("old1", authTime: now - TimeSpan.FromHours(2));
         var oldSession2 = CreateAuthSession("old2", authTime: now - TimeSpan.FromHours(1));
-
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())

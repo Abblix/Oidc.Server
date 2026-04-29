@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using HashAlg = Abblix.Oidc.Server.Features.Hashing.HashAlgorithm;
@@ -43,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 public class ClientSecretAuthenticatorTests
 {
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
-    private readonly Mock<TimeProvider> _clock;
+    private readonly FakeTimeProvider _clock;
     private readonly Mock<IHashService> _hashService;
     private readonly TestClientSecretAuthenticator _authenticator;
 
@@ -51,13 +52,13 @@ public class ClientSecretAuthenticatorTests
     {
         var logger = new Mock<ILogger<ClientSecretAuthenticator>>();
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _clock = new Mock<TimeProvider>();
+        _clock = new FakeTimeProvider();
         _hashService = new Mock<IHashService>(MockBehavior.Strict);
 
         _authenticator = new TestClientSecretAuthenticator(
             logger.Object,
             _clientInfoProvider.Object,
-            _clock.Object,
+            _clock,
             _hashService.Object);
     }
 
@@ -289,10 +290,6 @@ public class ClientSecretAuthenticatorTests
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(secretHash);
 
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
-
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
@@ -326,10 +323,6 @@ public class ClientSecretAuthenticatorTests
         _hashService
             .Setup(h => h.Sha(HashAlg.Sha512, secret))
             .Returns(secretHash);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
@@ -389,7 +382,7 @@ public class ClientSecretAuthenticatorTests
         var clientId = "test-client";
         var secret = "test-secret";
         var secretHash = ComputeSha256(secret);
-        var expirationTime = DateTimeOffset.UtcNow.AddDays(-1);
+        var expirationTime = _clock.GetUtcNow().AddDays(-1);
         var clientInfo = new ClientInfo(clientId)
         {
             ClientSecrets =
@@ -414,10 +407,6 @@ public class ClientSecretAuthenticatorTests
         _hashService
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(secretHash);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
@@ -438,7 +427,7 @@ public class ClientSecretAuthenticatorTests
         var clientId = "test-client";
         var secret = "test-secret";
         var secretHash = ComputeSha256(secret);
-        var expirationTime = DateTimeOffset.UtcNow.AddDays(30);
+        var expirationTime = _clock.GetUtcNow().AddDays(30);
         var clientInfo = new ClientInfo(clientId)
         {
             ClientSecrets =
@@ -464,10 +453,6 @@ public class ClientSecretAuthenticatorTests
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(secretHash);
 
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
-
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
@@ -487,8 +472,8 @@ public class ClientSecretAuthenticatorTests
         var clientId = "test-client";
         var secret = "test-secret";
         var secretHash = ComputeSha256(secret);
-        var oldExpiration = DateTimeOffset.UtcNow.AddDays(10);
-        var newExpiration = DateTimeOffset.UtcNow.AddDays(30);
+        var oldExpiration = _clock.GetUtcNow().AddDays(10);
+        var newExpiration = _clock.GetUtcNow().AddDays(30);
         var clientInfo = new ClientInfo(clientId)
         {
             ClientSecrets =
@@ -510,10 +495,6 @@ public class ClientSecretAuthenticatorTests
         _hashService
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(secretHash);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
@@ -550,10 +531,6 @@ public class ClientSecretAuthenticatorTests
         _hashService
             .Setup(h => h.Sha(HashAlg.Sha512, secret))
             .Returns(sha512Hash);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
@@ -604,10 +581,6 @@ public class ClientSecretAuthenticatorTests
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(sha256Hash);
 
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
-
         // Act
         await _authenticator.TestTryAuthenticateAsync(
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
@@ -653,10 +626,6 @@ public class ClientSecretAuthenticatorTests
         _hashService
             .Setup(h => h.Sha(HashAlg.Sha256, secret))
             .Returns(secretHash);
-
-        _clock
-            .Setup(c => c.GetUtcNow())
-            .Returns(DateTimeOffset.UtcNow);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(

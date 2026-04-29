@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -181,9 +182,8 @@ public class ClientCredentialsGrantHandlerTests
         var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
         sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
         var fixedTime = new DateTimeOffset(2024, 11, 6, 12, 0, 0, TimeSpan.Zero);
-        var timeProvider = new Mock<TimeProvider>();
-        timeProvider.Setup(t => t.GetUtcNow()).Returns(fixedTime);
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider.Object);
+        var timeProvider = new FakeTimeProvider(fixedTime);
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, timeProvider);
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest();
 
