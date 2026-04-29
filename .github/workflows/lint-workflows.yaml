@@ -31,8 +31,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      # --only-binary :all: skips arbitrary setup-script execution at install
+      # time (closes Sonar S8541). --require-hashes + pinned requirements file
+      # locks both the resolved version and the artifact bytes — a malicious
+      # PyPI release with the same version cannot pass the hash check (closes
+      # Sonar S8544).
       - name: Install PyYAML
-        run: pip install --disable-pip-version-check pyyaml
+        run: |
+          pip install --disable-pip-version-check --only-binary :all: \
+            --require-hashes -r .github/workflows/requirements/lint-workflows.txt
 
       - name: "Block inline untrusted-input interpolation in run: blocks"
         run: python .github/scripts/lint-no-inline-secrets.py
