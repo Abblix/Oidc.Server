@@ -1,0 +1,105 @@
+name: Publish dev build to GitHub Packages
+
+# Triggered on every push to develop. MinVer (configured in Directory.Build.props)
+# computes the package version from git tags + commit height; this workflow just
+# packs and pushes the resulting .nupkg files to nuget.pkg.github.com/Abblix.
+#
+# Example version (with MinVerMinimumMajorMinor=2.3 and DefaultPreReleaseIdentifiers=dev.0):
+#   pre-tag develop, 5 commits since v2.2  ->  2.3.0-dev.0.5
+#   tagged v2.3.0-beta1                    ->  2.3.0-beta1
+#   tagged v2.3.0                          ->  2.3.0
+#
+# Releases (canonical 2.3.0, 2.3.0-beta1, etc.) flow through the manual
+# enhanced-release.yml — this workflow does not produce them.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/*.slnx'
+      - '**/*.sln'
+      - 'NuGet.config'
+      - '.github/workflows/publish-dev-builds.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Only the latest develop commit needs to land in the feed; cancel an
+  # in-progress run if a newer commit arrives.
+  group: publish-dev-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pack-and-publish:
+    name: Pack and publish dev build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Harden runner (audit egress)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+          disable-telemetry: true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer needs the full commit history and tag refs to derive
+          # the version. fetch-depth: 0 disables shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.0'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+
+      - name: Pack
+        run: dotnet pack --no-build -c Release -o nupkg
+
+      - name: Push to GitHub Packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to nuget.pkg.github.com/Abblix..."
+            dotnet nuget push "$pkg" \
+              --api-key "$GH_TOKEN" \
+              --source https://nuget.pkg.github.com/Abblix/index.json \
+              --skip-duplicate
+          done
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          # Pick any one package — they all share the same MinVer-derived version.
+          PKG=$(find nupkg -maxdepth 1 -name 'Abblix.Oidc.Server.*.nupkg' | head -1 || true)
+          if [ -n "$PKG" ]; then
+            VERSION=$(basename "$PKG" .nupkg | sed 's|^Abblix.Oidc.Server.||')
+            {
+              echo "## Dev build published"
+              echo ""
+              echo "Version: \`$VERSION\` (derived by MinVer from git tags + height)"
+              echo ""
+              echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
+              echo ""
+              echo "Consumers floating \`2.3.0-dev.*\` will pick this up on next \`dotnet restore\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
