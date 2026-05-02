@@ -1,0 +1,140 @@
+name: Publish dev build to GitHub Packages
+
+# Triggered on every push to develop. Packs Abblix.* with the next-target
+# version from each csproj's <PackageVersion>, suffixed with the workflow
+# run number and the short commit SHA, and pushes the resulting .nupkg files
+# to the private feed at nuget.pkg.github.com/Abblix.
+#
+# Downstream consumers (AuthenticationService) restore Abblix.* from the
+# same feed via a floating SemVer range like "2.3.0-dev.*", so every push
+# here is observable in AuthSvc's next dotnet restore.
+#
+# Releases (the canonical 2.3.0, 2.3.0-beta1, etc.) flow through the
+# manual enhanced-release.yml — this workflow does not produce them.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/*.slnx'
+      - '**/*.sln'
+      - 'NuGet.config'
+      - '.github/workflows/publish-dev-builds.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Only the latest develop commit needs to land in the feed; cancel an
+  # in-progress run if a newer commit arrives. The cancelled push leaves
+  # no artefact, but the next run produces a fresher one with the latest
+  # SHA, so consumers don't lose anything actionable.
+  group: publish-dev-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pack-and-publish:
+    name: Pack and publish dev build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Harden runner (audit egress)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+          disable-telemetry: true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.0'
+
+      - name: Resolve dev version
+        id: version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # All shippable csproj carry the same <PackageVersion>; read from one.
+          BASE=$(grep -oP '<PackageVersion>\K[^<]+' Abblix.Oidc.Server/Abblix.Oidc.Server.csproj)
+          if [ -z "$BASE" ]; then
+            echo "Error: could not extract <PackageVersion> from Abblix.Oidc.Server.csproj"
+            exit 1
+          fi
+          # Normalise to a 3-part base if the csproj uses 2-part (e.g. 2.3 -> 2.3.0)
+          # so the AssemblyVersion is well-formed.
+          if [[ "$BASE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            BASE="${BASE}.0"
+          fi
+          if ! [[ "$BASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: <PackageVersion> '$BASE' is not a clean numeric base (expected X.Y.Z or X.Y)"
+            exit 1
+          fi
+          SHORT_SHA="${SHA:0:7}"
+          PACKAGE_VERSION="${BASE}-dev.${RUN_NUMBER}.${SHORT_SHA}"
+          ASSEMBLY_VERSION="${BASE}.0"
+          {
+            echo "base=$BASE"
+            echo "package_version=$PACKAGE_VERSION"
+            echo "assembly_version=$ASSEMBLY_VERSION"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved package version: $PACKAGE_VERSION"
+          echo "Assembly version: $ASSEMBLY_VERSION"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          ASSEMBLY_VERSION: ${{ steps.version.outputs.assembly_version }}
+        run: dotnet build --no-restore -c Release -p:AssemblyVersion="$ASSEMBLY_VERSION" -p:PackageVersion="$PACKAGE_VERSION"
+
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+
+      - name: Pack
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          ASSEMBLY_VERSION: ${{ steps.version.outputs.assembly_version }}
+        run: dotnet pack --no-build -c Release -o nupkg -p:AssemblyVersion="$ASSEMBLY_VERSION" -p:PackageVersion="$PACKAGE_VERSION"
+
+      - name: Push to GitHub Packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to nuget.pkg.github.com/Abblix..."
+            dotnet nuget push "$pkg" \
+              --api-key "$GH_TOKEN" \
+              --source https://nuget.pkg.github.com/Abblix/index.json \
+              --skip-duplicate
+          done
+          echo "Published ${{ steps.version.outputs.package_version }}"
+
+      - name: Summary
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          {
+            echo "## Dev build published"
+            echo ""
+            echo "Version: \`$PACKAGE_VERSION\`"
+            echo ""
+            echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
+            echo ""
+            echo "Consumers floating \`$(echo "$PACKAGE_VERSION" | cut -d- -f1)-dev.*\` will pick this up on next \`dotnet restore\`."
+          } >> "$GITHUB_STEP_SUMMARY"
