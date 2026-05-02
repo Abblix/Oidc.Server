@@ -5,6 +5,26 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
+  <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
+       from git tags. The latest tag (e.g. v2.2) sets the base; commits since the tag bump
+       the patch and append the height + pre-release suffix.
+
+       MinVerMinimumMajorMinor pins the develop branch's next-target line ahead of releases:
+       even before tagging v2.3.0 the dev builds publish as 2.3.0-dev.0.<height>, so
+       AuthenticationService can float Abblix.* on 2.3.0-dev.* immediately. Bump this when
+       the next-target moves (2.3 -> 2.4).
+
+       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so
+       the floating range AuthSvc consumes (2.3.0-dev.*) is unambiguous. Tagged releases
+       drop the suffix automatically (v2.3.0 -> 2.3.0). -->
+  <PropertyGroup>
+    <MinVerMinimumMajorMinor>2.3</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
   <!-- MTP0001 is raised by Microsoft.Testing.Platform when VSTest-specific MSBuild
        properties (VSTestTestAdapterPath, VSTestTestCaseFilter) are set by the .NET
        SDK's test-project defaults. MTP ignores them; the warning is informational. -->

@@ -18,6 +18,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer (referenced in Directory.Build.props) reads the latest tag
+          # plus commit height from git to derive the version. fetch-depth: 0
+          # disables the shallow clone so all tags and commits are visible.
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0

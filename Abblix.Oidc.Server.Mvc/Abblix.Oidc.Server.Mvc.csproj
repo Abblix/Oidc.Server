@@ -21,9 +21,6 @@
         <PackageReleaseNotes>Template-based front-channel logout with CSP nonce support and streamlined authorization response formatting. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.2</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <AssemblyVersion>2.2.0</AssemblyVersion>
-        <FileVersion>2.2.0</FileVersion>
-        <PackageVersion>2.2</PackageVersion>
 
         <!-- Deterministic builds for reproducible binaries -->
         <Deterministic>true</Deterministic>
