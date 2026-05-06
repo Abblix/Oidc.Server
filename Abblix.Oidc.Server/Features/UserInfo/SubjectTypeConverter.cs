@@ -25,8 +25,6 @@ using System.Text;
 using System.Web;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Utils;
-
 using System.Buffers.Text;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;

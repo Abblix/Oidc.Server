@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -77,8 +78,7 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientAuthentication(this IServiceCollection services)
     {
-        services.TryAddEnumerable(new[]
-        {
+        services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientAuthenticator, NoneClientAuthenticator>(),
             ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretPostAuthenticator>(),
             ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretBasicAuthenticator>(),
@@ -87,8 +87,8 @@ public static class ServiceCollectionExtensions
             // mTLS self-signed client authentication per RFC 8705
             ServiceDescriptor.Singleton<IClientAuthenticator, TlsClientAuthenticator>(),
             // mTLS metadata-driven subject/SAN matching (tls_client_auth)
-            ServiceDescriptor.Singleton<IClientAuthenticator, TlsMetadataClientAuthenticator>(),
-        });
+            ServiceDescriptor.Singleton<IClientAuthenticator, TlsMetadataClientAuthenticator>()
+        ]);
         return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 
@@ -496,9 +496,8 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpClient(nameof(HttpNotificationDeliveryService));
 
-        // Register CIBA grant handler
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, BackChannelAuthenticationGrantHandler>());
+        // Register CIBA grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
+        services.AddAuthorizationGrant<BackChannelAuthenticationGrantHandler>();
 
         return services;
     }
@@ -517,9 +516,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IUserCodeRateLimiter, UserCodeRateLimiter>();
         services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
 
-        // Register Device Authorization grant handler
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IAuthorizationGrantHandler, DeviceCodeGrantHandler>());
+        // Register Device Authorization grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
+        services.AddAuthorizationGrant<DeviceCodeGrantHandler>();
 
         return services;
     }

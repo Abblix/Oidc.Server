@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Model;
@@ -29,38 +30,97 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
-/// Handles the processing of authorization requests by validating and then processing these requests based
-/// on defined business logic. It also includes the fetching of authorization requests when necessary.
+/// Handles authorization requests by fetching, validating, and delegating processing.
+/// Aggregates <c>response_types_supported</c> and <c>grant_types_supported</c> for discovery
+/// from the registered set of <see cref="IAuthorizationResponseBuilder"/>: each processor
+/// declares the response-type it owns and (via <see cref="IGrantTypeInformer"/>) the
+/// grant-type it exposes, so the handler is no longer the source of truth for the mapping
+/// — adding a new processor automatically extends both discovery lists.
 /// </summary>
-/// <param name="fetcher">The service responsible for fetching external authorization requests when
-/// specified by a request or request_uri parameter.</param>
-/// <param name="validator">The service responsible for validating authorization requests.</param>
-/// <param name="processor">The service responsible for processing validated authorization requests.</param>
-public class AuthorizationHandler(
-    IAuthorizationRequestFetcher fetcher,
-    IAuthorizationRequestValidator validator,
-    IAuthorizationRequestProcessor processor) : IAuthorizationHandler
+/// <remarks>
+/// The class deliberately uses an explicit constructor instead of a primary constructor: a
+/// single pass over <see cref="IEnumerable{IAuthorizationResponseBuilder}"/> populates
+/// both supported-response-types and supported-grant-types sets, while a primary-ctor body
+/// would either iterate the enumerable twice (one Select for response types, one SelectMany
+/// for grant types) or store the enumerable itself and risk re-enumerating on every read.
+/// Single-pass is the cheapest correct shape; the cost is dropping the primary-ctor form.
+/// </remarks>
+public class AuthorizationHandler : IAuthorizationHandler
 {
-    /// <inheritdoc />
-    public AuthorizationEndpointMetadata Metadata => new()
+    public AuthorizationHandler(
+        IAuthorizationRequestFetcher fetcher,
+        IAuthorizationRequestValidator validator,
+        IAuthorizationRequestProcessor processor,
+        IEnumerable<IAuthorizationResponseBuilder> responseBuilders)
     {
-        RequestParameterSupported = true,
-        ClaimsParameterSupported = true,
-    };
+        _fetcher = fetcher;
+        _validator = validator;
+        _processor = processor;
+
+        // RFC 6749 §3.1.1 declares response_type values case-sensitive; OIDC Core §3 inherits
+        // the same casing rules. We compare with Ordinal so a host-supplied processor that
+        // declares a non-canonical case (e.g. "Code") is correctly rejected as an unsupported
+        // response type rather than silently merged with the spec-defined "code".
+        var supportedResponseTypes = new HashSet<string>(StringComparer.Ordinal);
+
+        // RFC 6749 §3.2.1 fixes grant_type parameter values as lowercase literals
+        // ("authorization_code", "password", "client_credentials", "refresh_token", and
+        // "implicit" inherited from the §1.3.2 mapping). Same Ordinal comparer for the same
+        // reason as response_type — a non-canonical-case host registration is treated as
+        // unsupported, not silently aliased to the spec value.
+        var grantTypesSupported = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var responseProcessor in responseBuilders)
+        {
+            supportedResponseTypes.Add(responseProcessor.ResponseType);
+
+            foreach (var grantType in responseProcessor.GrantTypesSupported)
+                grantTypesSupported.Add(grantType);
+        }
+
+        GrantTypesSupported = grantTypesSupported;
+
+        string[][] canonicalResponseTypeCombinations =
+        [
+            [ResponseTypes.Code],
+            [ResponseTypes.Token],
+            [ResponseTypes.IdToken],
+            [ResponseTypes.Code, ResponseTypes.Token],
+            [ResponseTypes.Code, ResponseTypes.IdToken],
+            [ResponseTypes.Token, ResponseTypes.IdToken],
+            [ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken],
+        ];
+
+        var responseTypesSupported = canonicalResponseTypeCombinations
+            .Where(combo => Array.TrueForAll(combo, supportedResponseTypes.Contains))
+            .Select(combo => string.Join(' ', combo))
+            .ToList();
+
+        Metadata = new()
+        {
+            RequestParameterSupported = true,
+            ClaimsParameterSupported = true,
+            ResponseTypesSupported = responseTypesSupported,
+        };
+    }
+
+    private readonly IAuthorizationRequestFetcher _fetcher;
+    private readonly IAuthorizationRequestValidator _validator;
+    private readonly IAuthorizationRequestProcessor _processor;
+
+    /// <inheritdoc />
+    public AuthorizationEndpointMetadata Metadata { get; }
 
     /// <summary>
-    /// Grant types contributed by the authorization endpoint to the <c>grant_types_supported</c>
-    /// discovery list. The implicit family is unconditionally included because this handler
-    /// supports <c>response_type=token</c>, <c>id_token</c> and their combinations; the
-    /// <c>authorization_code</c> grant is contributed instead by the token endpoint.
+    /// Grant types contributed by the authorization endpoint to the
+    /// <c>grant_types_supported</c> discovery list, aggregated from every registered
+    /// <see cref="IAuthorizationResponseBuilder"/>: the <c>code</c> processor yields
+    /// <c>authorization_code</c>, the <c>token</c> / <c>id_token</c> processors yield
+    /// <c>implicit</c>. The handler does not encode the response-type ↔ grant-type mapping
+    /// itself — each processor declares its own grant via
+    /// <see cref="IGrantTypeInformer.GrantTypesSupported"/>.
     /// </summary>
-    public IEnumerable<string> GrantTypesSupported
-    {
-        get
-        {
-            yield return GrantTypes.Implicit;
-        }
-    }
+    public IEnumerable<string> GrantTypesSupported { get; }
 
     /// <summary>
     /// Asynchronously handles an authorization request by first fetching the request if necessary,
@@ -84,17 +144,17 @@ public class AuthorizationHandler(
     /// </remarks>
     public async Task<AuthorizationResponse> HandleAsync(AuthorizationRequest request)
     {
-        var fetchResult = await fetcher.FetchAsync(request);
+        var fetchResult = await _fetcher.FetchAsync(request);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(request, fetchError);
 
         request = fetchResult.GetSuccess();
 
-        var validationResult = await validator.ValidateAsync(request);
+        var validationResult = await _validator.ValidateAsync(request);
 
         return await validationResult.MatchAsync(
-            onSuccess: processor.ProcessAsync,
+            onSuccess: _processor.ProcessAsync,
             onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(request, error)));
     }
 }

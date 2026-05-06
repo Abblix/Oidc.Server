@@ -37,7 +37,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// </summary>
 /// <param name="grantHandlers">
 /// A collection of grant handlers, each responsible for a specific set of grant types.</param>
-public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantHandler> grantHandlers): IAuthorizationGrantHandler
+public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantHandler> grantHandlers)
+    : IAuthorizationGrantHandler
 {
     private readonly Dictionary<string, IAuthorizationGrantHandler> _grantHandlers = new(
         from handler in grantHandlers
