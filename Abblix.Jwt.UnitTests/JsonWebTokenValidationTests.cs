@@ -719,6 +719,76 @@ public class JsonWebTokenValidationTests
         // On Linux, validation may succeed - this is acceptable platform-specific behavior
     }
 
+    /// <summary>
+    /// Verifies that a JWS is rejected when the resolved verification key declares an 'alg'
+    /// pinning it to a different algorithm than the one in the token header.
+    /// Per RFC 7517 §4.4, when a JWK declares its 'alg', recipients MUST NOT use that key
+    /// with any other algorithm. Pre-fix the validator ignored key.Algorithm and would happily
+    /// verify (e.g.) an RS256 token with a key declared as PS256-only, opening within-family
+    /// algorithm-confusion. Post-fix the key is filtered out by the validator before
+    /// verification is attempted, and validation fails as no usable key remains.
+    /// </summary>
+    [Fact]
+    public async Task Validate_VerifyKeyAlgPinnedToDifferentAlg_FailsValidation()
+    {
+        var unpinnedKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, unpinnedKey);
+
+        var pinnedKey = unpinnedKey with { Algorithm = SigningAlgorithms.PS256 };
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(pinnedKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// Sanity check that a verify-key whose declared 'alg' matches the token header alg
+    /// validates successfully. Locks the contract that the per-key alg pinning fix does not
+    /// over-restrict legitimate matched-alg verification.
+    /// </summary>
+    [Fact]
+    public async Task Validate_VerifyKeyAlgMatchesHeaderAlg_VerifiesSuccessfully()
+    {
+        var unpinnedKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, unpinnedKey);
+
+        var pinnedKey = unpinnedKey with { Algorithm = SigningAlgorithms.RS256 };
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(pinnedKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Sanity check that a verify-key with no declared 'alg' validates any compatible signature.
+    /// Per RFC 7517 §4.4 the 'alg' parameter on a JWK is OPTIONAL; absence means the key may be
+    /// used with any algorithm appropriate for its key type. Locks the contract that the
+    /// alg-pinning filter only kicks in when key.Algorithm is non-null.
+    /// </summary>
+    [Fact]
+    public async Task Validate_VerifyKeyHasNoAlgPin_VerifiesSuccessfully()
+    {
+        var unpinnedKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, unpinnedKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(unpinnedKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
     private static string EncodeBase64Url(string input)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(input);
