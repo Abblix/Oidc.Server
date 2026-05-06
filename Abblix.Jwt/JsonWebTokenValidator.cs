@@ -35,12 +35,46 @@ namespace Abblix.Jwt;
 /// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
 /// <param name="signer">The JWS signer for validating signatures.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
+/// <param name="criticalHeaderHandlers">Handlers declaring JOSE header parameters that the host
+/// understands when listed in a JWS 'crit' header (RFC 7515 §4.1.11). Empty by default; hosts
+/// implementing JOSE extensions register a handler per supported header name.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
-    SigningAlgorithmsProvider signingAlgorithmsProvider) : IJsonWebTokenValidator
+    SigningAlgorithmsProvider signingAlgorithmsProvider,
+    IEnumerable<ICriticalHeaderHandler> criticalHeaderHandlers) : IJsonWebTokenValidator
 {
+    /// <summary>
+    /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
+    /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
+    /// strict input parsing for security-critical formats is the right default.
+    /// </summary>
+    private static readonly IReadOnlySet<string> ReservedCriticalHeaderNames =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            JwtClaimTypes.Algorithm,
+            JwtClaimTypes.KeyId,
+            JwtClaimTypes.Type,
+            JwtClaimTypes.ContentType,
+            JwtClaimTypes.EncryptionAlgorithm,
+            JwtClaimTypes.Critical,
+            JwtClaimTypes.JwkSetUrl,
+            JwtClaimTypes.JsonWebKeyHeader,
+            JwtClaimTypes.X509Url,
+            JwtClaimTypes.X509CertificateChain,
+            JwtClaimTypes.X509Sha1Thumbprint,
+            JwtClaimTypes.X509Sha256Thumbprint,
+        };
+
+    /// <summary>
+    /// JOSE header parameter names declared by registered <see cref="ICriticalHeaderHandler"/>
+    /// instances. The validator accepts a JWS 'crit' entry only when its name is listed here.
+    /// </summary>
+    private readonly IReadOnlySet<string> _understoodCriticalHeaders = criticalHeaderHandlers
+        .Select(h => h.HeaderName)
+        .ToHashSet(StringComparer.Ordinal);
+
     /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
     /// Dynamically determined from registered signers in the dependency injection container.
@@ -79,6 +113,7 @@ internal class JsonWebTokenValidator(
         return await ParseJws(jwtParts).BindAsync<JsonWebToken>(async token =>
         {
             var error = await ValidateSignatureAsync(token, jwtParts, parameters)
+                        ?? ValidateCriticalHeaders(token.Header)
                         ?? await ValidateIssuerAsync(token.Payload.Issuer, parameters)
                         ?? await ValidateAudienceAsync(token.Payload.Audiences, parameters)
                         ?? ValidateLifetime(token.Payload, parameters);
@@ -176,6 +211,60 @@ internal class JsonWebTokenValidator(
             .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
 
         return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+    }
+
+    /// <summary>
+    /// Validates the JWS 'crit' header parameter (RFC 7515 §4.1.11). When present, every name in
+    /// the array MUST be a non-standard JOSE header parameter name that is also present in the
+    /// JOSE header and that the host has registered an <see cref="ICriticalHeaderHandler"/> for.
+    /// Empty 'crit', duplicates, standard header names, dangling references, and unknown
+    /// extension names all cause rejection.
+    /// </summary>
+    private JwtValidationError? ValidateCriticalHeaders(JsonWebTokenHeader header)
+    {
+        IReadOnlyList<string>? crit;
+        try
+        {
+            crit = header.Critical;
+        }
+        catch (JsonException)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "Invalid 'crit' header: must be a JSON array of strings");
+        }
+
+        if (crit is null)
+            return null;
+
+        if (crit.Count == 0)
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
+
+        var distinctNames = new HashSet<string>(crit, StringComparer.Ordinal);
+        if (distinctNames.Count != crit.Count)
+            return new JwtValidationError(JwtError.InvalidToken, "'crit' header contains duplicate names");
+
+        foreach (var name in crit)
+        {
+            if (ReservedCriticalHeaderNames.Contains(name))
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"'crit' header must not list standard JOSE header name: {name}");
+
+            if (!header.Json.ContainsKey(name))
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"'crit' lists header name '{name}' that is not present in the JOSE header");
+
+            if (!_understoodCriticalHeaders.Contains(name))
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"Unknown critical header parameter: {name}");
+        }
+
+        return null;
     }
 
     /// <summary>

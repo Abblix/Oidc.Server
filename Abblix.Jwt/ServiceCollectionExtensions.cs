@@ -24,6 +24,7 @@ using Abblix.DependencyInjection;
 using Abblix.Jwt.Encryption;
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Jwt;
 
@@ -108,6 +109,25 @@ public static class ServiceCollectionExtensions
 
             .AddSingleton(signingAlgorithmsProvider);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers an <see cref="ICriticalHeaderHandler"/> implementation declaring a JOSE header
+    /// parameter that the host understands when it appears in a JWS 'crit' array (RFC 7515 §4.1.11).
+    /// Without at least one matching handler, any token whose 'crit' lists a given name is rejected.
+    /// </summary>
+    /// <typeparam name="THandler">The handler implementation type.</typeparam>
+    /// <param name="services">The service collection to register the handler in.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    /// <remarks>
+    /// Uses <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
+    /// so multiple handlers can be registered side by side without duplicates.
+    /// </remarks>
+    public static IServiceCollection AddCriticalHeaderHandler<THandler>(this IServiceCollection services)
+        where THandler : class, ICriticalHeaderHandler
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICriticalHeaderHandler, THandler>());
         return services;
     }
 
