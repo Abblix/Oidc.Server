@@ -719,6 +719,55 @@ public class JsonWebTokenValidationTests
         // On Linux, validation may succeed - this is acceptable platform-specific behavior
     }
 
+    /// <summary>
+    /// Verifies that a verify-key whose declared 'alg' is compatible with the token header alg
+    /// validates successfully. Per RFC 7517 §4.4 the JWK 'alg' is OPTIONAL: a null value means
+    /// the key may be used with any compatible algorithm; a matching value pins the key to that
+    /// algorithm exactly. Both cases must succeed. Locks the contract that the per-key alg
+    /// pinning fix does not over-restrict legitimate verification.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(null)]
+    public async Task Validate_VerifyKeyAlgCompatibleWithHeaderAlg_VerifiesSuccessfully(string? verifyKeyAlg)
+    {
+        var result = await ValidateTokenWithVerifyKeyAlg(verifyKeyAlg);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that a JWS is rejected when the resolved verification key declares an 'alg'
+    /// pinning it to a different algorithm than the one in the token header. Per RFC 7517 §4.4,
+    /// when a JWK declares its 'alg', recipients MUST NOT use that key with any other algorithm.
+    /// Pre-fix the validator ignored key.Algorithm and would happily verify (e.g.) an RS256 token
+    /// with a key declared as PS256-only, opening within-family algorithm-confusion. Post-fix the
+    /// key is filtered out by the validator before verification is attempted, and validation
+    /// fails as no usable key remains.
+    /// </summary>
+    [Fact]
+    public async Task Validate_VerifyKeyAlgPinnedToDifferentAlg_FailsValidation()
+    {
+        var result = await ValidateTokenWithVerifyKeyAlg(SigningAlgorithms.PS256);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    private static async Task<Result<JsonWebToken, JwtValidationError>> ValidateTokenWithVerifyKeyAlg(
+        string? verifyKeyAlg)
+    {
+        var unpinnedKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, unpinnedKey);
+
+        var verifyKey = unpinnedKey with { Algorithm = verifyKeyAlg };
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(verifyKey);
+
+        return await validator.ValidateAsync(jwt, parameters);
+    }
+
     private static string EncodeBase64Url(string input)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(input);
