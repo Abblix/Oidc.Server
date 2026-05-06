@@ -145,32 +145,35 @@ internal class JsonWebTokenValidator(
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
 
-        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey) ||
-                             parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens);
-
         // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
         // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
         switch (algorithm)
         {
             case SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens):
-                return new JwtValidationError(JwtError.InvalidToken, "Unsigned tokens are not allowed");
+                return new JwtValidationError(
+                    JwtError.InvalidToken, "Unsigned tokens are not allowed");
 
             case SigningAlgorithms.None when jwtParts[2].HasValue():
-                return new JwtValidationError(JwtError.InvalidToken, "Unsigned token must have empty signature");
+                return new JwtValidationError(
+                    JwtError.InvalidToken, "Unsigned token must have empty signature");
 
-            case SigningAlgorithms.None:
-                return null;
+            case not SigningAlgorithms.None
+                when parameters.Options.HasAnyFlag(ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey):
+                break;
 
-            case var _ when !shouldValidate:
+            default:
                 return null;
+        }
+
+        var issuer = token.Payload.Issuer;
+        if (issuer == null)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
         }
 
         var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
             .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
-
-        var issuer = token.Payload.Issuer;
-        if (issuer == null)
-            return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
 
         return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
     }
@@ -194,14 +197,12 @@ internal class JsonWebTokenValidator(
     /// </summary>
     private static async Task<JwtValidationError?> ValidateIssuerAsync(string? issuer, ValidationParameters parameters)
     {
-        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuer) ||
-                             parameters.Options.HasFlag(ValidationOptions.RequireIssuer);
-
         if (issuer != null)
         {
-            if (shouldValidate)
+            if (parameters.Options.HasAnyFlag(ValidationOptions.RequireIssuer | ValidationOptions.ValidateIssuer))
             {
                 var validateIssuer = parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer));
+
                 if (!await validateIssuer(issuer))
                     return new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
             }
@@ -226,10 +227,7 @@ internal class JsonWebTokenValidator(
         if (parameters.Options.HasFlag(ValidationOptions.RequireAudience) && audiencesList.Count == 0)
             return new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload");
 
-        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateAudience) ||
-                             parameters.Options.HasFlag(ValidationOptions.RequireAudience);
-
-        if (shouldValidate && audiencesList.Count > 0)
+        if (parameters.Options.HasAnyFlag(ValidationOptions.RequireAudience | ValidationOptions.ValidateAudience) && audiencesList.Count > 0)
         {
             var validateAudience = parameters.ValidateAudience.NotNull(nameof(parameters.ValidateAudience));
             if (!await validateAudience(audiencesList))
