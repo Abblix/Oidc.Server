@@ -145,33 +145,34 @@ internal class JsonWebTokenValidator(
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
 
-        if (SigningAlgorithms.None.Equals(algorithm, StringComparison.OrdinalIgnoreCase))
+        var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey) ||
+                             parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens);
+
+        // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
+        // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
+        switch (algorithm)
         {
-            if (parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens))
+            case SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens):
                 return new JwtValidationError(JwtError.InvalidToken, "Unsigned tokens are not allowed");
 
-            if (jwtParts[2].HasValue())
+            case SigningAlgorithms.None when jwtParts[2].HasValue():
                 return new JwtValidationError(JwtError.InvalidToken, "Unsigned token must have empty signature");
-        }
-        else
-        {
-            var shouldValidate = parameters.Options.HasFlag(ValidationOptions.ValidateIssuerSigningKey) ||
-                                 parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens);
 
-            if (shouldValidate)
-            {
-                var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
-                    .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
+            case SigningAlgorithms.None:
+                return null;
 
-                var issuer = token.Payload.Issuer;
-                if (issuer == null)
-                    return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
-
-                return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
-            }
+            case var _ when !shouldValidate:
+                return null;
         }
 
-        return null;
+        var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
+            .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
+
+        var issuer = token.Payload.Issuer;
+        if (issuer == null)
+            return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
+
+        return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
     }
 
     /// <summary>

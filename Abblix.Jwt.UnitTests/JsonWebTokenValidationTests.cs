@@ -912,6 +912,103 @@ public class JsonWebTokenValidationTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
+    /// <summary>
+    /// Verifies that JWTs with case-variant 'none' algorithm are rejected even when RequireSignedTokens is cleared.
+    /// Per RFC 7515 §5.3 and §10.13, JOSE algorithm names must be compared verbatim (byte-exact).
+    /// Pre-fix: validator silently accepts alg="None"/"NONE"/"nOnE" as unsigned because the comparison uses
+    /// OrdinalIgnoreCase. Post-fix: rejects them as unknown algorithm. Reproduces the bug from #76.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenWithCaseVariantNoneAlg_RejectedWhenSigningOptional(string algValue)
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"{{algValue}}","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// Sanity check that the legitimate alg="none" still passes when RequireSignedTokens is cleared.
+    /// Locks the contract that the strict-comparison fix did not over-tighten the unsigned-token path.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithLowercaseNoneAlg_AcceptedWhenSigningOptional()
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"none","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that case-variant 'none' alg is also rejected under default options (which include RequireSignedTokens).
+    /// Defense-in-depth: confirms the default-config invariant holds across both the legacy and the fixed code paths.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenWithCaseVariantNoneAlg_RejectedWithDefaultOptions(string algValue)
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"{{algValue}}","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that signing a token whose header explicitly carries case-variant 'none' fails to issue.
+    /// Adjacent verification for JsonWebTokenSigner.cs:49: the existing byte-exact == comparison there
+    /// means a header alg of 'None'/'NONE'/'nOnE' is treated as an unknown algorithm, not as the
+    /// special unsigned-token contradiction. With an RSA signing key (declared alg=RS256), signing
+    /// fails at the algorithm-mismatch check; either way it throws InvalidOperationException.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenSigning_WithCaseVariantNoneAlgInHeader_FailsToIssue(string algValue)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algValue;
+
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => IssueToken(token, SigningKey));
+    }
+
     private static ValidationParameters CreateValidationParameters(
         JsonWebKey signingKey,
         JsonWebKey? decryptionKey = null,
