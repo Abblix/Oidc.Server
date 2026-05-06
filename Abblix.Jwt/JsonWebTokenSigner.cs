@@ -109,8 +109,14 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
 
-        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
-        // Filter only by kid when present - algorithm compatibility is validated during signature verification
+        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL but binding when present:
+        // a key declaring its alg MUST NOT be used with any other algorithm. Filter such keys out
+        // before reaching crypto so a key registered for (say) RS256 cannot be misused to verify
+        // PS256 or RS384 tokens, closing within-family algorithm-confusion alongside the
+        // cross-family protection already provided by the generic keyed-DI dispatch.
+        signingKeys = signingKeys.Where(key => key.Algorithm == null || key.Algorithm == algorithm);
+
+        // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key
         var keyId = header.KeyId;
         if (keyId.HasValue())
             signingKeys = signingKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
