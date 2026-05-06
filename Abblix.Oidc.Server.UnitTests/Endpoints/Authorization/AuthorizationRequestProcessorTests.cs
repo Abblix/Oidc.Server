@@ -29,7 +29,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -74,9 +73,9 @@ public class AuthorizationRequestProcessorTests
             _consentsProvider.Object,
             _timeProvider,
             [
-                new AuthorizationCodeProcessor(_authorizationCodeService.Object),
-                new TokenProcessor(_accessTokenService.Object),
-                new IdTokenProcessor(_identityTokenService.Object),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object),
+                new TokenResponseBuilder(_accessTokenService.Object),
+                new IdTokenResponseBuilder(_identityTokenService.Object),
             ]);
     }
 

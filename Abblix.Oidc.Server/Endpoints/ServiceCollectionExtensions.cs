@@ -27,7 +27,6 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
-using Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
@@ -117,12 +116,13 @@ public static class ServiceCollectionExtensions
         // (token, id_token response processors) are registered only when the host calls
         // EnableImplicitFlow(); without that call those response types are not in the DI graph
         // and the authorization endpoint rejects them per OAuth 2.1 §1.4 deprecation guidance.
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, AuthorizationCodeProcessor>());
+        services.AddAuthorizationResponseProcessor<AuthorizationCodeBuilder>();
 
-        return services
-            .AddAlias<IAuthorizationHandler, AuthorizationHandler>()
-            .AddAlias<IGrantTypeInformer, AuthorizationHandler>();
+        // AuthorizationHandler is no longer aliased as IGrantTypeInformer: each registered
+        // IAuthorizationResponseBuilder now contributes its own grant types directly to the
+        // IGrantTypeInformer set, so the IGrantTypeInformer chain stays Singleton-friendly
+        // (every contributor is Singleton — no captive-dep risk for Singleton consumers).
+        return services.AddAlias<IAuthorizationHandler, AuthorizationHandler>();
     }
 
     /// <summary>
@@ -336,8 +336,27 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthorizationGrant<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationGrantHandler
     {
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationGrantHandler, TImpl>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGrantTypeInformer, TImpl>());
+        services.TryAddSingleton<TImpl>();
+        services.TryAddEnumerableAlias<IAuthorizationGrantHandler, TImpl>();
+        services.TryAddEnumerableAlias<IGrantTypeInformer, TImpl>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <typeparamref name="TImpl"/> as a Singleton concrete service and aliases the
+    /// SAME instance under both <see cref="IAuthorizationResponseBuilder"/> (for response-type
+    /// dispatch in the authorization endpoint) and <see cref="IGrantTypeInformer"/> (for
+    /// discovery and registration-time gates that aggregate <c>grant_types_supported</c>).
+    /// Every <see cref="IAuthorizationResponseBuilder"/> implementation must be registered
+    /// through this helper so each processor's declared grant type lands in the
+    /// <see cref="IGrantTypeInformer"/> chain without an extra registration step.
+    /// </summary>
+    public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(this IServiceCollection services)
+        where TImpl : class, IAuthorizationResponseBuilder
+    {
+        services.TryAddSingleton<TImpl>();
+        services.TryAddEnumerableAlias<IAuthorizationResponseBuilder, TImpl>();
+        services.TryAddEnumerableAlias<IGrantTypeInformer, TImpl>();
         return services;
     }
 

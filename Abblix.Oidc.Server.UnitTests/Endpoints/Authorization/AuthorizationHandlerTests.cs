@@ -56,11 +56,17 @@ public class AuthorizationHandlerTests
         // Register all three response processors so existing tests asserting that Implicit grant
         // and the full response-type combination set are advertised continue to pass. New tests
         // that exercise the default-off Implicit configuration construct their own handler.
-        IAuthorizationResponseProcessor[] responseProcessors =
+        IAuthorizationResponseBuilder[] responseProcessors =
         [
-            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code),
-            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Token),
-            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.IdToken),
+            Mock.Of<IAuthorizationResponseBuilder>(p =>
+                p.ResponseType == ResponseTypes.Code &&
+                p.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode }),
+            Mock.Of<IAuthorizationResponseBuilder>(p =>
+                p.ResponseType == ResponseTypes.Token &&
+                p.GrantTypesSupported == new[] { GrantTypes.Implicit }),
+            Mock.Of<IAuthorizationResponseBuilder>(p =>
+                p.ResponseType == ResponseTypes.IdToken &&
+                p.GrantTypesSupported == new[] { GrantTypes.Implicit }),
         ];
         _handler = new AuthorizationHandler(
             _fetcher.Object, _validator.Object, _processor.Object, responseProcessors);
@@ -288,7 +294,7 @@ public class AuthorizationHandlerTests
         // (EnableImplicitFlow not called).
         var handler = new AuthorizationHandler(
             _fetcher.Object, _validator.Object, _processor.Object,
-            [Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code)]);
+            [Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code)]);
 
         // Act
         var grantTypes = handler.GrantTypesSupported.ToArray();
@@ -308,7 +314,7 @@ public class AuthorizationHandlerTests
         // Arrange — only the Code processor registered.
         var handler = new AuthorizationHandler(
             _fetcher.Object, _validator.Object, _processor.Object,
-            [Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code)]);
+            [Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code)]);
 
         // Act
         var responseTypesSupported = handler.Metadata.ResponseTypesSupported;

@@ -28,19 +28,28 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 
 /// <summary>
-/// Processor for the <c>token</c> response type — the access-token component of the Implicit /
-/// Hybrid Flow. Generates an access token via <see cref="IAccessTokenService"/> and stores it
-/// on the running <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host
-/// calls <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4 deprecation guidance.
+/// Builds the <c>token</c> response-type component of an authorization endpoint success
+/// response — the access-token contributor of the Implicit / Hybrid Flow. Generates an
+/// access token via <see cref="IAccessTokenService"/> and stores it on the running
+/// <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host calls
+/// <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4 deprecation guidance.
+/// Declares <c>implicit</c> in <see cref="GrantTypesSupported"/> so opting in surfaces the
+/// implicit grant in discovery and registration-time gating without extra DI wiring.
 /// </summary>
-public class TokenProcessor(IAccessTokenService accessTokenService)
-    : IAuthorizationResponseProcessor
+public class TokenResponseBuilder(IAccessTokenService accessTokenService)
+    : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
     public string ResponseType => ResponseTypes.Token;
 
     /// <inheritdoc />
-    public async Task ProcessAsync(
+    public IEnumerable<string> GrantTypesSupported
+    {
+        get { yield return GrantTypes.Implicit; }
+    }
+
+    /// <inheritdoc />
+    public async Task BuildResponseAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

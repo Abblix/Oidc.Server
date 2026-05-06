@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
 public class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
-    IEnumerable<IAuthorizationResponseProcessor> processors) : SyncAuthorizationContextValidatorBase
+    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);

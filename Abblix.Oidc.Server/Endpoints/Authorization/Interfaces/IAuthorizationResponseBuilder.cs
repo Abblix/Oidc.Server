@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -38,7 +39,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// the corresponding response types simply do not exist in the DI graph — Implicit Flow does not
 /// run, matching OAuth 2.1 §1.4 default-off semantics.
 /// </remarks>
-public interface IAuthorizationResponseProcessor
+public interface IAuthorizationResponseBuilder : IGrantTypeInformer
 {
     /// <summary>
     /// The single OAuth 2.0 / OIDC response-type value this processor is responsible for, matched
@@ -52,7 +53,7 @@ public interface IAuthorizationResponseProcessor
     /// processors that ran earlier in the canonical iteration order
     /// (<c>code</c> before <c>token</c> before <c>id_token</c>).
     /// </summary>
-    Task ProcessAsync(
+    Task BuildResponseAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result);

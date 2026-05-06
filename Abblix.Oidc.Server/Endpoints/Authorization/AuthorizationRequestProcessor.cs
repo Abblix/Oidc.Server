@@ -44,7 +44,7 @@ public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
 	TimeProvider clock,
-	IEnumerable<IAuthorizationResponseProcessor> responseProcessors) : IAuthorizationRequestProcessor
+	IEnumerable<IAuthorizationResponseBuilder> responseProcessors) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -165,19 +165,20 @@ public class AuthorizationRequestProcessor(
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
-		// Dispatch each requested response-type part to its registered processor. The DI
-		// registration order — CodeProcessor in the core registration, then TokenProcessor and
-		// IdTokenProcessor added by EnableImplicitFlow — preserves the dependency IdTokenProcessor
-		// has on the code and access-token fields populated by earlier processors (used to
-		// compute c_hash / at_hash). Parts whose processors are not registered (e.g. token /
-		// id_token when Implicit Flow is not enabled) cannot reach this point: FlowTypeValidator
-		// rejects the request earlier with unsupported_response_type.
+		// Dispatch each requested response-type part to its registered builder. The DI
+		// registration order — AuthorizationCodeBuilder in the core registration, then
+		// TokenResponseBuilder and IdTokenResponseBuilder added by EnableImplicitFlow —
+		// preserves the dependency IdTokenResponseBuilder has on the code and access-token
+		// fields populated by earlier builders (used to compute c_hash / at_hash). Parts
+		// whose builders are not registered (e.g. token / id_token when Implicit Flow is not
+		// enabled) cannot reach this point: FlowTypeValidator rejects the request earlier
+		// with unsupported_response_type.
 		foreach (var processor in responseProcessors)
 		{
 			if (!request.Model.ResponseType.HasFlag(processor.ResponseType))
 				continue;
 
-			await processor.ProcessAsync(request, authorizedGrant, result);
+			await processor.BuildResponseAsync(request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.

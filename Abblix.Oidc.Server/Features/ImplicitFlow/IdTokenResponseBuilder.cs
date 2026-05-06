@@ -29,27 +29,35 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 
 /// <summary>
-/// Processor for the <c>id_token</c> response type — the OIDC identity-token component of the
-/// Implicit / Hybrid Flow. Generates an ID token via <see cref="IIdentityTokenService"/> and
-/// stores it on the running <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY
-/// when a host calls <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4
-/// deprecation guidance.
+/// Builds the <c>id_token</c> response-type component of an authorization endpoint success
+/// response — the OIDC identity-token contributor of the Implicit / Hybrid Flow. Generates
+/// an ID token via <see cref="IIdentityTokenService"/> and stores it on the running
+/// <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host calls
+/// <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4 deprecation guidance.
+/// Declares <c>implicit</c> in <see cref="GrantTypesSupported"/> so opting in surfaces the
+/// implicit grant in discovery and registration-time gating without extra DI wiring.
 /// </summary>
 /// <remarks>
-/// This processor is order-dependent: it reads <see cref="SuccessfullyAuthenticated.Code"/> and
-/// <see cref="SuccessfullyAuthenticated.AccessToken"/> populated by earlier processors to compute
-/// the <c>c_hash</c> and <c>at_hash</c> claims when those response components are present.
-/// The processor iterates response-type parts in canonical order (<c>code</c> → <c>token</c> →
-/// <c>id_token</c>) so this dependency holds without explicit sequencing on the processor side.
+/// This builder is order-dependent: it reads <see cref="SuccessfullyAuthenticated.Code"/>
+/// and <see cref="SuccessfullyAuthenticated.AccessToken"/> populated by earlier builders to
+/// compute the <c>c_hash</c> and <c>at_hash</c> claims when those response components are
+/// present. The orchestrator iterates response-type parts in canonical order (<c>code</c> →
+/// <c>token</c> → <c>id_token</c>) so this dependency holds without explicit sequencing on
+/// the builder side.
 /// </remarks>
-public class IdTokenProcessor(IIdentityTokenService identityTokenService)
-    : IAuthorizationResponseProcessor
+public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
+    : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
     public string ResponseType => ResponseTypes.IdToken;
 
+    public IEnumerable<string> GrantTypesSupported
+    {
+        get { yield return GrantTypes.Implicit; }
+    }
+
     /// <inheritdoc />
-    public async Task ProcessAsync(
+    public async Task BuildResponseAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

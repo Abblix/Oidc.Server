@@ -25,22 +25,31 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 
-namespace Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
+namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
-/// Processor for the <c>code</c> response type — the Authorization Code Flow component. Generates
-/// an authorization code via <see cref="IAuthorizationCodeService"/> and stores it on the
-/// running <see cref="SuccessfullyAuthenticated"/> result. Registered by default; this processor
-/// covers the OAuth 2.1-recommended flow.
+/// Builds the <c>code</c> response-type component of an authorization endpoint success
+/// response — the Authorization Code Flow contributor. Generates an authorization code via
+/// <see cref="IAuthorizationCodeService"/> and stores it on the running
+/// <see cref="SuccessfullyAuthenticated"/> result. Registered by default through
+/// <c>AddAuthorizationEndpoint()</c>; covers the OAuth 2.1-recommended flow. Declares
+/// <c>authorization_code</c> in <see cref="GrantTypesSupported"/> so the discovery
+/// endpoint and registration-time gates aggregate it transparently.
 /// </summary>
-public class AuthorizationCodeProcessor(IAuthorizationCodeService authorizationCodeService)
-    : IAuthorizationResponseProcessor
+public class AuthorizationCodeBuilder(IAuthorizationCodeService authorizationCodeService)
+    : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
     public string ResponseType => ResponseTypes.Code;
 
     /// <inheritdoc />
-    public async Task ProcessAsync(
+    public IEnumerable<string> GrantTypesSupported
+    {
+        get { yield return GrantTypes.AuthorizationCode; }
+    }
+
+    /// <inheritdoc />
+    public async Task BuildResponseAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

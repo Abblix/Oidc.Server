@@ -50,11 +50,11 @@ public class FlowTypeValidatorTests
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         // Existing tests exercise Implicit / Hybrid response types; register all three builders so
         // the server-level support gate added in #90 does not pre-reject those scenarios.
-        IAuthorizationResponseProcessor[] processors =
+        IAuthorizationResponseBuilder[] processors =
         [
-            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.Code),
-            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.Token),
-            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.IdToken),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
         _validator = new FlowTypeValidator(logger.Object, processors);
     }
@@ -360,7 +360,7 @@ public class FlowTypeValidatorTests
     /// Verifies that ValidateAsync rejects an uppercase <c>response_type</c> at the server-level
     /// support gate. RFC 6749 §3.1.1 declares <c>response_type</c> values case-sensitive; the
     /// server-level part check (introduced with the Implicit Flow opt-in in #90) compares each
-    /// part against registered <see cref="IAuthorizationResponseProcessor"/> instances using
+    /// part against registered <see cref="IAuthorizationResponseBuilder"/> instances using
     /// <see cref="StringComparer.Ordinal"/>, so <c>CODE</c> does not match the registered
     /// <c>code</c> processor and the request is rejected with <c>unsupported_response_type</c>
     /// before reaching the historically tolerant HasFlag-based flow detection.
@@ -395,9 +395,9 @@ public class FlowTypeValidatorTests
     {
         // Arrange — only Code processor registered (default, no EnableImplicitFlow)
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
-        IAuthorizationResponseProcessor[] codeOnlyProcessors =
+        IAuthorizationResponseBuilder[] codeOnlyProcessors =
         [
-            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
         var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
@@ -429,9 +429,9 @@ public class FlowTypeValidatorTests
     {
         // Arrange — only Code processor registered.
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
-        IAuthorizationResponseProcessor[] codeOnlyProcessors =
+        IAuthorizationResponseBuilder[] codeOnlyProcessors =
         [
-            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
         var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 

@@ -41,13 +41,13 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SupportedResponseTypeValidatorTests
 {
-    private static IAuthorizationResponseProcessor Processor(string responseType) =>
-        Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == responseType);
+    private static IAuthorizationResponseBuilder Processor(string responseType) =>
+        Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == responseType);
 
-    private static IAuthorizationResponseProcessor[] CodeOnly =>
+    private static IAuthorizationResponseBuilder[] CodeOnly =>
         [Processor(ResponseTypes.Code)];
 
-    private static IAuthorizationResponseProcessor[] CodeTokenIdToken =>
+    private static IAuthorizationResponseBuilder[] CodeTokenIdToken =>
     [
         Processor(ResponseTypes.Code),
         Processor(ResponseTypes.Token),

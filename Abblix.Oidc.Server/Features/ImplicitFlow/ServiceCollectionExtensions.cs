@@ -20,9 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 
@@ -49,8 +48,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     public static IServiceCollection EnableImplicitFlow(this IServiceCollection services)
     {
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, TokenProcessor>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, IdTokenProcessor>());
+        services.AddAuthorizationResponseProcessor<TokenResponseBuilder>();
+        services.AddAuthorizationResponseProcessor<IdTokenResponseBuilder>();
         return services;
     }
 }

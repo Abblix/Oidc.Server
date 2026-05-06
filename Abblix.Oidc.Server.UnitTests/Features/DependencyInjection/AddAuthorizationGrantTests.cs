@@ -47,6 +47,26 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 /// </summary>
 public class AddAuthorizationGrantTests
 {
+    /// <summary>
+    /// Mirrors <c>ServiceDescriptor.GetImplementationType()</c> (which is internal in
+    /// .NET): for factory-based descriptors registered via
+    /// <c>ServiceDescriptor.Singleton&lt;TService, TImpl&gt;(factory)</c>, the runtime type
+    /// of the factory is <c>Func&lt;IServiceProvider, TImpl&gt;</c> — its second generic
+    /// argument is the implementation type the dual-registration helper preserves for
+    /// dedup purposes.
+    /// </summary>
+    private static System.Type? ImplementationTypeOf(ServiceDescriptor d)
+    {
+        if (d.ImplementationType != null) return d.ImplementationType;
+        if (d.ImplementationInstance != null) return d.ImplementationInstance.GetType();
+        if (d.ImplementationFactory != null)
+        {
+            var args = d.ImplementationFactory.GetType().GetGenericArguments();
+            if (args.Length == 2) return args[1];
+        }
+        return null;
+    }
+
     private sealed class StubGrantHandler : IAuthorizationGrantHandler
     {
         public IEnumerable<string> GrantTypesSupported { get; } = ["urn:test:stub"];
@@ -85,9 +105,35 @@ public class AddAuthorizationGrantTests
             .ToList();
 
         Assert.Single(grantHandlerDescriptors);
-        Assert.Equal(typeof(StubGrantHandler), grantHandlerDescriptors[0].ImplementationType);
+        Assert.Equal(typeof(StubGrantHandler), ImplementationTypeOf(grantHandlerDescriptors[0]));
         Assert.Single(informerDescriptors);
-        Assert.Equal(typeof(StubGrantHandler), informerDescriptors[0].ImplementationType);
+        Assert.Equal(typeof(StubGrantHandler), ImplementationTypeOf(informerDescriptors[0]));
+    }
+
+    /// <summary>
+    /// The dual-registration shares ONE concrete <typeparamref name="TImpl"/> singleton between
+    /// both interface aliases — resolving <see cref="IAuthorizationGrantHandler"/> and
+    /// <see cref="IGrantTypeInformer"/> returns the same instance, not two separate ones. This
+    /// preserves the «handler is constructed once per host» invariant that the previous direct
+    /// dual-registration would have broken.
+    /// </summary>
+    [Fact]
+    public void AddAuthorizationGrant_BothInterfaceResolutions_ReturnSameInstance()
+    {
+        var services = new ServiceCollection();
+        services.AddAuthorizationGrant<StubGrantHandler>();
+        var provider = services.BuildServiceProvider();
+
+        var asGrantHandler = provider.GetRequiredService<IEnumerable<IAuthorizationGrantHandler>>()
+            .OfType<StubGrantHandler>()
+            .Single();
+        var asInformer = provider.GetRequiredService<IEnumerable<IGrantTypeInformer>>()
+            .OfType<StubGrantHandler>()
+            .Single();
+        var asConcrete = provider.GetRequiredService<StubGrantHandler>();
+
+        Assert.Same(asConcrete, asGrantHandler);
+        Assert.Same(asConcrete, asInformer);
     }
 
     /// <summary>
@@ -105,10 +151,10 @@ public class AddAuthorizationGrantTests
 
         Assert.Single(services, d =>
             d.ServiceType == typeof(IAuthorizationGrantHandler) &&
-            d.ImplementationType == typeof(StubGrantHandler));
+            ImplementationTypeOf(d) == typeof(StubGrantHandler));
         Assert.Single(services, d =>
             d.ServiceType == typeof(IGrantTypeInformer) &&
-            d.ImplementationType == typeof(StubGrantHandler));
+            ImplementationTypeOf(d) == typeof(StubGrantHandler));
     }
 
     /// <summary>
@@ -126,11 +172,11 @@ public class AddAuthorizationGrantTests
 
         var grantHandlerImpls = services
             .Where(d => d.ServiceType == typeof(IAuthorizationGrantHandler))
-            .Select(d => d.ImplementationType)
+            .Select(d => ImplementationTypeOf(d))
             .ToList();
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
-            .Select(d => d.ImplementationType)
+            .Select(d => ImplementationTypeOf(d))
             .ToList();
 
         Assert.Contains(typeof(StubGrantHandler), grantHandlerImpls);
@@ -169,10 +215,10 @@ public class AddAuthorizationGrantTests
 
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IAuthorizationGrantHandler) &&
-            d.ImplementationType == typeof(TImpl));
+            ImplementationTypeOf(d) == typeof(TImpl));
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IGrantTypeInformer) &&
-            d.ImplementationType == typeof(TImpl));
+            ImplementationTypeOf(d) == typeof(TImpl));
     }
 
     /// <summary>
@@ -190,10 +236,10 @@ public class AddAuthorizationGrantTests
 
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IAuthorizationGrantHandler) &&
-            d.ImplementationType == typeof(PasswordGrantHandler));
+            ImplementationTypeOf(d) == typeof(PasswordGrantHandler));
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IGrantTypeInformer) &&
-            d.ImplementationType == typeof(PasswordGrantHandler));
+            ImplementationTypeOf(d) == typeof(PasswordGrantHandler));
     }
 
     /// <summary>
@@ -212,7 +258,7 @@ public class AddAuthorizationGrantTests
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
-            .Select(d => d.ImplementationType)
+            .Select(d => ImplementationTypeOf(d))
             .ToList();
 
         Assert.Contains(typeof(AuthorizationCodeGrantHandler), informerImpls);
@@ -235,7 +281,7 @@ public class AddAuthorizationGrantTests
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
-            .Select(d => d.ImplementationType)
+            .Select(d => ImplementationTypeOf(d))
             .ToList();
 
         Assert.DoesNotContain(typeof(PasswordGrantHandler), informerImpls);
@@ -257,7 +303,7 @@ public class AddAuthorizationGrantTests
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
-            .Select(d => d.ImplementationType)
+            .Select(d => ImplementationTypeOf(d))
             .ToList();
 
         Assert.Contains(typeof(PasswordGrantHandler), informerImpls);

@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// Server-level support gate for the <c>response_types</c> registration parameter
 /// (OIDC DCR §3.2): every part of every requested combination must have a registered
-/// <see cref="IAuthorizationResponseProcessor"/>. Without <c>EnableImplicitFlow()</c> the
+/// <see cref="IAuthorizationResponseBuilder"/>. Without <c>EnableImplicitFlow()</c> the
 /// <c>token</c> / <c>id_token</c> processors are absent — registration must reject those
 /// values with <c>invalid_client_metadata</c> at registration time, instead of letting the
 /// client succeed at registration and fail with <c>unsupported_response_type</c> on its first
@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="processors">Registered per-response-type processors. Same source of truth
 /// used by <c>FlowTypeValidator</c> at the authorization endpoint, so registration and
 /// run-time gating cannot drift.</param>
-public class SupportedResponseTypeValidator(IEnumerable<IAuthorizationResponseProcessor> processors)
+public class SupportedResponseTypeValidator(IEnumerable<IAuthorizationResponseBuilder> processors)
     : SyncClientRegistrationContextValidator
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts = processors
