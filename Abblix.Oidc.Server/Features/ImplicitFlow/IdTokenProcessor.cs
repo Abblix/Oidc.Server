@@ -25,8 +25,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens;
-using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 

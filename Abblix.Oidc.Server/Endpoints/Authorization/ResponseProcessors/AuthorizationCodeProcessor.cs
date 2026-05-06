@@ -20,13 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
 
