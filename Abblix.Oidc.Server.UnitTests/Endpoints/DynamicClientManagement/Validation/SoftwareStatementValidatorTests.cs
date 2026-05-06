@@ -30,7 +30,6 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;

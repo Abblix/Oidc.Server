@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using Abblix.Jwt;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Abblix.Jwt.UnitTests;
