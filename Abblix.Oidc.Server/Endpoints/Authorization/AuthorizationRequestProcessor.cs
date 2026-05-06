@@ -177,7 +177,7 @@ public class AuthorizationRequestProcessor(
 			if (!request.Model.ResponseType.HasFlag(processor.ResponseType))
 				continue;
 
-			await processor.BuildAsync(request, authorizedGrant, result);
+			await processor.ProcessAsync(request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.

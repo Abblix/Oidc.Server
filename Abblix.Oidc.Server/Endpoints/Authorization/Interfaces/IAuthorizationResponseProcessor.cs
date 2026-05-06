@@ -55,7 +55,7 @@ public interface IAuthorizationResponseProcessor
     /// processors that ran earlier in the canonical iteration order
     /// (<c>code</c> before <c>token</c> before <c>id_token</c>).
     /// </summary>
-    Task BuildAsync(
+    Task ProcessAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result);

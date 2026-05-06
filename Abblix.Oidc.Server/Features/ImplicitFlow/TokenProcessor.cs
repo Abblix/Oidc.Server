@@ -43,7 +43,7 @@ public class TokenProcessor(IAccessTokenService accessTokenService)
     public string ResponseType => ResponseTypes.Token;
 
     /// <inheritdoc />
-    public async Task BuildAsync(
+    public async Task ProcessAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

@@ -43,7 +43,7 @@ public class AuthorizationCodeProcessor(IAuthorizationCodeService authorizationC
     public string ResponseType => ResponseTypes.Code;
 
     /// <inheritdoc />
-    public async Task BuildAsync(
+    public async Task ProcessAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

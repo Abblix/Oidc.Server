@@ -51,7 +51,7 @@ public class IdTokenProcessor(IIdentityTokenService identityTokenService)
     public string ResponseType => ResponseTypes.IdToken;
 
     /// <inheritdoc />
-    public async Task BuildAsync(
+    public async Task ProcessAsync(
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
