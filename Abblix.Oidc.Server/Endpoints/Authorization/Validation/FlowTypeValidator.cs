@@ -65,13 +65,11 @@ public class FlowTypeValidator(
         // rejected here regardless of client-level AllowedResponseTypes configuration.
         if (responseType != null)
         {
-            foreach (var part in responseType)
+            var unsupportedPart = responseType.FirstOrDefault(part => !_supportedResponseTypeParts.Contains(part));
+            if (unsupportedPart != null)
             {
-                if (_supportedResponseTypeParts.Contains(part))
-                    continue;
-
-                logger.LogWarning("The response type part {Part} is not supported by this server", [part]);
-                return UnsupportedResponseType($"The response type '{part}' is not supported by this server");
+                logger.LogWarning("The response type part {Part} is not supported by this server", [unsupportedPart]);
+                return UnsupportedResponseType($"The response type '{unsupportedPart}' is not supported by this server");
             }
         }
 
