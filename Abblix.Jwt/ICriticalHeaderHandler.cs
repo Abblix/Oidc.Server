@@ -23,21 +23,19 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Declares that the host implementation understands a specific JOSE header parameter listed in
-/// a JWS 'crit' header (RFC 7515 §4.1.11).
+/// Marker that declares the host implementation understands a specific JOSE header parameter
+/// listed in a JWS 'crit' header (RFC 7515 §4.1.11). Handlers are registered as keyed services
+/// where the DI key is the header parameter name (for example "b64", or "iat" for DPoP) — the
+/// key is the source of truth for the name, so this contract does not need to expose it.
 /// </summary>
 /// <remarks>
 /// RFC 7515 §4.1.11 requires verifiers to reject any JWS whose 'crit' header lists a parameter
-/// the verifier does not understand. Hosts implementing JOSE extensions that travel through the
-/// 'crit' contract (for example RFC 7797 'b64', or DPoP-related parameters) register an
-/// <see cref="ICriticalHeaderHandler"/> for each supported extension name; the validator rejects
-/// any JWS whose 'crit' lists a name not declared by some registered handler.
+/// the verifier does not understand. Hosts implementing JOSE extensions register a handler
+/// keyed by each supported extension name via
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>; the validator
+/// rejects any JWS whose 'crit' lists a name that has no matching keyed registration. The
+/// contract is intentionally empty for now: when a concrete extension lands and needs
+/// value-level processing, methods will be added here and existing keyed registrations remain
+/// valid.
 /// </remarks>
-public interface ICriticalHeaderHandler
-{
-    /// <summary>
-    /// The JOSE header parameter name this handler declares understanding of.
-    /// MUST match the literal string used in the 'crit' array (case-sensitive, byte-exact).
-    /// </summary>
-    string HeaderName { get; }
-}
+public interface ICriticalHeaderHandler;

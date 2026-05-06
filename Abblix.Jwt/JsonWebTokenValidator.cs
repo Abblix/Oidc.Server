@@ -25,6 +25,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Jwt;
 
@@ -35,45 +36,37 @@ namespace Abblix.Jwt;
 /// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
 /// <param name="signer">The JWS signer for validating signatures.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
-/// <param name="criticalHeaderHandlers">Handlers declaring JOSE header parameters that the host
-/// understands when listed in a JWS 'crit' header (RFC 7515 §4.1.11). Empty by default; hosts
-/// implementing JOSE extensions register a handler per supported header name.</param>
+/// <param name="serviceProvider">Resolves keyed <see cref="ICriticalHeaderHandler"/> registrations
+/// when validating a JWS 'crit' header (RFC 7515 §4.1.11). Hosts register a handler keyed by each
+/// understood JOSE header parameter name via
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
-    IEnumerable<ICriticalHeaderHandler> criticalHeaderHandlers) : IJsonWebTokenValidator
+    IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
     /// <summary>
     /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
     /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
     /// strict input parsing for security-critical formats is the right default.
     /// </summary>
-    private static readonly IReadOnlySet<string> ReservedCriticalHeaderNames =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            JwtClaimTypes.Algorithm,
-            JwtClaimTypes.KeyId,
-            JwtClaimTypes.Type,
-            JwtClaimTypes.ContentType,
-            JwtClaimTypes.EncryptionAlgorithm,
-            JwtClaimTypes.Critical,
-            JwtClaimTypes.JwkSetUrl,
-            JwtClaimTypes.JsonWebKeyHeader,
-            JwtClaimTypes.X509Url,
-            JwtClaimTypes.X509CertificateChain,
-            JwtClaimTypes.X509Sha1Thumbprint,
-            JwtClaimTypes.X509Sha256Thumbprint,
-        };
-
-    /// <summary>
-    /// JOSE header parameter names declared by registered <see cref="ICriticalHeaderHandler"/>
-    /// instances. The validator accepts a JWS 'crit' entry only when its name is listed here.
-    /// </summary>
-    private readonly IReadOnlySet<string> _understoodCriticalHeaders = criticalHeaderHandlers
-        .Select(h => h.HeaderName)
-        .ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> ReservedCriticalHeaderNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        JwtClaimTypes.Algorithm,
+        JwtClaimTypes.KeyId,
+        JwtClaimTypes.Type,
+        JwtClaimTypes.ContentType,
+        JwtClaimTypes.EncryptionAlgorithm,
+        JwtClaimTypes.Critical,
+        JwtClaimTypes.JwkSetUrl,
+        JwtClaimTypes.JsonWebKeyHeader,
+        JwtClaimTypes.X509Url,
+        JwtClaimTypes.X509CertificateChain,
+        JwtClaimTypes.X509Sha1Thumbprint,
+        JwtClaimTypes.X509Sha256Thumbprint,
+    };
 
     /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
@@ -258,7 +251,7 @@ internal class JsonWebTokenValidator(
                     JwtError.InvalidToken,
                     $"'crit' lists header name '{name}' that is not present in the JOSE header");
 
-            if (!_understoodCriticalHeaders.Contains(name))
+            if (serviceProvider.GetKeyedService<ICriticalHeaderHandler>(name) is null)
                 return new JwtValidationError(
                     JwtError.InvalidToken,
                     $"Unknown critical header parameter: {name}");

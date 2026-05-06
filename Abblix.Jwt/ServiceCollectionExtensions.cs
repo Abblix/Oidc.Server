@@ -113,21 +113,27 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers an <see cref="ICriticalHeaderHandler"/> implementation declaring a JOSE header
-    /// parameter that the host understands when it appears in a JWS 'crit' array (RFC 7515 §4.1.11).
-    /// Without at least one matching handler, any token whose 'crit' lists a given name is rejected.
+    /// Registers an <see cref="ICriticalHeaderHandler"/> keyed by the JOSE header parameter
+    /// name the host understands when it appears in a JWS 'crit' array (RFC 7515 §4.1.11).
+    /// The validator looks up handlers by header name; a token whose 'crit' lists a name that
+    /// has no matching keyed registration is rejected.
     /// </summary>
     /// <typeparam name="THandler">The handler implementation type.</typeparam>
     /// <param name="services">The service collection to register the handler in.</param>
+    /// <param name="headerName">The JOSE header parameter name this handler declares
+    /// understanding of. Used as the DI key, byte-exact match with the 'crit' entry.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
-    /// Uses <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
-    /// so multiple handlers can be registered side by side without duplicates.
+    /// Uses <see cref="ServiceCollectionServiceExtensions.AddKeyedSingleton(IServiceCollection,Type,object,Type)"/>
+    /// (via <see cref="ServiceCollectionDescriptorExtensions.TryAdd(IServiceCollection,ServiceDescriptor)"/>)
+    /// so the validator's keyed lookup by header name resolves the handler in O(1).
     /// </remarks>
-    public static IServiceCollection AddCriticalHeaderHandler<THandler>(this IServiceCollection services)
+    public static IServiceCollection AddCriticalHeaderHandler<THandler>(
+        this IServiceCollection services,
+        string headerName)
         where THandler : class, ICriticalHeaderHandler
     {
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICriticalHeaderHandler, THandler>());
+        services.TryAddKeyedSingleton<ICriticalHeaderHandler, THandler>(headerName);
         return services;
     }
 

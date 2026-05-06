@@ -120,7 +120,7 @@ public class CriticalHeaderTests
     [Fact]
     public async Task TokenWithCritNameNotPresentInHeader_FailsValidation()
     {
-        var sp = CreateServiceProvider(new StaticHandler(ExtensionName));
+        var sp = CreateServiceProvider(ExtensionName);
         var jwt = await IssueTokenWithHeader(
             sp,
             criticalNode: new JsonArray((JsonNode)ExtensionName),
@@ -160,7 +160,7 @@ public class CriticalHeaderTests
     [Fact]
     public async Task TokenWithRegisteredExtensionInCrit_Validates()
     {
-        var sp = CreateServiceProvider(new StaticHandler(ExtensionName));
+        var sp = CreateServiceProvider(ExtensionName);
         var jwt = await IssueTokenWithHeader(
             sp,
             criticalNode: new JsonArray((JsonNode)ExtensionName),
@@ -204,16 +204,22 @@ public class CriticalHeaderTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
-    private static IServiceProvider CreateServiceProvider(params ICriticalHeaderHandler[] handlers)
+    private static IServiceProvider CreateServiceProvider(params string[] understoodHeaderNames)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
-        foreach (var handler in handlers)
-            services.AddSingleton(handler);
         services.AddJsonWebTokens();
+        foreach (var name in understoodHeaderNames)
+            services.AddCriticalHeaderHandler<UnderstoodHandler>(name);
         return services.BuildServiceProvider();
     }
+
+    /// <summary>
+    /// Empty marker implementation used to fill keyed <see cref="ICriticalHeaderHandler"/>
+    /// registrations in tests; the validator only checks for presence by header name.
+    /// </summary>
+    private sealed class UnderstoodHandler : ICriticalHeaderHandler;
 
     private static async Task<string> IssueTokenWithHeader(
         IServiceProvider sp,
@@ -253,8 +259,4 @@ public class CriticalHeaderTests
         return await validator.ValidateAsync(jwt, parameters);
     }
 
-    private sealed class StaticHandler(string name) : ICriticalHeaderHandler
-    {
-        public string HeaderName { get; } = name;
-    }
 }
