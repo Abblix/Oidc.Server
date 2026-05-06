@@ -22,7 +22,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
