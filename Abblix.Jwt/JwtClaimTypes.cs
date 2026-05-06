@@ -56,6 +56,56 @@ public static class JwtClaimTypes
     public const string EncryptionAlgorithm = "enc";
 
     /// <summary>
+    /// "crit" header parameter (RFC 7515 Section 4.1.11): a JSON array of JOSE header parameter
+    /// names that the recipient MUST understand and process. The parameter itself MUST be
+    /// understood by JWS implementations, even when no extensions are in use.
+    /// </summary>
+    public const string Critical = "crit";
+
+    /// <summary>
+    /// "jku" header parameter (RFC 7515 Section 4.1.2): URL referring to a JWK Set whose keys
+    /// the issuer claims as candidates for verifying the JWS.
+    /// </summary>
+    public const string JwkSetUrl = "jku";
+
+    /// <summary>
+    /// "jwk" header parameter (RFC 7515 Section 4.1.3): the public key embedded directly in
+    /// the JOSE header as a JWK.
+    /// </summary>
+    public const string JsonWebKeyHeader = "jwk";
+
+    /// <summary>
+    /// "x5u" header parameter (RFC 7515 Section 4.1.5): URL referring to an X.509 public-key
+    /// certificate or certificate chain corresponding to the key used for the JWS signature.
+    /// </summary>
+    public const string X509Url = "x5u";
+
+    /// <summary>
+    /// "x5c" header parameter (RFC 7515 Section 4.1.6): an X.509 certificate chain embedded in
+    /// the JOSE header as a JSON array of base64-encoded DER certificates.
+    /// </summary>
+    public const string X509CertificateChain = "x5c";
+
+    /// <summary>
+    /// "x5t" header parameter (RFC 7515 Section 4.1.7): base64url-encoded SHA-1 thumbprint of
+    /// the DER encoding of the corresponding X.509 certificate. Discouraged in favour of
+    /// <see cref="X509Sha256Thumbprint"/> per RFC 7515 §10.11.
+    /// </summary>
+    public const string X509Sha1Thumbprint = "x5t";
+
+    /// <summary>
+    /// "x5t#S256" header parameter (RFC 7515 Section 4.1.8): base64url-encoded SHA-256 thumbprint
+    /// of the DER encoding of the corresponding X.509 certificate.
+    /// </summary>
+    public const string X509Sha256Thumbprint = "x5t#S256";
+
+    /// <summary>
+    /// "cty" header parameter (RFC 7515 Section 4.1.10): the media type of the JWS payload, used
+    /// when the payload itself is a nested JWT or another well-defined media type.
+    /// </summary>
+    public const string ContentType = "cty";
+
+    /// <summary>
     /// The 'idp' claim represents the identity provider that authenticated the end user.
     /// </summary>
     public const string IdentityProvider = "idp";

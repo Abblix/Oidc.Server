@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
@@ -94,5 +95,42 @@ public class JsonWebTokenHeader(JsonObject json)
     {
         get => Json.GetProperty<string>(JwtClaimTypes.EncryptionAlgorithm);
         set => Json.SetProperty(JwtClaimTypes.EncryptionAlgorithm, value);
+    }
+
+    /// <summary>
+    /// The 'crit' (Critical) header parameter (RFC 7515 §4.1.11): names of JOSE header parameters
+    /// that the recipient MUST understand and process. Returns null when 'crit' is absent.
+    /// </summary>
+    /// <exception cref="JsonException">Thrown when 'crit' is present but is not a JSON array of strings.</exception>
+    public IReadOnlyList<string>? Critical
+    {
+        get
+        {
+            if (!Json.TryGetPropertyValue(JwtClaimTypes.Critical, out var node) || node is null)
+                return null;
+            if (node is not JsonArray array)
+                throw new JsonException($"'{JwtClaimTypes.Critical}' header must be a JSON array");
+
+            var result = new string[array.Count];
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (array[i] is not JsonValue value || !value.TryGetValue<string>(out var name))
+                    throw new JsonException($"'{JwtClaimTypes.Critical}' header must contain only strings");
+                result[i] = name;
+            }
+            return result;
+        }
+        set
+        {
+            if (value is null)
+            {
+                Json.Remove(JwtClaimTypes.Critical);
+                return;
+            }
+            var array = new JsonArray();
+            foreach (var name in value)
+                array.Add(name);
+            Json[JwtClaimTypes.Critical] = array;
+        }
     }
 }
