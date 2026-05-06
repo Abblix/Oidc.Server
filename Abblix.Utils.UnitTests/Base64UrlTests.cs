@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Buffers.Text;
+using System.Security.Cryptography;
 using System.Text;
 using Xunit;
 
@@ -102,9 +103,8 @@ public class Base64UrlTests
     [InlineData(255)]
     public void RoundTrip_RandomBytes_RestoresOriginal(int length)
     {
-        var random = new Random(length);
         var original = new byte[length];
-        random.NextBytes(original);
+        RandomNumberGenerator.Fill(original);
 
         var encoded = Base64Url.EncodeToString(original);
         var decoded = Base64Url.DecodeFromChars(encoded);
@@ -146,11 +146,10 @@ public class Base64UrlTests
     [Fact]
     public void EncodeToString_NeverEmitsStandardBase64Characters()
     {
-        var random = new Random(42);
         for (var trial = 0; trial < 256; trial++)
         {
             var bytes = new byte[trial + 1];
-            random.NextBytes(bytes);
+            RandomNumberGenerator.Fill(bytes);
 
             var encoded = Base64Url.EncodeToString(bytes);
 

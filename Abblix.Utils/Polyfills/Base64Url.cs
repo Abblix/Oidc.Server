@@ -53,7 +53,7 @@ public static class Base64Url
             throw new FormatException("Invalid base64url length: length mod 4 cannot be 1.");
 
         var aligned = (source.Length + 3) & ~3;
-        Span<char> buffer = aligned <= 512 ? stackalloc char[aligned] : new char[aligned];
+        var buffer = new char[aligned];
 
         for (var i = 0; i < source.Length; i++)
         {
@@ -90,7 +90,7 @@ public static class Base64Url
             return string.Empty;
 
         var encodedLength = ((source.Length + 2) / 3) * 4;
-        Span<char> buffer = encodedLength <= 512 ? stackalloc char[encodedLength] : new char[encodedLength];
+        var buffer = new char[encodedLength];
         if (!Convert.TryToBase64Chars(source, buffer, out var written))
             throw new InvalidOperationException("base64url encoding failed.");
 
