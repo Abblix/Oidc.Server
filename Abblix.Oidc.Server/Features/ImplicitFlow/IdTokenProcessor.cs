@@ -28,19 +28,27 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
-namespace Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
+namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 
 /// <summary>
-/// Processor for the <c>token</c> response type — the access-token component of the Implicit /
-/// Hybrid Flow. Generates an access token via <see cref="IAccessTokenService"/> and stores it
-/// on the running <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host
-/// calls <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4 deprecation guidance.
+/// Processor for the <c>id_token</c> response type — the OIDC identity-token component of the
+/// Implicit / Hybrid Flow. Generates an ID token via <see cref="IIdentityTokenService"/> and
+/// stores it on the running <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY
+/// when a host calls <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4
+/// deprecation guidance.
 /// </summary>
-public class TokenProcessor(IAccessTokenService accessTokenService)
+/// <remarks>
+/// This processor is order-dependent: it reads <see cref="SuccessfullyAuthenticated.Code"/> and
+/// <see cref="SuccessfullyAuthenticated.AccessToken"/> populated by earlier processors to compute
+/// the <c>c_hash</c> and <c>at_hash</c> claims when those response components are present.
+/// The processor iterates response-type parts in canonical order (<c>code</c> → <c>token</c> →
+/// <c>id_token</c>) so this dependency holds without explicit sequencing on the processor side.
+/// </remarks>
+public class IdTokenProcessor(IIdentityTokenService identityTokenService)
     : IAuthorizationResponseProcessor
 {
     /// <inheritdoc />
-    public string ResponseType => ResponseTypes.Token;
+    public string ResponseType => ResponseTypes.IdToken;
 
     /// <inheritdoc />
     public async Task BuildAsync(
@@ -48,11 +56,15 @@ public class TokenProcessor(IAccessTokenService accessTokenService)
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
     {
-        result.TokenType = TokenTypes.Bearer;
+        var responseType = request.Model.ResponseType;
+        var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
-        result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
+        result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
-            request.ClientInfo);
+            request.ClientInfo,
+            standalone,
+            result.Code,
+            result.AccessToken?.EncodedJwt);
     }
 }
