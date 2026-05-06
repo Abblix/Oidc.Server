@@ -26,8 +26,6 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -45,10 +43,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
-	IAuthorizationCodeService authorizationCodeService,
-	IAccessTokenService accessTokenService,
-	IIdentityTokenService identityTokenService,
-	TimeProvider clock) : IAuthorizationRequestProcessor
+	TimeProvider clock,
+	IEnumerable<IAuthorizationResponseProcessor> responseProcessors) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -167,37 +163,21 @@ public class AuthorizationRequestProcessor(
 			authSession.SessionId,
 			authSession.AffectedClientIds);
 
-		// Check if the response type requires an authorization code, and generate it if needed.
-		var codeRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Code);
-		if (codeRequired)
-		{
-			result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
-				new AuthorizedGrant(authSession, authContext),
-				request.ClientInfo.AuthorizationCodeExpiresIn);
-		}
+		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
-		// Check if an access token is required, and generate it if needed.
-		var tokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Token);
-		if (tokenRequired)
+		// Dispatch each requested response-type part to its registered processor. The DI
+		// registration order — CodeProcessor in the core registration, then TokenProcessor and
+		// IdTokenProcessor added by EnableImplicitFlow — preserves the dependency IdTokenProcessor
+		// has on the code and access-token fields populated by earlier processors (used to
+		// compute c_hash / at_hash). Parts whose processors are not registered (e.g. token /
+		// id_token when Implicit Flow is not enabled) cannot reach this point: FlowTypeValidator
+		// rejects the request earlier with unsupported_response_type.
+		foreach (var processor in responseProcessors)
 		{
-			result.TokenType = TokenTypes.Bearer;
-			result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
-				authSession,
-				authContext,
-				request.ClientInfo);
-		}
+			if (!request.Model.ResponseType.HasFlag(processor.ResponseType))
+				continue;
 
-		// Check if an ID token is required, and generate it if needed.
-		var idTokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.IdToken);
-		if (idTokenRequired)
-		{
-			result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-				authSession,
-				authContext,
-				request.ClientInfo,
-				!codeRequired && !tokenRequired,
-				result.Code,
-				result.AccessToken?.EncodedJwt);
+			await processor.BuildAsync(request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.
@@ -219,8 +199,7 @@ public class AuthorizationRequestProcessor(
 		{
 			// skip all sessions older than max_age value
 			var minAuthenticationTime = clock.GetUtcNow() - model.MaxAge;
-			authSessions = authSessions
-				.Where(session => minAuthenticationTime < session.AuthenticationTime);
+			authSessions = authSessions.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
 		// Filter sessions based on the required ACR (Authentication Context Class Reference) values, if specified.

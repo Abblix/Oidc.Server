@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
+using Abblix.Oidc.Server.Endpoints.Authorization.ResponseProcessors;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
@@ -111,6 +112,13 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<AuthorizationHandler>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
+
+        // Authorization Code Flow is registered by default. Implicit / Hybrid Flow components
+        // (token, id_token response processors) are registered only when the host calls
+        // EnableImplicitFlow(); without that call those response types are not in the DI graph
+        // and the authorization endpoint rejects them per OAuth 2.1 §1.4 deprecation guidance.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, AuthorizationCodeProcessor>());
 
         return services
             .AddAlias<IAuthorizationHandler, AuthorizationHandler>()
@@ -256,6 +264,29 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IAuthorizationGrantHandler, PasswordGrantHandler>());
+        return services;
+    }
+
+    /// <summary>
+    /// Enables support for the Implicit and Hybrid Flows by registering the response-type
+    /// processors that emit access tokens and ID tokens directly from the authorization endpoint.
+    /// </summary>
+    /// <remarks>
+    /// OAuth 2.1 §1.4 deprecates the Implicit Grant. By default this library does not register
+    /// the <c>token</c> or <c>id_token</c> response-type processors, so the authorization endpoint
+    /// rejects requests for those response types with <c>unsupported_response_type</c> and the
+    /// discovery document advertises only <c>code</c> in <c>response_types_supported</c> and
+    /// omits <c>implicit</c> from <c>grant_types_supported</c>. Hosts that still need Implicit
+    /// or Hybrid (legacy SPAs, transition deployments) make a deliberate decision to opt in via
+    /// this method, mirroring the <c>EnablePasswordGrant</c> precedent for ROPC.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to register the Implicit /
+    /// Hybrid response-type processors in.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection EnableImplicitFlow(this IServiceCollection services)
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, TokenProcessor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationResponseProcessor, IdTokenProcessor>());
         return services;
     }
 

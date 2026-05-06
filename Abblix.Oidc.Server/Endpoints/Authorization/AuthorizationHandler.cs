@@ -36,29 +36,63 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// specified by a request or request_uri parameter.</param>
 /// <param name="validator">The service responsible for validating authorization requests.</param>
 /// <param name="processor">The service responsible for processing validated authorization requests.</param>
+/// <param name="responseProcessors">The set of registered authorization response processors. The
+/// supported response types and grant types contributed to discovery are derived from this set:
+/// without <c>EnableImplicitFlow()</c> the <c>token</c> / <c>id_token</c> processors are absent and
+/// the discovery document advertises only the Code Flow as supported.</param>
 public class AuthorizationHandler(
     IAuthorizationRequestFetcher fetcher,
     IAuthorizationRequestValidator validator,
-    IAuthorizationRequestProcessor processor) : IAuthorizationHandler
+    IAuthorizationRequestProcessor processor,
+    IEnumerable<IAuthorizationResponseProcessor> responseProcessors) : IAuthorizationHandler
 {
+    /// <summary>
+    /// Canonical response-type combinations defined across OAuth 2.0 / OIDC. A combination is
+    /// advertised in discovery only if every one of its parts has a registered response processor.
+    /// </summary>
+    private static readonly string[][] CanonicalResponseTypeCombinations =
+    [
+        [ResponseTypes.Code],
+        [ResponseTypes.Token],
+        [ResponseTypes.IdToken],
+        [ResponseTypes.Code, ResponseTypes.Token],
+        [ResponseTypes.Code, ResponseTypes.IdToken],
+        [ResponseTypes.Token, ResponseTypes.IdToken],
+        [ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken],
+    ];
+
+    // OrdinalIgnoreCase mirrors the codebase's historical tolerance for response_type case
+    // variations (FlowTypeValidator does the same).
+    private readonly IReadOnlySet<string> _supportedResponseTypeParts =
+        responseProcessors.Select(b => b.ResponseType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     /// <inheritdoc />
     public AuthorizationEndpointMetadata Metadata => new()
     {
         RequestParameterSupported = true,
         ClaimsParameterSupported = true,
+        ResponseTypesSupported = CanonicalResponseTypeCombinations
+            .Where(combo => Array.TrueForAll(combo, _supportedResponseTypeParts.Contains))
+            .Select(combo => string.Join(' ', combo))
+            .ToList(),
     };
 
     /// <summary>
     /// Grant types contributed by the authorization endpoint to the <c>grant_types_supported</c>
-    /// discovery list. The implicit family is unconditionally included because this handler
-    /// supports <c>response_type=token</c>, <c>id_token</c> and their combinations; the
-    /// <c>authorization_code</c> grant is contributed instead by the token endpoint.
+    /// discovery list. The <c>implicit</c> grant is advertised only when at least one of the
+    /// implicit response-type processors (<c>token</c> or <c>id_token</c>) is registered, i.e. when
+    /// the host called <c>EnableImplicitFlow()</c>. The <c>authorization_code</c> grant is
+    /// contributed instead by the token endpoint.
     /// </summary>
     public IEnumerable<string> GrantTypesSupported
     {
         get
         {
-            yield return GrantTypes.Implicit;
+            if (_supportedResponseTypeParts.Contains(ResponseTypes.Token) ||
+                _supportedResponseTypeParts.Contains(ResponseTypes.IdToken))
+            {
+                yield return GrantTypes.Implicit;
+            }
         }
     }
 

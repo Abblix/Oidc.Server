@@ -23,6 +23,7 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -47,7 +48,15 @@ public class FlowTypeValidatorTests
     public FlowTypeValidatorTests()
     {
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
-        _validator = new FlowTypeValidator(logger.Object);
+        // Existing tests exercise Implicit / Hybrid response types; register all three builders so
+        // the server-level support gate added in #90 does not pre-reject those scenarios.
+        IAuthorizationResponseProcessor[] processors =
+        [
+            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.Token),
+            Mock.Of<IAuthorizationResponseProcessor>(b => b.ResponseType == ResponseTypes.IdToken),
+        ];
+        _validator = new FlowTypeValidator(logger.Object, processors);
     }
 
     /// <summary>
@@ -348,12 +357,16 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync handles case-insensitive response_type for flow detection.
-    /// HasFlag uses OrdinalIgnoreCase, making flow detection tolerant of case variations.
-    /// Tests that "CODE" is recognized as authorization code flow.
+    /// Verifies that ValidateAsync rejects an uppercase <c>response_type</c> at the server-level
+    /// support gate. RFC 6749 §3.1.1 declares <c>response_type</c> values case-sensitive; the
+    /// server-level part check (introduced with the Implicit Flow opt-in in #90) compares each
+    /// part against registered <see cref="IAuthorizationResponseProcessor"/> instances using
+    /// <see cref="StringComparer.Ordinal"/>, so <c>CODE</c> does not match the registered
+    /// <c>code</c> processor and the request is rejected with <c>unsupported_response_type</c>
+    /// before reaching the historically tolerant HasFlag-based flow detection.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_UppercaseResponseType_ShouldSucceedForFlowDetection()
+    public async Task ValidateAsync_UppercaseResponseType_ShouldFailServerLevelSupportGate()
     {
         // Arrange - Client configured for uppercase "CODE"
         var context = CreateContext(["CODE"], [["CODE"]]);
@@ -362,8 +375,74 @@ public class FlowTypeValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Null(result);
-        Assert.Equal(FlowTypes.AuthorizationCode, context.FlowType);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies that without <c>EnableImplicitFlow()</c> the validator rejects requests asking for
+    /// the <c>token</c> response type with <c>unsupported_response_type</c>, even when the client
+    /// is configured to allow it. The server-level support gate (registered processors) takes
+    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist — per OAuth 2.1 §1.4
+    /// the Implicit Grant is deprecated and the library default refuses to issue access tokens
+    /// directly from the authorization endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.Token)]
+    [InlineData(ResponseTypes.IdToken)]
+    public async Task ValidateAsync_ImplicitResponseType_WhenImplicitFlowDisabled_FailsWithUnsupportedResponseType(
+        string implicitResponseType)
+    {
+        // Arrange — only Code processor registered (default, no EnableImplicitFlow)
+        var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
+        IAuthorizationResponseProcessor[] codeOnlyProcessors =
+        [
+            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code),
+        ];
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+
+        // Client is configured to allow the implicit response type, so without the server-level
+        // gate the request would proceed past ResponseTypeAllowed.
+        var context = CreateContext([implicitResponseType], [[implicitResponseType]]);
+
+        // Act
+        var result = await validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
+
+    /// <summary>
+    /// Same as the single-part case but for the four hybrid combinations: <c>code token</c>,
+    /// <c>code id_token</c>, <c>token id_token</c>, and <c>code token id_token</c>. Each one
+    /// contains at least one part (<c>token</c> or <c>id_token</c>) that has no registered
+    /// processor when Implicit Flow is disabled, so the validator rejects the entire request.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.Code, ResponseTypes.Token)]
+    [InlineData(ResponseTypes.Code, ResponseTypes.IdToken)]
+    [InlineData(ResponseTypes.Token, ResponseTypes.IdToken)]
+    [InlineData(ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)]
+    public async Task ValidateAsync_HybridResponseType_WhenImplicitFlowDisabled_FailsWithUnsupportedResponseType(
+        params string[] hybridResponseType)
+    {
+        // Arrange — only Code processor registered.
+        var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
+        IAuthorizationResponseProcessor[] codeOnlyProcessors =
+        [
+            Mock.Of<IAuthorizationResponseProcessor>(p => p.ResponseType == ResponseTypes.Code),
+        ];
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+
+        var context = CreateContext(hybridResponseType, [hybridResponseType]);
+
+        // Act
+        var result = await validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
     }
 
     /// <summary>
