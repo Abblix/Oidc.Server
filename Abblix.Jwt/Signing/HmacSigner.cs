@@ -49,7 +49,7 @@ internal sealed class HmacSigner(string algorithm) : IDataSigner<OctetJsonWebKey
 		var minLength = GetMinimumKeyLengthBytes();
 		if (keyValue.Length < minLength)
 			throw new ArgumentException(
-				$"{algorithm} requires a key of at least {minLength} bytes ({minLength * 8} bits) " +
+				$"{algorithm} requires a key of at least {minLength} bytes ({minLength << 3} bits) " +
 				$"per RFC 7518 §3.2; got {keyValue.Length} bytes.",
 				nameof(octetKey));
 
@@ -81,9 +81,9 @@ internal sealed class HmacSigner(string algorithm) : IDataSigner<OctetJsonWebKey
 	/// </summary>
 	private int GetMinimumKeyLengthBytes() => algorithm switch
 	{
-		SigningAlgorithms.HS256 => 32,
-		SigningAlgorithms.HS384 => 48,
-		SigningAlgorithms.HS512 => 64,
+		SigningAlgorithms.HS256 => 256 >> 3,
+		SigningAlgorithms.HS384 => 384 >> 3,
+		SigningAlgorithms.HS512 => 512 >> 3,
 		_ => throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}"),
 	};
 
