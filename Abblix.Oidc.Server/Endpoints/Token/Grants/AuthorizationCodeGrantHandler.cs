@@ -31,6 +31,8 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
@@ -129,11 +131,11 @@ public class AuthorizationCodeGrantHandler(
     private static string CalculateChallenge(string method, string codeVerifier) => method switch
     {
         // Encodes the code verifier using SHA256 and URL-safe base64 encoding for 'S256' method.
-        CodeChallengeMethods.S256 => HttpServerUtility.UrlTokenEncode(
+        CodeChallengeMethods.S256 => Base64Url.EncodeToString(
             SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
 
         // Encodes the code verifier using SHA512 and URL-safe base64 encoding for 'S512' method.
-        CodeChallengeMethods.S512 => HttpServerUtility.UrlTokenEncode(
+        CodeChallengeMethods.S512 => Base64Url.EncodeToString(
             SHA512.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
 
         // Returns the code verifier as-is for the 'plain' method.

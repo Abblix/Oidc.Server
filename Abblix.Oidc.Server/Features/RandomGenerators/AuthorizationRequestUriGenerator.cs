@@ -25,6 +25,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
@@ -42,6 +44,6 @@ public class AuthorizationRequestUriGenerator(IOptions<OidcOptions> options) : I
     public Uri GenerateRequestUri()
     {
         var randomBytes = CryptoRandom.GetRandomBytes(options.Value.RequestUriLength);
-        return new(RequestUrn.Prefix + HttpServerUtility.UrlTokenEncode(randomBytes));
+        return new(RequestUrn.Prefix + Base64Url.EncodeToString(randomBytes));
     }
 }

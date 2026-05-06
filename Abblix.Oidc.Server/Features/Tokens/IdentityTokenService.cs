@@ -33,6 +33,8 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
@@ -163,7 +165,7 @@ internal class IdentityTokenService(
 			return;
 
 		var hashBytes = hashFunc(Encoding.ASCII.GetBytes(sourceValue));
-		var hashString = HttpServerUtility.UrlTokenEncode(hashBytes, hashBytes.Length / 2);
+		var hashString = Base64Url.EncodeToString(hashBytes.AsSpan(0, hashBytes.Length / 2));
 
 		identityToken.Payload[claimType] = hashString;
 	}

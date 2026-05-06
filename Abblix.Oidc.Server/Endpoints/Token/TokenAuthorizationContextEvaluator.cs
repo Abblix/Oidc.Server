@@ -26,6 +26,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 using System.Security.Cryptography;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
@@ -68,7 +70,7 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
             if (string.Equals(authMethod, ClientAuthenticationMethods.SelfSignedTlsClientAuth, StringComparison.Ordinal)
                 || string.Equals(authMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
             {
-                thumbprint = HttpServerUtility.UrlTokenEncode(SHA256.HashData(request.ClientCertificate.RawData));
+                thumbprint = Base64Url.EncodeToString(SHA256.HashData(request.ClientCertificate.RawData));
             }
         }
 

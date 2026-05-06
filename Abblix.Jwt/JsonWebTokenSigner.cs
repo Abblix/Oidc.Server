@@ -5,6 +5,8 @@ using Abblix.Jwt.Signing;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Buffers.Text;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -78,7 +80,7 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
             _ => throw new InvalidOperationException($"No signer registered for key type: {signingKey.GetType().Name}")
         };
 
-        return $"{signingInput}.{HttpServerUtility.UrlTokenEncode(signature)}";
+        return $"{signingInput}.{Base64Url.EncodeToString(signature)}";
 
         byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
@@ -93,7 +95,7 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
     private static string EncodeJson(JsonObject json)
     {
         var bytes = Encoding.UTF8.GetBytes(json.ToJsonString(Options));
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     /// <summary>
@@ -128,7 +130,7 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         byte[] signature;
         try
         {
-            signature = HttpServerUtility.UrlTokenDecode(jwt[2]);
+            signature = Base64Url.DecodeFromChars(jwt[2]);
         }
         catch (FormatException)
         {

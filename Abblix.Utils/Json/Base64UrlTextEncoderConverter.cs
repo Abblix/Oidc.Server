@@ -23,6 +23,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using System.Buffers.Text;
+
 namespace Abblix.Utils.Json;
 
 /// <summary>
@@ -52,7 +54,7 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
         {
             try
             {
-                return HttpServerUtility.UrlTokenDecode(value);
+                return Base64Url.DecodeFromChars(value);
             }
             catch (FormatException ex)
             {
@@ -70,7 +72,7 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
     public override void Write(Utf8JsonWriter writer, byte[]? value, JsonSerializerOptions options)
     {
         if (value != null)
-            writer.WriteStringValue(HttpServerUtility.UrlTokenEncode(value));
+            writer.WriteStringValue(Base64Url.EncodeToString(value));
         else
             writer.WriteNullValue();
     }

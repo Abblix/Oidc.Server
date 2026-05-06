@@ -6,6 +6,8 @@ using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Buffers.Text;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -80,7 +82,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     {
         var options = new JsonSerializerOptions { WriteIndented = false };
         var bytes = Encoding.UTF8.GetBytes(json.ToJsonString(options));
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     /// <summary>
@@ -89,7 +91,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     private static string EncodeJwe(string header, params byte[][] parts)
     {
         return string.Join(".", parts
-            .Select(p => HttpServerUtility.UrlTokenEncode(p))
+            .Select(p => Base64Url.EncodeToString(p))
             .Prepend(header));
     }
 
@@ -125,7 +127,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         byte[][] decodedParts;
         try
         {
-            decodedParts = Array.ConvertAll(jwtParts, HttpServerUtility.UrlTokenDecode);
+            decodedParts = Array.ConvertAll(jwtParts, static s => Base64Url.DecodeFromChars(s));
         }
         catch (FormatException)
         {
