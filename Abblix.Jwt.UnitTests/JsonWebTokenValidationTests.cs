@@ -25,6 +25,8 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+using System.Buffers.Text;
+
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
@@ -771,7 +773,7 @@ public class JsonWebTokenValidationTests
     private static string EncodeBase64Url(string input)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(input);
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     private static JsonWebToken CreateValidToken()
@@ -947,9 +949,9 @@ public class JsonWebTokenValidationTests
         var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
         var headerJson = """{"alg":"HS256","typ":"JWT"}""";
         var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
-        var headerEnc = HttpServerUtility.UrlTokenEncode(Encoding.UTF8.GetBytes(headerJson));
-        var payloadEnc = HttpServerUtility.UrlTokenEncode(Encoding.UTF8.GetBytes(payloadJson));
-        var sigEnc = HttpServerUtility.UrlTokenEncode(new byte[32]);
+        var headerEnc = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(headerJson));
+        var payloadEnc = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payloadJson));
+        var sigEnc = Base64Url.EncodeToString(new byte[32]);
         var jwt = $"{headerEnc}.{payloadEnc}.{sigEnc}";
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();

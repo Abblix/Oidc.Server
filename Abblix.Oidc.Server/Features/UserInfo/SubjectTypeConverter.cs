@@ -27,6 +27,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.UserInfo;
 
 /// <summary>
@@ -86,6 +88,6 @@ public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : IS
             _ => throw new NotSupportedException($"HMAC algorithm '{algorithm.Name}' is not supported"),
         };
 
-        return HttpServerUtility.UrlTokenEncode(hash);
+        return Base64Url.EncodeToString(hash);
     }
 }

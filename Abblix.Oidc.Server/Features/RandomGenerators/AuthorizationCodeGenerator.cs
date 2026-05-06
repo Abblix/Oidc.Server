@@ -24,6 +24,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
@@ -39,5 +41,5 @@ public class AuthorizationCodeGenerator(IOptions<OidcOptions> options) : IAuthor
     /// </summary>
     /// <returns>A URL-safe, secure, and randomly generated authorization code.</returns>
     public string GenerateAuthorizationCode()
-        => HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.AuthorizationCodeLength));
+        => Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(options.Value.AuthorizationCodeLength));
 }
