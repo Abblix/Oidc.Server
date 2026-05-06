@@ -27,6 +27,8 @@ using System.Text.Json.Nodes;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Buffers.Text;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -123,8 +125,8 @@ internal class JsonWebTokenValidator(
         byte[] headerPart, payloadPart;
         try
         {
-            headerPart = HttpServerUtility.UrlTokenDecode(jwtParts[0]);
-            payloadPart = HttpServerUtility.UrlTokenDecode(jwtParts[1]);
+            headerPart = Base64Url.DecodeFromChars(jwtParts[0]);
+            payloadPart = Base64Url.DecodeFromChars(jwtParts[1]);
         }
         catch
         {
@@ -231,9 +233,11 @@ internal class JsonWebTokenValidator(
             return null;
 
         if (crit.Count == 0)
+        {
             return new JwtValidationError(
                 JwtError.InvalidToken,
                 "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
+        }
 
         var distinctNames = new HashSet<string>(crit, StringComparer.Ordinal);
         if (distinctNames.Count != crit.Count)
@@ -242,19 +246,26 @@ internal class JsonWebTokenValidator(
         foreach (var name in crit)
         {
             if (ReservedCriticalHeaderNames.Contains(name))
+            {
                 return new JwtValidationError(
                     JwtError.InvalidToken,
                     $"'crit' header must not list standard JOSE header name: {name}");
+            }
 
             if (!header.Json.ContainsKey(name))
+            {
                 return new JwtValidationError(
                     JwtError.InvalidToken,
                     $"'crit' lists header name '{name}' that is not present in the JOSE header");
+            }
 
-            if (serviceProvider.GetKeyedService<ICriticalHeaderHandler>(name) is null)
+            var handler = serviceProvider.GetKeyedService<ICriticalHeaderHandler>(name);
+            if (handler is null)
+            {
                 return new JwtValidationError(
                     JwtError.InvalidToken,
                     $"Unknown critical header parameter: {name}");
+            }
         }
 
         return null;

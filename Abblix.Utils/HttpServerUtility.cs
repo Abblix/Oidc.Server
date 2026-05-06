@@ -36,6 +36,14 @@ public static class HttpServerUtility
 	/// This method converts URL-safe characters ('-' and '_') back to their
 	/// original Base64 equivalents ('+' and '/') and then decodes the Base64 string.
 	/// </remarks>
+	[Obsolete(
+		"Use System.Buffers.Text.Base64Url.DecodeFromChars instead. " +
+		"UrlTokenDecode accepts characters outside the strict RFC 7515 §3 base64url alphabet " +
+		"('+', '/', '=' from standard base64), so two cosmetically different encodings of the " +
+		"same payload decode to the same bytes. That breaks identity-of-bytes checks (replay " +
+		"caches keyed by full JWT, jti hashes, at_hash binding). Base64Url.DecodeFromChars is " +
+		"strict per RFC and is the BCL primitive on net9.0+; this wrapper will be removed when " +
+		"net8.0 reaches end-of-life on 2026-11-10.")]
 	public static byte[] UrlTokenDecode(string input)
 	{
 		var length = input.Length;
@@ -72,6 +80,13 @@ public static class HttpServerUtility
 	/// This method first converts the byte array to a Base64 string, then replaces Base64-specific
 	/// characters ('+' and '/') with URL-safe characters ('-' and '_'), and trims any trailing '=' characters.
 	/// </remarks>
+	[Obsolete(
+		"Use System.Buffers.Text.Base64Url.EncodeToString instead. " +
+		"For encode-with-length use Base64Url.EncodeToString(input.AsSpan(0, length)). " +
+		"Base64Url.EncodeToString is the BCL primitive on net9.0+ and matches the strict " +
+		"RFC 7515 §3 contract directly; this wrapper accepts a nullable byte[] for symmetry " +
+		"with UrlTokenDecode and exists only to bridge the net8.0 target. It will be removed " +
+		"when net8.0 reaches end-of-life on 2026-11-10.")]
 	public static string UrlTokenEncode(byte[]? input, int? length = null)
 	{
 		if (input == null)

@@ -24,6 +24,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
@@ -40,5 +42,5 @@ public class TokenIdGenerator(IOptions<OidcOptions> options) : ITokenIdGenerator
 	/// </summary>
 	/// <returns>A URL-safe, randomly generated unique identifier for a JWT.</returns>
 	public string GenerateTokenId()
-		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.TokenIdLength));
+		=> Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(options.Value.TokenIdLength));
 }

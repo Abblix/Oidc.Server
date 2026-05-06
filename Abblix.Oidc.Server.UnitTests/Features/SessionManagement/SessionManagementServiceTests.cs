@@ -34,7 +34,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using static System.Web.HttpUtility;
-using static Abblix.Utils.HttpServerUtility;
+using System.Buffers.Text;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.SessionManagement;
 
@@ -508,7 +508,7 @@ public class SessionManagementServiceTests
         // Manually compute expected hash
         var origin = request.RedirectUri!.GetOrigin();
         var input = string.Join(" ", request.ClientId, origin, SessionId, salt);
-        var expectedHash = UrlTokenEncode(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
+        var expectedHash = Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
 
         // Assert
         Assert.Equal(expectedHash, hash);
