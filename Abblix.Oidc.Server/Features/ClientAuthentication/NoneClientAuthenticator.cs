@@ -76,7 +76,7 @@ public partial class NoneClientAuthenticator(
         switch (client)
         {
             case null:
-                LogClientNotFound(Value(clientId));
+                LogClientNotFound(clientId);
                 return null;
 
             case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:

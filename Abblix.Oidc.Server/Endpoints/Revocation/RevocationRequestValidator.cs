@@ -93,7 +93,7 @@ public partial class RevocationRequestValidator(
 				// If the token was issued to a different client, log a warning and return an invalid token result.
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
-					LogTokenIssuedToAnotherClient(Value(clientId));
+					LogTokenIssuedToAnotherClient(clientId);
 					return ValidRevocationRequest.InvalidToken(revocationRequest);
 				}
 

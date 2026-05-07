@@ -121,7 +121,7 @@ public partial class SubjectTypeValidator(
         var missingUris = sectorIdentifierContent.Except(redirectUris).ToArray();
         if (missingUris.Length > 0)
         {
-            LogSectorIdentifierMissingUris(Sanitized.Value(sectorIdentifierUri), missingUris);
+            LogSectorIdentifierMissingUris(sectorIdentifierUri, missingUris);
 
             return ErrorFactory.InvalidClientMetadata(
                 $"The content received from the {Parameters.SectorIdentifierUri} contains one or more URIs that are not in the registered list of redirect URIs");

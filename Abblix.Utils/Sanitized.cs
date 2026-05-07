@@ -97,4 +97,7 @@ public readonly record struct Sanitized
 
         return builder?.ToString() ?? source;
     }
+
+    public static implicit operator Sanitized(string? source) => Value(source);
+    public static implicit operator Sanitized(Uri? source) => Value(source);
 }

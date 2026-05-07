@@ -93,7 +93,7 @@ public partial class RequestUriFetcher(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            LogClientNotFound(Sanitized.Value(clientId));
+            LogClientNotFound(clientId);
             return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }

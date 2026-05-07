@@ -58,11 +58,11 @@ public partial class ClientIdValidator(
                 break;
 
             case DynamicClientOperation.Update:
-                LogClientNotFound(Sanitized.Value(clientId));
+                LogClientNotFound(clientId);
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} does not exist");
 
             case DynamicClientOperation.Register:
-                LogClientAlreadyRegistered(Sanitized.Value(clientId));
+                LogClientAlreadyRegistered(clientId);
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
 
             default:

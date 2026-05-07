@@ -65,7 +65,7 @@ public partial class ClientValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            LogClientNotFound(Sanitized.Value(clientId));
+            LogClientNotFound(clientId);
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 

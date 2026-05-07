@@ -61,7 +61,7 @@ public partial class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectU
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        LogInvalidPostLogoutRedirectUri(Sanitized.Value(redirectUri), context.ClientInfo.ClientId);
+        LogInvalidPostLogoutRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
         return new OidcError(
             ErrorCodes.InvalidRequest,
