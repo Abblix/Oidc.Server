@@ -162,7 +162,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <exception cref="JsonException">Thrown when 'jwk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
     [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
         Justification = "Deserialize<JsonWebKey> can throw JsonException when 'jwk' is malformed. Returning null on a malformed JWK would let a downstream consumer (DPoP, federation) silently treat the absence of trust material as success — the parse error must surface.")]
-    public JsonWebKey? EmbeddedJwk
+    public JsonWebKey? VerificationKey
     {
         get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
                 ? obj.Deserialize<JsonWebKey>()
@@ -181,7 +181,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// public-key certificate or certificate chain corresponding to the key used for the JWS
     /// signature. Same caveat as <see cref="JwkSetUrl"/> — the library does not fetch.
     /// </summary>
-    public Uri? X509Url
+    public Uri? CertificatesUrl
     {
         get
         {
@@ -200,7 +200,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <exception cref="JsonException">Thrown when 'x5c' is present but is not a JSON array of strings.</exception>
     [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
         Justification = "Returning null on a malformed 'x5c' array would let a host treat 'no certificate chain available' identically to 'producer sent a wrong shape', collapsing two distinct conditions a chain-validating consumer must distinguish.")]
-    public IReadOnlyList<string>? X509CertificateChain
+    public IReadOnlyList<string>? Certificates
     {
         get
         {
@@ -235,10 +235,10 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <summary>
     /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 §4.1.7): base64url-encoded
     /// SHA-1 digest of the DER-encoded leaf certificate. Per RFC 7515 §10.11, SHA-1 is
-    /// discouraged because of cryptographic weaknesses — prefer <see cref="X509Sha256Thumbprint"/>
+    /// discouraged because of cryptographic weaknesses — prefer <see cref="CertificateSha256Thumbprint"/>
     /// for new deployments. The library exposes 'x5t' for inspection of legacy producers.
     /// </summary>
-    public string? X509Sha1Thumbprint
+    public string? CertificateSha1Thumbprint
     {
         get => Json.GetProperty<string>(JwtClaimTypes.X509Sha1Thumbprint);
         set => Json.SetProperty(JwtClaimTypes.X509Sha1Thumbprint, value);
@@ -250,7 +250,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// name strips the '#' character (illegal in identifiers); the JSON literal stays
     /// 'x5t#S256' as defined by the spec.
     /// </summary>
-    public string? X509Sha256Thumbprint
+    public string? CertificateSha256Thumbprint
     {
         get => Json.GetProperty<string>(JwtClaimTypes.X509Sha256Thumbprint);
         set => Json.SetProperty(JwtClaimTypes.X509Sha256Thumbprint, value);

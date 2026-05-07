@@ -88,22 +88,22 @@ public class JsonWebTokenHeaderTests
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void EmbeddedJwk_Missing_ReturnsNull()
+    public void VerificationKey_Missing_ReturnsNull()
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.EmbeddedJwk);
+        Assert.Null(header.VerificationKey);
     }
 
     [Fact]
-    public void EmbeddedJwk_PresentAsObject_ReturnsParsedKey()
+    public void VerificationKey_PresentAsObject_ReturnsParsedKey()
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
         var keyJson = JsonNode.Parse(JsonSerializer.Serialize(key))!.AsObject();
         var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = keyJson };
         var header = new JsonWebTokenHeader(json);
 
-        var parsed = header.EmbeddedJwk;
+        var parsed = header.VerificationKey;
 
         Assert.NotNull(parsed);
         Assert.Equal(key.KeyType, parsed!.KeyType);
@@ -111,13 +111,13 @@ public class JsonWebTokenHeaderTests
     }
 
     [Fact]
-    public void EmbeddedJwk_SetThenGet_RoundTrips()
+    public void VerificationKey_SetThenGet_RoundTrips()
     {
         var header = EmptyHeader();
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
 
-        header.EmbeddedJwk = key;
-        var parsed = header.EmbeddedJwk;
+        header.VerificationKey = key;
+        var parsed = header.VerificationKey;
 
         Assert.NotNull(parsed);
         Assert.Equal(key.KeyType, parsed!.KeyType);
@@ -125,12 +125,12 @@ public class JsonWebTokenHeaderTests
     }
 
     [Fact]
-    public void EmbeddedJwk_SetNull_RemovesProperty()
+    public void VerificationKey_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.EmbeddedJwk = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
+        header.VerificationKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
 
-        header.EmbeddedJwk = null;
+        header.VerificationKey = null;
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.JsonWebKeyHeader));
     }
@@ -140,30 +140,30 @@ public class JsonWebTokenHeaderTests
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void X509Url_Missing_ReturnsNull()
+    public void CertificatesUrl_Missing_ReturnsNull()
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.X509Url);
+        Assert.Null(header.CertificatesUrl);
     }
 
     [Fact]
-    public void X509Url_PresentAsString_ReturnsParsedUri()
+    public void CertificatesUrl_PresentAsString_ReturnsParsedUri()
     {
         var json = new JsonObject { [JwtClaimTypes.X509Url] = "https://issuer.example.com/cert.pem" };
         var header = new JsonWebTokenHeader(json);
 
-        Assert.Equal(new Uri("https://issuer.example.com/cert.pem"), header.X509Url);
+        Assert.Equal(new Uri("https://issuer.example.com/cert.pem"), header.CertificatesUrl);
     }
 
     [Fact]
-    public void X509Url_SetThenGet_RoundTrips()
+    public void CertificatesUrl_SetThenGet_RoundTrips()
     {
         var header = EmptyHeader();
 
-        header.X509Url = new Uri("https://issuer.example.com/cert.pem");
+        header.CertificatesUrl = new Uri("https://issuer.example.com/cert.pem");
 
-        Assert.Equal(new Uri("https://issuer.example.com/cert.pem"), header.X509Url);
+        Assert.Equal(new Uri("https://issuer.example.com/cert.pem"), header.CertificatesUrl);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -171,15 +171,15 @@ public class JsonWebTokenHeaderTests
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void X509CertificateChain_Missing_ReturnsNull()
+    public void Certificates_Missing_ReturnsNull()
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.X509CertificateChain);
+        Assert.Null(header.Certificates);
     }
 
     [Fact]
-    public void X509CertificateChain_PresentAsArray_ReturnsAllEntries()
+    public void Certificates_PresentAsArray_ReturnsAllEntries()
     {
         var leaf = "MIIDleafBASE64==";
         var intermediate = "MIIDintermediateBASE64==";
@@ -189,39 +189,39 @@ public class JsonWebTokenHeaderTests
         };
         var header = new JsonWebTokenHeader(json);
 
-        var chain = header.X509CertificateChain;
+        var chain = header.Certificates;
 
         Assert.NotNull(chain);
         Assert.Equal(new[] { leaf, intermediate }, chain);
     }
 
     [Fact]
-    public void X509CertificateChain_SetThenGet_RoundTrips()
+    public void Certificates_SetThenGet_RoundTrips()
     {
         var header = EmptyHeader();
         var chain = new[] { "MIIDleaf==", "MIIDintermediate==" };
 
-        header.X509CertificateChain = chain;
+        header.Certificates = chain;
 
-        Assert.Equal(chain, header.X509CertificateChain);
+        Assert.Equal(chain, header.Certificates);
     }
 
     [Fact]
-    public void X509CertificateChain_PresentAsNonArray_Throws()
+    public void Certificates_PresentAsNonArray_Throws()
     {
         var json = new JsonObject { [JwtClaimTypes.X509CertificateChain] = "MIIDleaf==" };
         var header = new JsonWebTokenHeader(json);
 
-        Assert.Throws<JsonException>(() => header.X509CertificateChain);
+        Assert.Throws<JsonException>(() => header.Certificates);
     }
 
     [Fact]
-    public void X509CertificateChain_SetNull_RemovesProperty()
+    public void Certificates_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.X509CertificateChain = new[] { "MIIDleaf==" };
+        header.Certificates = new[] { "MIIDleaf==" };
 
-        header.X509CertificateChain = null;
+        header.Certificates = null;
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.X509CertificateChain));
     }
@@ -232,42 +232,42 @@ public class JsonWebTokenHeaderTests
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void X509Sha1Thumbprint_Missing_ReturnsNull()
+    public void CertificateSha1Thumbprint_Missing_ReturnsNull()
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.X509Sha1Thumbprint);
+        Assert.Null(header.CertificateSha1Thumbprint);
     }
 
     [Fact]
-    public void X509Sha1Thumbprint_RoundTrips()
+    public void CertificateSha1Thumbprint_RoundTrips()
     {
         var header = EmptyHeader();
         const string thumbprint = "dGhpcy1pcy1hLXNoYTEtdGh1bWJwcmludA";
 
-        header.X509Sha1Thumbprint = thumbprint;
+        header.CertificateSha1Thumbprint = thumbprint;
 
-        Assert.Equal(thumbprint, header.X509Sha1Thumbprint);
+        Assert.Equal(thumbprint, header.CertificateSha1Thumbprint);
         Assert.Equal(thumbprint, (string?)header.Json[JwtClaimTypes.X509Sha1Thumbprint]);
     }
 
     [Fact]
-    public void X509Sha256Thumbprint_Missing_ReturnsNull()
+    public void CertificateSha256Thumbprint_Missing_ReturnsNull()
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.X509Sha256Thumbprint);
+        Assert.Null(header.CertificateSha256Thumbprint);
     }
 
     [Fact]
-    public void X509Sha256Thumbprint_RoundTrips()
+    public void CertificateSha256Thumbprint_RoundTrips()
     {
         var header = EmptyHeader();
         const string thumbprint = "dGhpcy1pcy1hLXNoYTI1Ni10aHVtYnByaW50LWZyb20tdGhlLWNlcnQ";
 
-        header.X509Sha256Thumbprint = thumbprint;
+        header.CertificateSha256Thumbprint = thumbprint;
 
-        Assert.Equal(thumbprint, header.X509Sha256Thumbprint);
+        Assert.Equal(thumbprint, header.CertificateSha256Thumbprint);
         Assert.Equal(thumbprint, (string?)header.Json[JwtClaimTypes.X509Sha256Thumbprint]);
     }
 
@@ -276,11 +276,11 @@ public class JsonWebTokenHeaderTests
     /// the <c>#</c> — RFC compliance lives in the constant, not the member name.
     /// </summary>
     [Fact]
-    public void X509Sha256Thumbprint_StoresUnderSpecLiteral()
+    public void CertificateSha256Thumbprint_StoresUnderSpecLiteral()
     {
         var header = EmptyHeader();
 
-        header.X509Sha256Thumbprint = "thumb";
+        header.CertificateSha256Thumbprint = "thumb";
 
         Assert.True(header.Json.ContainsKey("x5t#S256"));
     }
