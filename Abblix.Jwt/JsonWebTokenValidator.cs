@@ -83,7 +83,9 @@ internal class JsonWebTokenValidator(
     /// <param name="parameters">The parameters defining the validation rules and requirements.</param>
     /// <returns>A task representing the validation operation,
     /// with a result containing either a validated JsonWebToken or a JwtValidationError.</returns>
-    public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationParameters parameters)
+    public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+        string jwt,
+        ValidationParameters parameters)
     {
         if (string.IsNullOrWhiteSpace(jwt))
             return new JwtValidationError(JwtError.InvalidToken, "JWT is null or empty");
@@ -93,7 +95,9 @@ internal class JsonWebTokenValidator(
         {
             3 => await ValidateJwsAsync(jwtParts, parameters),
             5 => await DecryptJweAsync(jwtParts, parameters),
-            _ => new JwtValidationError(JwtError.InvalidToken, $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
+            _ => new JwtValidationError(
+                JwtError.InvalidToken,
+                $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
         };
     }
 
@@ -109,6 +113,7 @@ internal class JsonWebTokenValidator(
         {
             var error = await ValidateSignatureAsync(token, jwtParts, parameters)
                         ?? ValidateCriticalHeaders(token.Header)
+                        ?? ValidateTokenType(token.Header, parameters)
                         ?? await ValidateIssuerAsync(token.Payload.Issuer, parameters)
                         ?? await ValidateAudienceAsync(token.Payload.Audiences, parameters)
                         ?? ValidateLifetime(token.Payload, parameters);
@@ -283,6 +288,51 @@ internal class JsonWebTokenValidator(
 
         var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
         return await result.BindAsync(innerJwt => ValidateAsync(innerJwt, parameters));
+    }
+
+    /// <summary>
+    /// Pins the JWT's <c>typ</c> header (RFC 7515 §4.1.9) to the set the caller expects, per
+    /// the RFC 8725 §3.11 token-class-confusion guidance. When
+    /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
+    /// skipped (backward-compatible default for callers that have not opted in). Comparison
+    /// is case-sensitive per RFC 7515 §5.3, with the <c>application/</c> prefix stripped
+    /// before lookup per the §4.1.9 convention so <c>typ=at+jwt</c> and
+    /// <c>typ=application/at+jwt</c> both match a registered <c>at+jwt</c> expectation.
+    /// </summary>
+    private static JwtValidationError? ValidateTokenType(JsonWebTokenHeader header, ValidationParameters parameters)
+    {
+        if (parameters is not { ExpectedTokenTypes: { Count: > 0 } expected})
+            return null;
+
+        var typ = header.Type;
+        if (typ is null)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"JWT 'typ' header is missing — expected one of: {string.Join(", ", expected)}");
+        }
+
+        var normalized = StripApplicationPrefix(typ);
+        if (!expected.Contains(normalized))
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"JWT 'typ' header '{typ}' does not match expected token type(s): {string.Join(", ", expected)}");
+        }
+
+        return null;
+
+    }
+
+    /// <summary>
+    /// Implements RFC 7515 §4.1.9's prefix-stripping convention: when <c>typ</c> contains no
+    /// '/' the recipient SHOULD treat it as if <c>application/</c> were prepended; symmetric
+    /// stripping of the literal prefix lets either form match.
+    /// </summary>
+    private static string StripApplicationPrefix(string typ)
+    {
+        const string prefix = "application/";
+        return typ.StartsWith(prefix, StringComparison.Ordinal) ? typ[prefix.Length..] : typ;
     }
 
     /// <summary>
