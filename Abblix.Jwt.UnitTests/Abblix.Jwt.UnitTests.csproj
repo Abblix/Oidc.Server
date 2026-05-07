@@ -21,6 +21,7 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Console" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
         <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
     </ItemGroup>
 

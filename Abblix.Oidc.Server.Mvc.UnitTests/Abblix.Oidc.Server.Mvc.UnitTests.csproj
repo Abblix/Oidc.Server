@@ -17,6 +17,7 @@
 	<ItemGroup>
 		<PackageReference Include="Moq" />
 		<PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
 		<PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
 	</ItemGroup>
 

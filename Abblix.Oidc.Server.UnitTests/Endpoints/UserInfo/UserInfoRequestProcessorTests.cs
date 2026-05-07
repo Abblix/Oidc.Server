@@ -300,7 +300,7 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = "https://auth.example.org";
+        var issuer = TestConstants.DefaultIssuer;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
