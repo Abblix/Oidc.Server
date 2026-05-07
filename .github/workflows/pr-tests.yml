@@ -43,14 +43,22 @@ jobs:
         run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test Abblix.Oidc.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        run: |
+          dotnet test Abblix.Oidc.slnx --configuration Release --no-build -- \
+            --report-trx --report-trx-filename test-results.trx \
+            --results-directory ./TestResults
 
+      # `dotnet test Abblix.Oidc.slnx -- --results-directory ./TestResults` resolves
+      # the relative path PER TEST PROJECT (each MTP runner uses its own working
+      # directory), not at solution root. Files land at <Project>/TestResults/.
+      # Coverage collection is disabled by design: Abblix.Oidc.Server's license-terms
+      # check rejects the in-flight assembly fingerprint produced by MTP coverage
+      # instrumentation (Microsoft.Testing.Extensions.CodeCoverage). Re-add the
+      # package and `--coverage` flag if and when the license check is reconciled.
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
-          path: |
-            ./TestResults/*.trx
-            ./TestResults/**/coverage.cobertura.xml
+          path: '**/TestResults/*.trx'
           retention-days: 7
