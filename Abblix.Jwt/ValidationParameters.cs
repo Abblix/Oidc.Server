@@ -58,6 +58,22 @@ public record ValidationParameters
 	public TimeSpan ClockSkew { get; set; } = TimeSpan.Zero;
 
 	/// <summary>
+	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.
+	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 §3.11 to
+	/// prevent token-class confusion: a JWS signed for one class (id_token, logout_token,
+	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
+	/// as another by relying parties that trust the same issuer for several classes.
+	/// </summary>
+	/// <remarks>
+	/// Comparison follows the spec rules: case-sensitive (RFC 7515 §5.3), with the
+	/// <c>application/</c>-prefix-stripping convention from §4.1.9 applied before lookup
+	/// — <c>typ=at+jwt</c> and <c>typ=application/at+jwt</c> are accepted equivalently.
+	/// When this property is null or empty the validator skips the check, preserving
+	/// historical behaviour for callers that have not opted in.
+	/// </remarks>
+	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
+
+	/// <summary>
 	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.
 	/// </summary>
 	/// <param name="issuer">Issuer whose signing keys are to be resolved.</param>
