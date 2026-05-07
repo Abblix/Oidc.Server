@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// process matches the stored secret for the client. This class supports various hash algorithms for
 /// secure secret comparison and handles client secret expiration.
 /// </summary>
-public abstract class ClientSecretAuthenticator(
+public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
@@ -61,18 +61,18 @@ public abstract class ClientSecretAuthenticator(
 		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (client == null)
 		{
-			logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", Value(clientId));
+			LogClientNotFound(Value(clientId));
 			return null;
 		}
 
 		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
-			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", Value(clientId));
+			LogWrongAuthMethod(Value(clientId));
 			return null;
 		}
 
 		if (client is not { ClientSecrets.Length: > 0 })
 		{
-			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
+			LogNoSecretsConfigured(Value(clientId));
 			return null;
 		}
 
@@ -107,20 +107,17 @@ public abstract class ClientSecretAuthenticator(
 
 		if (matchingSecret == null)
 		{
-			logger.LogWarning("Client authentication failed: No matching secret found for client {ClientId}",
-				client.ClientId);
+			LogNoMatchingSecret(client.ClientId);
 			return false; // Invalid secret
 		}
 
 		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < clock.GetUtcNow())
 		{
-			logger.LogWarning("Client authentication failed: Secret has expired for client {ClientId}",
-				client.ClientId);
+			LogSecretExpired(client.ClientId);
 			return false; // Secret is expired
 		}
 
-		logger.LogInformation("Client authenticated successfully with client ID {ClientId}",
-			client.ClientId);
+		LogAuthenticated(client.ClientId);
 		return true;
 	}
 

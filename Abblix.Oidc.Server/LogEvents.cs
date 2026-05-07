@@ -69,7 +69,91 @@ internal static class LogEvents
     /// </summary>
     public static class ClientAuth
     {
-        private const int Base = 3000;
+        /// <summary>
+        /// <c>Features/ClientAuthentication/JwtAssertionAuthenticatorBase.cs</c> — shared
+        /// JWT assertion validation pipeline for private_key_jwt and client_secret_jwt
+        /// (sub-range 3000–3019).
+        /// </summary>
+        public static class JwtAssertionAuthenticatorBase
+        {
+            private const int Base = 3000;
+
+            public const int WrongAssertionType = Base + 1;
+            public const int MissingAssertion = Base + 2;
+            public const int JwtValidationError = Base + 3;
+            public const int AuthMethodNotAllowed = Base + 4;
+            public const int SubjectExtractionFailed = Base + 5;
+            public const int IssuerSubjectMismatch = Base + 6;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/ClientSecretAuthenticator.cs</c> — base
+        /// authenticator for client_secret_basic and client_secret_post
+        /// (sub-range 3020–3039).
+        /// </summary>
+        public static class ClientSecretAuthenticator
+        {
+            private const int Base = 3020;
+
+            public const int ClientNotFound = Base + 1;
+            public const int WrongAuthMethod = Base + 2;
+            public const int NoSecretsConfigured = Base + 3;
+            public const int NoMatchingSecret = Base + 4;
+            public const int SecretExpired = Base + 5;
+            public const int Authenticated = Base + 6;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/ClientSecretJwtAuthenticator.cs</c> —
+        /// client_secret_jwt authentication via HMAC-signed JWT assertions
+        /// (sub-range 3040–3059).
+        /// </summary>
+        public static class ClientSecretJwtAuthenticator
+        {
+            private const int Base = 3040;
+
+            public const int AudienceValidationFailed = Base + 1;
+            public const int WrongAuthMethod = Base + 2;
+            public const int NoSecretsConfigured = Base + 3;
+            public const int SecretWithoutRawValue = Base + 4;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/NoneClientAuthenticator.cs</c> — public
+        /// clients that do not use client authentication (sub-range 3060–3069).
+        /// </summary>
+        public static class NoneClientAuthenticator
+        {
+            private const int Base = 3060;
+
+            public const int ClientNotFound = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/TlsClientAuthenticator.cs</c> — RFC 8705
+        /// self_signed_tls_client_auth (sub-range 3070–3084).
+        /// </summary>
+        public static class TlsClientAuthenticator
+        {
+            private const int Base = 3070;
+
+            public const int ClientNotFound = Base + 1;
+            public const int NoMatchingPublicKey = Base + 2;
+            public const int Authenticated = Base + 3;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/TlsMetadataClientAuthenticator.cs</c> —
+        /// RFC 8705 tls_client_auth via Subject DN / SAN matching
+        /// (sub-range 3085–3099).
+        /// </summary>
+        public static class TlsMetadataClientAuthenticator
+        {
+            private const int Base = 3085;
+
+            public const int NoTlsMetadataConfigured = Base + 1;
+            public const int Authenticated = Base + 2;
+        }
     }
 
     /// <summary>

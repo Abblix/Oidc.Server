@@ -65,12 +65,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
+	ILogger<JwtBearerGrantHandler> logger,
 	IJsonWebTokenValidator jwtValidator,
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider,
-	ILogger<JwtBearerGrantHandler> logger) : IAuthorizationGrantHandler
+	TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
