@@ -101,7 +101,7 @@ public class JsonWebTokenValidationTests
     /// Returns JwtError.InvalidToken - unable to verify signature without keys.
     /// </summary>
     [Fact]
-    public async Task ValidToken_WithNoSigningKey_FailsValidation()
+    public async Task ValidToken_WithNoSigningKey_FailsValidationWithSpecificError()
     {
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
@@ -118,6 +118,36 @@ public class JsonWebTokenValidationTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
+        // Empty-JWKS case must surface differently from the wrong-kid case so audit logs
+        // can tell a misconfigured issuer (zero keys) from a stale-cache kid mismatch.
+        Assert.Contains("no signing keys configured", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that when the issuer has signing keys but the token's <c>kid</c> header does
+    /// not match any of them, validation fails with an error description that distinguishes
+    /// this case from "issuer has no keys at all" (RFC 7515 §4.1.4 / §6 — observability).
+    /// Both still surface as <see cref="JwtError.InvalidToken"/>; the distinction lives in
+    /// the description text and (separately) in the structured log event.
+    /// </summary>
+    [Fact]
+    public async Task ValidToken_WithKidNotInIssuerKeys_FailsWithSpecificError()
+    {
+        // Sign with one key; expose only a different key (different kid) to the validator.
+        // Models the kid-rotation incident from RFC 7515 §4.1.4: the relying party's cached
+        // JWKS no longer contains the kid the issuer used to sign this token.
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(WrongSigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("kid", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(SigningKey.KeyId!, error.ErrorDescription);
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt.Signing;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using System.Buffers.Text;
 
@@ -13,7 +14,12 @@ namespace Abblix.Jwt;
 /// Handles signing and signature verification of JSON Web Signature (JWS) tokens.
 /// </summary>
 /// <param name="serviceProvider">The service provider for resolving signers by algorithm.</param>
-internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTokenSigner
+/// <param name="logger">Records signature-verification outcomes as structured events. The
+/// caller-facing <see cref="JwtValidationError"/> carries a human-readable description, but
+/// FAPI 2.0 audit-logging requires a granular event-type on every key-resolution failure
+/// (kid mismatch vs. empty issuer JWKS) so a SOC operator can tell a key-rotation incident
+/// from a misconfigured issuer without parsing free-form text.</param>
+internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILogger<JsonWebTokenSigner> logger) : IJsonWebTokenSigner
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
 
@@ -111,17 +117,45 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
 
+        // Materialize once: we need to distinguish 'issuer returned zero keys' (configuration
+        // problem) from 'returned keys but none survived alg/kid filters' (kid-rotation /
+        // mis-cached-JWKS). Streaming the IAsyncEnumerable conflates the two cases at the
+        // foreach level. JWKS responses are bounded (typically 1-3 keys), so materializing
+        // is cheap; lazy-streaming would only matter for hosts that fan out per-issuer to
+        // unbounded sources, which is not a supported pattern.
+        var allKeys = new List<JsonWebKey>();
+        await foreach (var key in signingKeys)
+            allKeys.Add(key);
+
+        var keyId = header.KeyId;
+        if (allKeys.Count == 0)
+        {
+            LogNoSigningKeys(algorithm, keyId);
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "No signing keys configured for issuer (RFC 7515 §6: cannot verify signature without keys)");
+        }
+
         // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL but binding when present:
         // a key declaring its alg MUST NOT be used with any other algorithm. Filter such keys out
         // before reaching crypto so a key registered for (say) RS256 cannot be misused to verify
         // PS256 or RS384 tokens, closing within-family algorithm-confusion alongside the
         // cross-family protection already provided by the generic keyed-DI dispatch.
-        signingKeys = signingKeys.Where(key => key.Algorithm == null || key.Algorithm == algorithm);
+        // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key.
+        var candidates = allKeys
+            .Where(key => key.Algorithm == null || key.Algorithm == algorithm)
+            .Where(key => !keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal))
+            .ToList();
 
-        // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key
-        var keyId = header.KeyId;
-        if (keyId.HasValue())
-            signingKeys = signingKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
+        if (candidates.Count == 0)
+        {
+            LogNoMatchingKey(algorithm, keyId, allKeys.Count);
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                keyId.HasValue()
+                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Count} key(s), none usable)"
+                    : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Count} key(s), none usable)");
+        }
 
         // Signing input is BASE64URL(header) + '.' + BASE64URL(payload)
         var signingInput = Encoding.UTF8.GetBytes($"{jwt[0]}.{jwt[1]}");
@@ -137,18 +171,26 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
             return new JwtValidationError(JwtError.InvalidToken, "Invalid signature encoding");
         }
 
-        var keyFound = false;
-        await foreach (var key in signingKeys)
+        foreach (var key in candidates)
         {
-            keyFound = true;
             if (VerifySignature(key, algorithm, signingInput, signature))
                 return null;
         }
 
-        return new JwtValidationError(
-            JwtError.InvalidToken,
-            keyFound ? "Invalid signature" : "No signing keys found");
+        return new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
     }
+
+    [LoggerMessage(
+        EventId = 1,
+        Level = LogLevel.Warning,
+        Message = "JWS signature validation failed: no signing keys configured for issuer (alg='{Algorithm}', kid='{KeyId}'). FAPI category: NoKeysAvailable.")]
+    private partial void LogNoSigningKeys(string Algorithm, string? KeyId);
+
+    [LoggerMessage(
+        EventId = 2,
+        Level = LogLevel.Warning,
+        Message = "JWS signature validation failed: no signing key matched header (alg='{Algorithm}', kid='{KeyId}'); issuer has {IssuerKeyCount} key(s). FAPI category: UnknownKid.")]
+    private partial void LogNoMatchingKey(string Algorithm, string? KeyId, int IssuerKeyCount);
 
     /// <summary>
     /// Verifies a signature using the appropriate signer based on the key type and algorithm.
