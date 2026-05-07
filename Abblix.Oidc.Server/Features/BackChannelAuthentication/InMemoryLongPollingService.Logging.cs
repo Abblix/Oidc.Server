@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
