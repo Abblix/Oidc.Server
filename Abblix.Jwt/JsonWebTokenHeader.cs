@@ -145,7 +145,7 @@ public class JsonWebTokenHeader(JsonObject json)
         get
         {
             var raw = Json.GetProperty<string>(JwtClaimTypes.JwkSetUrl);
-            return raw is null ? null : new Uri(raw);
+            return raw is not null ? new Uri(raw) : null;
         }
         set => Json.SetProperty(JwtClaimTypes.JwkSetUrl, value?.ToString());
     }
@@ -159,18 +159,14 @@ public class JsonWebTokenHeader(JsonObject json)
     public JsonWebKey? EmbeddedJwk
     {
         get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
-                ? JsonSerializer.Deserialize<JsonWebKey>(obj.ToJsonString())
+                ? obj.Deserialize<JsonWebKey>()
                 : null;
         set
         {
             if (value is not null)
-            {
-                Json[JwtClaimTypes.JsonWebKeyHeader] = JsonNode.Parse(JsonSerializer.Serialize(value));
-            }
+                Json[JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(value);
             else
-            {
                 Json.Remove(JwtClaimTypes.JsonWebKeyHeader);
-            }
         }
     }
 
