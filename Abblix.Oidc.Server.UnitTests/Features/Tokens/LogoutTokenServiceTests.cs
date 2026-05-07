@@ -50,7 +50,7 @@ public class LogoutTokenServiceTests
     private const string ClientId = TestConstants.DefaultClientId;
     private const string SubjectId = "user_456";
     private const string SessionId = "session_789";
-    private const string Issuer = "https://auth.example.com";
+    private const string Issuer = TestConstants.DefaultIssuer;
     private const string EncodedJwt = "encoded.logout.token";
 
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter;
