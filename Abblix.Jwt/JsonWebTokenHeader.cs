@@ -133,4 +133,122 @@ public class JsonWebTokenHeader(JsonObject json)
             Json[JwtClaimTypes.Critical] = array;
         }
     }
+
+    /// <summary>
+    /// The 'jku' (JWK Set URL) header parameter (RFC 7515 §4.1.2): a URI referring to a JSON Web
+    /// Key Set whose keys the issuer claims are candidates for verifying the JWS. The library
+    /// only exposes the URI; it does not fetch the URL — the host is responsible for trust and
+    /// transport per RFC 7515 §8 (TLS with server identity validation per RFC 6125).
+    /// </summary>
+    public Uri? JwkSetUrl
+    {
+        get
+        {
+            var raw = Json.GetProperty<string>(JwtClaimTypes.JwkSetUrl);
+            return raw is null ? null : new Uri(raw);
+        }
+        set => Json.SetProperty(JwtClaimTypes.JwkSetUrl, value?.ToString());
+    }
+
+    /// <summary>
+    /// The 'jwk' (JSON Web Key) header parameter (RFC 7515 §4.1.3): the public key used to
+    /// verify the JWS, embedded directly in the JOSE header as a JWK. Returns null when
+    /// 'jwk' is absent. Trust is the consumer's responsibility — for example, DPoP (RFC 9449)
+    /// binds this key to the request via a separate confirmation claim.
+    /// </summary>
+    public JsonWebKey? EmbeddedJwk
+    {
+        get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
+                ? JsonSerializer.Deserialize<JsonWebKey>(obj.ToJsonString())
+                : null;
+        set
+        {
+            if (value is not null)
+            {
+                Json[JwtClaimTypes.JsonWebKeyHeader] = JsonNode.Parse(JsonSerializer.Serialize(value));
+            }
+            else
+            {
+                Json.Remove(JwtClaimTypes.JsonWebKeyHeader);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The 'x5u' (X.509 URL) header parameter (RFC 7515 §4.1.5): a URI referring to an X.509
+    /// public-key certificate or certificate chain corresponding to the key used for the JWS
+    /// signature. Same caveat as <see cref="JwkSetUrl"/> — the library does not fetch.
+    /// </summary>
+    public Uri? X509Url
+    {
+        get
+        {
+            var raw = Json.GetProperty<string>(JwtClaimTypes.X509Url);
+            return raw is null ? null : new Uri(raw);
+        }
+        set => Json.SetProperty(JwtClaimTypes.X509Url, value?.ToString());
+    }
+
+    /// <summary>
+    /// The 'x5c' (X.509 Certificate Chain) header parameter (RFC 7515 §4.1.6): an X.509
+    /// certificate chain as a JSON array of base64-encoded DER certificates, the first being
+    /// the leaf. Returns the raw base64 strings; consumers are responsible for decoding to
+    /// <c>X509Certificate2</c> and validating the chain per RFC 5280.
+    /// </summary>
+    /// <exception cref="JsonException">Thrown when 'x5c' is present but is not a JSON array of strings.</exception>
+    public IReadOnlyList<string>? X509CertificateChain
+    {
+        get
+        {
+            if (!Json.TryGetPropertyValue(JwtClaimTypes.X509CertificateChain, out var node) || node is null)
+                return null;
+            if (node is not JsonArray array)
+                throw new JsonException($"'{JwtClaimTypes.X509CertificateChain}' header must be a JSON array");
+
+            var result = new string[array.Count];
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (array[i] is not JsonValue value || !value.TryGetValue<string>(out var cert))
+                    throw new JsonException($"'{JwtClaimTypes.X509CertificateChain}' header must contain only strings");
+                result[i] = cert;
+            }
+            return result;
+        }
+        set
+        {
+            if (value is null)
+            {
+                Json.Remove(JwtClaimTypes.X509CertificateChain);
+                return;
+            }
+            var array = new JsonArray();
+            foreach (var cert in value)
+                array.Add(cert);
+            Json[JwtClaimTypes.X509CertificateChain] = array;
+        }
+    }
+
+    /// <summary>
+    /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 §4.1.7): base64url-encoded
+    /// SHA-1 digest of the DER-encoded leaf certificate. Per RFC 7515 §10.11, SHA-1 is
+    /// discouraged because of cryptographic weaknesses — prefer <see cref="X509Sha256Thumbprint"/>
+    /// for new deployments. The library exposes 'x5t' for inspection of legacy producers.
+    /// </summary>
+    public string? X509Sha1Thumbprint
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.X509Sha1Thumbprint);
+        set => Json.SetProperty(JwtClaimTypes.X509Sha1Thumbprint, value);
+    }
+
+    /// <summary>
+    /// The 'x5t#S256' (X.509 SHA-256 Thumbprint) header parameter (RFC 7515 §4.1.8):
+    /// base64url-encoded SHA-256 digest of the DER-encoded leaf certificate. The C# member
+    /// name strips the '#' character (illegal in identifiers); the JSON literal stays
+    /// 'x5t#S256' as defined by the spec.
+    /// </summary>
+    public string? X509Sha256Thumbprint
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.X509Sha256Thumbprint);
+        set => Json.SetProperty(JwtClaimTypes.X509Sha256Thumbprint, value);
+    }
 }
