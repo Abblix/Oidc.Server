@@ -21,25 +21,28 @@
 // info@abblix.com
 
 using System.Buffers.Text;
-using System.Security.Cryptography;
-using System.Text;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Tests for <see cref="JsonWebKeyThumbprintExtensions.ComputeJwkThumbprint"/> covering
-/// RFC 7638 §3 JWK Thumbprint computation. The thumbprint is a SHA-256 hash over a
-/// canonical-JSON form of the JWK's required members (RFC 7638 §3.2), encoded as
-/// base64url. Optional members (use, alg, kid, x5c, x5t, ...) MUST NOT enter the canonical
-/// form, so the same key with different metadata yields the same thumbprint.
+/// Tests for <see cref="JsonWebKey.ComputeJwkThumbprint"/> and its base64url-encoded
+/// sibling, covering RFC 7638 §3 JWK Thumbprint computation. The thumbprint is a
+/// SHA-256 hash over a canonical-JSON form of the JWK's required members
+/// (RFC 7638 §3.2), encoded as base64url. Optional members (<c>use</c>, <c>alg</c>,
+/// <c>kid</c>, <c>x5c</c>, <c>x5t</c>, ...) MUST NOT enter the canonical form, so the
+/// same key with different metadata yields the same thumbprint.
 /// </summary>
 public class JwkThumbprintTests
 {
-    // RFC 7638 §3.1 reference vector: an RSA key with kid "2011-04-29" produces base64url
-    // thumbprint "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs".
+    /// <summary>
+    /// RFC 7638 §3.1 reference vector. The kid="2011-04-29" RSA key produces base64url
+    /// thumbprint <c>NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs</c>. The optional
+    /// members alg/kid/use are present in the spec example but MUST NOT influence the
+    /// result.
+    /// </summary>
     [Fact]
-    public void ComputeJwkThumbprintBase64Url_Rfc7638Section31_MatchesReferenceVector()
+    public void ComputeJwkThumbprintBase64Url_RsaRfc7638Section31_MatchesReferenceVector()
     {
         var key = new RsaJsonWebKey
         {
@@ -52,46 +55,55 @@ public class JwkThumbprintTests
                 "d2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzK" +
                 "nqDKgw"),
             Exponent = Base64Url.DecodeFromChars("AQAB"),
-            // Optional members from the spec example — must NOT affect the thumbprint.
             Algorithm = SigningAlgorithms.RS256,
             KeyId = "2011-04-29",
             Usage = PublicKeyUsages.Signature,
         };
 
-        var thumbprint = key.ComputeJwkThumbprintBase64Url();
-
-        Assert.Equal("NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", thumbprint);
+        Assert.Equal(
+            "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
+            key.ComputeJwkThumbprintBase64Url());
     }
 
+    /// <summary>
+    /// RFC 9449 §6.1 reference vector for an EC P-256 key. The DPoP-spec access-token
+    /// example carries <c>cnf.jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"</c>,
+    /// computed over the JWK from §A.1. Acts as a cross-spec check that the
+    /// implementation produces the value relying parties expect.
+    /// </summary>
     [Fact]
-    public void ComputeJwkThumbprint_Ec_MatchesHandComputedCanonical()
+    public void ComputeJwkThumbprintBase64Url_EcRfc9449Section61_MatchesReferenceVector()
     {
-        // P-256 key from RFC 9449 §A.1 (DPoP example).
-        const string xb64 = "l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs";
-        const string yb64 = "9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA";
         var key = new EllipticCurveJsonWebKey
         {
             Curve = EllipticCurveTypes.P256,
-            X = Base64Url.DecodeFromChars(xb64),
-            Y = Base64Url.DecodeFromChars(yb64),
+            X = Base64Url.DecodeFromChars("l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs"),
+            Y = Base64Url.DecodeFromChars("9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA"),
         };
 
-        var canonical = $$"""{"crv":"P-256","kty":"EC","x":"{{xb64}}","y":"{{yb64}}"}""";
-        var expected = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-
-        Assert.Equal(expected, key.ComputeJwkThumbprint());
+        Assert.Equal(
+            "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I",
+            key.ComputeJwkThumbprintBase64Url());
     }
 
+    /// <summary>
+    /// Regression vector for an oct (symmetric) key. Neither RFC 7638 nor RFC 9449
+    /// publishes an oct test vector, so the expected value was computed independently
+    /// (SHA-256 of UTF-8 of <c>{"k":"GawgguFyGrWKav7AX4VKUg","kty":"oct"}</c>, then
+    /// base64url-encoded). The literal canonical-JSON above is the per-RFC 7638 §3.2
+    /// canonical form for this key.
+    /// </summary>
     [Fact]
-    public void ComputeJwkThumbprint_Oct_MatchesHandComputedCanonical()
+    public void ComputeJwkThumbprintBase64Url_Oct_MatchesIndependentlyComputedVector()
     {
-        const string kb64 = "GawgguFyGrWKav7AX4VKUg";
-        var key = new OctetJsonWebKey { KeyValue = Base64Url.DecodeFromChars(kb64) };
+        var key = new OctetJsonWebKey
+        {
+            KeyValue = Base64Url.DecodeFromChars("GawgguFyGrWKav7AX4VKUg"),
+        };
 
-        var canonical = $$"""{"k":"{{kb64}}","kty":"oct"}""";
-        var expected = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-
-        Assert.Equal(expected, key.ComputeJwkThumbprint());
+        Assert.Equal(
+            "k1JnWRfC-5zzmL72vXIuBgTLfVROXBakS4OmGcrMCoc",
+            key.ComputeJwkThumbprintBase64Url());
     }
 
     [Fact]

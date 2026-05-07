@@ -168,4 +168,34 @@ public abstract record JsonWebKey
     /// (per RFC 7638 §3.2) is missing on this key.</exception>
     public string ComputeJwkThumbprintBase64Url()
         => Base64Url.EncodeToString(ComputeJwkThumbprint());
+
+    /// <summary>
+    /// Throws if a required byte-array member is missing on the key, otherwise returns its base64url-encoded form.
+    /// </summary>
+    /// <param name="name">The JWK wire name of the member being encoded
+    /// (use a constant from <see cref="JsonWebKeyPropertyNames"/>).
+    /// Appears verbatim in the exception message.</param>
+    /// <param name="value">The byte content of the member.</param>
+    /// <returns>The base64url-encoded form of <paramref name="value"/>.</returns>
+    /// <exception cref="InvalidOperationException"><paramref name="value"/> is
+    /// <c>null</c>.</exception>
+    protected static string Encode(string name, byte[]? value)
+        => Base64Url.EncodeToString(Require(name, value));
+
+    /// <summary>
+    /// Throws if a required member is missing on the key, otherwise returns the value unchanged.
+    /// Used for members whose wire form is already a string (such as the EC <c>crv</c> identifier).
+    /// Callers that need base64url encoding for byte-array members go through <see cref="Encode"/>,
+    /// which builds on top of it.
+    /// </summary>
+    /// <typeparam name="T">The type of the member being checked.</typeparam>
+    /// <param name="name">The JWK wire name of the member (use a constant from
+    /// <see cref="JsonWebKeyPropertyNames"/>). Appears verbatim in the exception
+    /// message.</param>
+    /// <param name="value">The value of the member.</param>
+    /// <returns><paramref name="value"/> when not <c>null</c>.</returns>
+    /// <exception cref="InvalidOperationException"><paramref name="value"/> is
+    /// <c>null</c>.</exception>
+    protected static T Require<T>(string name, T? value) =>
+        value ?? throw new InvalidOperationException($"JWK Thumbprint requires the '{name}' member for a key.");
 }

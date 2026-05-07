@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Buffers.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -99,8 +98,5 @@ public sealed record OctetJsonWebKey : JsonWebKey
     /// no JSON escaping.
     /// </remarks>
     protected override string CanonicalJson()
-    {
-        var keyValue = KeyValue ?? throw new InvalidOperationException("JWK Thumbprint requires the 'k' member for an oct key.");
-        return $$"""{"k":"{{Base64Url.EncodeToString(keyValue)}}","kty":"oct"}""";
-    }
+        => $$"""{"k":"{{Encode(JsonWebKeyPropertyNames.KeyValue, KeyValue)}}","kty":"{{KeyType}}"}""";
 }
