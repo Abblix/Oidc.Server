@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -102,6 +103,8 @@ public class JsonWebTokenHeader(JsonObject json)
     /// that the recipient MUST understand and process. Returns null when 'crit' is absent.
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'crit' is present but is not a JSON array of strings.</exception>
+    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
+        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state — RFC 7515 §4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
     public IReadOnlyList<string>? Critical
     {
         get
@@ -156,6 +159,9 @@ public class JsonWebTokenHeader(JsonObject json)
     /// 'jwk' is absent. Trust is the consumer's responsibility — for example, DPoP (RFC 9449)
     /// binds this key to the request via a separate confirmation claim.
     /// </summary>
+    /// <exception cref="JsonException">Thrown when 'jwk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
+    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
+        Justification = "Deserialize<JsonWebKey> can throw JsonException when 'jwk' is malformed. Returning null on a malformed JWK would let a downstream consumer (DPoP, federation) silently treat the absence of trust material as success — the parse error must surface.")]
     public JsonWebKey? EmbeddedJwk
     {
         get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
@@ -192,6 +198,8 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <c>X509Certificate2</c> and validating the chain per RFC 5280.
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'x5c' is present but is not a JSON array of strings.</exception>
+    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
+        Justification = "Returning null on a malformed 'x5c' array would let a host treat 'no certificate chain available' identically to 'producer sent a wrong shape', collapsing two distinct conditions a chain-validating consumer must distinguish.")]
     public IReadOnlyList<string>? X509CertificateChain
     {
         get
