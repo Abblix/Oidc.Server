@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 partial class SubjectTypeValidator
 {
     [LoggerMessage(
-        EventId = LogEvents.Dcr.SubjectTypeValidator.SectorIdentifierMissingUris,
+        EventId = LogEvents.DynamicClientManagement.SubjectTypeValidator.SectorIdentifierMissingUris,
         Level = LogLevel.Warning,
         Message = "The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}")]
     private partial void LogSectorIdentifierMissingUris(Sanitized SectorIdentifierUri, Uri[] MissingUris);

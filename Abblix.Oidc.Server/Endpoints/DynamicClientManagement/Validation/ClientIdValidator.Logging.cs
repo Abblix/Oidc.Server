@@ -28,13 +28,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 partial class ClientIdValidator
 {
     [LoggerMessage(
-        EventId = LogEvents.Dcr.ClientIdValidator.ClientNotFound,
+        EventId = LogEvents.DynamicClientManagement.ClientIdValidator.ClientNotFound,
         Level = LogLevel.Warning,
         Message = "The client with id {ClientId} does not exist")]
     private partial void LogClientNotFound(Sanitized ClientId);
 
     [LoggerMessage(
-        EventId = LogEvents.Dcr.ClientIdValidator.ClientAlreadyRegistered,
+        EventId = LogEvents.DynamicClientManagement.ClientIdValidator.ClientAlreadyRegistered,
         Level = LogLevel.Warning,
         Message = "The client with id {ClientId} is already registered")]
     private partial void LogClientAlreadyRegistered(Sanitized ClientId);

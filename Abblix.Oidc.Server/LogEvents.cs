@@ -276,10 +276,8 @@ internal static class LogEvents
     /// <summary>
     /// Range 4000–4099: <c>Endpoints/DynamicClientManagement</c>.
     /// </summary>
-    public static class Dcr
+    public static class DynamicClientManagement
     {
-        private const int Base = 4000;
-
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> —
         /// cross-checks supplied <c>client_id</c> against register/update operation type
@@ -387,8 +385,6 @@ internal static class LogEvents
     /// </summary>
     public static class HttpFetch
     {
-        private const int Base = 6000;
-
         /// <summary>
         /// <c>Features/SecureHttpFetch/SecureHttpFetcher.cs</c> — secure outbound
         /// HTTP fetch with SSRF protection and response validation
@@ -426,8 +422,6 @@ internal static class LogEvents
     /// </summary>
     public static class Device
     {
-        private const int Base = 7000;
-
         /// <summary>
         /// <c>Features/DeviceAuthorization/UserCodeRateLimiter.cs</c> — RFC 8628
         /// brute-force protection for user code verification (sub-range 7000–7009).
@@ -548,8 +542,6 @@ internal static class LogEvents
     /// </summary>
     public static class Licensing
     {
-        private const int Base = 8000;
-
         /// <summary>
         /// <c>Features/Licensing/LicenseChecker.cs</c> — runtime enforcement of
         /// client and issuer caps from the active license (sub-range 8000–8019).
@@ -583,8 +575,6 @@ internal static class LogEvents
     /// </summary>
     public static class Misc
     {
-        private const int Base = 9000;
-
         /// <summary>
         /// <c>Features/RequestObject/RequestObjectFetcher.cs</c> — JWT request object
         /// fetching, validation and binding for OpenID Connect authorization flows
