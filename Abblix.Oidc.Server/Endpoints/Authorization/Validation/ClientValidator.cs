@@ -37,11 +37,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// as part of the authorization validation process. It plays a crucial role in ensuring that
 /// only valid and authorized clients can initiate authorization requests.
 /// </summary>
-/// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
-public class ClientValidator(
-    IClientInfoProvider clientInfoProvider,
-    ILogger<ClientValidator> logger) : IAuthorizationContextValidator
+/// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
+public partial class ClientValidator(
+    ILogger<ClientValidator> logger,
+    IClientInfoProvider clientInfoProvider) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
@@ -65,7 +65,7 @@ public class ClientValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
+            LogClientNotFound(Sanitized.Value(clientId));
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 

@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 [Collection("License")]
 public class UserInfoRequestProcessorTests
 {
-    private const string Issuer = "https://auth.example.com";
+    private const string Issuer = TestConstants.DefaultIssuer;
 
     private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IUserClaimsProvider> _userClaimsProvider;

@@ -34,15 +34,15 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// from <see cref="OidcOptions.JwtBearer"/> configuration, fetches JWKS with SSRF protection,
 /// and provides JWT replay protection.
 /// </summary>
+/// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
 /// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 5.2.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection and JWKS caching.</param>
-/// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
-public class JwtBearerIssuerProvider(
+public partial class JwtBearerIssuerProvider(
+	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
 	IJwtReplayCache replayCache,
-	[FromKeyedServices(JwtBearerIssuerProvider.SecureHttpFetcherKey)] ISecureHttpFetcher secureFetcher,
-	ILogger<JwtBearerIssuerProvider> logger) : IJwtBearerIssuerProvider
+	[FromKeyedServices(JwtBearerIssuerProvider.SecureHttpFetcherKey)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
 {
 	/// <summary>
 	/// The keyed service key used to resolve the caching <see cref="ISecureHttpFetcher"/> for JWKS fetching.
@@ -66,7 +66,7 @@ public class JwtBearerIssuerProvider(
 
 		if (trustedIssuer == null)
 		{
-			logger.LogDebug("Issuer {Issuer} is not in the trusted issuers list", issuer);
+			LogIssuerNotTrusted(issuer);
 		}
 
 		return Task.FromResult(trustedIssuer != null);
@@ -84,7 +84,7 @@ public class JwtBearerIssuerProvider(
 	{
 		if (!Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri))
 		{
-			logger.LogDebug("Invalid issuer URI format: {Issuer}", issuer);
+			LogInvalidIssuerUri(issuer);
 			return null;
 		}
 
@@ -124,7 +124,7 @@ public class JwtBearerIssuerProvider(
 
 		if (trustedIssuer == null)
 		{
-			logger.LogWarning("Attempted to get signing keys for untrusted issuer {Issuer}", issuer);
+			LogSigningKeysForUntrustedIssuer(issuer);
 			yield break;
 		}
 

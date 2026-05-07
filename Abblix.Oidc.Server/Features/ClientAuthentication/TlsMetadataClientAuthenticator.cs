@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// RFC 8705 tls_client_auth authenticator. Matches presented client certificate against
 /// client metadata: subject DN and/or Subject Alternative Name entries.
 /// </summary>
-public class TlsMetadataClientAuthenticator(
+public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider) : IClientAuthenticator
 {
@@ -76,7 +76,7 @@ public class TlsMetadataClientAuthenticator(
         var options = client.TlsClientAuth;
         if (options == null)
         {
-            logger.LogWarning("tls_client_auth: client {ClientId} has no tls metadata configured", clientId);
+            LogNoTlsMetadataConfigured(clientId);
             return null;
         }
 
@@ -86,7 +86,7 @@ public class TlsMetadataClientAuthenticator(
         if (!MatchSans(options, certificate))
             return null;
 
-        logger.LogInformation("tls_client_auth: client authenticated: {ClientId}", clientId);
+        LogAuthenticated(clientId);
         return client;
     }
 

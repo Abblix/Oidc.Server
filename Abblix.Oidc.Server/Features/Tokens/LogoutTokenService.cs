@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="jwtFormatter">Formatter for encoding the generated logout token into a compact serialized format.
 /// </param>
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
-public class LogoutTokenService(
+public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
@@ -108,7 +108,7 @@ public class LogoutTokenService(
             },
         };
 
-        logger.LogDebug("The logout token was prepared {@LogoutToken}", logoutToken);
+        LogTokenPrepared(logoutToken);
 
         return new EncodedJsonWebToken(logoutToken, await jwtFormatter.FormatAsync(logoutToken, clientInfo));
     }

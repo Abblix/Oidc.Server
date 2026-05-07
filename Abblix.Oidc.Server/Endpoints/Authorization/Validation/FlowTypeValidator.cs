@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor — this enforces OAuth 2.1 §1.4 default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
-public class FlowTypeValidator(
+public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
     IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
@@ -68,20 +68,20 @@ public class FlowTypeValidator(
             var unsupportedPart = responseType.FirstOrDefault(part => !_supportedResponseTypeParts.Contains(part));
             if (unsupportedPart != null)
             {
-                logger.LogWarning("The response type part {Part} is not supported by this server", [unsupportedPart]);
+                LogResponseTypePartUnsupported(unsupportedPart);
                 return UnsupportedResponseType($"The response type '{unsupportedPart}' is not supported by this server");
             }
         }
 
         if (!ResponseTypeAllowed(context))
         {
-            logger.LogWarning("The response type {@ResponseType} is not allowed for the client", [responseType]);
+            LogResponseTypeNotAllowed(responseType);
             return UnsupportedResponseType("The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            logger.LogWarning("The response type {@ResponseType} is not valid", [responseType]);
+            LogResponseTypeInvalid(responseType);
             return UnsupportedResponseType("The response type is not supported");
         }
 

@@ -48,7 +48,7 @@ public class ClientIdValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logger = new Mock<ILogger<ClientIdValidator>>();
-        _validator = new ClientIdValidator(_clientInfoProvider.Object, _logger.Object);
+        _validator = new ClientIdValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
     private ClientRegistrationValidationContext CreateContext(string? clientId = null)

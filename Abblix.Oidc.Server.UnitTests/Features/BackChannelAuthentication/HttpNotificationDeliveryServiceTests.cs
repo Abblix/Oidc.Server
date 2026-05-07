@@ -54,7 +54,9 @@ public class HttpNotificationDeliveryServiceTests
     {
         _httpClientFactory = new Mock<IHttpClientFactory>(MockBehavior.Strict);
         _logger = new Mock<ILogger<HttpNotificationDeliveryService>>(MockBehavior.Loose);
-        _service = new HttpNotificationDeliveryService(_httpClientFactory.Object, _logger.Object);
+        // [LoggerMessage] source generator gates calls on IsEnabled; default Loose mock returns false.
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        _service = new HttpNotificationDeliveryService(_logger.Object, _httpClientFactory.Object);
     }
 
     /// <summary>

@@ -35,17 +35,17 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// Implements rate limiting for user code verification attempts to prevent brute force attacks.
 /// Uses exponential backoff and per-IP rate limiting as recommended by RFC 8628 Section 5.2.
 /// </summary>
+/// <param name="logger">Logger for security events.</param>
 /// <param name="storage">The storage service for persisting rate limit state.</param>
 /// <param name="keyFactory">The factory for generating storage keys.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing device authorization settings.</param>
-/// <param name="logger">Logger for security events.</param>
-public class UserCodeRateLimiter(
+public partial class UserCodeRateLimiter(
+    ILogger<UserCodeRateLimiter> logger,
     IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
     TimeProvider timeProvider,
-    IOptions<OidcOptions> options,
-    ILogger<UserCodeRateLimiter> logger) : IUserCodeRateLimiter
+    IOptions<OidcOptions> options) : IUserCodeRateLimiter
 {
     /// <inheritdoc />
     public async Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier)
@@ -64,10 +64,7 @@ public class UserCodeRateLimiter(
             {
                 var retryAfter = blockedUntil - now;
 
-                logger.LogWarning(
-                    "User code {UserCode} is rate limited until {BlockedUntil}. " +
-                    "Failed attempts: {FailureCount}",
-                    userCode, blockedUntil, userCodeAttempts.FailureCount);
+                LogUserCodeRateLimited(userCode, blockedUntil, userCodeAttempts.FailureCount);
 
                 return retryAfter;
             }
@@ -83,10 +80,7 @@ public class UserCodeRateLimiter(
             var retryAfter = deviceAuthOptions.RateLimitSlidingWindow - (now - firstFailure);
             if (retryAfter > TimeSpan.Zero)
             {
-                logger.LogWarning(
-                    "Client {ClientIdentifier} exceeded per-IP rate limit. " +
-                    "Failed attempts in window: {FailureCount}",
-                    clientIdentifier, ipAttempts.FailureCount);
+                LogIpRateLimited(clientIdentifier, ipAttempts.FailureCount);
 
                 return retryAfter;
             }
@@ -117,9 +111,7 @@ public class UserCodeRateLimiter(
             var blockedUntil = now.Add(cappedBackoff);
             userCodeState.BlockedUntil = Timestamp.FromDateTimeOffset(blockedUntil);
 
-            logger.LogWarning(
-                "User code {UserCode} blocked until {BlockedUntil} after {FailureCount} failed attempts",
-                userCode, blockedUntil, userCodeState.FailureCount);
+            LogUserCodeBlocked(userCode, blockedUntil, userCodeState.FailureCount);
         }
 
         await storage.SetAsync(
@@ -156,10 +148,7 @@ public class UserCodeRateLimiter(
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= userCodeState.FailureCount ||
             deviceAuthOptions.MaxIpFailuresPerMinute <= ipState.FailureCount)
         {
-            logger.LogWarning(
-                "Potential brute force attack detected. UserCode: {UserCode}, " +
-                "Client: {ClientIdentifier}, UserCodeFailures: {UserCodeFailures}, IpFailures: {IpFailures}",
-                userCode, clientIdentifier, userCodeState.FailureCount, ipState.FailureCount);
+            LogBruteForceDetected(userCode, clientIdentifier, userCodeState.FailureCount, ipState.FailureCount);
         }
     }
 
@@ -173,8 +162,6 @@ public class UserCodeRateLimiter(
         var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
         await storage.RemoveAsync(ipKey);
 
-        logger.LogInformation(
-            "User code {UserCode} successfully verified from {ClientIdentifier}",
-            userCode, clientIdentifier);
+        LogUserCodeVerified(userCode, clientIdentifier);
     }
 }

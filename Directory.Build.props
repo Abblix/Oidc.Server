@@ -42,4 +42,5 @@
       <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
 </Project>

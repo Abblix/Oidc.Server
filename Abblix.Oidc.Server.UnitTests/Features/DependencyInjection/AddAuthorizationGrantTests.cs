@@ -32,6 +32,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -254,7 +255,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_RegistersBuiltInGrantHandlersAsGrantTypeInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = "https://test.example.com");
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -277,7 +278,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_WithoutPasswordOptIn_ExcludesPasswordGrantFromInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = "https://test.example.com");
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -298,7 +299,7 @@ public class AddAuthorizationGrantTests
     {
         var services = new ServiceCollection();
         services
-            .AddOidcServices(opts => opts.Issuer = "https://test.example.com")
+            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer)
             .EnablePasswordGrant();
 
         var informerImpls = services

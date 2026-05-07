@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking completion events.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
-public class AuthenticationCompletionRouter(
+public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
     IClientInfoProvider clientInfoProvider,
     IServiceProvider serviceProvider) : IAuthenticationCompletionHandler
@@ -73,10 +73,7 @@ public class AuthenticationCompletionRouter(
 
         if (clientInfo == null)
         {
-            logger.LogError(
-                "Client not found for auth_req_id: {AuthReqId}, ClientId: {ClientId}",
-                authenticationRequestId,
-                clientId);
+            LogClientNotFound(authenticationRequestId, clientId);
             return;
         }
 

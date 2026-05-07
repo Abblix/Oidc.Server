@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// <param name="logger">The logger to use for logging information about the logout token sending process.</param>
 /// <param name="backChannelHttpClient">The HTTP client used for sending the logout tokens to clients over the
 /// back channel.</param>
-public class BackChannelLogoutTokenSender(
+public partial class BackChannelLogoutTokenSender(
     ILogger<BackChannelLogoutTokenSender> logger,
     HttpClient backChannelHttpClient) : ILogoutTokenSender
 {
@@ -61,14 +61,12 @@ public class BackChannelLogoutTokenSender(
         using var content = new FormUrlEncodedContent(parameters);
         using var response = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
 
-        logger.LogDebug("The request with {@Parameters} was sent to {Uri}, the status code {StatusCode} was received",
-            parameters, logoutOptions.Uri, response.StatusCode);
+        LogRequestSent(parameters, logoutOptions.Uri, response.StatusCode);
 
         response.EnsureSuccessStatusCode();
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogError("Failed to send logout token to {Uri}. Status code: {StatusCode}",
-                logoutOptions.Uri, response.StatusCode);
+            LogSendFailed(logoutOptions.Uri, response.StatusCode);
         }
     }
 }

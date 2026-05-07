@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc;
@@ -67,7 +68,7 @@ public class RegisterClientHandlerIntegrationTests
 
         services.AddOidcServices(opts =>
         {
-            opts.Issuer = "https://test.example.com";
+            opts.Issuer = TestConstants.DefaultIssuer;
 
             // Generate an in-memory RS256 signing key for the registration access token the
             // success-path test asserts on. Production hosts feed real certificates here;

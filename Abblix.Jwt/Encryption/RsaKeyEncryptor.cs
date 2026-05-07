@@ -37,7 +37,7 @@ namespace Abblix.Jwt.Encryption;
 /// RSA-OAEP and RSA-OAEP-256 are recommended for new implementations.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm) : IKeyEncryptor<RsaJsonWebKey>
+internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm) : IKeyEncryptor<RsaJsonWebKey>
 {
 	private readonly RSAEncryptionPadding _padding = algorithm switch
 	{
@@ -103,10 +103,7 @@ internal sealed class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string al
 		};
 
 		// Log diagnostic information before throwing
-		logger.LogError(
-			"RSA key encryption failed: Algorithm={Algorithm}, KeySize={KeySize} bits, " +
-			"CEK size={CekSize} bytes, Theoretical max CEK={MaxCekSize} bytes",
-			algorithm, rsa.KeySize, keyToEncrypt.Length, maxCekSize);
+		LogEncryptionFailed(algorithm, rsa.KeySize, keyToEncrypt.Length, maxCekSize);
 
 		// Encryption failed - provide detailed error message per RFC 7518 Section 4
 		return new CryptographicException(

@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
 /// <param name="jwtValidator">The JWT validator to validate the token.</param>
-public class IntrospectionRequestValidator(
+public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
@@ -84,7 +84,7 @@ public class IntrospectionRequestValidator(
 			},
 			error =>
 			{
-				logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
+				LogInvalidJwt(error);
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
 			});
 	}
