@@ -1076,4 +1076,197 @@ public class JsonWebTokenValidationTests
             Options = options ?? ValidationOptions.Default
         };
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RFC 8725 §3.11 — pin the JWT 'typ' header (RFC 7515 §4.1.9) via
+    // ValidationParameters.ExpectedTokenTypes so token-class confusion (replaying a
+    // logout_token as an id_token, etc.) is rejected inside the validator instead of
+    // relying on every caller to post-check token.Header.Type.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sanity baseline: when <see cref="ValidationParameters.ExpectedTokenTypes"/> is null,
+    /// the validator skips <c>typ</c> enforcement entirely — preserves historical behaviour
+    /// for callers that have not opted in to the RFC 8725 §3.11 hook.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_NullByDefault_SkipsTypValidation()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// When the JWT's <c>typ</c> matches the configured expected value, validation passes.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMatches_Validates()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "at+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// When the JWT's <c>typ</c> does not match any configured expected value, the validator
+    /// rejects with <see cref="JwtError.InvalidToken"/> — the very token-class-confusion
+    /// rejection RFC 8725 §3.11 prescribes.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMismatch_RejectsAsInvalidToken()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("logout+jwt", error.ErrorDescription);
+        Assert.Contains("at+jwt", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// When <see cref="ValidationParameters.ExpectedTokenTypes"/> is configured but the JWT
+    /// has no <c>typ</c> header at all, validation rejects: the caller asked for typ pinning
+    /// and the token does not declare its class.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMissing_RejectsAsInvalidToken()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = null;
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("missing", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// RFC 7515 §4.1.9: a <c>typ</c> value without a slash is treated as if
+    /// <c>application/</c> were prepended. The validator strips that prefix before lookup so
+    /// callers can register the bare canonical form (<c>at+jwt</c>) and tokens whose
+    /// producer wrote out the long form (<c>application/at+jwt</c>) still validate.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_ApplicationPrefixStripped_Matches()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "application/at+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// RFC 7515 §5.3: the <c>typ</c> header is case-sensitive. <c>At+JWT</c> does NOT match
+    /// the canonical <c>at+jwt</c>; the validator rejects the mismatched casing instead of
+    /// silently coercing to the spec value.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypIsCaseSensitive()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "At+JWT";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// When the configured set has multiple values, any one of them is acceptable. Lets a
+    /// caller accept several token classes through the same validator invocation — for
+    /// example, a transitional period where both <c>at+jwt</c> and a legacy custom
+    /// <c>access+jwt</c> are honoured.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_MultipleValues_AnyMatchPasses()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "access+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt", "access+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Empty set is treated identically to null — no enforcement. Defensive default for
+    /// callers that build the set programmatically and may hit edge cases producing zero
+    /// expected types.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_EmptySet_SkipsTypValidation()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal),
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
 }
