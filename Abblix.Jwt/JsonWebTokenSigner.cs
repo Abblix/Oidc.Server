@@ -123,12 +123,10 @@ internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILog
         // foreach level. JWKS responses are bounded (typically 1-3 keys), so materializing
         // is cheap; lazy-streaming would only matter for hosts that fan out per-issuer to
         // unbounded sources, which is not a supported pattern.
-        var allKeys = new List<JsonWebKey>();
-        await foreach (var key in signingKeys)
-            allKeys.Add(key);
+        var allKeys = await signingKeys.ToArrayAsync();
 
         var keyId = header.KeyId;
-        if (allKeys.Count == 0)
+        if (allKeys.Length == 0)
         {
             LogNoSigningKeys(algorithm, keyId);
             return new JwtValidationError(
@@ -143,18 +141,19 @@ internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILog
         // cross-family protection already provided by the generic keyed-DI dispatch.
         // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key.
         var candidates = allKeys
-            .Where(key => key.Algorithm == null || key.Algorithm == algorithm)
-            .Where(key => !keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal))
-            .ToList();
+            .Where(key =>
+                (key.Algorithm == null || key.Algorithm == algorithm) &&
+                (!keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal)))
+            .ToArray();
 
-        if (candidates.Count == 0)
+        if (candidates.Length == 0)
         {
-            LogNoMatchingKey(algorithm, keyId, allKeys.Count);
+            LogNoMatchingKey(algorithm, keyId, allKeys.Length);
             return new JwtValidationError(
                 JwtError.InvalidToken,
                 keyId.HasValue()
-                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Count} key(s), none usable)"
-                    : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Count} key(s), none usable)");
+                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)"
+                    : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)");
         }
 
         // Signing input is BASE64URL(header) + '.' + BASE64URL(payload)
@@ -171,13 +170,11 @@ internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILog
             return new JwtValidationError(JwtError.InvalidToken, "Invalid signature encoding");
         }
 
-        foreach (var key in candidates)
-        {
-            if (VerifySignature(key, algorithm, signingInput, signature))
-                return null;
-        }
+        if (!candidates.Any(key => VerifySignature(key, algorithm, signingInput, signature)))
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
 
-        return new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
+        return null;
+
     }
 
     [LoggerMessage(
