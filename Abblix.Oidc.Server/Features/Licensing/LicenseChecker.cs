@@ -22,7 +22,6 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
 
@@ -36,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// operates beyond these constraints. It supports real-time updates to the license,
 /// allowing the application to adjust to new licenses dynamically.
 /// </remarks>
-public static class LicenseChecker
+public static partial class LicenseChecker
 {
     private const double ClientLimitOverExceedingFactor = 1.3;
 
@@ -83,8 +82,8 @@ public static class LicenseChecker
                 {
                     if (LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(1)))
                     {
-                        LicenseLogger.Instance.LogCritical(
-                            "Client limit exceeded: licensed for {ClientLimit} clients, current count exceeds by more than 30%. Used client IDs: {@ClientIds}, new client ID: {ClientId}",
+                        LogClientLimitExceededByMargin(
+                            LicenseLogger.Instance,
                             currentLicense.ClientLimit,
                             _knownClientIds.Keys,
                             clientInfo.ClientId);
@@ -97,9 +96,10 @@ public static class LicenseChecker
                 if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
                     LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(15)))
                 {
-                    LicenseLogger.Instance.LogError(
-                        "Licensed client limit of {ClientLimit} exceeded. Current clients: {@ClientIds}. Immediate license upgrade required",
-                        currentLicense.ClientLimit.Value, _knownClientIds.Keys);
+                    LogClientLimitExceeded(
+                        LicenseLogger.Instance,
+                        currentLicense.ClientLimit.Value,
+                        _knownClientIds.Keys);
                 }
             }
         }
@@ -120,8 +120,7 @@ public static class LicenseChecker
         if (currentLicense.ValidIssuers is { Count: > 0 } && !currentLicense.ValidIssuers.Contains(issuer))
         {
             // Log error: the allowed list of issuers does not contain current value.
-            LicenseLogger.Instance.LogCritical("The issuer {Issuer} is not allowed by current license. The list of allowed issuers is {@Issuers}",
-                issuer, currentLicense.ValidIssuers);
+            LogIssuerNotInWhitelist(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
 
             throw new InvalidOperationException("The license terms violation detected");
         }
@@ -134,8 +133,10 @@ public static class LicenseChecker
                 LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))
             {
                 // Log error: Exceeded the licensed limit of issuers.
-                LicenseLogger.Instance.LogError("Exceeded the licensed limit of issuers: {IssuerLimit}. The list of used issuers is {@Issuers}",
-                    currentLicense.IssuerLimit.Value, _knownIssuers.Keys);
+                LogIssuerLimitExceeded(
+                    LicenseLogger.Instance,
+                    currentLicense.IssuerLimit.Value,
+                    _knownIssuers.Keys);
 
                 throw new InvalidOperationException("The license terms violation detected");
             }

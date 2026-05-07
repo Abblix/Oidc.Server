@@ -37,6 +37,7 @@ using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
@@ -49,7 +50,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 /// </summary>
 public class IdentityTokenServiceTests
 {
-    private const string Issuer = "https://auth.example.com";
+    private const string Issuer = TestConstants.DefaultIssuer;
     private const string ClientId = "test_client_123";
     private const string UserId = "user_456";
     private const string SessionId = "session_789";

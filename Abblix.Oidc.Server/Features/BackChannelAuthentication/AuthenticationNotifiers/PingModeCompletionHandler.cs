@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="notificationService">Service for sending ping notifications.</param>
-public class PingModeCompletionHandler(
+public partial class PingModeCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     INotificationDeliveryService notificationService)
@@ -72,9 +72,7 @@ public class PingModeCompletionHandler(
 
         await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
 
-        _logger.LogInformation(
-            "Sending ping notification for auth_req_id: {AuthReqId}",
-            authenticationRequestId);
+        LogSendingPingNotification(authenticationRequestId);
 
         var payload = new BackChannelPingNotificationRequest
         {

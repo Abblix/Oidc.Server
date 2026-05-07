@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking completion events and errors.</param>
 /// <param name="storage">Storage for persisting authentication request state.</param>
-public abstract class AuthenticationCompletionHandler(
+public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage)
 {
@@ -102,10 +102,7 @@ public abstract class AuthenticationCompletionHandler(
         if (hasToken && endpoint != null)
             return true;
 
-        logger.LogError(
-            "{ModeName} client missing notification endpoint or token. " +
-            "ClientId: {ClientId}, auth_req_id: {AuthReqId}, " +
-            "Endpoint: {Endpoint}, Token: {HasToken}",
+        LogMissingNotificationConfig(
             deliveryMode,
             clientId,
             authenticationRequestId,

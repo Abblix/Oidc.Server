@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// </param>
 /// <param name="subjectTypeConverter">The converter used to translate user identifiers into subject types as
 /// required by different client configurations.</param>
-public class UserClaimsProvider(
+public partial class UserClaimsProvider(
     ILogger<UserClaimsProvider> logger,
     IUserInfoProvider userInfoProvider,
     IScopeClaimsProvider scopeClaimsProvider,
@@ -74,7 +74,7 @@ public class UserClaimsProvider(
         var userInfo = await userInfoProvider.GetUserInfoAsync(authSession, claimNames);
         if (userInfo == null)
         {
-            logger.LogWarning("The user claims were not found by subject value");
+            LogUserClaimsNotFound();
             return null;
         }
 
@@ -83,9 +83,7 @@ public class UserClaimsProvider(
 
         if (FindMissingClaims(userInfo, requestedClaims) is { Length: > 0 } missingClaims)
         {
-            logger.LogWarning("The following claims are requested, but not returned from {IUserInfoProvider}: {@MissingClaims}",
-                userInfoProvider.GetType().FullName,
-                missingClaims);
+            LogMissingClaims(userInfoProvider.GetType().FullName, missingClaims);
 
             return null;
         }

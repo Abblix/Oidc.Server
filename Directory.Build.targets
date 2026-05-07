@@ -1,0 +1,13 @@
+<Project>
+  <!-- File nesting in Solution Explorer / Rider Project view: every
+       *.Logging.cs becomes a child node of the same-named *.cs. The rule
+       lives in Directory.Build.targets (NOT .props) because the SDK's
+       implicit Compile glob runs between props and targets — at .props
+       time the Compile item set is empty, so an Update= there is a no-op.
+       By .targets time the items exist and metadata sticks. -->
+  <ItemGroup>
+    <Compile Update="**\*.Logging.cs">
+      <DependentUpon>$([System.String]::Copy('%(Filename)').Replace('.Logging', '')).cs</DependentUpon>
+    </Compile>
+  </ItemGroup>
+</Project>

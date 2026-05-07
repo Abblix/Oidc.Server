@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
-public class RequestObjectFetcher(
+public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
@@ -119,7 +119,7 @@ public class RequestObjectFetcher(
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {
-        logger.LogWarning("The request object contains invalid token: {@Error}", error);
+        LogInvalidToken(error);
         return new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 

@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
-public class ClientSecretJwtAuthenticator(
+public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
@@ -106,12 +106,11 @@ public class ClientSecretJwtAuthenticator(
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
         var requestUri = requestInfoProvider.RequestUri;
-        var result = audiences.Contains(requestUri);
+        var materialized = audiences.Materialize();
+        var result = materialized.Contains(requestUri);
         if (!result)
         {
-            logger.LogWarning(
-                "Audience validation failed, token audiences: {@Audiences}, actual requestUri: {RequestUri}",
-                audiences, requestUri);
+            LogAudienceValidationFailed(materialized, requestUri);
         }
 
         return Task.FromResult(result);
@@ -139,7 +138,7 @@ public class ClientSecretJwtAuthenticator(
         switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck())
         {
             case { } clientInfo when !string.Equals(clientInfo.TokenEndpointAuthMethod, ClientAuthenticationMethods.ClientSecretJwt, StringComparison.Ordinal):
-                logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", issuer);
+                LogWrongAuthMethod(issuer);
                 return false;
 
             case { } clientInfo:
@@ -166,7 +165,7 @@ public class ClientSecretJwtAuthenticator(
         var client = context.ClientInfo.NotNull(nameof(context.ClientInfo));
         if (client.ClientSecrets is not { Length: > 0 })
         {
-            logger.LogWarning("No client secrets configured for client {ClientId}", client.ClientId);
+            LogNoSecretsConfigured(client.ClientId);
             yield break;
         }
 
@@ -178,9 +177,7 @@ public class ClientSecretJwtAuthenticator(
 
             if (!clientSecret.Value.HasValue())
             {
-                logger.LogWarning(
-                    "Client secret for {ClientId} does not have a raw value, which is required for client_secret_jwt",
-                    client.ClientId);
+                LogSecretWithoutRawValue(client.ClientId);
                 continue;
             }
 

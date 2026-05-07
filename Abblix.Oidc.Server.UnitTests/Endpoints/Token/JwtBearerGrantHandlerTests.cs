@@ -658,12 +658,12 @@ public class JwtBearerGrantHandlerTests
 		var logger = new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerGrantHandler>>();
 
 		var handler = new JwtBearerGrantHandler(
+			logger.Object,
 			jwtValidator.Object,
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
-			timeProvider,
-			logger.Object);
+			timeProvider);
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

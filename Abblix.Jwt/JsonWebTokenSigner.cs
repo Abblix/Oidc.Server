@@ -19,7 +19,7 @@ namespace Abblix.Jwt;
 /// FAPI 2.0 audit-logging requires a granular event-type on every key-resolution failure
 /// (kid mismatch vs. empty issuer JWKS) so a SOC operator can tell a key-rotation incident
 /// from a misconfigured issuer without parsing free-form text.</param>
-internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILogger<JsonWebTokenSigner> logger) : IJsonWebTokenSigner
+internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IServiceProvider serviceProvider) : IJsonWebTokenSigner
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
 
@@ -176,18 +176,6 @@ internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILog
         return null;
 
     }
-
-    [LoggerMessage(
-        EventId = 1,
-        Level = LogLevel.Warning,
-        Message = "JWS signature validation failed: no signing keys configured for issuer (alg='{Algorithm}', kid='{KeyId}'). FAPI category: NoKeysAvailable.")]
-    private partial void LogNoSigningKeys(string Algorithm, string? KeyId);
-
-    [LoggerMessage(
-        EventId = 2,
-        Level = LogLevel.Warning,
-        Message = "JWS signature validation failed: no signing key matched header (alg='{Algorithm}', kid='{KeyId}'); issuer has {IssuerKeyCount} key(s). FAPI category: UnknownKid.")]
-    private partial void LogNoMatchingKey(string Algorithm, string? KeyId, int IssuerKeyCount);
 
     /// <summary>
     /// Verifies a signature using the appropriate signer based on the key type and algorithm.

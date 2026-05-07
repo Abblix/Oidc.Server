@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
 /// must not appear in the URL query string.
 /// </summary>
-public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
+public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
 	/// <inheritdoc />
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
@@ -48,9 +48,7 @@ public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : Sync
 		{
 			if (!IsResponseModeAllowed(responseMode, context.FlowType))
 			{
-				logger.LogWarning("The response mode {ResponseMode} is not compatible with response type {ResponseType}",
-					responseMode,
-					context.Request.ResponseType);
+				LogIncompatibleResponseMode(responseMode, context.Request.ResponseType);
 
 				return context.InvalidRequest("The response mode is not supported");
 			}

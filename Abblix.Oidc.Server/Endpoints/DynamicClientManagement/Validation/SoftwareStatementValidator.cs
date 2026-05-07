@@ -33,15 +33,15 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates the software_statement parameter in a client registration request per RFC 7591 Section 2.3.
 /// Software statements are signed JWTs issued by a third-party authority asserting metadata about client software.
 /// </summary>
+/// <param name="logger">Logger for recording validation operations.</param>
 /// <param name="jwtValidator">Validates the software statement JWT signature and claims.</param>
 /// <param name="options">OIDC options containing software statement configuration.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection for retrieving trusted issuer JWKS.</param>
-/// <param name="logger">Logger for recording validation operations.</param>
-public class SoftwareStatementValidator(
+public partial class SoftwareStatementValidator(
+    ILogger<SoftwareStatementValidator> logger,
     IJsonWebTokenValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
-    ISecureHttpFetcher secureFetcher,
-    ILogger<SoftwareStatementValidator> logger) : IClientRegistrationContextValidator
+    ISecureHttpFetcher secureFetcher) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -79,7 +79,7 @@ public class SoftwareStatementValidator(
 
         if (result.TryGetFailure(out var error))
         {
-            logger.LogWarning("Software statement validation failed: {Error}", error.ErrorDescription);
+            LogValidationFailed(error.ErrorDescription);
             return ErrorFactory.InvalidSoftwareStatement(
                 $"The software_statement is invalid: {error.ErrorDescription}");
         }
@@ -94,7 +94,7 @@ public class SoftwareStatementValidator(
     {
         var trusted = FindTrustedIssuer(statementOptions, issuer) != null;
         if (!trusted)
-            logger.LogDebug("Software statement issuer {Issuer} is not trusted", issuer);
+            LogIssuerNotTrusted(issuer);
         return Task.FromResult(trusted);
     }
 

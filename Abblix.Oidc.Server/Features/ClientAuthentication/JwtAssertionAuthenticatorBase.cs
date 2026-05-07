@@ -29,7 +29,6 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using static Abblix.Oidc.Server.Model.ClientRequest.Parameters;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -39,7 +38,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
-public abstract class JwtAssertionAuthenticatorBase(
+public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     ITokenRegistry tokenRegistry) : IClientAuthenticator
 {
@@ -62,13 +61,13 @@ public abstract class JwtAssertionAuthenticatorBase(
 
         if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
         {
-            logger.LogWarning($"{ClientAssertionType} is not '{ClientAssertionTypes.JwtBearer}'");
+            LogWrongAssertionType();
             return null;
         }
 
         if (!request.ClientAssertion.HasValue())
         {
-            logger.LogWarning($"{ClientAssertionType} is '{ClientAssertionTypes.JwtBearer}', but {ClientAssertion} is empty");
+            LogMissingAssertion();
             return null;
         }
 
@@ -77,7 +76,7 @@ public abstract class JwtAssertionAuthenticatorBase(
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
-            logger.LogWarning("JWT validation error: {@Error}", error);
+            LogJwtValidationError(error);
             return null;
         }
 
@@ -87,7 +86,7 @@ public abstract class JwtAssertionAuthenticatorBase(
         var tokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod;
         if (!ClientAuthenticationMethodsSupported.Contains(tokenEndpointAuthMethod.NotNull(nameof(tokenEndpointAuthMethod))))
         {
-            logger.LogWarning("The authentication method is not allowed for the client {@ClientId}", clientInfo.ClientId);
+            LogAuthMethodNotAllowed(clientInfo.ClientId);
             return null;
         }
 
@@ -98,14 +97,14 @@ public abstract class JwtAssertionAuthenticatorBase(
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogWarning(ex, "The error while getting subject: {Message}", ex.Message);
+            LogSubjectExtractionFailed(ex, ex.Message);
             return null;
         }
 
         var issuer = token.Payload.Issuer;
         if (issuer == null || subject == null || issuer != subject)
         {
-            logger.LogWarning("The error during authentication: iss is '{Issuer}', but sub is {Subject}", issuer, subject);
+            LogIssuerSubjectMismatch(issuer, subject);
             return null;
         }
 

@@ -46,7 +46,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <param name="issuerProvider">The issuer provider.</param>
 /// <param name="clientInfoProvider">The client info provider.</param>
 /// <param name="logoutNotifier">The logout notifier.</param>
-public class EndSessionRequestProcessor(
+public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
 	IIssuerProvider issuerProvider,
@@ -88,7 +88,7 @@ public class EndSessionRequestProcessor(
 		}
 
 		await authSessionService.SignOutAsync();
-		logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
+		LogUserLoggedOut(subjectId, sessionId);
 
 		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));
 

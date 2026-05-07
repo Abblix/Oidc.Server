@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 [Collection("License")]
 public class EndSessionRequestProcessorTests
 {
-    private const string Issuer = "https://auth.example.com";
+    private const string Issuer = TestConstants.DefaultIssuer;
 
     private readonly Mock<ILogger<EndSessionRequestProcessor>> _logger;
     private readonly Mock<IAuthSessionService> _authSessionService;

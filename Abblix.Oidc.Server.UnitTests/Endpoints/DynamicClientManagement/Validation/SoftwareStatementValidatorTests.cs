@@ -54,10 +54,10 @@ public class SoftwareStatementValidatorTests
         optionsMonitor.Setup(m => m.CurrentValue).Returns(() => _oidcOptions);
 
         _validator = new SoftwareStatementValidator(
+            NullLogger<SoftwareStatementValidator>.Instance,
             _jwtValidator.Object,
             optionsMonitor.Object,
-            _secureFetcher.Object,
-            NullLogger<SoftwareStatementValidator>.Instance);
+            _secureFetcher.Object);
     }
 
     private static ClientRegistrationValidationContext CreateContext(string? softwareStatement = null)

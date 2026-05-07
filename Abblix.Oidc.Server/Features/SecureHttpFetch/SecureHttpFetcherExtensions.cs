@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// Provides reusable functionality for fetching JSON Web Key Sets (JWKS) from remote URIs
 /// with SSRF protection and consistent error handling.
 /// </summary>
-public static class SecureHttpFetcherExtensions
+public static partial class SecureHttpFetcherExtensions
 {
 	/// <summary>
 	/// Fetches JSON Web Keys from a JWKS URI with SSRF protection and optional filtering.
@@ -50,8 +50,7 @@ public static class SecureHttpFetcherExtensions
 		string entityId,
 		string entityType)
 	{
-		logger.LogDebug("Fetching JWKS for {EntityType} {EntityId} from {JwksUri}",
-			entityType, entityId, jwksUri);
+		LogFetchingJwks(logger, entityType, entityId, jwksUri);
 
 		var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
 
@@ -61,16 +60,14 @@ public static class SecureHttpFetcherExtensions
 				if (jwks is { Keys: { Length: > 0 } keys })
 					return keys.ToAsyncEnumerable();
 
-				logger.LogWarning("JWKS for {EntityType} {EntityId} from {JwksUri} is empty or invalid",
-					entityType, entityId, jwksUri);
+				LogJwksEmpty(logger, entityType, entityId, jwksUri);
 
 				return AsyncEnumerable.Empty<JsonWebKey>();
 
 			},
 			error =>
 			{
-				logger.LogError("Failed to fetch JWKS for {EntityType} {EntityId} from {JwksUri}: {Error}",
-					entityType, entityId, jwksUri, error.ErrorDescription);
+				LogJwksFetchFailed(logger, entityType, entityId, jwksUri, error.ErrorDescription);
 
 				return AsyncEnumerable.Empty<JsonWebKey>();
 			});
