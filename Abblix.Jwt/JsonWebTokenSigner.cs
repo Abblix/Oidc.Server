@@ -177,18 +177,6 @@ internal partial class JsonWebTokenSigner(IServiceProvider serviceProvider, ILog
 
     }
 
-    [LoggerMessage(
-        EventId = LogEvents.Jwt.NoSigningKeys,
-        Level = LogLevel.Warning,
-        Message = "JWS signature validation failed: no signing keys configured for issuer (alg='{Algorithm}', kid='{KeyId}'). FAPI category: NoKeysAvailable.")]
-    private partial void LogNoSigningKeys(string Algorithm, string? KeyId);
-
-    [LoggerMessage(
-        EventId = LogEvents.Jwt.NoMatchingKey,
-        Level = LogLevel.Warning,
-        Message = "JWS signature validation failed: no signing key matched header (alg='{Algorithm}', kid='{KeyId}'); issuer has {IssuerKeyCount} key(s). FAPI category: UnknownKid.")]
-    private partial void LogNoMatchingKey(string Algorithm, string? KeyId, int IssuerKeyCount);
-
     /// <summary>
     /// Verifies a signature using the appropriate signer based on the key type and algorithm.
     /// Resolves the correct IDataSigner implementation from DI using the algorithm as key.

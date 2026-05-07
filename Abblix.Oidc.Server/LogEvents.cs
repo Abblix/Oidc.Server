@@ -33,11 +33,35 @@ internal static class LogEvents
 {
     /// <summary>
     /// Range 2000–2099: <c>Endpoints/Authorization</c>, <c>Endpoints/Token</c>,
-    /// response builders.
+    /// response builders. Each source class lives in its own nested static class
+    /// with a packed sub-range inside the feature window.
     /// </summary>
     public static class Endpoints
     {
-        private const int Base = 2000;
+        /// <summary>
+        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> — RFC 7523
+        /// JWT Bearer grant validation pipeline (sub-range 2000–2019).
+        /// </summary>
+        public static class JwtBearer
+        {
+            private const int Base = 2000;
+
+            public const int MissingAssertion = Base + 1;
+            public const int AssertionTooLarge = Base + 2;
+            public const int ValidationFailed = Base + 3;
+            public const int MissingSubject = Base + 4;
+            public const int AlgorithmNotAllowed = Base + 5;
+            public const int TokenTypeNotAllowed = Base + 6;
+            public const int MissingIssuedAt = Base + 7;
+            public const int TooOld = Base + 8;
+            public const int MissingJti = Base + 9;
+            public const int ReplayDetected = Base + 10;
+            public const int ScopesNotAllowed = Base + 11;
+            public const int GrantSucceeded = Base + 12;
+            public const int IssuerNotTrusted = Base + 13;
+            public const int AudienceFailedStrict = Base + 14;
+            public const int AudienceFailedPermissive = Base + 15;
+        }
     }
 
     /// <summary>

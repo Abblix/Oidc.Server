@@ -113,12 +113,6 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 			$"plaintext size based on the key size and padding overhead.");
 	}
 
-	[LoggerMessage(
-		EventId = LogEvents.Jwt.RsaEncryptionFailed,
-		Level = LogLevel.Error,
-		Message = "RSA key encryption failed: Algorithm={Algorithm}, KeySize={KeySize} bits, CEK size={CekSize} bytes, Theoretical max CEK={MaxCekSize} bytes")]
-	private partial void LogEncryptionFailed(string Algorithm, int KeySize, int CekSize, int MaxCekSize);
-
 	/// <inheritdoc />
 	public bool TryDecryptKey(
 		JsonWebTokenHeader header,

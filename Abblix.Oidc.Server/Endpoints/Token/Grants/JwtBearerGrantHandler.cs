@@ -64,7 +64,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
-public class JwtBearerGrantHandler(
+public partial class JwtBearerGrantHandler(
 	IJsonWebTokenValidator jwtValidator,
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
@@ -138,15 +138,13 @@ public class JwtBearerGrantHandler(
 
 		if (string.IsNullOrWhiteSpace(request.Assertion))
 		{
-			logger.LogWarning("JWT Bearer grant request missing required 'assertion' parameter from client {ClientId}",
-				clientInfo.ClientId);
+			LogMissingAssertion(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant, "The 'assertion' parameter is required for JWT Bearer grant type");
 		}
 
 		if (request.Assertion.Length > options.MaxJwtSize)
 		{
-			logger.LogWarning("JWT assertion too large ({Length} chars, max {MaxSize}) from client {ClientId}",
-				request.Assertion.Length, options.MaxJwtSize, clientInfo.ClientId);
+			LogAssertionTooLarge(request.Assertion.Length, options.MaxJwtSize, clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant,
 				$"The JWT assertion exceeds maximum allowed size of {options.MaxJwtSize} characters");
 		}
@@ -176,9 +174,7 @@ public class JwtBearerGrantHandler(
 		{
 			var (error, errorDescription) = failure;
 
-			logger.LogWarning(
-				"JWT assertion validation failed for client {ClientId}: {ErrorCode} - {ErrorDescription}",
-				clientInfo.ClientId, error, errorDescription);
+			LogValidationFailed(clientInfo.ClientId, error, errorDescription);
 
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion is invalid or has expired");
 		});
@@ -192,7 +188,7 @@ public class JwtBearerGrantHandler(
 		var subject = jwt.Payload.Subject;
 		if (string.IsNullOrWhiteSpace(subject))
 		{
-			logger.LogWarning("JWT assertion missing required 'sub' claim for client {ClientId}", clientInfo.ClientId);
+			LogMissingSubject(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion must contain a 'sub' (subject) claim");
 		}
 
@@ -213,8 +209,7 @@ public class JwtBearerGrantHandler(
 		if (allowedAlgorithms.Contains(algorithm, StringComparer.OrdinalIgnoreCase))
 			return ctx;
 
-		logger.LogWarning("JWT assertion rejected: algorithm {Algorithm} not allowed for issuer {Issuer}, client {ClientId}",
-			algorithm, ctx.Issuer, clientInfo.ClientId);
+		LogAlgorithmNotAllowed(algorithm, ctx.Issuer, clientInfo.ClientId);
 
 		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion uses an unsupported signature algorithm");
 	}
@@ -232,9 +227,7 @@ public class JwtBearerGrantHandler(
 		if (allowedTypes.Contains(tokenType, StringComparer.OrdinalIgnoreCase))
 			return ctx;
 
-		logger.LogWarning(
-			"JWT assertion rejected: token type '{TokenType}' not in allowed types [{AllowedTypes}], client {ClientId}, issuer {Issuer}",
-			tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
+		LogTokenTypeNotAllowed(tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
 
 		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has an unsupported token type");
 	}
@@ -251,9 +244,7 @@ public class JwtBearerGrantHandler(
 		var issuedAt = ctx.Jwt.Payload.IssuedAt;
 		if (issuedAt == null)
 		{
-			logger.LogWarning(
-				"JWT assertion rejected: missing 'iat' claim but MaxJwtAge is configured, client {ClientId}, issuer {Issuer}",
-				clientInfo.ClientId, ctx.Issuer);
+			LogMissingIssuedAt(clientInfo.ClientId, ctx.Issuer);
 
 			return new OidcError(ErrorCodes.InvalidGrant,
 				"The JWT assertion must contain an 'iat' (issued at) claim when age validation is enabled");
@@ -265,9 +256,7 @@ public class JwtBearerGrantHandler(
 		if (jwtAge <= maxAge + options.ClockSkew)
 			return ctx;
 
-		logger.LogWarning(
-			"JWT assertion rejected: JWT too old. Issued at {IssuedAt}, age {JwtAge}, max allowed {MaxAge}, client {ClientId}, issuer {Issuer}",
-			issuedAt, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
+		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
 
 		return new OidcError(ErrorCodes.InvalidGrant,
 			"The JWT assertion is too old. Please use a freshly issued JWT.");
@@ -285,17 +274,14 @@ public class JwtBearerGrantHandler(
 		var jti = ctx.Jwt.Payload.JwtId;
 		if (string.IsNullOrWhiteSpace(jti))
 		{
-			logger.LogWarning("JWT assertion missing required 'jti' claim for client {ClientId}, issuer {Issuer}",
-				clientInfo.ClientId, ctx.Issuer);
+			LogMissingJti(clientInfo.ClientId, ctx.Issuer);
 			return new OidcError(ErrorCodes.InvalidGrant,
 				"The JWT assertion must contain a 'jti' (JWT ID) claim for replay protection");
 		}
 
 		if (await issuerProvider.IsReplayedAsync(jti))
 		{
-			logger.LogWarning(
-				"SECURITY: JWT replay attack detected - JTI: {JwtId}, Client: {ClientId}, Issuer: {Issuer}, KeyId: {KeyId}, IP: {ClientIp}",
-				jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
+			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
 		}
 
@@ -315,8 +301,7 @@ public class JwtBearerGrantHandler(
 		if (invalidScopes.Length == 0)
 			return ctx;
 
-		logger.LogWarning("JWT Bearer grant rejected: scopes {InvalidScopes} not allowed for issuer {Issuer}",
-			invalidScopes, ctx.Issuer);
+		LogScopesNotAllowed(string.Join(", ", invalidScopes), ctx.Issuer);
 
 		return new OidcError(
 			ErrorCodes.InvalidScope,
@@ -328,8 +313,7 @@ public class JwtBearerGrantHandler(
 	/// </summary>
 	private AuthorizedGrant CreateAuthorizedGrant(ValidationContext ctx, string[] scope, ClientInfo clientInfo)
 	{
-		logger.LogInformation(
-			"AUDIT: JWT Bearer grant SUCCESS - Client: {ClientId}, Subject: {Subject}, Issuer: {Issuer}, JTI: {JwtId}, KeyId: {KeyId}, IP: {ClientIp}",
+		LogGrantSucceeded(
 			clientInfo.ClientId, ctx.Subject, ctx.Issuer, ctx.Jwt.Payload.JwtId ?? "none",
 			ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 
@@ -359,7 +343,7 @@ public class JwtBearerGrantHandler(
 		var isTrusted = await issuerProvider.IsTrustedIssuerAsync(issuer);
 		if (!isTrusted)
 		{
-			logger.LogWarning("JWT Bearer assertion rejected: issuer {Issuer} is not trusted", issuer);
+			LogIssuerNotTrusted(issuer);
 		}
 		return isTrusted;
 	}
@@ -376,31 +360,26 @@ public class JwtBearerGrantHandler(
 	private Task<bool> ValidateAudience(IEnumerable<string> audiences)
 	{
 		var options = issuerProvider.Options;
+		var audienceList = audiences.Materialize();
 
 		if (!Uri.TryCreate(requestInfoProvider.RequestUri, UriKind.Absolute, out var tokenEndpoint))
 			return Task.FromResult(false);
 
 		var isValid = options.StrictAudienceValidation
-			? ValidateStrict(audiences, tokenEndpoint)
-			: ValidatePermissive(audiences, tokenEndpoint, requestInfoProvider.ApplicationUri);
+			? ValidateStrict(audienceList, tokenEndpoint)
+			: ValidatePermissive(audienceList, tokenEndpoint, requestInfoProvider.ApplicationUri);
 
 		if (isValid)
 			return Task.FromResult(true);
 
+		var actualAudiences = string.Join(", ", audienceList);
 		if (options.StrictAudienceValidation)
 		{
-			logger.LogWarning(
-				"JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, got {@Audiences}",
-				tokenEndpoint,
-				audiences);
+			LogAudienceFailedStrict(tokenEndpoint, actualAudiences);
 		}
 		else
 		{
-			logger.LogWarning(
-				"JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {@Audiences}",
-				tokenEndpoint,
-				requestInfoProvider.ApplicationUri,
-				audiences);
+			LogAudienceFailedPermissive(tokenEndpoint, requestInfoProvider.ApplicationUri, actualAudiences);
 		}
 
 		return Task.FromResult(false);
