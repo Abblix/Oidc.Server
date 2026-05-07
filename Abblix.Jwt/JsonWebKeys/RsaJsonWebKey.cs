@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -154,4 +155,17 @@ public sealed record RsaJsonWebKey : JsonWebKey
     /// </remarks>
     [JsonIgnore]
     public override bool HasPrivateKey => PrivateExponent is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Required RSA members per RFC 7638 §3.2 in lexicographic order: <c>e</c>,
+    /// <c>kty</c>, <c>n</c>. Both base64url-encoded values contain only characters that
+    /// need no JSON escaping.
+    /// </remarks>
+    protected override string CanonicalJson()
+    {
+        var e = Exponent ?? throw new InvalidOperationException("JWK Thumbprint requires the 'e' member for an RSA key.");
+        var n = Modulus ?? throw new InvalidOperationException("JWK Thumbprint requires the 'n' member for an RSA key.");
+        return $$"""{"e":"{{Base64Url.EncodeToString(e)}}","kty":"RSA","n":"{{Base64Url.EncodeToString(n)}}"}""";
+    }
 }

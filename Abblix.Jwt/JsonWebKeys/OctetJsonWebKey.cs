@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -90,4 +91,16 @@ public sealed record OctetJsonWebKey : JsonWebKey
     /// </remarks>
     [JsonIgnore]
     public override bool HasPrivateKey => KeyValue is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Required oct members per RFC 7638 §3.2 in lexicographic order: <c>k</c>,
+    /// <c>kty</c>. The base64url-encoded key value contains only characters that need
+    /// no JSON escaping.
+    /// </remarks>
+    protected override string CanonicalJson()
+    {
+        var keyValue = KeyValue ?? throw new InvalidOperationException("JWK Thumbprint requires the 'k' member for an oct key.");
+        return $$"""{"k":"{{Base64Url.EncodeToString(keyValue)}}","kty":"oct"}""";
+    }
 }

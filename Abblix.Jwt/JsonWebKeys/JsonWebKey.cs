@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -123,4 +126,46 @@ public abstract record JsonWebKey
     /// </summary>
     [JsonIgnore]
     public abstract bool HasPrivateKey { get; }
+
+    /// <summary>
+    /// Builds the canonical-JSON form of this key per RFC 7638 §3.2: the required members
+    /// for this <c>kty</c>, in lexicographic order, with no whitespace. Optional members
+    /// (<c>use</c>, <c>alg</c>, <c>kid</c>, certificate metadata) must NOT enter the form.
+    /// </summary>
+    /// <returns>The canonical-JSON string fed into the SHA-256 hash by
+    /// <see cref="ComputeJwkThumbprint"/>.</returns>
+    /// <exception cref="InvalidOperationException">A member required by the concrete
+    /// subtype is missing.</exception>
+    protected abstract string CanonicalJson();
+
+    /// <summary>
+    /// Computes the JWK Thumbprint of this key per RFC 7638 §3 as the raw 32-byte SHA-256
+    /// digest of the canonical-JSON form built by <see cref="CanonicalJson"/>.
+    /// </summary>
+    /// <remarks>
+    /// The thumbprint is computed at runtime from the public-key material; it is not a
+    /// stored member on the JWK and is distinct from the X.509 certificate thumbprints
+    /// <c>x5t</c> (RFC 7517 §4.8) and <c>x5t#S256</c> (RFC 7517 §4.9), which hash the
+    /// certificate, not the key. OAuth 2.0 DPoP (RFC 9449) uses this value for
+    /// <c>cnf.jkt</c> and the <c>dpop_jkt</c> request parameter.
+    /// </remarks>
+    /// <returns>The 32-byte SHA-256 digest.</returns>
+    /// <exception cref="InvalidOperationException">A required member
+    /// (per RFC 7638 §3.2) is missing on this key.</exception>
+    public byte[] ComputeJwkThumbprint()
+    {
+        var canonical = CanonicalJson();
+        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+    }
+
+    /// <summary>
+    /// Computes the JWK Thumbprint of this key per RFC 7638 §3 and returns the
+    /// base64url-encoded form, which is the wire shape used by DPoP <c>cnf.jkt</c> and
+    /// the <c>dpop_jkt</c> authorization-request parameter.
+    /// </summary>
+    /// <returns>The base64url-encoded SHA-256 digest of the canonical-JSON form.</returns>
+    /// <exception cref="InvalidOperationException">A required member
+    /// (per RFC 7638 §3.2) is missing on this key.</exception>
+    public string ComputeJwkThumbprintBase64Url()
+        => Base64Url.EncodeToString(ComputeJwkThumbprint());
 }

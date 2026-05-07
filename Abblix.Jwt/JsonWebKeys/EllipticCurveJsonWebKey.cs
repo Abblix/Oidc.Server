@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -113,4 +114,18 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
     /// </remarks>
     [JsonIgnore]
     public override bool HasPrivateKey => PrivateKey is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Required EC members per RFC 7638 §3.2 in lexicographic order: <c>crv</c>,
+    /// <c>kty</c>, <c>x</c>, <c>y</c>. The interpolated <c>crv</c> identifier and the
+    /// base64url-encoded coordinates contain only characters that need no JSON escaping.
+    /// </remarks>
+    protected override string CanonicalJson()
+    {
+        var crv = Curve ?? throw new InvalidOperationException("JWK Thumbprint requires the 'crv' member for an EC key.");
+        var x = X ?? throw new InvalidOperationException("JWK Thumbprint requires the 'x' member for an EC key.");
+        var y = Y ?? throw new InvalidOperationException("JWK Thumbprint requires the 'y' member for an EC key.");
+        return $$"""{"crv":"{{crv}}","kty":"EC","x":"{{Base64Url.EncodeToString(x)}}","y":"{{Base64Url.EncodeToString(y)}}"}""";
+    }
 }
