@@ -58,6 +58,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Abblix.Jwt.UnitTests" />
+    <!-- Abblix.Oidc.Server.Features.DPoP.ProofValidator delegates JWS signature
+         verification to IJsonWebTokenSigner. The two assemblies ship together; the
+         alternative (public-fying IJsonWebTokenSigner) commits to a stable contract
+         we have no need to expose to library consumers. -->
+    <InternalsVisibleTo Include="Abblix.Oidc.Server" />
   </ItemGroup>
 
 </Project>
