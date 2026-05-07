@@ -22,7 +22,7 @@
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+    <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- MTP0001 is raised by Microsoft.Testing.Platform when VSTest-specific MSBuild
@@ -37,7 +37,7 @@
        instead of waiting for a CI scan. PrivateAssets=all keeps the analyzer
        out of the NuGet graph we ship to consumers. -->
   <ItemGroup>
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.24.0.138807">
+    <PackageReference Include="SonarAnalyzer.CSharp">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
     </PackageReference>
