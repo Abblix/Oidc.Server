@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// at all is permitted to pass; an identifier that does not resolve yields
 /// <see cref="ErrorCodes.UnauthorizedClient"/>.
 /// </summary>
-public class ClientValidator(
+public partial class ClientValidator(
     ILogger<ClientValidator> logger,
     IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
@@ -49,7 +49,7 @@ public class ClientValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(context.ClientId));
+            LogClientNotFound(Sanitized.Value(context.ClientId));
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");

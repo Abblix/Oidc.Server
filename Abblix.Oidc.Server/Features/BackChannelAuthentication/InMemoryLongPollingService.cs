@@ -51,7 +51,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// Use a distributed implementation based on Redis Pub/Sub, SignalR backplane, or message queue.
 /// </para>
 /// </remarks>
-public class InMemoryLongPollingService(
+public partial class InMemoryLongPollingService(
     ILogger<InMemoryLongPollingService> logger)
     : IBackChannelLongPollingService
 {
@@ -76,10 +76,7 @@ public class InMemoryLongPollingService(
         var waiters = _waiters.GetOrAdd(authenticationRequestId, _ => new ConcurrentBag<TaskCompletionSource<bool>>());
         waiters.Add(tcs);
 
-        logger.LogDebug(
-            "Long-polling request waiting for auth_req_id: {AuthReqId}, timeout: {Timeout}",
-            authenticationRequestId,
-            timeout);
+        LogWaitingForStatusChange(authenticationRequestId, timeout);
 
         try
         {
@@ -93,15 +90,11 @@ public class InMemoryLongPollingService(
 
             if (completedTask == tcs.Task)
             {
-                logger.LogInformation(
-                    "Long-polling request received status change notification for auth_req_id: {AuthReqId}",
-                    authenticationRequestId);
+                LogStatusChangeReceived(authenticationRequestId);
                 return true;
             }
 
-            logger.LogDebug(
-                "Long-polling request timed out for auth_req_id: {AuthReqId}",
-                authenticationRequestId);
+            LogWaitTimedOut(authenticationRequestId);
             return false;
         }
         catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
@@ -120,10 +113,7 @@ public class InMemoryLongPollingService(
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
     private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
     {
-        logger.LogDebug(
-            ex,
-            "Long-polling request cancelled for auth_req_id: {AuthReqId}",
-            authenticationRequestId);
+        LogWaitCancelled(ex, authenticationRequestId);
         return false;
     }
 
@@ -138,18 +128,11 @@ public class InMemoryLongPollingService(
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))
         {
             // No one waiting - this is normal and expected
-            logger.LogDebug(
-                "Status changed to {Status} for auth_req_id: {AuthReqId}, but no long-polling requests waiting",
-                newStatus,
-                authenticationRequestId);
+            LogNoWaiters(newStatus, authenticationRequestId);
             return Task.CompletedTask;
         }
 
-        logger.LogInformation(
-            "Notifying {Count} long-polling request(s) of status change to {Status} for auth_req_id: {AuthReqId}",
-            waiters.Count,
-            newStatus,
-            authenticationRequestId);
+        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId);
 
         // Signal all waiting tasks
         foreach (var waiter in waiters)

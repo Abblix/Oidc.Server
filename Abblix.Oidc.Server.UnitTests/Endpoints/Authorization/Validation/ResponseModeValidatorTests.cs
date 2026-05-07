@@ -49,6 +49,7 @@ public class ResponseModeValidatorTests
     public ResponseModeValidatorTests()
     {
         _logger = new Mock<ILogger<ResponseModeValidator>>();
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
         _validator = new ResponseModeValidator(_logger.Object);
     }
 

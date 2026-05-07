@@ -34,11 +34,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 §3) it must not.
 /// A missing <c>client_id</c> is treated as new-registration with server-assigned id.
 /// </summary>
-/// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>
-public class ClientIdValidator(
-    IClientInfoProvider clientInfoProvider,
-    ILogger<ClientIdValidator> logger) : IClientRegistrationContextValidator
+/// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
+public partial class ClientIdValidator(
+    ILogger<ClientIdValidator> logger,
+    IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -58,11 +58,11 @@ public class ClientIdValidator(
                 break;
 
             case DynamicClientOperation.Update:
-                logger.LogWarning("The client with id {ClientId} does not exist", Sanitized.Value(clientId));
+                LogClientNotFound(Sanitized.Value(clientId));
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} does not exist");
 
             case DynamicClientOperation.Register:
-                logger.LogWarning("The client with id {ClientId} is already registered", Sanitized.Value(clientId));
+                LogClientAlreadyRegistered(Sanitized.Value(clientId));
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
 
             default:

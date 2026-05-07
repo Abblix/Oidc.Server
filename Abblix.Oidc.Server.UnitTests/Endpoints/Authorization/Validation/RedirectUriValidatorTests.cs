@@ -50,6 +50,7 @@ public class RedirectUriValidatorTests
     public RedirectUriValidatorTests()
     {
         _logger = new Mock<ILogger<RedirectUriValidator>>();
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
         _validator = new RedirectUriValidator(_logger.Object);
     }
 

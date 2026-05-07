@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// the client cannot be resolved from <c>client_id</c> or <c>id_token_hint</c>, the
 /// redirect URI cannot be safely validated and the request is rejected.
 /// </summary>
-public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
+public partial class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
 {
     /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
@@ -61,9 +61,7 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-            Sanitized.Value(redirectUri),
-            context.ClientInfo.ClientId);
+        LogInvalidPostLogoutRedirectUri(Sanitized.Value(redirectUri), context.ClientInfo.ClientId);
 
         return new OidcError(
             ErrorCodes.InvalidRequest,

@@ -36,11 +36,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// cross-checked against the registered <c>redirect_uris</c>, or all redirect URIs must
 /// share a single host. The resolved host is stored on the context for later persistence.
 /// </summary>
-/// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
 /// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>
-public class SubjectTypeValidator(
-    ISecureHttpFetcher secureHttpFetcher,
-    ILogger<SubjectTypeValidator> logger): IClientRegistrationContextValidator
+/// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
+public partial class SubjectTypeValidator(
+    ILogger<SubjectTypeValidator> logger,
+    ISecureHttpFetcher secureHttpFetcher): IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -121,10 +121,7 @@ public class SubjectTypeValidator(
         var missingUris = sectorIdentifierContent.Except(redirectUris).ToArray();
         if (missingUris.Length > 0)
         {
-            logger.LogWarning(
-                "The following URIs are present in the {SectorIdentifierUri}, but missing from the Redirect URIs: {@MissingUris}",
-                Sanitized.Value(sectorIdentifierUri),
-                missingUris);
+            LogSectorIdentifierMissingUris(Sanitized.Value(sectorIdentifierUri), missingUris);
 
             return ErrorFactory.InvalidClientMetadata(
                 $"The content received from the {Parameters.SectorIdentifierUri} contains one or more URIs that are not in the registered list of redirect URIs");

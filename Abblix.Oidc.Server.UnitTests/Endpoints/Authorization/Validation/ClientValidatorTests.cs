@@ -51,7 +51,7 @@ public class ClientValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         var logger = new Mock<ILogger<ClientValidator>>(MockBehavior.Loose);
-        _validator = new ClientValidator(_clientInfoProvider.Object, logger.Object);
+        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object);
     }
 
     /// <summary>
