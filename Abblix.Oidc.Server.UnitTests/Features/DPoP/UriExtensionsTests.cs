@@ -65,8 +65,5 @@ public class UriExtensionsTests
     // are uppercased; the literal characters they represent are not decoded.
     [InlineData("https://example.com/foo%2fbar", "https://example.com/foo%2Fbar")]
     public void Normalize_ProducesCanonicalHtuForm(string input, string expected)
-    {
-        Assert.Equal(expected, new Uri(input).Normalize());
-    }
-
+        => Assert.Equal(expected, new Uri(input).Normalize());
 }
