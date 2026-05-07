@@ -36,15 +36,15 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// Works with Redis, SQL Server, NCache, or any IDistributedCache implementation.
 /// Clock skew buffer is configurable via <see cref="JwtBearerOptions.ClockSkew"/>.
 /// </remarks>
+/// <param name="logger">Logger for recording replay detection events.</param>
 /// <param name="cache">The distributed cache for storing JTIs.</param>
 /// <param name="options">JWT Bearer options for configurable settings like clock skew.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
-/// <param name="logger">Logger for recording replay detection events.</param>
-public class DistributedJwtReplayCache(
+public partial class DistributedJwtReplayCache(
+	ILogger<DistributedJwtReplayCache> logger,
 	IDistributedCache cache,
 	IOptionsMonitor<OidcOptions> options,
-	TimeProvider timeProvider,
-	ILogger<DistributedJwtReplayCache> logger) : IJwtReplayCache
+	TimeProvider timeProvider) : IJwtReplayCache
 {
 	/// <summary>
 	/// Cache key prefix for JTI entries to avoid collisions with other cache data.
@@ -76,7 +76,7 @@ public class DistributedJwtReplayCache(
 
 		if (existing != null)
 		{
-			logger.LogDebug("JWT replay detected for jti {JwtId}", jti);
+			LogReplayDetected(jti);
 			return true;
 		}
 
@@ -106,6 +106,6 @@ public class DistributedJwtReplayCache(
 			UsedMarker,
 			new () { AbsoluteExpirationRelativeToNow = expiration });
 
-		logger.LogDebug("Marked jti {JwtId} as used, expires in {Expiration}", jti, expiration);
+		LogMarkedAsUsed(jti, expiration);
 	}
 }

@@ -43,15 +43,4 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- Solution Explorer / Rider Project tool window shows *.Logging.cs as a
-       child node of the same-named *.cs. DependentUpon metadata is the canonical
-       MSBuild contract for arbitrary file nesting; both VS and Rider read it
-       directly without per-IDE configuration. After bumping this rule, a Rider
-       refresh of the project tree (or full IDE reload) is required for the
-       nesting to redraw — Rider caches the structure between solution loads. -->
-  <ItemGroup>
-    <Compile Update="**\*.Logging.cs">
-      <DependentUpon>$([System.String]::Copy('%(Filename)').Replace('.Logging', '')).cs</DependentUpon>
-    </Compile>
-  </ItemGroup>
 </Project>

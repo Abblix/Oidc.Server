@@ -166,10 +166,65 @@ internal static class LogEvents
 
     /// <summary>
     /// Range 5000–5099: <c>Features/Tokens</c> — validation, issuance, revocation.
+    /// Each source class lives in its own nested static class with a packed sub-range
+    /// inside the feature window.
     /// </summary>
     public static class Tokens
     {
-        private const int Base = 5000;
+        /// <summary>
+        /// <c>Features/Tokens/Validation/ClientJwtValidator.cs</c> — validation of JWTs
+        /// issued by clients (private_key_jwt assertions, request objects)
+        /// (sub-range 5000–5019).
+        /// </summary>
+        public static class ClientJwtValidator
+        {
+            private const int Base = 5000;
+
+            public const int ValidationFailed = Base + 1;
+            public const int ClientIdMismatch = Base + 2;
+            public const int ClientNotDetermined = Base + 3;
+            public const int ValidationSucceeded = Base + 4;
+            public const int AudienceValidationFailed = Base + 5;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/LogoutTokenService.cs</c> — back-channel logout token
+        /// generation per OpenID Connect Back-Channel Logout 1.0
+        /// (sub-range 5020–5039).
+        /// </summary>
+        public static class LogoutTokenService
+        {
+            private const int Base = 5020;
+
+            public const int TokenPrepared = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/JwtBearer/DistributedJwtReplayCache.cs</c> — JWT replay
+        /// protection via <c>IDistributedCache</c> per RFC 7523 Section 5.2
+        /// (sub-range 5040–5059).
+        /// </summary>
+        public static class DistributedJwtReplayCache
+        {
+            private const int Base = 5040;
+
+            public const int ReplayDetected = Base + 1;
+            public const int MarkedAsUsed = Base + 2;
+        }
+
+        /// <summary>
+        /// <c>Features/JwtBearer/JwtBearerIssuerProvider.cs</c> — trusted issuer
+        /// resolution and JWKS fetching for JWT Bearer assertions
+        /// (sub-range 5060–5079).
+        /// </summary>
+        public static class JwtBearerIssuerProvider
+        {
+            private const int Base = 5060;
+
+            public const int IssuerNotTrusted = Base + 1;
+            public const int InvalidIssuerUri = Base + 2;
+            public const int SigningKeysForUntrustedIssuer = Base + 3;
+        }
     }
 
     /// <summary>
@@ -178,6 +233,36 @@ internal static class LogEvents
     public static class HttpFetch
     {
         private const int Base = 6000;
+
+        /// <summary>
+        /// <c>Features/SecureHttpFetch/SecureHttpFetcher.cs</c> — secure outbound
+        /// HTTP fetch with SSRF protection and response validation
+        /// (sub-range 6000–6019).
+        /// </summary>
+        public static class SecureHttpFetcher
+        {
+            private const int Base = 6000;
+
+            public const int ResponseTooLarge = Base + 1;
+            public const int UnexpectedContentType = Base + 2;
+            public const int Timeout = Base + 3;
+            public const int SsrfProtectionBlocked = Base + 4;
+            public const int FetchFailed = Base + 5;
+        }
+
+        /// <summary>
+        /// <c>Features/SecureHttpFetch/SecureHttpFetcherExtensions.cs</c> — JWKS
+        /// fetch helpers built on top of <c>ISecureHttpFetcher</c>
+        /// (sub-range 6020–6039).
+        /// </summary>
+        public static class SecureHttpFetcherExtensions
+        {
+            private const int Base = 6020;
+
+            public const int FetchingJwks = Base + 1;
+            public const int JwksEmpty = Base + 2;
+            public const int JwksFetchFailed = Base + 3;
+        }
     }
 
     /// <summary>
@@ -195,6 +280,33 @@ internal static class LogEvents
     public static class Licensing
     {
         private const int Base = 8000;
+
+        /// <summary>
+        /// <c>Features/Licensing/LicenseChecker.cs</c> — runtime enforcement of
+        /// client and issuer caps from the active license (sub-range 8000–8019).
+        /// </summary>
+        public static class LicenseChecker
+        {
+            private const int Base = 8000;
+
+            public const int ClientLimitExceededByMargin = Base + 1;
+            public const int ClientLimitExceeded = Base + 2;
+            public const int IssuerNotInWhitelist = Base + 3;
+            public const int IssuerLimitExceeded = Base + 4;
+        }
+
+        /// <summary>
+        /// <c>Features/Licensing/LicenseManager.cs</c> — license lifecycle events
+        /// (expiring soon, grace period, expired) (sub-range 8020–8039).
+        /// </summary>
+        public static class LicenseManager
+        {
+            private const int Base = 8020;
+
+            public const int LicenseExpiringSoon = Base + 1;
+            public const int LicenseInGracePeriod = Base + 2;
+            public const int LicenseExpired = Base + 3;
+        }
     }
 
     /// <summary>

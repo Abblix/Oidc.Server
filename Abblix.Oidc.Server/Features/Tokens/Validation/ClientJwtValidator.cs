@@ -47,7 +47,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
-public class ClientJwtValidator(
+public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
     IJsonWebTokenValidator tokenValidator,
@@ -84,10 +84,7 @@ public class ClientJwtValidator(
 
         if (result.TryGetFailure(out var error))
         {
-            logger.LogWarning(
-                "Client JWT validation failed. Error: {ErrorType}, Description: {Description}",
-                error.GetType().Name,
-                error.ToString());
+            LogValidationFailed(error.GetType().Name, error.ToString());
             return error;
         }
 
@@ -104,10 +101,7 @@ public class ClientJwtValidator(
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
                 // Both issuer and client_id present but don't match
-                logger.LogWarning(
-                    "Client ID mismatch: issuer resolves to {IssuerClientId}, but client_id claim is {ClaimClientId}",
-                    context.ClientInfo.ClientId,
-                    clientIdFromJwt);
+                LogClientIdMismatch(context.ClientInfo.ClientId, clientIdFromJwt);
 
                 return new JwtValidationError(
                     JwtError.InvalidToken,
@@ -117,11 +111,11 @@ public class ClientJwtValidator(
 
         if (context.ClientInfo == null)
         {
-            logger.LogWarning("Unable to determine client from JWT. No matching client found by issuer or client_id claim.");
+            LogClientNotDetermined();
             return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
         }
 
-        logger.LogInformation("Client JWT validation succeeded for client: {ClientId}", context.ClientInfo.ClientId);
+        LogValidationSucceeded(context.ClientInfo.ClientId);
         return new ValidJsonWebToken(validatedToken, context.ClientInfo);
     }
 
@@ -137,12 +131,11 @@ public class ClientJwtValidator(
         var requestUri = requestInfoProvider.RequestUri;
         var issuer = issuerProvider.GetIssuer();
 
-        var result = audiences.Contains(requestUri) || audiences.Contains(issuer);
+        var materializedAudiences = audiences.Materialize();
+        var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);
         if (!result)
         {
-            logger.LogWarning(
-                "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}",
-                audiences, requestUri, issuer);
+            LogAudienceValidationFailed(materializedAudiences, requestUri, issuer);
         }
 
         return Task.FromResult(result);
