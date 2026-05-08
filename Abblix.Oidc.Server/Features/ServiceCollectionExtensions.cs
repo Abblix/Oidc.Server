@@ -38,6 +38,8 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.DPoP.Nonce;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -60,6 +62,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
+using RollingHmacNonceService = Abblix.Oidc.Server.Features.DPoP.Nonce.RollingHmacNonceService;
 
 namespace Abblix.Oidc.Server.Features;
 
@@ -568,6 +571,25 @@ public static class ServiceCollectionExtensions
             })
             .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the OAuth 2.0 DPoP (RFC 9449) infrastructure: the
+    /// <see cref="INonceService"/> backing the <c>DPoP-Nonce</c> challenge flow,
+    /// and (via defensive <c>TryAdd</c>) the JWT replay cache that the proof
+    /// validator depends on so DPoP-only deployments do not need to enable JWT
+    /// Bearer just to get the cache. The proof validator itself is wired by the
+    /// token-endpoint integration slice.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection AddDPoP(this IServiceCollection services)
+    {
+        services.TryAddSingleton<
+            ReplayPrevention.IJwtReplayCache,
+            ReplayPrevention.DistributedJwtReplayCache>();
+        services.TryAddSingleton<INonceService, RollingHmacNonceService>();
         return services;
     }
 }

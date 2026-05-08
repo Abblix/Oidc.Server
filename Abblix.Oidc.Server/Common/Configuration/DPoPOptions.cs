@@ -36,4 +36,11 @@ public class DPoPOptions
     /// because DPoP proofs have no expiration claim — <c>iat</c> bounds them.
     /// </summary>
     public TimeSpan IssuedAtTolerance { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Configuration for the DPoP-Nonce service (RFC 9449 §8 / §9): nonce
+    /// acceptance window, secret-rotation cadence, and per-endpoint
+    /// require-nonce policy.
+    /// </summary>
+    public NonceOptions Nonce { get; set; } = new();
 }

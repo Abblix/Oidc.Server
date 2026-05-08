@@ -378,6 +378,18 @@ internal static class LogEvents
             public const int InvalidIssuerUri = Base + 2;
             public const int SigningKeysForUntrustedIssuer = Base + 3;
         }
+
+        /// <summary>
+        /// <c>Features/DPoP/RollingHmacNonceService.cs</c> — DPoP-Nonce issuance
+        /// and validation per RFC 9449 §8 / §9 (sub-range 5080–5099).
+        /// </summary>
+        public static class RollingHmacNonceService
+        {
+            private const int Base = 5080;
+
+            public const int SecretGenerated = Base + 1;
+            public const int ValidationFailed = Base + 2;
+        }
     }
 
     /// <summary>
