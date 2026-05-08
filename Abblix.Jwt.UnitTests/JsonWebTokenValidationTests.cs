@@ -284,7 +284,7 @@ public class JsonWebTokenValidationTests
     /// Verifies that JWTs with invalid Base64URL encoding fail validation.
     /// Tests handling of malformed tokens that cannot be decoded.
     /// Per RFC 7515 Section 3, JWTs must use Base64URL encoding for header, payload, and signature.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithInvalidBase64_FailsValidation()
@@ -297,14 +297,14 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.MalformedToken, error.Error);
     }
 
     /// <summary>
     /// Verifies that JWTs with missing parts (header/payload/signature) fail validation.
     /// Per RFC 7515, a JWS compact serialization must have exactly 3 parts separated by dots: header.payload.signature
     /// Tests rejection of structurally invalid tokens.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithMissingParts_FailsValidation()
@@ -317,13 +317,13 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.MalformedToken, error.Error);
     }
 
     /// <summary>
     /// Verifies that empty string input fails validation.
     /// Tests edge case of completely empty token input.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithEmptyString_FailsValidation()
@@ -334,7 +334,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(string.Empty, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.MalformedToken, error.Error);
     }
 
     /// <summary>
@@ -397,7 +397,7 @@ public class JsonWebTokenValidationTests
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),
             ResolveTokenDecryptionKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
         };
 
@@ -411,7 +411,8 @@ public class JsonWebTokenValidationTests
     /// Verifies that unsigned JWTs (algorithm: none) fail validation when signatures are required.
     /// Critical security check - prevents acceptance of unsigned tokens that could be trivially forged.
     /// Per RFC 7515 Section 3.1, "none" algorithm indicates unsecured JWTs.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.InvalidAlgorithm — alg "none" is rejected by the algorithm gate before
+    /// signature verification when RequireSignedTokens is set.
     /// </summary>
     [Fact]
     public async Task UnsignedToken_WithSignatureRequired_FailsValidation()
@@ -425,7 +426,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
     }
 
     /// <summary>
@@ -990,7 +991,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidSignature, error.Error);
     }
 
     /// <summary>
@@ -1019,7 +1020,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
     }
 
     /// <summary>
@@ -1068,7 +1069,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
     }
 
     /// <summary>
@@ -1099,9 +1100,9 @@ public class JsonWebTokenValidationTests
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
             ResolveTokenDecryptionKeys = decryptionKey != null
-                ? _ => new[] { decryptionKey }.ToAsyncEnumerable()
+                ? _ => decryptionKey.ToAsync()
                 : _ => AsyncEnumerable.Empty<JsonWebKey>(),
             Options = options ?? ValidationOptions.Default
         };
@@ -1157,11 +1158,11 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// When the JWT's <c>typ</c> does not match any configured expected value, the validator
-    /// rejects with <see cref="JwtError.InvalidToken"/> — the very token-class-confusion
+    /// rejects with <see cref="JwtError.InvalidTokenType"/> — the very token-class-confusion
     /// rejection RFC 8725 §3.11 prescribes.
     /// </summary>
     [Fact]
-    public async Task ExpectedTokenTypes_TypMismatch_RejectsAsInvalidToken()
+    public async Task ExpectedTokenTypes_TypMismatch_RejectsAsInvalidTokenType()
     {
         var token = CreateValidToken();
         token.Header.Type = "logout+jwt";
@@ -1176,7 +1177,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidTokenType, error.Error);
         Assert.Contains("logout+jwt", error.ErrorDescription);
         Assert.Contains("at+jwt", error.ErrorDescription);
     }
@@ -1187,7 +1188,7 @@ public class JsonWebTokenValidationTests
     /// and the token does not declare its class.
     /// </summary>
     [Fact]
-    public async Task ExpectedTokenTypes_TypMissing_RejectsAsInvalidToken()
+    public async Task ExpectedTokenTypes_TypMissing_RejectsAsInvalidTokenType()
     {
         var token = CreateValidToken();
         token.Header.Type = null;
@@ -1202,7 +1203,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidTokenType, error.Error);
         Assert.Contains("missing", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -52,4 +52,20 @@ public static class ObjectExtensions
 	/// <exception cref="InvalidOperationException">Thrown when the input value is null.</exception>
 	public static T NotNull<T>([NotNull] this T? value, string valueName) where T : struct
 		=> value ?? throw new InvalidOperationException($"{valueName} is expected to be not null");
+
+	/// <summary>
+	/// Wraps a single value as an <see cref="IAsyncEnumerable{T}"/> that yields exactly
+	/// one element. Useful for adapting non-streaming sources to APIs that consume an
+	/// async sequence — for example handing a single signing key to a verifier that
+	/// expects a candidate-key stream.
+	/// </summary>
+	/// <typeparam name="T">The type of the value to wrap.</typeparam>
+	/// <param name="value">The value to yield.</param>
+	/// <returns>An <see cref="IAsyncEnumerable{T}"/> producing <paramref name="value"/>
+	/// once and then completing.</returns>
+	public static async IAsyncEnumerable<T> ToAsync<T>(this T value)
+	{
+		yield return value;
+		await Task.CompletedTask;
+	}
 }

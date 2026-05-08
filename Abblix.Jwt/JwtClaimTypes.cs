@@ -159,6 +159,26 @@ public static class JwtClaimTypes
     public const string JwtId = IanaClaimTypes.Jti;
 
     /// <summary>
+    /// The 'htm' (HTTP Method) claim binds a DPoP proof to the HTTP method of the request
+    /// (RFC 9449 §4.2). Compared byte-exact against the request method.
+    /// </summary>
+    public const string DPoPHttpMethod = "htm";
+
+    /// <summary>
+    /// The 'htu' (HTTP URI) claim binds a DPoP proof to the request target URI
+    /// (RFC 9449 §4.2). Compared after RFC 3986 §6.2 canonicalisation.
+    /// </summary>
+    public const string DPoPHttpUri = "htu";
+
+    /// <summary>
+    /// The 'ath' (Access Token Hash) claim binds a DPoP proof to the access token it
+    /// accompanies at a protected resource (RFC 9449 §4.2). Base64url-encoded SHA-256 of
+    /// the access-token ASCII bytes; present only when an access token is presented.
+    /// Distinct from <see cref="AccessTokenHash"/> (OIDC <c>at_hash</c> in id_tokens).
+    /// </summary>
+    public const string DPoPAccessTokenHash = "ath";
+
+    /// <summary>
     /// The 'auth_time' claim represents the time when the authentication occurred.
     /// It is expressed as the number of seconds since Unix epoch.
     /// </summary>

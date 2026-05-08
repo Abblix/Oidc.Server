@@ -115,7 +115,7 @@ internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IS
         // Per RFC 7515 Section 4.1.1, 'alg' parameter in JWT header is REQUIRED
         var algorithm = header.Algorithm;
         if (algorithm == null)
-            return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "Missing algorithm in JWT header");
 
         // Materialize once: we need to distinguish 'issuer returned zero keys' (configuration
         // problem) from 'returned keys but none survived alg/kid filters' (kid-rotation /
@@ -167,11 +167,11 @@ internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IS
         }
         catch (FormatException)
         {
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid signature encoding");
+            return new JwtValidationError(JwtError.MalformedToken, "Invalid signature encoding");
         }
 
         if (!candidates.Any(key => VerifySignature(key, algorithm, signingInput, signature)))
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
+            return new JwtValidationError(JwtError.InvalidSignature, "Invalid signature");
 
         return null;
 
