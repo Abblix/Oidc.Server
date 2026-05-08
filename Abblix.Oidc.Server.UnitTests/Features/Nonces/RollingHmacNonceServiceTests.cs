@@ -25,7 +25,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.DPoP.Nonce;
+using Abblix.Oidc.Server.Features.Nonces;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,7 +33,7 @@ using Microsoft.Extensions.Time.Testing;
 
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.DPoP;
+namespace Abblix.Oidc.Server.UnitTests.Features.Nonces;
 
 /// <summary>
 /// Tests for <see cref="RollingHmacNonceService"/>. Cover the issue/validate

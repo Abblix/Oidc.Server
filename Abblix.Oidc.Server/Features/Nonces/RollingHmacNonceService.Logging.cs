@@ -22,19 +22,19 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Abblix.Oidc.Server.Features.DPoP.Nonce;
+namespace Abblix.Oidc.Server.Features.Nonces;
 
 partial class RollingHmacNonceService
 {
     [LoggerMessage(
         EventId = LogEvents.Tokens.RollingHmacNonceService.SecretGenerated,
         Level = LogLevel.Debug,
-        Message = "DPoP-Nonce secret generated for bucket {Bucket}")]
+        Message = "Nonce-service secret generated for bucket {Bucket}")]
     private partial void LogSecretGenerated(long Bucket);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.RollingHmacNonceService.ValidationFailed,
         Level = LogLevel.Debug,
-        Message = "DPoP-Nonce validation failed: {Failure}")]
+        Message = "Nonce-service validation failed: {Failure}")]
     private partial void LogValidationFailed(NonceValidationFailure Failure);
 }

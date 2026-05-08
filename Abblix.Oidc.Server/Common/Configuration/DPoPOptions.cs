@@ -20,12 +20,16 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Features.Nonces;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Configuration options for OAuth 2.0 DPoP (RFC 9449). The remaining settings
-/// (algorithm whitelist, replay-cache lifetime, DPoP-Nonce policy, per-endpoint
-/// nonce-required flags) land alongside the corresponding feature slices.
+/// Configuration options for OAuth 2.0 DPoP (RFC 9449), covering the proof
+/// validator's <c>iat</c> tolerance and DPoP-specific nonce policy. The
+/// nonce sub-section inherits from the generic <see cref="NonceOptions"/>
+/// so DPoP can configure stricter values independently of other nonce-service
+/// consumers without duplicating field definitions.
 /// </summary>
 public class DPoPOptions
 {
@@ -38,9 +42,10 @@ public class DPoPOptions
     public TimeSpan IssuedAtTolerance { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// Configuration for the DPoP-Nonce service (RFC 9449 §8 / §9): nonce
-    /// acceptance window, secret-rotation cadence, and per-endpoint
-    /// require-nonce policy.
+    /// DPoP-specific nonce configuration: per-endpoint require-nonce policy
+    /// (RFC 9449 §8) plus DPoP-specific overrides of the generic
+    /// <see cref="NonceOptions.AcceptanceWindow"/> and
+    /// <see cref="NonceOptions.RotationInterval"/>.
     /// </summary>
-    public NonceOptions Nonce { get; set; } = new();
+    public DPoPNonceOptions Nonce { get; set; } = new();
 }

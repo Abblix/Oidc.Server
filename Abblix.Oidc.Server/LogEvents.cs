@@ -380,8 +380,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/DPoP/RollingHmacNonceService.cs</c> — DPoP-Nonce issuance
-        /// and validation per RFC 9449 §8 / §9 (sub-range 5080–5099).
+        /// <c>Features/Nonces/RollingHmacNonceService.cs</c> — generic
+        /// stateless-nonce issuance and validation. DPoP-Nonce per RFC 9449
+        /// §8 / §9 is the current consumer (sub-range 5080–5099).
         /// </summary>
         public static class RollingHmacNonceService
         {

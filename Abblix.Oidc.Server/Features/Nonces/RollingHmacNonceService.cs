@@ -27,7 +27,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Features.DPoP.Nonce;
+namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
 /// HMAC-SHA256 backed implementation of <see cref="INonceService"/>.
@@ -41,8 +41,10 @@ namespace Abblix.Oidc.Server.Features.DPoP.Nonce;
 /// nonce's embedded timestamp, looks up that bucket's secret in the
 /// distributed cache, and either finds it or creates one with last-write-wins
 /// semantics. Per RFC 9449 §11.3 a brief mismatch during the rotation race
-/// surfaces to the client as a single retry with a fresh <c>DPoP-Nonce</c>
-/// header, which is the protocol's intended recovery path.
+/// surfaces to the DPoP client as a single retry with a fresh
+/// <c>DPoP-Nonce</c> header, which is the protocol's intended recovery path;
+/// other consumers of this service get the analogous one-retry behaviour
+/// through their own challenge-response loop.
 /// </remarks>
 public partial class RollingHmacNonceService(
     ILogger<RollingHmacNonceService> logger,
@@ -52,11 +54,10 @@ public partial class RollingHmacNonceService(
 {
     /// <summary>
     /// Cache-key prefix for rotating-secret entries. Bucket-index is appended
-    /// per <see cref="BucketIndex"/> below; the prefix isolates DPoP-Nonce
-    /// secrets from any other DPoP entries the cache may host.
+    /// per <see cref="BucketIndex"/> below; the prefix isolates nonce-service
+    /// secrets from any other entries the cache may host.
     /// </summary>
-    private const string CacheKeyPrefix =
-        $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(DPoP)}.Nonce:";
+    private const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.Nonces:";
 
     /// <summary>
     /// Length of the HMAC secret. 32 bytes matches SHA-256's block-aligned

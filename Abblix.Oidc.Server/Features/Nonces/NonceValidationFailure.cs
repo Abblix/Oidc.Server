@@ -20,14 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.DPoP.Nonce;
+namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
-/// Reasons a server-issued DPoP nonce can fail validation. The taxonomy is
-/// internal to the validator and the endpoint glue: every failure surfaces to
-/// the client as the same RFC 9449 §8 <c>use_dpop_nonce</c> error with a
-/// freshly issued nonce in the response header — so the categories are for
-/// log filters and metrics, not for tailoring the protocol response.
+/// Reasons a server-issued nonce can fail validation. The categories are for
+/// log filters and metrics — at the protocol layer DPoP-Nonce flows surface
+/// every failure as the same RFC 9449 §8 <c>use_dpop_nonce</c> error with a
+/// freshly issued nonce in the response header, regardless of the underlying
+/// reason.
 /// </summary>
 public enum NonceValidationFailure
 {

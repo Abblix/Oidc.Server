@@ -20,13 +20,15 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.DPoP.Nonce;
+namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
-/// Issues and validates server-issued DPoP nonces per RFC 9449 §8 / §9. The
-/// nonce is an opaque token the server returns via the <c>DPoP-Nonce</c>
-/// response header; the client echoes it back in the <c>nonce</c> claim of a
-/// subsequent DPoP proof to prove freshness.
+/// Issues and validates server-issued opaque, time-bounded nonces. The current
+/// consumer is DPoP-Nonce per RFC 9449 §8 / §9 — the server returns a nonce
+/// via the <c>DPoP-Nonce</c> response header and the client echoes it back in
+/// the <c>nonce</c> claim of a subsequent DPoP proof to prove freshness — but
+/// the primitive is intentionally generic: any future feature needing
+/// challenge-response freshness checks can resolve the same service.
 /// </summary>
 /// <remarks>
 /// The default implementation is stateless modulo a short-lived rotating HMAC

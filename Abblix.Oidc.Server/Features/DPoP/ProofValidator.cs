@@ -81,9 +81,10 @@ internal sealed class ProofValidator(
             AllowedSigningAlgorithms = AllowedAlgorithms,
         });
 
-        if (!jwtResult.TryGetSuccess(out var jwt))
-            return MapValidationError(jwtResult.GetFailure());
+        if (jwtResult.TryGetFailure(out var validationError))
+            return MapValidationError(validationError);
 
+        var jwt = jwtResult.GetSuccess();
         DateTimeOffset issuedAt = default;
         var jwtId = string.Empty;
 
