@@ -123,10 +123,32 @@ public record AuthorizationContext
 
     /// <summary>
     /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
-    /// for mutual TLS client authentication. When present, access tokens should include a confirmation claim
-    /// (cnf) containing "x5t#S256" equal to this value (RFC 8705).
+    /// for mutual TLS client authentication. When present, access tokens carry a confirmation
+    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 §3.1).
     /// </summary>
-    public string? X509CertificateSha256Thumbprint { get; init; }
+    public string? CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
+    /// Legacy alias for <see cref="CertificateSha256Thumbprint"/>: forwards to the same backing
+    /// storage so existing JSON blobs and downstream callers initialising this property still
+    /// resolve correctly, while the deprecation warning steers new code to the canonical name.
+    /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
+    /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
+    /// </summary>
+    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
+    public string? X509CertificateSha256Thumbprint
+    {
+        get => CertificateSha256Thumbprint;
+        init => CertificateSha256Thumbprint = value;
+    }
+
+    /// <summary>
+    /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
+    /// bound to this authorization (RFC 9449 §6.1). When present, access tokens carry a
+    /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the
+    /// specific key the client demonstrated control of at the token endpoint.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
 
     /// <summary>
     /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI

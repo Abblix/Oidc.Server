@@ -55,17 +55,25 @@ public static class AuthorizationContextExtensions
         payload.ClientId = context.ClientId;
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
+
         payload.Audiences = context.Resources is { Length: > 0 }
             ? Array.ConvertAll(context.Resources, res => res.OriginalString)
             : [context.ClientId];
-        payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(context.RequestedClaims, JsonSerializerOptions);
 
-        // Add certificate-bound token confirmation if available
-        if (!string.IsNullOrWhiteSpace(context.X509CertificateSha256Thumbprint))
+        payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
+            context.RequestedClaims,
+            JsonSerializerOptions);
+
+        // mTLS (RFC 8705) and DPoP (RFC 9449) can coexist on a single token; when both
+        // bindings are present the cnf object carries x5t#S256 and jkt side by side.
+        // When neither binding is present, no cnf claim is emitted.
+        if (!string.IsNullOrWhiteSpace(context.CertificateSha256Thumbprint) ||
+            !string.IsNullOrWhiteSpace(context.ProofKeyThumbprint))
         {
-            payload[IanaClaimTypes.Cnf] = new JsonObject
+            payload.Confirmation = new JsonWebTokenConfirmation
             {
-                ["x5t#S256"] = context.X509CertificateSha256Thumbprint,
+                CertificateSha256Thumbprint = context.CertificateSha256Thumbprint,
+                JwkThumbprint = context.ProofKeyThumbprint,
             };
         }
     }
@@ -94,6 +102,8 @@ public static class AuthorizationContextExtensions
                 .ToArray();
         }
 
+        var cnf = payload.Confirmation;
+
         return new AuthorizationContext(
             payload.ClientId.NotNull(nameof(payload.ClientId)),
             payload.Scope.NotNull(nameof(payload.Scope)).ToArray(),
@@ -101,6 +111,8 @@ public static class AuthorizationContextExtensions
         {
             Nonce = payload.Nonce,
             Resources = resources,
+            CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
+            ProofKeyThumbprint = cnf?.JwkThumbprint,
         };
     }
 }
