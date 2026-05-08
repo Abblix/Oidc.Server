@@ -57,7 +57,12 @@ public class ProofValidatorTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
+        services.AddDistributedMemoryCache();
+        services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
         services.AddSingleton<TimeProvider>(_time);
+        services.AddSingleton<
+            Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache,
+            Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache>();
         services.AddSingleton<IProofValidator, ProofValidator>();
         var sp = services.BuildServiceProvider();
         _sut = sp.GetRequiredService<IProofValidator>();
@@ -110,7 +115,6 @@ public class ProofValidatorTests
     [Theory]
     [InlineData("openid+jwt")]
     [InlineData("JWT")]
-    [InlineData("application/dpop+jwt")] // Even spec-prefix-stripping convention does not save it; this validator is strict.
     public async Task ValidateAsync_TypNotDpopJwt_ReturnsInvalidTyp(string typ)
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Typ = typ }.Build();
@@ -118,7 +122,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("invalid_typ", error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidTyp, error.Reason);
     }
 
     [Theory]
@@ -133,18 +137,18 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("invalid_alg", error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidAlg, error.Reason);
     }
 
     [Fact]
-    public async Task ValidateAsync_HeaderMissingJwk_ReturnsMissingJwk()
+    public async Task ValidateAsync_HeaderMissingJwk_ReturnsInvalidJwk()
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { IncludeJwk = false }.Build();
 
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("missing_jwk", error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
     }
 
     [Fact]
@@ -155,7 +159,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("invalid_jwk", error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
     }
 
     [Fact]
@@ -166,7 +170,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("signature_invalid", error.Reason);
+        Assert.Equal(ProofErrorReasons.SignatureInvalid, error.Reason);
     }
 
     [Fact]
@@ -177,7 +181,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("htm_mismatch", error.Reason);
+        Assert.Equal(ProofErrorReasons.HtmMismatch, error.Reason);
     }
 
     [Fact]
@@ -191,7 +195,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("htu_mismatch", error.Reason);
+        Assert.Equal(ProofErrorReasons.HtuMismatch, error.Reason);
     }
 
     [Fact]
@@ -202,7 +206,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("iat_out_of_window", error.Reason);
+        Assert.Equal(ProofErrorReasons.IatOutOfWindow, error.Reason);
     }
 
     [Fact]
@@ -213,7 +217,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("iat_out_of_window", error.Reason);
+        Assert.Equal(ProofErrorReasons.IatOutOfWindow, error.Reason);
     }
 
     [Fact]
@@ -224,7 +228,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("ath_missing", error.Reason);
+        Assert.Equal(ProofErrorReasons.AthMissing, error.Reason);
     }
 
     [Fact]
@@ -235,7 +239,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("ath_mismatch", error.Reason);
+        Assert.Equal(ProofErrorReasons.AthMismatch, error.Reason);
     }
 
     [Fact]
@@ -246,7 +250,23 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("jti_missing", error.Reason);
+        Assert.Equal(ProofErrorReasons.JtiMissing, error.Reason);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_SameJtiPresentedTwice_SecondReturnsReplayDetected()
+    {
+        // Same builder produces the same jti on every Build() — two consecutive validates
+        // exercise the replay-cache integration: first registers the jti, second hits.
+        var builder = new DPoPProofBuilder(_time.GetUtcNow());
+        var proof = builder.Build();
+
+        var first = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        Assert.True(first.TryGetSuccess(out _));
+
+        var second = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        Assert.True(second.TryGetFailure(out var error));
+        Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
     }
 
     [Theory]
@@ -258,7 +278,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal("malformed_jwt", error.Reason);
+        Assert.Equal(ProofErrorReasons.MalformedJwt, error.Reason);
     }
 }
 

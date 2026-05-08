@@ -247,4 +247,10 @@ public record OidcOptions
 	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
 	/// </summary>
 	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();
+
+	/// <summary>
+	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the
+	/// <see cref="DPoP.ProofValidator"/> behaviour and related primitives.
+	/// </summary>
+	public DPoPOptions DPoP { get; set; } = new();
 }
