@@ -200,7 +200,7 @@ public class DPoPTokenEndpointValidatorTests
         {
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
-                DPoPBoundAccessTokens = clientRequiresDPoP,
+                RequireDPoP = clientRequiresDPoP,
             },
         };
     }

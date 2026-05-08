@@ -234,7 +234,7 @@ public static class ServiceCollectionExtensions
     {
         // Register individual validators that will participate in a composite pattern.
         // Order is load-bearing: ClientValidator must precede DPoPTokenEndpointValidator
-        // because the latter reads ClientInfo.DPoPBoundAccessTokens to decide whether DPoP
+        // because the latter reads ClientInfo.RequireDPoP to decide whether DPoP
         // is mandatory or opportunistic.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),

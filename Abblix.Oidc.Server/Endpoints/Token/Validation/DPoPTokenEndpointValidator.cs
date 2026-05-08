@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Microsoft.Extensions.Options;
@@ -40,7 +41,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// <remarks>
 /// Sits AFTER <see cref="ClientValidator"/> in the composite — that ordering is
 /// load-bearing because this step reads <see cref="TokenValidationContext.ClientInfo"/>
-/// to decide whether DPoP is mandatory (<see cref="ClientInfo.DPoPBoundAccessTokens"/>)
+/// to decide whether DPoP is mandatory (<see cref="ClientInfo.RequireDPoP"/>)
 /// or opportunistic. When the client opts in but the proof is missing, the request is
 /// rejected with <c>invalid_dpop_proof</c>; when the client does not opt in, a missing
 /// proof is silently accepted (Bearer token issued downstream) and a present-and-valid
@@ -56,11 +57,9 @@ public class DPoPTokenEndpointValidator(
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
     {
         var proofJwt = context.ClientRequest.DPoPProof;
-        var clientRequiresDPoP = context.ClientInfo.DPoPBoundAccessTokens;
-
         if (proofJwt is null)
         {
-            if (clientRequiresDPoP)
+            if (context.ClientInfo.RequireDPoP)
             {
                 return new OidcError(
                     ErrorCodes.InvalidDPoPProof,
@@ -116,6 +115,13 @@ public class DPoPTokenEndpointValidator(
         return null;
     }
 
+    /// <summary>
+    /// Mints a fresh nonce via <see cref="INonceService"/> and wraps it in a
+    /// <see cref="DPoPNonceRequiredError"/>. Shared between the missing-nonce and
+    /// stale-nonce branches of <see cref="EnforceNonceAsync"/>: both surface the same
+    /// challenge to the client and both need a freshly issued nonce so the response
+    /// formatter can attach it on the <c>DPoP-Nonce</c> header.
+    /// </summary>
     private async Task<DPoPNonceRequiredError> NonceRequired()
         => new(await nonceService.IssueAsync());
 }
