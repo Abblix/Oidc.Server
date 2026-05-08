@@ -122,7 +122,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.InvalidTyp, error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidTokenType, error.Reason);
     }
 
     [Theory]
@@ -137,7 +137,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.InvalidAlg, error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidAlgorithm, error.Reason);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.HtmMismatch, error.Reason);
+        Assert.Equal(ProofErrorReasons.HttpMethodMismatch, error.Reason);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.HtuMismatch, error.Reason);
+        Assert.Equal(ProofErrorReasons.HttpUriMismatch, error.Reason);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.IatOutOfWindow, error.Reason);
+        Assert.Equal(ProofErrorReasons.IssuedAtOutOfWindow, error.Reason);
     }
 
     [Fact]
@@ -217,7 +217,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.IatOutOfWindow, error.Reason);
+        Assert.Equal(ProofErrorReasons.IssuedAtOutOfWindow, error.Reason);
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.AthMissing, error.Reason);
+        Assert.Equal(ProofErrorReasons.AccessTokenHashMissing, error.Reason);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.AthMismatch, error.Reason);
+        Assert.Equal(ProofErrorReasons.AccessTokenHashMismatch, error.Reason);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.JtiMissing, error.Reason);
+        Assert.Equal(ProofErrorReasons.JwtIdMissing, error.Reason);
     }
 
     [Fact]

@@ -23,7 +23,6 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -43,8 +42,8 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// <remarks>
 /// JWS structure parse, <c>typ</c> pinning, alg-whitelist enforcement, and signature
 /// verification all delegate to <see cref="IJsonWebTokenValidator"/>. The
-/// <see cref="ValidationOptions.AllowMissingIssuer"/> flag opts the call into the DPoP
-/// "embedded jwk" trust model where the validator extracts the signing key from the
+/// <see cref="ValidationOptions.UseEmbeddedVerificationKey"/> flag opts the call into the
+/// DPoP "embedded jwk" trust model where the validator extracts the signing key from the
 /// proof's <c>jwk</c> JOSE header parameter natively. ProofValidator therefore owns only
 /// DPoP-specific concerns: the structural <c>jwk-no-private-key</c> rule, request-binding
 /// claims, and replay protection.
@@ -81,27 +80,33 @@ internal sealed class ProofValidator(
             ExpectedTokenTypes = ExpectedTokenTypes,
             AllowedSigningAlgorithms = AllowedAlgorithms,
         });
+
         if (!jwtResult.TryGetSuccess(out var jwt))
             return MapValidationError(jwtResult.GetFailure());
 
-        if (ValidateJwkShape(jwt.Header, out var jwk) is { } jwkError)
-            return jwkError;
-        if (ValidateRequestBinding(jwt.Payload.Json, httpMethod, requestUri, out var iat) is { } bindingError)
-            return bindingError;
-        if (ValidateAccessTokenBinding(jwt.Payload.Json, accessToken) is { } athError)
-            return athError;
-        if (TryGetJti(jwt.Payload.Json, out var jti) is { } jtiError)
-            return jtiError;
+        DateTimeOffset issuedAt = default;
+        var jwtId = string.Empty;
 
-        if (await replayCache.IsReplayedAsync(jti))
-            return new ProofError(ProofErrorReasons.ReplayDetected,
+        var error = ValidateJwkShape(jwt.Header, out var jwk) ??
+                    ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
+                    ValidateAccessTokenBinding(jwt.Payload, accessToken) ??
+                    TryGetJti(jwt.Payload, out jwtId);
+
+        if (error != null)
+            return error;
+
+        if (await replayCache.IsReplayedAsync(jwtId))
+        {
+            return new ProofError(
+                ProofErrorReasons.ReplayDetected,
                 "DPoP proof jti has already been used within the acceptance window.");
+        }
 
         // The latest moment a same-iat replay could still pass the iat-window check is
         // iat + tolerance; the replay-cache only needs to remember jti up to that point.
-        await replayCache.MarkAsUsedAsync(jti, iat + options.CurrentValue.DPoP.IssuedAtTolerance);
+        await replayCache.MarkAsUsedAsync(jwtId, issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
 
-        return new Proof(jwk, jwk.ComputeJwkThumbprintBase64Url(), jti, iat);
+        return new Proof(jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
     }
 
     /// <summary>
@@ -116,8 +121,8 @@ internal sealed class ProofValidator(
         var reason = error.Error switch
         {
             JwtError.MalformedToken => ProofErrorReasons.MalformedJwt,
-            JwtError.InvalidAlgorithm => ProofErrorReasons.InvalidAlg,
-            JwtError.InvalidTokenType => ProofErrorReasons.InvalidTyp,
+            JwtError.InvalidAlgorithm => ProofErrorReasons.InvalidAlgorithm,
+            JwtError.InvalidTokenType => ProofErrorReasons.InvalidTokenType,
             JwtError.InvalidHeader => ProofErrorReasons.InvalidJwk,
             JwtError.InvalidSignature => ProofErrorReasons.SignatureInvalid,
             _ => ProofErrorReasons.SignatureInvalid,
@@ -146,27 +151,30 @@ internal sealed class ProofValidator(
     /// canonicalisation, and <c>iat</c> falls within the configured tolerance window
     /// around the server's current time. Returns the parsed <c>iat</c> on success.
     /// </summary>
-    private ProofError? ValidateRequestBinding(JsonObject payloadObj, string httpMethod, Uri requestUri, out DateTimeOffset iat)
+    private ProofError? ValidateRequestBinding(
+        JsonWebTokenPayload payload,
+        string httpMethod,
+        Uri requestUri,
+        out DateTimeOffset issuedAt)
     {
-        iat = default;
+        issuedAt = default;
 
-        if (ValidateHttpMethod(payloadObj, httpMethod) is { } htmError)
-            return htmError;
-        if (ValidateHttpUri(payloadObj, requestUri) is { } htuError)
-            return htuError;
-        if (TryGetIat(payloadObj, out var iatValue) is { } iatError)
-            return iatError;
+        var error = ValidateHttpMethod(payload, httpMethod) ??
+                    ValidateHttpUri(payload, requestUri) ??
+                    TryGetIat(payload, out issuedAt);
+
+        if (error != null)
+            return error;
 
         var now = timeProvider.GetUtcNow();
         var tolerance = options.CurrentValue.DPoP.IssuedAtTolerance;
-        if (tolerance < (iatValue - now).Duration())
+        if (tolerance < (issuedAt - now).Duration())
         {
             return new ProofError(
-                ProofErrorReasons.IatOutOfWindow,
+                ProofErrorReasons.IssuedAtOutOfWindow,
                 $"iat is outside the {tolerance.TotalSeconds:0}-second tolerance window.");
         }
 
-        iat = iatValue;
         return null;
     }
 
@@ -174,47 +182,59 @@ internal sealed class ProofValidator(
     /// Compares the proof's <c>htm</c> claim against the current request method
     /// byte-exact (RFC 9449 §4.3).
     /// </summary>
-    private static ProofError? ValidateHttpMethod(JsonObject payloadObj, string httpMethod)
+    private static ProofError? ValidateHttpMethod(JsonWebTokenPayload payload, string httpMethod)
     {
-        var htm = ReadStringClaim(payloadObj, JwtClaimTypes.DPoPHttpMethod);
-        return htm == httpMethod
-            ? null
-            : new ProofError(ProofErrorReasons.HtmMismatch,
-                $"htm '{htm ?? "<missing>"}' does not match request method '{httpMethod}'.");
+        var actualHttpMethod = payload.DPoPHttpMethod;
+        if (actualHttpMethod != httpMethod)
+        {
+            return new ProofError(
+                ProofErrorReasons.HttpMethodMismatch,
+                $"{JwtClaimTypes.DPoPHttpMethod} '{actualHttpMethod ?? "<missing>"}' does not match request method '{httpMethod}'.");
+        }
+
+        return null;
     }
 
     /// <summary>
     /// Compares the proof's <c>htu</c> claim against the current request URI after
     /// RFC 3986 §6.2 canonicalisation.
     /// </summary>
-    private static ProofError? ValidateHttpUri(JsonObject payloadObj, Uri requestUri)
+    private static ProofError? ValidateHttpUri(JsonWebTokenPayload payload, Uri requestUri)
     {
-        var htu = ReadStringClaim(payloadObj, JwtClaimTypes.DPoPHttpUri);
-        if (htu is null)
-            return new ProofError(ProofErrorReasons.HtuMissing, "htu claim is required.");
-        if (!Uri.TryCreate(htu, UriKind.Absolute, out var htuUri))
-            return new ProofError(ProofErrorReasons.HtuInvalid, "htu is not a valid absolute URI.");
-        return htuUri.Normalize() == requestUri.Normalize()
-            ? null
-            : new ProofError(ProofErrorReasons.HtuMismatch, "htu does not match the request URI after canonicalisation.");
+        var httpUri = payload.DPoPHttpUri;
+        if (httpUri is null)
+            return new ProofError(ProofErrorReasons.HttpUriMissing, $"{JwtClaimTypes.DPoPHttpUri} claim is required.");
+
+        if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
+            return new ProofError(ProofErrorReasons.HttpUriInvalid, $"{JwtClaimTypes.DPoPHttpUri} is not a valid absolute URI.");
+
+        if (uri.Normalize() != requestUri.Normalize())
+            return new ProofError(ProofErrorReasons.HttpUriMismatch, $"{JwtClaimTypes.DPoPHttpUri} does not match the request URI after canonicalisation.");
+
+        return null;
     }
 
     /// <summary>
     /// Extracts the <c>iat</c> claim as a <see cref="DateTimeOffset"/>, distinguishing
     /// missing-from-malformed because the two cases need different operator responses.
     /// </summary>
-    private static ProofError? TryGetIat(JsonObject payloadObj, out DateTimeOffset iat)
+    private static ProofError? TryGetIat(JsonWebTokenPayload payload, out DateTimeOffset issuedAt)
     {
-        iat = default;
+        issuedAt = default;
         DateTimeOffset? iatNullable;
-        try { iatNullable = payloadObj.GetUnixTimeSeconds(JwtClaimTypes.IssuedAt); }
+        try
+        {
+            iatNullable = payload.IssuedAt;
+        }
         catch
         {
-            return new ProofError(ProofErrorReasons.IatInvalid, "iat claim is not a valid Unix-time numeric.");
+            return new ProofError(ProofErrorReasons.IssuedAtInvalid, "iat claim is not a valid Unix-time numeric.");
         }
+
         if (iatNullable is null)
-            return new ProofError(ProofErrorReasons.IatMissing, "iat claim is required.");
-        iat = iatNullable.Value;
+            return new ProofError(ProofErrorReasons.IssuedAtMissing, "iat claim is required.");
+
+        issuedAt = iatNullable.Value;
         return null;
     }
 
@@ -222,40 +242,43 @@ internal sealed class ProofValidator(
     /// When the proof accompanies an access token, verifies the <c>ath</c> claim equals
     /// <c>Base64Url(SHA-256(access_token))</c> per RFC 9449 §4.2.
     /// </summary>
-    private static ProofError? ValidateAccessTokenBinding(JsonObject payloadObj, string? accessToken)
+    private static ProofError? ValidateAccessTokenBinding(JsonWebTokenPayload payload, string? accessToken)
     {
         if (accessToken is null)
             return null;
 
-        var ath = ReadStringClaim(payloadObj, JwtClaimTypes.DPoPAccessTokenHash);
-        if (ath is null)
-            return new ProofError(ProofErrorReasons.AthMissing,
-                "ath claim is required when an access token is presented.");
+        var accessTokenHash = payload.DPoPAccessTokenHash;
+        if (accessTokenHash is null)
+        {
+            return new ProofError(
+                ProofErrorReasons.AccessTokenHashMissing,
+                $"{JwtClaimTypes.DPoPAccessTokenHash} claim is required when an access token is presented.");
+        }
 
-        var expectedAth = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
-        return ath == expectedAth
-            ? null
-            : new ProofError(ProofErrorReasons.AthMismatch, "ath does not match the access-token hash.");
+        var expected = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
+        if (accessTokenHash != expected)
+        {
+            return new ProofError(
+                ProofErrorReasons.AccessTokenHashMismatch,
+                $"{JwtClaimTypes.DPoPAccessTokenHash} does not match the access-token hash.");
+        }
+
+        return null;
     }
 
     /// <summary>
     /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 §4.1.7.
     /// The downstream replay-cache uses this value as its key.
     /// </summary>
-    private static ProofError? TryGetJti(JsonObject payloadObj, out string jti)
+    private static ProofError? TryGetJti(JsonWebTokenPayload payload, out string jti)
     {
         jti = null!;
-        var value = ReadStringClaim(payloadObj, JwtClaimTypes.JwtId);
+
+        var value = payload.JwtId;
         if (string.IsNullOrEmpty(value))
-            return new ProofError(ProofErrorReasons.JtiMissing, "jti claim is required.");
+            return new ProofError(ProofErrorReasons.JwtIdMissing, "jti claim is required.");
+
         jti = value;
         return null;
     }
-
-    /// <summary>
-    /// Reads a string-typed claim by name, returning <c>null</c> when the claim is
-    /// missing or not a JSON string.
-    /// </summary>
-    private static string? ReadStringClaim(JsonObject payloadObj, string name)
-        => payloadObj[name]?.AsValue().TryGetValue<string>(out var value) == true ? value : null;
 }

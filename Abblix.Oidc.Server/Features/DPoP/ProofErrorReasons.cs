@@ -36,49 +36,46 @@ public static class ProofErrorReasons
     public const string MalformedJwt = "malformed_jwt";
 
     /// <summary>Header <c>typ</c> is not <c>dpop+jwt</c>.</summary>
-    public const string InvalidTyp = "invalid_typ";
+    public const string InvalidTokenType = "invalid_typ";
 
     /// <summary>Header <c>alg</c> is missing, not asymmetric, or not in the configured whitelist.</summary>
-    public const string InvalidAlg = "invalid_alg";
+    public const string InvalidAlgorithm = "invalid_alg";
 
-    /// <summary>Header <c>jwk</c> is required but missing.</summary>
-    public const string MissingJwk = "missing_jwk";
-
-    /// <summary>Header <c>jwk</c> is malformed or contains private-key material.</summary>
+    /// <summary>Header <c>jwk</c> is missing, malformed, or contains private-key material.</summary>
     public const string InvalidJwk = "invalid_jwk";
 
     /// <summary>JWS signature does not verify under the embedded <c>jwk</c>.</summary>
     public const string SignatureInvalid = "signature_invalid";
 
     /// <summary>Payload <c>htm</c> does not match the request method.</summary>
-    public const string HtmMismatch = "htm_mismatch";
+    public const string HttpMethodMismatch = "htm_mismatch";
 
     /// <summary>Payload <c>htu</c> claim is missing.</summary>
-    public const string HtuMissing = "htu_missing";
+    public const string HttpUriMissing = "htu_missing";
 
     /// <summary>Payload <c>htu</c> is not a valid absolute URI.</summary>
-    public const string HtuInvalid = "htu_invalid";
+    public const string HttpUriInvalid = "htu_invalid";
 
     /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 §6.2 canonicalisation.</summary>
-    public const string HtuMismatch = "htu_mismatch";
+    public const string HttpUriMismatch = "htu_mismatch";
 
     /// <summary>Payload <c>iat</c> claim is missing.</summary>
-    public const string IatMissing = "iat_missing";
+    public const string IssuedAtMissing = "iat_missing";
 
     /// <summary>Payload <c>iat</c> is not a Unix-time numeric.</summary>
-    public const string IatInvalid = "iat_invalid";
+    public const string IssuedAtInvalid = "iat_invalid";
 
     /// <summary>Payload <c>iat</c> falls outside the configured tolerance window around the current time.</summary>
-    public const string IatOutOfWindow = "iat_out_of_window";
+    public const string IssuedAtOutOfWindow = "iat_out_of_window";
 
     /// <summary>Payload <c>ath</c> claim is required (an access token is presented) but missing.</summary>
-    public const string AthMissing = "ath_missing";
+    public const string AccessTokenHashMissing = "ath_missing";
 
     /// <summary>Payload <c>ath</c> does not match <c>Base64Url(SHA-256(access_token))</c>.</summary>
-    public const string AthMismatch = "ath_mismatch";
+    public const string AccessTokenHashMismatch = "ath_mismatch";
 
     /// <summary>Payload <c>jti</c> claim is missing.</summary>
-    public const string JtiMissing = "jti_missing";
+    public const string JwtIdMissing = "jti_missing";
 
     /// <summary>Payload <c>jti</c> has already been used within the acceptance window.</summary>
     public const string ReplayDetected = "replay_detected";
