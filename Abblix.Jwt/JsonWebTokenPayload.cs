@@ -292,4 +292,17 @@ public class JsonWebTokenPayload(JsonObject json)
 		get => Json.GetProperty<string>(JwtClaimTypes.DPoPAccessTokenHash);
 		set => Json.SetProperty(JwtClaimTypes.DPoPAccessTokenHash, value);
 	}
+
+	/// <summary>
+	/// The proof-of-possession confirmation object (RFC 7800 §3.1 <c>cnf</c>) bound to this
+	/// JWT. Carries each binding the token holds — <c>cnf.x5t#S256</c> for mTLS-bound
+	/// tokens (RFC 8705 §3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 §6.1) —
+	/// behind typed accessors. Assignment writes the wrapped <see cref="JsonObject"/> as
+	/// the <c>cnf</c> claim; assigning <c>null</c> removes the claim.
+	/// </summary>
+	public JsonWebTokenConfirmation? Confirmation
+	{
+		get => Json[IanaClaimTypes.Cnf] is JsonObject obj ? new JsonWebTokenConfirmation(obj) : null;
+		set => Json.SetProperty(IanaClaimTypes.Cnf, value?.Json);
+	}
 }

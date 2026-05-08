@@ -23,12 +23,11 @@
 namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
-/// Backward-compat alias for <see cref="ReplayPrevention.IJwtReplayCache"/>. The contract
-/// is identical; the canonical type now lives in
-/// <c>Abblix.Oidc.Server.Features.ReplayPrevention</c> so DPoP and any future consumer can
-/// share the same primitive without cross-feature coupling. Update consumers to import
-/// the new namespace.
+/// Backward-compat alias for <see cref="ReplayPrevention.IJwtReplayCache"/>. The contract is identical;
+/// the canonical type now lives in <c>Abblix.Oidc.Server.Features.ReplayPrevention</c> so DPoP and
+/// any future consumer can share the same primitive without cross-feature coupling.
+/// Update consumers to import the new namespace.
 /// </summary>
-[Obsolete("Use Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache. " +
+[Obsolete($"Use {nameof(Features)}.{nameof(ReplayPrevention)}.{nameof(IJwtReplayCache)}. " +
           "The contract is identical and this interface derives from it for backward compatibility.")]
 public interface IJwtReplayCache : ReplayPrevention.IJwtReplayCache;

@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// code that DI-resolves <see cref="IJwtReplayCache"/> (the deprecated interface) keeps
 /// receiving an instance of the same logical type.
 /// </summary>
-[Obsolete("Use Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache. " +
+[Obsolete($"Use {nameof(Features)}.{nameof(ReplayPrevention)}.{nameof(DistributedJwtReplayCache)}. " +
           "Behaviour is identical; this type is a backward-compat shim that delegates to " +
           "the canonical implementation.")]
 public sealed class DistributedJwtReplayCache(

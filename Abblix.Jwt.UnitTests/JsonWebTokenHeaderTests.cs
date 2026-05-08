@@ -282,6 +282,6 @@ public class JsonWebTokenHeaderTests
 
         header.CertificateSha256Thumbprint = "thumb";
 
-        Assert.True(header.Json.ContainsKey("x5t#S256"));
+        Assert.True(header.Json.ContainsKey(JwtClaimTypes.X509Sha256Thumbprint));
     }
 }
