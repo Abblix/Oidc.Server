@@ -79,8 +79,8 @@ public class ProofValidatorTests
         var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
 
         Assert.True(result.TryGetSuccess(out var ok));
-        Assert.Equal(builder.PublicJwk.ComputeJwkThumbprintBase64Url(), ok.Jkt);
-        Assert.Equal(builder.Jti, ok.Jti);
+        Assert.Equal(builder.PublicJwk.ComputeJwkThumbprintBase64Url(), ok.ProofKeyThumbprint);
+        Assert.Equal(builder.Jti, ok.JwtId);
         Assert.Equal(_time.GetUtcNow(), ok.IssuedAt);
     }
 

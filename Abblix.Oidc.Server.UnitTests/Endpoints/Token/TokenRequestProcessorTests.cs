@@ -598,4 +598,41 @@ public class TokenRequestProcessorTests
                 accessToken.EncodedJwt),
             Times.Once);
     }
+
+    /// <summary>
+    /// Verifies the RFC 9449 §7.1 token-type contract: an authorization context carrying a
+    /// DPoP proof-key thumbprint produces <c>token_type: "DPoP"</c> (so the client sends a
+    /// DPoP proof on every resource-server request); absent the thumbprint, the response
+    /// advertises <c>token_type: "Bearer"</c>. The Bearer row is the regression guard for
+    /// non-DPoP clients.
+    /// </summary>
+    [Theory]
+    [InlineData("test-jkt", TokenTypes.DPoP)]
+    [InlineData(null, TokenTypes.Bearer)]
+    public async Task ProcessAsync_TokenTypeReflectsProofKeyThumbprint(
+        string? proofKeyThumbprint,
+        string expectedTokenType)
+    {
+        // Arrange
+        var request = CreateValidTokenRequest([]);
+        var accessToken = CreateAccessToken();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
+        {
+            ProofKeyThumbprint = proofKeyThumbprint,
+        };
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Equal(expectedTokenType, tokenIssued.TokenType);
+    }
 }

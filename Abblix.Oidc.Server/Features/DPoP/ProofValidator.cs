@@ -74,12 +74,14 @@ internal sealed class ProofValidator(
         string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
-        var jwtResult = await jwtValidator.ValidateAsync(proofJwt, new ValidationParameters
-        {
-            Options = ValidationOptions.RequireSignedTokens | ValidationOptions.UseEmbeddedVerificationKey,
-            ExpectedTokenTypes = ExpectedTokenTypes,
-            AllowedSigningAlgorithms = AllowedAlgorithms,
-        });
+        var jwtResult = await jwtValidator.ValidateAsync(
+            proofJwt,
+            new ()
+            {
+                Options = ValidationOptions.RequireSignedTokens | ValidationOptions.UseEmbeddedVerificationKey,
+                ExpectedTokenTypes = ExpectedTokenTypes,
+                AllowedSigningAlgorithms = AllowedAlgorithms,
+            });
 
         if (jwtResult.TryGetFailure(out var validationError))
             return MapValidationError(validationError);
@@ -107,7 +109,7 @@ internal sealed class ProofValidator(
         // iat + tolerance; the replay-cache only needs to remember jti up to that point.
         await replayCache.MarkAsUsedAsync(jwtId, issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
 
-        return new Proof(jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
+        return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
     }
 
     /// <summary>
@@ -141,9 +143,14 @@ internal sealed class ProofValidator(
     private static ProofError? ValidateJwkShape(JsonWebTokenHeader header, out JsonWebKey jwk)
     {
         jwk = header.VerificationKey.NotNull(nameof(header.VerificationKey));
-        return jwk.HasPrivateKey
-            ? new ProofError(ProofErrorReasons.InvalidJwk, "Header 'jwk' must not contain private key material.")
-            : null;
+        if (jwk.HasPrivateKey)
+        {
+            return new ProofError(
+                ProofErrorReasons.InvalidJwk,
+                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' must not contain private key material.");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -204,13 +211,25 @@ internal sealed class ProofValidator(
     {
         var httpUri = payload.DPoPHttpUri;
         if (httpUri is null)
-            return new ProofError(ProofErrorReasons.HttpUriMissing, $"{JwtClaimTypes.DPoPHttpUri} claim is required.");
+        {
+            return new ProofError(
+                ProofErrorReasons.HttpUriMissing,
+                $"{JwtClaimTypes.DPoPHttpUri} claim is required.");
+        }
 
         if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
-            return new ProofError(ProofErrorReasons.HttpUriInvalid, $"{JwtClaimTypes.DPoPHttpUri} is not a valid absolute URI.");
+        {
+            return new ProofError(
+                ProofErrorReasons.HttpUriInvalid,
+                $"{JwtClaimTypes.DPoPHttpUri} is not a valid absolute URI.");
+        }
 
         if (uri.Normalize() != requestUri.Normalize())
-            return new ProofError(ProofErrorReasons.HttpUriMismatch, $"{JwtClaimTypes.DPoPHttpUri} does not match the request URI after canonicalisation.");
+        {
+            return new ProofError(
+                ProofErrorReasons.HttpUriMismatch,
+                $"{JwtClaimTypes.DPoPHttpUri} does not match the request URI after canonicalisation.");
+        }
 
         return null;
     }
@@ -229,7 +248,9 @@ internal sealed class ProofValidator(
         }
         catch
         {
-            return new ProofError(ProofErrorReasons.IssuedAtInvalid, "iat claim is not a valid Unix-time numeric.");
+            return new ProofError(
+                ProofErrorReasons.IssuedAtInvalid,
+                "iat claim is not a valid Unix-time numeric.");
         }
 
         if (iatNullable is null)
@@ -277,7 +298,7 @@ internal sealed class ProofValidator(
 
         var value = payload.JwtId;
         if (string.IsNullOrEmpty(value))
-            return new ProofError(ProofErrorReasons.JwtIdMissing, "jti claim is required.");
+            return new ProofError(ProofErrorReasons.JwtIdMissing, $"'{JwtClaimTypes.JwtId}' claim is required.");
 
         jti = value;
         return null;

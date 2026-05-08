@@ -77,7 +77,8 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         {
             Scope = scope,
             Resources = resources,
-            X509CertificateSha256Thumbprint = thumbprint,
+            CertificateSha256Thumbprint = thumbprint,
+            ProofKeyThumbprint = request.ProofKeyThumbprint,
         };
     }
 }

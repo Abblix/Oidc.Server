@@ -36,6 +36,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class TokenResponseFormatter : ITokenResponseFormatter
 {
+    private const string DPoPNonceResponseHeader = "DPoP-Nonce";
+
     /// <summary>
     /// Asynchronously formats the response for a token request.
     /// </summary>
@@ -66,6 +68,19 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                 return new ActionResult<TokenResponse>(
                     new OkObjectResult(tokenResponse).WithNoCacheHeaders());
             },
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: FormatError));
+    }
+
+    private static ActionResult<TokenResponse> FormatError(OidcError error)
+    {
+        ActionResult result = new BadRequestObjectResult(
+            new ErrorResponse(error.Error, error.ErrorDescription));
+
+        // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
+        // DPoP-Nonce response header alongside the standard error JSON envelope.
+        if (error is DPoPNonceRequiredError nonceError)
+            result = result.WithHeader(DPoPNonceResponseHeader, nonceError.Nonce);
+
+        return new ActionResult<TokenResponse>(result);
     }
 }

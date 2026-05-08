@@ -73,9 +73,15 @@ public class TokenRequestProcessor(
 			authContext,
 			clientInfo);
 
+		// RFC 9449 §7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
+		// from the proof key) advertises token_type "DPoP"; otherwise "Bearer".
+		var tokenType = !string.IsNullOrEmpty(authContext.ProofKeyThumbprint)
+			? TokenTypes.DPoP
+			: TokenTypes.Bearer;
+
 		var response = new TokenIssued(
 			accessToken,
-			TokenTypes.Bearer,
+			tokenType,
 			clientInfo.AccessTokenExpiresIn,
 			TokenTypeIdentifiers.AccessToken);
 

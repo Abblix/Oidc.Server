@@ -233,11 +233,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
     {
         // Register individual validators that will participate in a composite pattern.
+        // Order is load-bearing: ClientValidator must precede DPoPTokenEndpointValidator
+        // because the latter reads ClientInfo.DPoPBoundAccessTokens to decide whether DPoP
+        // is mandatory or opportunistic.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>()
+            ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.DPoPTokenEndpointValidator>()
         ]);
         // Combine all registered ITokenContextValidator into a single composite validator.
         // This composite approach allows the application to apply multiple validation checks sequentially.
