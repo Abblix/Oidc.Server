@@ -192,7 +192,7 @@ public class JsonWebTokenHeaderTests
         var chain = header.Certificates;
 
         Assert.NotNull(chain);
-        Assert.Equal(new[] { leaf, intermediate }, chain);
+        Assert.Equal([leaf, intermediate], chain);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class JsonWebTokenHeaderTests
     public void Certificates_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.Certificates = new[] { "MIIDleaf==" };
+        header.Certificates = ["MIIDleaf=="];
 
         header.Certificates = null;
 

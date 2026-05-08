@@ -281,7 +281,7 @@ internal sealed class DPoPProofBuilder
     public bool IncludePrivateInJwk { get; init; } = false;
     public string? Htm { get; init; } = "POST";
     public string? Htu { get; init; } = "https://auth.example.com/token";
-    public string? Jti { get; init; } = "test-jti-" + Guid.NewGuid();
+    public string? Jti { get; init; } = $"test-jti-{Guid.NewGuid():N}";
     public DateTimeOffset? Iat { get; init; }
     public string? Ath { get; init; }
     public bool CorruptSignature { get; init; }

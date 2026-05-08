@@ -65,9 +65,7 @@ public partial class JwtBearerIssuerProvider(
 		var trustedIssuer = FindTrustedIssuer(issuer);
 
 		if (trustedIssuer == null)
-		{
 			LogIssuerNotTrusted(issuer);
-		}
 
 		return Task.FromResult(trustedIssuer != null);
 	}
@@ -136,8 +134,10 @@ public partial class JwtBearerIssuerProvider(
 	}
 
 	/// <inheritdoc />
-	public Task<bool> IsReplayedAsync(string jti) => replayCache.IsReplayedAsync(jti);
+	public Task<bool> IsReplayedAsync(string jti)
+		=> replayCache.IsReplayedAsync(jti);
 
 	/// <inheritdoc />
-	public Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt) => replayCache.MarkAsUsedAsync(jti, expiresAt);
+	public Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
+		=> replayCache.MarkAsUsedAsync(jti, expiresAt);
 }
