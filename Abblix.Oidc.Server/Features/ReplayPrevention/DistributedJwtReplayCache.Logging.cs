@@ -22,7 +22,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Abblix.Oidc.Server.Features.JwtBearer;
+namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 partial class DistributedJwtReplayCache
 {

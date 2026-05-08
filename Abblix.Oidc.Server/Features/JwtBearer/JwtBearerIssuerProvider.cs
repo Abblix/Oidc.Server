@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 public partial class JwtBearerIssuerProvider(
 	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
-	IJwtReplayCache replayCache,
+	ReplayPrevention.IJwtReplayCache replayCache,
 	[FromKeyedServices(JwtBearerIssuerProvider.SecureHttpFetcherKey)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
 {
 	/// <summary>

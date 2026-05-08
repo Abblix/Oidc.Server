@@ -271,7 +271,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtBearerGrant(this IServiceCollection services)
     {
         services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
+        services.TryAddSingleton<Features.ReplayPrevention.IJwtReplayCache, Features.ReplayPrevention.DistributedJwtReplayCache>();
+
+        // The replay-cache implementation now lives in Features.ReplayPrevention so DPoP
+        // and any future consumer can share it. The JwtBearer-namespaced shim is the
+        // singleton registered concretely; both the canonical interface and the deprecated
+        // JwtBearer.IJwtReplayCache alias resolve to the same instance for back-compat.
+#pragma warning disable CS0618 // intentional registration of the deprecated shim
         services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+#pragma warning restore CS0618
 
         // Register keyed caching decorator for JWT Bearer JWKS fetching
         // DecorateKeyed will find the non-keyed ISecureHttpFetcher and create a keyed decorated version

@@ -23,34 +23,12 @@
 namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
-/// Provides JWT replay protection by tracking JWT IDs (jti claims) that have been used.
-/// This prevents attackers from replaying the same JWT assertion multiple times.
+/// Backward-compat alias for <see cref="ReplayPrevention.IJwtReplayCache"/>. The contract
+/// is identical; the canonical type now lives in
+/// <c>Abblix.Oidc.Server.Features.ReplayPrevention</c> so DPoP and any future consumer can
+/// share the same primitive without cross-feature coupling. Update consumers to import
+/// the new namespace.
 /// </summary>
-/// <remarks>
-/// Per RFC 7523 Section 5.2, authorization servers MUST consider JWT IDs (jti) to prevent replay.
-/// This interface enables tracking of used JTIs with automatic expiration based on JWT lifetime.
-/// Implementations should use distributed storage (e.g., Redis) for multi-instance deployments.
-/// </remarks>
-public interface IJwtReplayCache
-{
-	/// <summary>
-	/// Checks if a JWT with the specified JTI has already been used.
-	/// </summary>
-	/// <param name="jti">The JWT ID (jti claim) to check.</param>
-	/// <returns>
-	/// A task that completes with true if the JWT has already been used (replay detected);
-	/// false if this is the first time the JWT is being presented.
-	/// </returns>
-	Task<bool> IsReplayedAsync(string jti);
-
-	/// <summary>
-	/// Marks a JWT as used by storing its JTI in the cache until the specified expiration time.
-	/// </summary>
-	/// <param name="jti">The JWT ID (jti claim) to mark as used.</param>
-	/// <param name="expiresAt">
-	/// The time at which the JWT expires. The JTI will be stored until this time plus a small buffer.
-	/// If null, a default expiration will be used.
-	/// </param>
-	/// <returns>A task that completes when the JTI has been stored.</returns>
-	Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt);
-}
+[Obsolete("Use Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache. " +
+          "The contract is identical and this interface derives from it for backward compatibility.")]
+public interface IJwtReplayCache : ReplayPrevention.IJwtReplayCache;

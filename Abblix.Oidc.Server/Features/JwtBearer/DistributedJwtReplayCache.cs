@@ -28,84 +28,18 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
-/// Distributed cache implementation of <see cref="IJwtReplayCache"/> for JWT replay protection.
-/// Uses <see cref="IDistributedCache"/> to store JTIs, enabling multi-instance deployments.
+/// Backward-compat shim for <see cref="ReplayPrevention.DistributedJwtReplayCache"/>. The
+/// canonical implementation now lives in
+/// <c>Abblix.Oidc.Server.Features.ReplayPrevention</c>. This subclass exists so any host
+/// code that DI-resolves <see cref="IJwtReplayCache"/> (the deprecated interface) keeps
+/// receiving an instance of the same logical type.
 /// </summary>
-/// <remarks>
-/// This implementation stores JTIs with automatic expiration matching the JWT's lifetime.
-/// Works with Redis, SQL Server, NCache, or any IDistributedCache implementation.
-/// Clock skew buffer is configurable via <see cref="JwtBearerOptions.ClockSkew"/>.
-/// </remarks>
-/// <param name="logger">Logger for recording replay detection events.</param>
-/// <param name="cache">The distributed cache for storing JTIs.</param>
-/// <param name="options">JWT Bearer options for configurable settings like clock skew.</param>
-/// <param name="timeProvider">Provides access to the current time.</param>
-public partial class DistributedJwtReplayCache(
-	ILogger<DistributedJwtReplayCache> logger,
-	IDistributedCache cache,
-	IOptionsMonitor<OidcOptions> options,
-	TimeProvider timeProvider) : IJwtReplayCache
-{
-	/// <summary>
-	/// Cache key prefix for JTI entries to avoid collisions with other cache data.
-	/// Uses fully qualified type name to prevent conflicts with other cache entries.
-	/// </summary>
-	private const string CacheKeyPrefix = $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(Issuer)}.{nameof(DistributedJwtReplayCache)}:";
-
-	/// <summary>
-	/// Default expiration time for JTIs when the JWT doesn't specify an expiration.
-	/// </summary>
-	private static readonly TimeSpan DefaultExpiration = TimeSpan.FromHours(1);
-
-	/// <summary>
-	/// Marker value stored in cache to indicate a JTI has been used.
-	/// </summary>
-	private static readonly byte[] UsedMarker = [1];
-
-	/// <summary>
-	/// Minimum TTL to ensure cache entries are not immediately expired due to clock issues.
-	/// Prevents edge cases where calculated expiration is negative or very small.
-	/// </summary>
-	private static readonly TimeSpan MinimumTtl = TimeSpan.FromSeconds(10);
-
-	/// <inheritdoc />
-	public async Task<bool> IsReplayedAsync(string jti)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
-		var existing = await cache.GetAsync(cacheKey);
-
-		if (existing != null)
-		{
-			LogReplayDetected(jti);
-			return true;
-		}
-
-		return false;
-	}
-
-	/// <inheritdoc />
-	public async Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
-		var now = timeProvider.GetUtcNow();
-		var clockSkew = options.CurrentValue.JwtBearer.ClockSkew;
-
-		// Calculate TTL based on JWT expiration + clock skew buffer, or use default
-		var expiration = expiresAt.HasValue
-			? expiresAt.Value - now + clockSkew
-			: DefaultExpiration;
-
-		// Ensure minimum TTL (in case of clock issues)
-		if (expiration < MinimumTtl)
-		{
-			expiration = MinimumTtl;
-		}
-
-		await cache.SetAsync(
-			cacheKey,
-			UsedMarker,
-			new () { AbsoluteExpirationRelativeToNow = expiration });
-
-		LogMarkedAsUsed(jti, expiration);
-	}
-}
+[Obsolete("Use Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache. " +
+          "Behaviour is identical; this type is a backward-compat shim that delegates to " +
+          "the canonical implementation.")]
+public sealed class DistributedJwtReplayCache(
+    ILogger<ReplayPrevention.DistributedJwtReplayCache> logger,
+    IDistributedCache cache,
+    IOptionsMonitor<OidcOptions> options,
+    TimeProvider timeProvider)
+    : ReplayPrevention.DistributedJwtReplayCache(logger, cache, options, timeProvider), IJwtReplayCache;
