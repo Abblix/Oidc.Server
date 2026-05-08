@@ -83,4 +83,14 @@ public record ClientRequest
     /// for certificate-bound access tokens.
     /// </summary>
     public X509Certificate2? ClientCertificate { get; set; }
+
+    /// <summary>
+    /// The compact-form DPoP proof JWT taken from the inbound request's <c>DPoP</c> header
+    /// per RFC 9449 §4.1. Travels alongside <see cref="AuthorizationHeader"/> and
+    /// <see cref="ClientCertificate"/> as transport-level material so the core layer stays
+    /// ASP.NET-Core-free; the MVC binder lifts it from the header. <c>null</c> when no
+    /// proof was presented.
+    /// </summary>
+    [JsonIgnore]
+    public string? DPoPProof { get; set; }
 }

@@ -62,4 +62,12 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
     /// the token's utility for fine-grained access control.
     /// </summary>
     public ResourceDefinition[] Resources { get; set; } = [];
+
+    /// <summary>
+    /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
+    /// (RFC 9449 §6.1) populated by the DPoP validator step when a valid proof accompanies
+    /// the request. Surfaces to the processor so the issued access token can carry
+    /// <c>cnf.jkt</c>. <c>null</c> when no proof was presented or DPoP is not in use.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; set; }
 }

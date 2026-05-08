@@ -53,6 +53,11 @@ public class HttpRequestInfoAdapter(IHttpContextAccessor httpContextAccessor) : 
     public string RequestUri => Request.GetBaseUrl();
 
     /// <summary>
+    /// The HTTP method of the current request, taken from <see cref="HttpRequest.Method"/>.
+    /// </summary>
+    public string RequestMethod => Request.Method;
+
+    /// <summary>
     /// The base URI of the application.
     /// </summary>
     public string ApplicationUri => Request.GetAppUrl();

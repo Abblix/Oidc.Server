@@ -37,4 +37,12 @@ public static class TokenTypes
     /// Indicates the Bearer token type, often used in OAuth 2.0 for securing API requests.
     /// </summary>
     public const string Bearer = "Bearer";
+
+    /// <summary>
+    /// Indicates a DPoP-bound token type per RFC 9449 §7.1: the access token is locked to
+    /// a specific proof-of-possession key and the client MUST present a fresh DPoP proof
+    /// on every resource-server request. Carries a <c>cnf.jkt</c> confirmation claim equal
+    /// to the JWK thumbprint of the binding key.
+    /// </summary>
+    public const string DPoP = "DPoP";
 }

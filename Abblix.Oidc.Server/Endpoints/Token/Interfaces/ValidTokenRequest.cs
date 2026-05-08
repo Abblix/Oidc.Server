@@ -48,11 +48,13 @@ public record ValidTokenRequest(
     ClientInfo ClientInfo,
     ScopeDefinition[] Scope,
     ResourceDefinition[] Resources,
-    X509Certificate2? ClientCertificate = null)
+    X509Certificate2? ClientCertificate = null,
+    string? ProofKeyThumbprint = null)
 {
     /// <summary>
     /// Builds the validated request from a populated <see cref="TokenValidationContext"/>, taking
-    /// the mutual-TLS client certificate (if any) from the transport-level client request.
+    /// the mutual-TLS client certificate (if any) and the DPoP proof-of-possession key
+    /// thumbprint (if any) from the populated context.
     /// </summary>
     public ValidTokenRequest(TokenValidationContext context)
         : this(
@@ -61,7 +63,8 @@ public record ValidTokenRequest(
             context.ClientInfo,
             context.Scope,
             context.Resources,
-            context.ClientRequest.ClientCertificate)
+            context.ClientRequest.ClientCertificate,
+            context.ProofKeyThumbprint)
     {
     }
 }

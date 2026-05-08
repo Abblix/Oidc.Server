@@ -32,4 +32,11 @@ public static class HttpRequestHeaders
 	/// It is crucial for securing API endpoints and providing proof of client identity or permissions.
 	/// </summary>
 	public const string Authorization = "Authorization";
+
+	/// <summary>
+	/// The "DPoP" request header carries the proof JWT bound to the current request method+URI
+	/// per RFC 9449 §4.1. Present on token, userinfo, introspection, and revocation requests
+	/// when the client demonstrates proof-of-possession of the access-token-binding key.
+	/// </summary>
+	public const string DPoP = "DPoP";
 }
