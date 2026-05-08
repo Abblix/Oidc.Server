@@ -261,4 +261,35 @@ public class JsonWebTokenPayload(JsonObject json)
 		get => Json.GetProperty<bool?>(JwtClaimTypes.EmailVerified);
 		set => Json.SetProperty(JwtClaimTypes.EmailVerified, value);
 	}
+
+	/// <summary>
+	/// The HTTP method bound by a DPoP proof (RFC 9449 §4.2 <c>htm</c>). Compared
+	/// byte-exact against the current request method on the server side.
+	/// </summary>
+	public string? DPoPHttpMethod
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPHttpMethod);
+		set => Json.SetProperty(JwtClaimTypes.DPoPHttpMethod, value);
+	}
+
+	/// <summary>
+	/// The HTTP URI bound by a DPoP proof (RFC 9449 §4.2 <c>htu</c>). Returned as the
+	/// raw claim string so callers keep the three-way "missing / unparseable / mismatched"
+	/// distinction; parsing into a <see cref="Uri"/> belongs to the comparison step.
+	/// </summary>
+	public string? DPoPHttpUri
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPHttpUri);
+		set => Json.SetProperty(JwtClaimTypes.DPoPHttpUri, value);
+	}
+
+	/// <summary>
+	/// The access-token hash bound by a DPoP proof when one accompanies an access token
+	/// (RFC 9449 §4.2 <c>ath</c>): <c>Base64Url(SHA-256(access_token))</c>.
+	/// </summary>
+	public string? DPoPAccessTokenHash
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPAccessTokenHash);
+		set => Json.SetProperty(JwtClaimTypes.DPoPAccessTokenHash, value);
+	}
 }
