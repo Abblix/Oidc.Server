@@ -23,8 +23,6 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
-
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;

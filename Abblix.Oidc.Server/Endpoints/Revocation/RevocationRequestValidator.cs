@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;

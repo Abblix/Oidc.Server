@@ -107,12 +107,15 @@ public class DPoPTokenEndpointValidator(
     {
         var nonceClaim = proof.Token.Payload.Nonce;
         if (nonceClaim is null)
-            return new DPoPNonceRequiredError(await nonceService.IssueAsync());
+            return await NonceRequired();
 
         var failure = await nonceService.ValidateAsync(nonceClaim);
         if (failure is not null)
-            return new DPoPNonceRequiredError(await nonceService.IssueAsync());
+            return await NonceRequired();
 
         return null;
     }
+
+    private async Task<DPoPNonceRequiredError> NonceRequired()
+        => new(await nonceService.IssueAsync());
 }
