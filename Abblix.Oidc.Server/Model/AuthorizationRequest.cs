@@ -202,6 +202,16 @@ public record AuthorizationRequest
 	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]
 	public Uri[]? Resources { get; set; }
 
+	/// <summary>
+	/// Client's pre-commitment to a DPoP proof-of-possession key per RFC 9449 §10
+	/// (<c>dpop_jkt</c> parameter): the base64url-encoded RFC 7638 JWK Thumbprint of the
+	/// key the client will demonstrate at the token endpoint. Persisted with the
+	/// authorization code so /token can reject mismatched proofs and close the
+	/// authorization-code injection window.
+	/// </summary>
+	[JsonPropertyName(Parameters.DpopJkt)]
+	public string? ProofKeyThumbprint { get; init; }
+
 	public static class Parameters
     {
         public const string Scope = "scope";
@@ -226,5 +236,7 @@ public record AuthorizationRequest
 
         public const string Request = "request";
         public const string RequestUri = "request_uri";
+
+        public const string DpopJkt = "dpop_jkt";
     }
 }
