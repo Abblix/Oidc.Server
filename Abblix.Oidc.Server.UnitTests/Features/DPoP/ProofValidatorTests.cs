@@ -35,6 +35,8 @@ using Abblix.Oidc.Server.Features.DPoP;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
+using Moq;
+
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DPoP;
@@ -52,14 +54,21 @@ public class ProofValidatorTests
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 5, 7, 12, 0, 0, TimeSpan.Zero));
     private readonly IProofValidator _sut;
 
+    private readonly Mock<Abblix.Oidc.Server.Common.Interfaces.IRequestInfoProvider> _requestInfo
+        = new(MockBehavior.Strict);
+
     public ProofValidatorTests()
     {
+        _requestInfo.SetupGet(p => p.RequestMethod).Returns(DefaultHttpMethod);
+        _requestInfo.SetupGet(p => p.RequestUri).Returns(DefaultRequestUri.ToString());
+
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddDistributedMemoryCache();
         services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
         services.AddSingleton<TimeProvider>(_time);
+        services.AddSingleton(_requestInfo.Object);
         services.AddSingleton<
             Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache,
             Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache>();
@@ -76,7 +85,7 @@ public class ProofValidatorTests
         var builder = new DPoPProofBuilder(_time.GetUtcNow());
         var proof = builder.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetSuccess(out var ok));
         Assert.Equal(builder.PublicJwk.ComputeJwkThumbprintBase64Url(), ok.ProofKeyThumbprint);
@@ -93,7 +102,7 @@ public class ProofValidatorTests
         var builder = new DPoPProofBuilder(_time.GetUtcNow()) { Ath = expectedAth };
         var proof = builder.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, accessToken, Ct);
+        var result = await _sut.ValidateAsync(proof, accessToken, Ct);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -103,11 +112,11 @@ public class ProofValidatorTests
     {
         // Proof carries htu without port; request URI includes the default :443.
         // Both must canonicalise to the same form.
+        _requestInfo.SetupGet(p => p.RequestUri).Returns("https://auth.example.com:443/token");
         var builder = new DPoPProofBuilder(_time.GetUtcNow());
         var proof = builder.Build();
-        var requestUriWithExplicitDefaultPort = new Uri("https://auth.example.com:443/token");
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, requestUriWithExplicitDefaultPort, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -119,7 +128,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Typ = typ }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.InvalidTokenType, error.Reason);
@@ -134,7 +143,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Alg = alg }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.InvalidAlgorithm, error.Reason);
@@ -145,7 +154,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { IncludeJwk = false }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
@@ -156,7 +165,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { IncludePrivateInJwk = true }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
@@ -167,7 +176,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { CorruptSignature = true }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.SignatureInvalid, error.Reason);
@@ -178,7 +187,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Htm = "GET" }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.HttpMethodMismatch, error.Reason);
@@ -192,7 +201,7 @@ public class ProofValidatorTests
             Htu = "https://auth.example.com/different-endpoint",
         }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.HttpUriMismatch, error.Reason);
@@ -203,7 +212,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow().AddMinutes(-5)).Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.IssuedAtOutOfWindow, error.Reason);
@@ -214,7 +223,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow().AddMinutes(5)).Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.IssuedAtOutOfWindow, error.Reason);
@@ -225,7 +234,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()).Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
+        var result = await _sut.ValidateAsync(proof, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.AccessTokenHashMissing, error.Reason);
@@ -236,7 +245,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Ath = "wrong-hash" }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, "some-access-token", Ct);
+        var result = await _sut.ValidateAsync(proof, "some-access-token", Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.AccessTokenHashMismatch, error.Reason);
@@ -247,7 +256,7 @@ public class ProofValidatorTests
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = null }.Build();
 
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.JwtIdMissing, error.Reason);
@@ -261,10 +270,10 @@ public class ProofValidatorTests
         var builder = new DPoPProofBuilder(_time.GetUtcNow());
         var proof = builder.Build();
 
-        var first = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var first = await _sut.ValidateAsync(proof, cancellationToken: Ct);
         Assert.True(first.TryGetSuccess(out _));
 
-        var second = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var second = await _sut.ValidateAsync(proof, cancellationToken: Ct);
         Assert.True(second.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
     }
@@ -275,7 +284,7 @@ public class ProofValidatorTests
     [InlineData("")]
     public async Task ValidateAsync_MalformedJwt_ReturnsMalformedJwt(string proof)
     {
-        var result = await _sut.ValidateAsync(proof, DefaultHttpMethod, DefaultRequestUri, cancellationToken: Ct);
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.MalformedJwt, error.Reason);

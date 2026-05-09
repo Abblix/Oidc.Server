@@ -1,32 +1,33 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
@@ -36,16 +37,10 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// This validator ensures that requests do not use prohibited parameters and
 /// comply with standard authorization request requirements.
 /// </summary>
-/// <param name="authorizationRequestValidator">
-/// The <see cref="IAuthorizationRequestValidator"/> used to validate the standard parameters of authorization
-/// requests.
-/// </param>
-/// <param name="clientAuthenticator">
-/// The <see cref="IClientAuthenticator"/> used to authenticate the client making the pushed authorization request.
-/// </param>
 public class PushedAuthorizationRequestValidator(
     IAuthorizationRequestValidator authorizationRequestValidator,
-    IClientAuthenticator clientAuthenticator) : IPushedAuthorizationRequestValidator
+    IClientAuthenticator clientAuthenticator,
+    IProofValidator proofValidator) : IPushedAuthorizationRequestValidator
 {
     /// <summary>
     /// Validates a pushed authorization request according to OAuth 2.0 and OpenID Connect standards.
@@ -55,7 +50,9 @@ public class PushedAuthorizationRequestValidator(
     /// </summary>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
-    /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 §2.</param>
+    /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 §2. Also carries an
+    /// optional DPoP header used to pre-bind the request to a proof-of-possession key
+    /// (RFC 9449 §10).</param>
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
@@ -73,6 +70,12 @@ public class PushedAuthorizationRequestValidator(
             return ErrorFactory.InvalidRequestUri(
                 $"{RequestUri} is prohibited to use in pushed authorization request");
         }
+
+        var dpopResult = await ResolveProofKeyThumbprintAsync(clientRequest, authorizationRequest);
+        if (dpopResult.TryGetFailure(out var dpopError))
+            return dpopError;
+
+        authorizationRequest = dpopResult.GetSuccess();
 
         var result = await authorizationRequestValidator.ValidateAsync(authorizationRequest);
 
@@ -93,5 +96,44 @@ public class PushedAuthorizationRequestValidator(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves the RFC 9449 §10 commitment from the inbound PAR call: when a DPoP header
+    /// accompanies the request, validates the proof against the PAR endpoint's method+URI
+    /// and (if configured) the nonce policy, then either back-fills <c>dpop_jkt</c> from
+    /// the proof's thumbprint or — if the client also posted <c>dpop_jkt</c> as a form
+    /// parameter — checks both produce the same thumbprint. Returns the (possibly
+    /// back-filled) request on success.
+    /// </summary>
+    private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> ResolveProofKeyThumbprintAsync(
+        ClientRequest clientRequest, AuthorizationRequest authorizationRequest)
+    {
+        if (clientRequest.DPoPProof is not { } proofJwt)
+            return authorizationRequest;
+
+        var proofResult = await proofValidator.ValidateAsync(proofJwt);
+
+        if (proofResult.TryGetFailure(out var proofError))
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.InvalidDPoPProof,
+                $"DPoP proof rejected ({proofError.Reason}).");
+        }
+
+        var derived = proofResult.GetSuccess().ProofKeyThumbprint;
+        if (authorizationRequest.ProofKeyThumbprint is { } committed)
+        {
+            if (committed != derived)
+            {
+                return ErrorFactory.ValidationError(
+                    ErrorCodes.InvalidDPoPProof,
+                    "dpop_jkt parameter does not match the DPoP header thumbprint.");
+            }
+
+            return authorizationRequest;
+        }
+
+        return authorizationRequest with { ProofKeyThumbprint = derived };
     }
 }

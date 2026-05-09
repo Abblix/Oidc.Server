@@ -29,9 +29,10 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
@@ -56,8 +57,6 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// </summary>
 public class DPoPTokenEndpointValidatorTests
 {
-    private const string TokenEndpointUri = "https://auth.example.com/token";
-    private const string TokenEndpointMethod = "POST";
     private const string ProofJwt = "eyJ.dummy.proof";
     private const string ProofKeyThumbprint = "test-jkt-thumbprint";
     private const string FreshNonce = "fresh-nonce-value";
@@ -66,21 +65,17 @@ public class DPoPTokenEndpointValidatorTests
 
     private readonly Mock<IProofValidator> _proofValidator = new(MockBehavior.Strict);
     private readonly Mock<INonceService> _nonceService = new(MockBehavior.Strict);
-    private readonly Mock<IRequestInfoProvider> _requestInfoProvider = new(MockBehavior.Strict);
     private readonly Mock<IOptionsMonitor<OidcOptions>> _options = new(MockBehavior.Strict);
     private readonly OidcOptions _opts = new();
     private readonly DPoPTokenEndpointValidator _validator;
 
     public DPoPTokenEndpointValidatorTests()
     {
-        _requestInfoProvider.SetupGet(p => p.RequestUri).Returns(TokenEndpointUri);
-        _requestInfoProvider.SetupGet(p => p.RequestMethod).Returns(TokenEndpointMethod);
         _options.SetupGet(o => o.CurrentValue).Returns(_opts);
 
         _validator = new DPoPTokenEndpointValidator(
             _proofValidator.Object,
             _nonceService.Object,
-            _requestInfoProvider.Object,
             _options.Object);
     }
 
@@ -139,7 +134,7 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_NonceRequiredAndMissing_ReturnsDPoPNonceRequiredError()
+    public async Task ValidateAsync_NonceRequiredAndMissing_ReturnsUseDPoPNonceError()
     {
         RequireNonceAtTokenEndpoint();
         SetupProofValidatorSuccess(BuildProof(nonceClaim: null));
@@ -152,7 +147,7 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_NonceRequiredAndStale_ReturnsDPoPNonceRequiredError()
+    public async Task ValidateAsync_NonceRequiredAndStale_ReturnsUseDPoPNonceError()
     {
         RequireNonceAtTokenEndpoint();
         SetupProofValidatorSuccess(BuildProof(nonceClaim: "stale-nonce"));
@@ -179,6 +174,50 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     [Fact]
+    public async Task ValidateAsync_CommittedMatchesProof_StashesThumbprint()
+    {
+        SetupProofValidatorSuccess(BuildProof());
+        var context = CreateContext(
+            proofJwt: ProofJwt,
+            clientRequiresDPoP: false,
+            committedThumbprint: ProofKeyThumbprint);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofStashed(error, context);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_CommittedMismatchesProof_ReturnsInvalidDPoPProof()
+    {
+        SetupProofValidatorSuccess(BuildProof());
+        var context = CreateContext(
+            proofJwt: ProofJwt,
+            clientRequiresDPoP: false,
+            committedThumbprint: "different-committed-thumbprint");
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_CommittedButNoProof_ReturnsInvalidDPoPProof()
+    {
+        // RFC 9449 §10 carry-over: dpop_jkt was committed at /authorize but the client
+        // tries to redeem the auth code without a DPoP proof. This is the canonical
+        // attack window the carry-over closes.
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            committedThumbprint: "committed-thumbprint-from-authorize");
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    [Fact]
     public async Task ValidateAsync_NonceNotRequired_DoesNotInvokeNonceService()
     {
         // Default _opts.DPoP.Nonce.RequireAtTokenEndpoint == false. Strict mock: any call to
@@ -193,15 +232,24 @@ public class DPoPTokenEndpointValidatorTests
         _nonceService.VerifyNoOtherCalls();
     }
 
-    private static TokenValidationContext CreateContext(string? proofJwt, bool clientRequiresDPoP)
+    private static TokenValidationContext CreateContext(
+        string? proofJwt,
+        bool clientRequiresDPoP,
+        string? committedThumbprint = null)
     {
         var clientRequest = new ClientRequest { DPoPProof = proofJwt };
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
+        {
+            ProofKeyThumbprint = committedThumbprint,
+        };
+        var authSession = new AuthSession("user-1", "session-1", ProofIssuedAt, "local");
         return new TokenValidationContext(new TokenRequest(), clientRequest)
         {
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequireDPoP = clientRequiresDPoP,
             },
+            AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };
     }
 
@@ -216,12 +264,12 @@ public class DPoPTokenEndpointValidatorTests
 
     private void SetupProofValidatorSuccess(Proof proof) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, TokenEndpointMethod, It.IsAny<Uri>(), null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
 
     private void SetupProofValidatorFailure(ProofError error) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, TokenEndpointMethod, It.IsAny<Uri>(), null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)error);
 
     private void RequireNonceAtTokenEndpoint() => _opts.DPoP.Nonce.RequireAtTokenEndpoint = true;
@@ -251,7 +299,7 @@ public class DPoPTokenEndpointValidatorTests
 
     private static void AssertNonceChallenge(OidcError? error, TokenValidationContext context)
     {
-        var nonceError = Assert.IsType<DPoPNonceRequiredError>(error);
+        var nonceError = Assert.IsType<UseDPoPNonceError>(error);
         Assert.Equal(ErrorCodes.UseDPoPNonce, nonceError.Error);
         Assert.Equal(FreshNonce, nonceError.Nonce);
         Assert.Null(context.ProofKeyThumbprint);

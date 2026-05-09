@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
@@ -50,13 +49,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 public class DPoPTokenEndpointValidator(
     IProofValidator proofValidator,
     INonceService nonceService,
-    IRequestInfoProvider requestInfoProvider,
     IOptionsMonitor<OidcOptions> options) : ITokenContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
     {
         var proofJwt = context.ClientRequest.DPoPProof;
+        var committed = context.AuthorizedGrant?.Context.ProofKeyThumbprint;
+
         if (proofJwt is null)
         {
             if (context.ClientInfo.RequireDPoP)
@@ -66,13 +66,20 @@ public class DPoPTokenEndpointValidator(
                     "DPoP proof is required for this client.");
             }
 
+            if (committed is not null)
+            {
+                // RFC 9449 §10: the authorization request committed to a proof-of-possession
+                // key via dpop_jkt; presenting the auth code without the proof is the very
+                // attack the carry-over closes.
+                return new OidcError(
+                    ErrorCodes.InvalidDPoPProof,
+                    "Authorization request committed to a DPoP key but no proof was presented.");
+            }
+
             return null;
         }
 
-        var proofResult = await proofValidator.ValidateAsync(
-            proofJwt,
-            requestInfoProvider.RequestMethod,
-            new Uri(requestInfoProvider.RequestUri));
+        var proofResult = await proofValidator.ValidateAsync(proofJwt);
 
         if (proofResult.TryGetFailure(out var proofError))
         {
@@ -82,6 +89,13 @@ public class DPoPTokenEndpointValidator(
         }
 
         var proof = proofResult.GetSuccess();
+
+        if (committed is not null && committed != proof.ProofKeyThumbprint)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidDPoPProof,
+                "DPoP proof key does not match the dpop_jkt committed at the authorization request.");
+        }
 
         var nonceOptions = options.CurrentValue.DPoP.Nonce;
         if (nonceOptions.RequireAtTokenEndpoint)
@@ -99,29 +113,29 @@ public class DPoPTokenEndpointValidator(
     /// Enforces the nonce policy at the token endpoint per RFC 9449 §8: the proof MUST
     /// carry a <c>nonce</c> claim accepted by <see cref="INonceService"/>; when missing or
     /// stale, mints a fresh nonce and surfaces it as a
-    /// <see cref="DPoPNonceRequiredError"/> so the response formatter can attach the
+    /// <see cref="UseDPoPNonceError"/> so the response formatter can attach the
     /// <c>DPoP-Nonce</c> header to the error response.
     /// </summary>
     private async Task<OidcError?> EnforceNonceAsync(Proof proof)
     {
         var nonceClaim = proof.Token.Payload.Nonce;
         if (nonceClaim is null)
-            return await NonceRequired();
+            return await UseDPoPNonce();
 
         var failure = await nonceService.ValidateAsync(nonceClaim);
         if (failure is not null)
-            return await NonceRequired();
+            return await UseDPoPNonce();
 
         return null;
     }
 
     /// <summary>
     /// Mints a fresh nonce via <see cref="INonceService"/> and wraps it in a
-    /// <see cref="DPoPNonceRequiredError"/>. Shared between the missing-nonce and
+    /// <see cref="UseDPoPNonceError"/>. Shared between the missing-nonce and
     /// stale-nonce branches of <see cref="EnforceNonceAsync"/>: both surface the same
     /// challenge to the client and both need a freshly issued nonce so the response
     /// formatter can attach it on the <c>DPoP-Nonce</c> header.
     /// </summary>
-    private async Task<DPoPNonceRequiredError> NonceRequired()
+    private async Task<UseDPoPNonceError> UseDPoPNonce()
         => new(await nonceService.IssueAsync());
 }

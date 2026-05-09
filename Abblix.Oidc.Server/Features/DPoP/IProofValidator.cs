@@ -33,17 +33,16 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 public interface IProofValidator
 {
     /// <summary>
-    /// Validates <paramref name="proofJwt"/> as a DPoP proof for the request identified by
-    /// <paramref name="httpMethod"/> and <paramref name="requestUri"/>. When
+    /// Validates <paramref name="proofJwt"/> as a DPoP proof for the current request.
+    /// The HTTP method and URI used for <c>htm</c> / <c>htu</c> binding checks come from
+    /// <see cref="Abblix.Oidc.Server.Common.Interfaces.IRequestInfoProvider"/> injected
+    /// into the validator, so callers never need to thread them through. When
     /// <paramref name="accessToken"/> is supplied (the proof accompanies a bearer-style
     /// access-token presentation), the proof's <c>ath</c> claim is verified against the
     /// access-token hash per RFC 9449 §4.2.
     /// </summary>
     /// <param name="proofJwt">The compact JWS form of the DPoP proof, taken from the
     /// <c>DPoP</c> request header.</param>
-    /// <param name="httpMethod">The HTTP method of the current request, in upper case
-    /// (e.g. <c>POST</c>, <c>GET</c>).</param>
-    /// <param name="requestUri">The HTTP target URI of the current request.</param>
     /// <param name="accessToken">The access token presented alongside the proof, when the
     /// proof secures a resource-server request. <c>null</c> at the token endpoint where no
     /// access token is yet bound.</param>
@@ -53,8 +52,6 @@ public interface IProofValidator
     /// reason.</returns>
     Task<Result<Proof, ProofError>> ValidateAsync(
         string proofJwt,
-        string httpMethod,
-        Uri requestUri,
         string? accessToken = null,
         CancellationToken cancellationToken = default);
 }

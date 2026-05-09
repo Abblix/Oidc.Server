@@ -26,6 +26,7 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -52,6 +53,7 @@ internal sealed class ProofValidator(
     IJsonWebTokenValidator jwtValidator,
     IJwtReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
+    IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
 {
     private static readonly IReadOnlySet<string> AllowedAlgorithms = new HashSet<string>(StringComparer.Ordinal)
@@ -69,8 +71,6 @@ internal sealed class ProofValidator(
     /// <inheritdoc/>
     public async Task<Result<Proof, ProofError>> ValidateAsync(
         string proofJwt,
-        string httpMethod,
-        Uri requestUri,
         string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
@@ -89,6 +89,9 @@ internal sealed class ProofValidator(
         var jwt = jwtResult.GetSuccess();
         DateTimeOffset issuedAt = default;
         var jwtId = string.Empty;
+
+        var httpMethod = requestInfoProvider.RequestMethod;
+        var requestUri = new Uri(requestInfoProvider.RequestUri);
 
         var error = ValidateJwkShape(jwt.Header, out var jwk) ??
                     ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
