@@ -95,7 +95,7 @@ public partial class JwtBearerIssuerProvider(
 			return string.Equals(issuerUri.Scheme, trustedUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
 			       string.Equals(issuerUri.Host, trustedUri.Host, StringComparison.OrdinalIgnoreCase) &&
 			       issuerUri.Port == trustedUri.Port &&
-			       string.Equals(issuerUri.AbsolutePath, trustedUri.AbsolutePath, StringComparison.Ordinal);
+			       issuerUri.AbsolutePath == trustedUri.AbsolutePath;
 		});
 	}
 

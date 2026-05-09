@@ -409,5 +409,5 @@ public partial class JwtBearerGrantHandler(
 		=> string.Equals(uri1.Scheme, uri2.Scheme, StringComparison.OrdinalIgnoreCase) &&
 		   string.Equals(uri1.Host, uri2.Host, StringComparison.OrdinalIgnoreCase) &&
 		   uri1.Port == uri2.Port &&
-		   string.Equals(uri1.AbsolutePath.TrimEnd('/'), uri2.AbsolutePath.TrimEnd('/'), StringComparison.Ordinal);
+		   uri1.AbsolutePath.TrimEnd('/') == uri2.AbsolutePath.TrimEnd('/');
 }

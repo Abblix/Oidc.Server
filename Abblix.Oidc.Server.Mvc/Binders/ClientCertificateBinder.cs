@@ -41,10 +41,7 @@ public class ClientCertificateBinder : IModelBinder
     public async Task BindModelAsync(ModelBindingContext bindingContext)
     {
         var connection = bindingContext.HttpContext.Connection;
-
-        var clientCert = connection.ClientCertificate
-                         ?? await connection.GetClientCertificateAsync();
-
+        var clientCert = connection.ClientCertificate ?? await connection.GetClientCertificateAsync();
         bindingContext.Result = ModelBindingResult.Success(clientCert);
     }
 }

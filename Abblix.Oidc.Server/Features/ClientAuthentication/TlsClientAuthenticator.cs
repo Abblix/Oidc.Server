@@ -157,7 +157,7 @@ public partial class TlsClientAuthenticator(
                            X: { } jwkX,
                            Y: { } jwkY,
                        } &&
-                       string.Equals(certCurve, jwkCurve, StringComparison.Ordinal) &&
+                       certCurve == jwkCurve &&
                        certX.SequenceEqual(jwkX) &&
                        certY.SequenceEqual(jwkY),
 

@@ -130,7 +130,7 @@ public class RegisterClientRequestProcessor(
         };
 
         // Map tls_client_auth metadata if selected
-        if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
         {
             clientInfo.TlsClientAuth = new ()
             {

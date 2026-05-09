@@ -70,7 +70,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
     /// <param name="request">The client registration request to check.</param>
     /// <returns>True if using tls_client_auth; otherwise, false.</returns>
     private static bool IsTlsClientAuth(ClientRegistrationRequest request) =>
-        string.Equals(request.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal);
+        request.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth;
 
     /// <summary>
     /// Checks whether any TLS client authentication metadata is provided in the request.
