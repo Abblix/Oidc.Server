@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -36,8 +37,6 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class TokenResponseFormatter : ITokenResponseFormatter
 {
-    private const string DPoPNonceResponseHeader = "DPoP-Nonce";
-
     /// <summary>
     /// Asynchronously formats the response for a token request.
     /// </summary>
@@ -79,7 +78,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
         // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.
         if (error is UseDPoPNonceError { Nonce: var nonce })
-            result = result.WithHeader(DPoPNonceResponseHeader, nonce);
+            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
 
         return new ActionResult<TokenResponse>(result);
     }

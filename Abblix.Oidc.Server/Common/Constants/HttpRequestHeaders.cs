@@ -39,4 +39,12 @@ public static class HttpRequestHeaders
 	/// when the client demonstrates proof-of-possession of the access-token-binding key.
 	/// </summary>
 	public const string DPoP = "DPoP";
+
+	/// <summary>
+	/// The "DPoP-Nonce" response header carries the fresh nonce on a <c>use_dpop_nonce</c>
+	/// challenge response per RFC 9449 §8 / §9. Although a response header by direction, it
+	/// lives alongside the request-header constants here to keep all DPoP wire-form names in
+	/// one place; consumers are response formatters writing it onto outbound responses.
+	/// </summary>
+	public const string DPoPNonce = "DPoP-Nonce";
 }

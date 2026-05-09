@@ -440,6 +440,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
         services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
         services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
+        services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();
         return services;
     }
 

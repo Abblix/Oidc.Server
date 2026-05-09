@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -68,6 +67,24 @@ public static class ActionResultExtensions
 	/// <returns>A decorated <see cref="ActionResult"/> that appends the specified header.</returns>
 	public static ActionResult WithHeader(this ActionResult innerResult, string name, string value)
 		=> new ActionResultDecorator(innerResult, response => response.Headers[name] = value);
+
+	/// <summary>
+	/// Decorates an <see cref="ActionResult"/> to append each value as a separate header line.
+	/// Use when the wire form expects multiple header lines under the same name (e.g. RFC 9449
+	/// §7.1 dual <c>WWW-Authenticate</c> emission for DPoP and Bearer); plain
+	/// <see cref="WithHeader"/> overwrites instead of appending.
+	/// </summary>
+	public static ActionResult WithAppendHeader(
+		this ActionResult innerResult,
+		string name,
+		IEnumerable<string> values)
+		=> new ActionResultDecorator(
+			innerResult,
+			response =>
+			{
+				foreach (var value in values)
+					response.Headers.Append(name, value);
+			});
 
 	/// <summary>
 	/// Pre-computed Cache-Control header value that combines multiple cache prevention directives
@@ -126,7 +143,7 @@ public static class ActionResultExtensions
 	/// <returns>An <see cref="ActionResult"/> with the appropriate status code and headers.</returns>
 	public static ActionResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
 	{
-		var challenge = FormatBearerChallenge(error, realm);
+		var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
 
 		return (error.Error, fallbackStatusCode) switch
 		{
@@ -148,30 +165,38 @@ public static class ActionResultExtensions
 	}
 
 	/// <summary>
-	/// Builds a <c>WWW-Authenticate: Bearer</c> challenge value per RFC 6750 Section 3,
-	/// including optional realm, error, and error_description attributes.
+	/// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP
+	/// scheme (RFC 9449 §7.1) on the <c>WWW-Authenticate</c> header, optionally alongside the
+	/// Bearer scheme. <see cref="UseDPoPNonceError"/> additionally emits the <c>DPoP-Nonce</c>
+	/// response header so the client can echo the freshly issued nonce on retry.
 	/// </summary>
-	private static string FormatBearerChallenge(OidcError error, string? realm)
+	public static ActionResult Format(
+		this OidcError error,
+		int fallbackStatusCode,
+		string? realm,
+		IEnumerable<string> dpopAlgs,
+		bool advertiseBearer)
 	{
-		var sb = new StringBuilder(TokenTypes.Bearer);
-		var first = true;
-		Append(sb, ref first, "realm", realm);
-		Append(sb, ref first, "error", error.Error);
-		Append(sb, ref first, "error_description", error.ErrorDescription);
-		return sb.ToString();
+		var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
-		static void Append(StringBuilder sb, ref bool first, string name, string? value)
+		ActionResult result = error switch
 		{
-			if (string.IsNullOrEmpty(value))
-				return;
+			InvalidDPoPProofError or UseDPoPNonceError => new UnauthorizedResult(),
+			_ when error.Error == ErrorCodes.InvalidToken => new UnauthorizedResult(),
+			_ when error.Error == ErrorCodes.InsufficientScope => new StatusCodeResult(StatusCodes.Status403Forbidden),
+			_ when fallbackStatusCode == StatusCodes.Status400BadRequest
+				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+			_ when fallbackStatusCode == StatusCodes.Status401Unauthorized
+				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+			_ => new ObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+				{ StatusCode = fallbackStatusCode },
+		};
 
-			sb.Append(first ? " " : ", ")
-				.Append(name)
-				.Append("=\"")
-				.Append(value.Replace("\"", "'"))
-				.Append('"');
+		result = result.WithAppendHeader(HeaderNames.WWWAuthenticate, challenges);
 
-			first = false;
-		}
+		if (error is UseDPoPNonceError { Nonce: var nonce })
+			result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
+
+		return result;
 	}
 }

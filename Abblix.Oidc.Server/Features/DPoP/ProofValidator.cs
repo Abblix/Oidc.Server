@@ -56,13 +56,6 @@ internal sealed class ProofValidator(
     IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
 {
-    private static readonly IReadOnlySet<string> AllowedAlgorithms = new HashSet<string>(StringComparer.Ordinal)
-    {
-        SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
-        SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512,
-        SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512,
-    };
-
     private static readonly IReadOnlySet<string> ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal)
     {
         JwtTypes.DPoPProof,
@@ -80,7 +73,7 @@ internal sealed class ProofValidator(
             {
                 Options = ValidationOptions.RequireSignedTokens | ValidationOptions.UseEmbeddedVerificationKey,
                 ExpectedTokenTypes = ExpectedTokenTypes,
-                AllowedSigningAlgorithms = AllowedAlgorithms,
+                AllowedSigningAlgorithms = DPoPAlgorithms.Allowed,
             });
 
         if (jwtResult.TryGetFailure(out var validationError))
