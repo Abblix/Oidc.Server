@@ -87,9 +87,19 @@ public class TokenRequestProcessor(
 
 		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{
+			// RFC 9449 §5: confidential clients' refresh tokens are not separately
+			// DPoP-bound — client authentication already sender-constrains them. Stripping
+			// the committed jkt from the persisted refresh-token context lets the next
+			// refresh call skip the committed-vs-presented compare in
+			// DPoPTokenEndpointValidator. The new access token's cnf.jkt is independently
+			// re-derived from the live proof in TokenAuthorizationContextEvaluator.
+			var refreshContext = clientInfo.ClientType == ClientType.Confidential
+				? request.AuthorizedGrant.Context with { ProofKeyThumbprint = null }
+				: request.AuthorizedGrant.Context;
+
 			response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
 				request.AuthorizedGrant.AuthSession,
-				request.AuthorizedGrant.Context,
+				refreshContext,
 				clientInfo,
 				request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken } ? refreshToken : null);
 		}
