@@ -33,5 +33,5 @@ namespace Abblix.Oidc.Server.Common;
 /// </summary>
 /// <param name="Nonce">The fresh nonce the client should attach to the next DPoP proof.
 /// </param>
-public sealed record DPoPNonceRequiredError(string Nonce)
+public sealed record UseDPoPNonceError(string Nonce)
     : OidcError(ErrorCodes.UseDPoPNonce, "DPoP proof requires a fresh nonce.");

@@ -78,8 +78,8 @@ public class TokenResponseFormatter : ITokenResponseFormatter
 
         // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.
-        if (error is DPoPNonceRequiredError nonceError)
-            result = result.WithHeader(DPoPNonceResponseHeader, nonceError.Nonce);
+        if (error is UseDPoPNonceError { Nonce: var nonce })
+            result = result.WithHeader(DPoPNonceResponseHeader, nonce);
 
         return new ActionResult<TokenResponse>(result);
     }
