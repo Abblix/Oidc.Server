@@ -45,6 +45,24 @@ public record ClientRegistrationResponse
         public const string RegistrationClientUri = "registration_client_uri";
         public const string InitiateLoginUri = "initiate_login_uri";
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        public const string ApplicationType = "application_type";
+        public const string RedirectUris = "redirect_uris";
+        public const string ClientName = "client_name";
+        public const string LogoUri = "logo_uri";
+        public const string SubjectType = "subject_type";
+        public const string SectorIdentifierUri = "sector_identifier_uri";
+        public const string JwksUri = "jwks_uri";
+        public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+        public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+        public const string Contacts = "contacts";
+        public const string RequestUris = "request_uris";
+        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
     }
 
     /// <summary>
@@ -128,4 +146,117 @@ public record ClientRegistrationResponse
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
     public string? SoftwareStatement { get; init; }
+
+    /// <summary>
+    /// The type of application for which the client is registered (<c>web</c>, <c>native</c>).
+    /// Optional — server may assign a default. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.ApplicationType)]
+    public string? ApplicationType { get; init; }
+
+    /// <summary>
+    /// The URIs where the client expects to receive responses after user authentication.
+    /// Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.RedirectUris)]
+    public Uri[]? RedirectUris { get; init; }
+
+    /// <summary>
+    /// The human-readable name of the client. Optional client metadata. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientName)]
+    public string? ClientName { get; init; }
+
+    /// <summary>
+    /// URL that references a logo for the client. Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.LogoUri)]
+    public Uri? LogoUri { get; init; }
+
+    /// <summary>
+    /// The type of subject identifier used (<c>public</c>, <c>pairwise</c>).
+    /// Optional. Per OpenID Connect Core §8.
+    /// </summary>
+    [JsonPropertyName(Parameters.SubjectType)]
+    public string? SubjectType { get; init; }
+
+    /// <summary>
+    /// URL using <c>https</c> scheme used in calculating pseudonymous identifiers for
+    /// pairwise subject type. Optional. Per OpenID Connect Core §8.1.
+    /// </summary>
+    [JsonPropertyName(Parameters.SectorIdentifierUri)]
+    public Uri? SectorIdentifierUri { get; init; }
+
+    /// <summary>
+    /// URL for the client's JSON Web Key Set document.
+    /// Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.JwksUri)]
+    public Uri? JwksUri { get; init; }
+
+    /// <summary>
+    /// JWE <c>alg</c> algorithm for encrypting UserInfo responses.
+    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.UserInfoEncryptedResponseAlg)]
+    public string? UserInfoEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>enc</c> algorithm for encrypting UserInfo responses.
+    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.UserInfoEncryptedResponseEnc)]
+    public string? UserInfoEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// Array of contact email addresses for people responsible for this client.
+    /// Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.Contacts)]
+    public string[]? Contacts { get; init; }
+
+    /// <summary>
+    /// Array of <c>request_uri</c> values pre-registered by the client.
+    /// Optional. Per OpenID Connect Core §6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestUris)]
+    public Uri[]? RequestUris { get; init; }
+
+    /// <summary>
+    /// Exact Subject Distinguished Name required when using <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSubjectDn)]
+    public string? TlsClientAuthSubjectDn { get; init; }
+
+    /// <summary>
+    /// Required DNS Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanDns)]
+    public string[]? TlsClientAuthSanDns { get; init; }
+
+    /// <summary>
+    /// Required URI Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanUri)]
+    public Uri[]? TlsClientAuthSanUri { get; init; }
+
+    /// <summary>
+    /// Required IP Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanIp)]
+    public string[]? TlsClientAuthSanIp { get; init; }
+
+    /// <summary>
+    /// Required email Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanEmail)]
+    public string[]? TlsClientAuthSanEmail { get; init; }
+
+    /// <summary>
+    /// Whether access tokens issued to this client are sender-constrained via DPoP per
+    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes the registered value of
+    /// <c>ClientInfo.RequireDPoP</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
 }
