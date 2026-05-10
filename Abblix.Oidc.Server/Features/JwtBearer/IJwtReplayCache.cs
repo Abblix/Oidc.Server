@@ -29,5 +29,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// Update consumers to import the new namespace.
 /// </summary>
 [Obsolete($"Use {nameof(Features)}.{nameof(ReplayPrevention)}.{nameof(IJwtReplayCache)}. " +
-          "The contract is identical and this interface derives from it for backward compatibility.")] // NOSONAR S1133: permanent backward-compat alias; removal is a major-version concern.
+          "The contract is identical and this interface derives from it for backward compatibility.")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+    Justification = "Permanent backward-compat alias; removal is a major-version concern.")]
 public interface IJwtReplayCache : ReplayPrevention.IJwtReplayCache;

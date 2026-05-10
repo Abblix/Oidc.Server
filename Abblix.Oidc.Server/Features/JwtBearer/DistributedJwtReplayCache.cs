@@ -36,7 +36,9 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// </summary>
 [Obsolete($"Use {nameof(Features)}.{nameof(ReplayPrevention)}.{nameof(DistributedJwtReplayCache)}. " +
           "Behaviour is identical; this type is a backward-compat shim that delegates to " +
-          "the canonical implementation.")] // NOSONAR S1133: permanent backward-compat shim; removal is a major-version concern.
+          "the canonical implementation.")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+    Justification = "Permanent backward-compat shim; removal is a major-version concern.")]
 public sealed class DistributedJwtReplayCache(
     ILogger<ReplayPrevention.DistributedJwtReplayCache> logger,
     IDistributedCache cache,
