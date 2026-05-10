@@ -94,21 +94,21 @@ internal sealed class ProofValidator(
         if (error != null)
             return error;
 
-        // IsReplayedAsync + MarkAsUsedAsync is not atomic on IDistributedCache; two
-        // concurrent proofs sharing the same jti can both pass the read before either
-        // marks. The race window is bounded by the cache round-trip; RFC 9449 §11.1
-        // accepts probabilistic replay defence and an atomic SETNX-style primitive is
-        // backend-specific (e.g. StackExchange.Redis), out of scope for the abstraction.
-        if (await replayCache.IsReplayedAsync(jwtId))
+        // The latest moment a same-iat replay could still pass the iat-window check is
+        // iat + tolerance; the replay-cache only needs to remember jti up to that point.
+        // TryAddAsync is single-call by contract — atomic-capable backends close the
+        // read-then-write race natively; the default IDistributedCache fallback retains
+        // the documented probabilistic guarantee accepted under RFC 9449 §11.1.
+        var fresh = await replayCache.TryAddAsync(
+            jwtId,
+            issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
+
+        if (!fresh)
         {
             return new ProofError(
                 ProofErrorReasons.ReplayDetected,
                 "DPoP proof jti has already been used within the acceptance window.");
         }
-
-        // The latest moment a same-iat replay could still pass the iat-window check is
-        // iat + tolerance; the replay-cache only needs to remember jti up to that point.
-        await replayCache.MarkAsUsedAsync(jwtId, issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
 
         return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
     }
@@ -294,13 +294,18 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 §4.1.7
-    /// and at least 96 bits of effective entropy per RFC 9449 §11.1. 16 base64url
-    /// characters ≈ 96 bits, which also passes UUIDv4 in any common encoding (32 hex,
-    /// 36 with dashes, 22 base64url). The downstream replay-cache uses the value as its key.
+    /// RFC 9449 §4.2 floor on jti entropy: at least 96 bits of pseudorandom data
+    /// (or a UUIDv4) so in-window collisions stay negligible. The strictest length
+    /// floor that admits every conforming encoding is the byte count of the raw
+    /// payload itself; every wider encoding (base64url, hex, UUIDv4) lands above.
     /// </summary>
-    private const int MinJwtIdLength = 16;
+    private const int MinJwtIdLengthInBits = 96;
 
+    /// <summary>
+    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 §4.1.7
+    /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy. The downstream
+    /// replay-cache uses the value as its key.
+    /// </summary>
     private static ProofError? TryGetJti(JsonWebTokenPayload payload, out string jti)
     {
         jti = null!;
@@ -309,11 +314,11 @@ internal sealed class ProofValidator(
         if (string.IsNullOrEmpty(value))
             return new ProofError(ProofErrorReasons.JwtIdMissing, $"'{JwtClaimTypes.JwtId}' claim is required.");
 
-        if (value.Length < MinJwtIdLength)
+        if (value.Length < MinJwtIdLengthInBits >> 3)
         {
             return new ProofError(
                 ProofErrorReasons.JwtIdMissing,
-                $"'{JwtClaimTypes.JwtId}' must carry at least 96 bits of entropy (RFC 9449 §11.1).");
+                $"'{JwtClaimTypes.JwtId}' must carry at least {MinJwtIdLengthInBits} bits of entropy.");
         }
 
         jti = value;

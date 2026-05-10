@@ -32,13 +32,13 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -61,7 +61,9 @@ using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-
+using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
+using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
+using Legacy = Abblix.Oidc.Server.Features.JwtBearer;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -242,7 +244,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.DPoPTokenEndpointValidator>()
+            ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>()
         ]);
         // Combine all registered ITokenContextValidator into a single composite validator.
         // This composite approach allows the application to apply multiple validation checks sequentially.
@@ -276,14 +278,14 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtBearerGrant(this IServiceCollection services)
     {
         services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
-        services.TryAddSingleton<Features.ReplayPrevention.IJwtReplayCache, Features.ReplayPrevention.DistributedJwtReplayCache>();
+        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
 
         // The replay-cache implementation now lives in Features.ReplayPrevention so DPoP
         // and any future consumer can share it. The JwtBearer-namespaced shim is the
         // singleton registered concretely; both the canonical interface and the deprecated
         // JwtBearer.IJwtReplayCache alias resolve to the same instance for back-compat.
 #pragma warning disable CS0618 // intentional registration of the deprecated shim
-        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+        services.TryAddSingleton<Legacy.IJwtReplayCache, Legacy.DistributedJwtReplayCache>();
 #pragma warning restore CS0618
 
         // Register keyed caching decorator for JWT Bearer JWKS fetching

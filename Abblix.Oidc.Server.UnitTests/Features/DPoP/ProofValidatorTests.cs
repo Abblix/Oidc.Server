@@ -31,7 +31,7 @@ using System.Threading.Tasks;
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.DPoP;
-
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -69,9 +69,7 @@ public class ProofValidatorTests
         services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
         services.AddSingleton<TimeProvider>(_time);
         services.AddSingleton(_requestInfo.Object);
-        services.AddSingleton<
-            Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache,
-            Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache>();
+        services.AddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
         services.AddSingleton<IProofValidator, ProofValidator>();
         var sp = services.BuildServiceProvider();
         _sut = sp.GetRequiredService<IProofValidator>();

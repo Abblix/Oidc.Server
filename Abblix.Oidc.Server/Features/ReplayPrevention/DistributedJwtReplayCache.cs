@@ -71,37 +71,39 @@ public partial class DistributedJwtReplayCache(
 	private static readonly TimeSpan MinimumTtl = TimeSpan.FromSeconds(10);
 
 	/// <inheritdoc />
-	public async Task<bool> IsReplayedAsync(string jti)
+	/// <remarks>
+	/// <see cref="IDistributedCache"/> exposes only Get + Set, no atomic compare-and-set
+	/// primitive. Two concurrent presenters of the same jti can both observe a cache
+	/// miss before either writes, so the duplicate-detection guarantee is probabilistic
+	/// rather than strict; the race window is bounded by the cache round-trip. RFC 9449
+	/// §11.1 accepts probabilistic replay defence for DPoP proofs. Hosts that need
+	/// strict atomicity should plug in a backend-aware implementation (Redis
+	/// <c>SET … NX EX</c> via <c>StackExchange.Redis</c>, SQL <c>INSERT … ON CONFLICT
+	/// DO NOTHING</c>, etc.).
+	/// </remarks>
+	public async Task<bool> TryAddAsync(string jti, DateTimeOffset? expiresAt)
 	{
 		var cacheKey = CacheKeyPrefix + jti;
-		var existing = await cache.GetAsync(cacheKey);
 
+		var existing = await cache.GetAsync(cacheKey);
 		if (existing != null)
 		{
 			LogReplayDetected(jti);
-			return true;
+			return false;
 		}
 
-		return false;
-	}
-
-	/// <inheritdoc />
-	public async Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
 		var now = timeProvider.GetUtcNow();
 		var clockSkew = options.CurrentValue.JwtBearer.ClockSkew;
 
-		// Calculate TTL based on JWT expiration + clock skew buffer, or use default
+		// TTL = JWT expiration + clock-skew buffer, or a sane default.
 		var expiration = expiresAt.HasValue
 			? expiresAt.Value - now + clockSkew
 			: DefaultExpiration;
 
-		// Ensure minimum TTL (in case of clock issues)
+		// Floor to MinimumTtl so a clock skew or expiry-already-past does not yield a
+		// zero/negative TTL that the cache would discard immediately.
 		if (expiration < MinimumTtl)
-		{
 			expiration = MinimumTtl;
-		}
 
 		await cache.SetAsync(
 			cacheKey,
@@ -109,5 +111,6 @@ public partial class DistributedJwtReplayCache(
 			new () { AbsoluteExpirationRelativeToNow = expiration });
 
 		LogMarkedAsUsed(jti, expiration);
+		return true;
 	}
 }
