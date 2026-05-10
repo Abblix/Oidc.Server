@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Utils;
 
 /// <summary>
@@ -44,6 +46,8 @@ public static class HttpServerUtility
 		"caches keyed by full JWT, jti hashes, at_hash binding). Base64Url.DecodeFromChars is " +
 		"strict per RFC and is the BCL primitive on net9.0+; this wrapper will be removed when " +
 		"net8.0 reaches end-of-life on 2026-11-10.")]
+	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+		Justification = "Removal scheduled in the Obsolete message — bound to the net8.0 EOL window (2026-11-10).")]
 	public static byte[] UrlTokenDecode(string input)
 	{
 		var length = input.Length;
@@ -87,6 +91,8 @@ public static class HttpServerUtility
 		"RFC 7515 §3 contract directly; this wrapper accepts a nullable byte[] for symmetry " +
 		"with UrlTokenDecode and exists only to bridge the net8.0 target. It will be removed " +
 		"when net8.0 reaches end-of-life on 2026-11-10.")]
+	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+		Justification = "Removal scheduled in the Obsolete message — bound to the net8.0 EOL window (2026-11-10).")]
 	public static string UrlTokenEncode(byte[]? input, int? length = null)
 	{
 		if (input == null)
