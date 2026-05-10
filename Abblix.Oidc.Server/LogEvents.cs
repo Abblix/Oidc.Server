@@ -640,6 +640,10 @@ internal static class LogEvents
             private const int Base = 10000;
 
             public const int NonceChallengeIssued = Base + 1;
+            public const int ProofRequiredButMissing = Base + 2;
+            public const int ProofKeyMismatch = Base + 3;
+            public const int ProofRejected = Base + 4;
+            public const int SchemeBindingMismatch = Base + 5;
         }
 
         /// <summary>
@@ -651,6 +655,9 @@ internal static class LogEvents
             private const int Base = 10020;
 
             public const int NonceChallengeIssued = Base + 1;
+            public const int ProofRequiredButMissing = Base + 2;
+            public const int ProofKeyMismatch = Base + 3;
+            public const int ProofRejected = Base + 4;
         }
     }
 }

@@ -53,18 +53,17 @@ public partial class DPoPUserInfoValidator(
         JsonWebToken accessToken,
         string rawAccessToken)
     {
-        var committed = accessToken.Payload.Confirmation?.JwkThumbprint;
-        var scheme = clientRequest.AuthorizationHeader?.Scheme;
-        var proofJwt = clientRequest.DPoPProof;
+        var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
 
-        if (committed is null)
+        if (accessToken is not { Payload.Confirmation.JwkThumbprint: {} committed})
         {
             // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
             // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
             // (RFC 9449 §7.1) and presenting it via DPoP would bypass logging/policy
             // gates that key off scheme.
-            if (scheme == TokenTypes.DPoP)
+            if (schemeDPoP)
             {
+                LogSchemeBindingMismatch(TokenTypes.DPoP, tokenIsBound: false);
                 return new OidcError(
                     ErrorCodes.InvalidToken,
                     "Access token is not DPoP-bound; use the Bearer scheme.");
@@ -73,23 +72,31 @@ public partial class DPoPUserInfoValidator(
             return null;
         }
 
-        if (scheme != TokenTypes.DPoP)
+        if (!schemeDPoP)
         {
+            LogSchemeBindingMismatch(clientRequest.AuthorizationHeader?.Scheme ?? "<missing>", tokenIsBound: true);
             return new OidcError(
                 ErrorCodes.InvalidToken,
                 "DPoP-bound access token must be presented via the DPoP scheme.");
         }
 
-        if (proofJwt is null)
+        if (clientRequest is not { DPoPProof: {} proofJwt})
+        {
+            LogProofRequiredButMissing("DPoP-bound access token");
             return new InvalidDPoPProofError("DPoP proof is required for the DPoP-bound access token.");
+        }
 
         var proofResult = await proofValidator.ValidateAsync(proofJwt, rawAccessToken);
         if (proofResult.TryGetFailure(out var proofError))
+        {
+            LogProofRejected(proofError.Reason);
             return new InvalidDPoPProofError($"DPoP proof rejected ({proofError.Reason}).");
+        }
 
         var proof = proofResult.GetSuccess();
         if (proof.ProofKeyThumbprint != committed)
         {
+            LogProofKeyMismatch(committed, proof.ProofKeyThumbprint);
             return new InvalidDPoPProofError(
                 "DPoP proof key does not match the cnf.jkt of the access token.");
         }

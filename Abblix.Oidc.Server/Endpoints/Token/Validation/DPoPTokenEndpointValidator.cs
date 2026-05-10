@@ -56,13 +56,13 @@ public partial class DPoPTokenEndpointValidator(
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
     {
-        var proofJwt = context.ClientRequest.DPoPProof;
         var committed = context.AuthorizedGrant?.Context.ProofKeyThumbprint;
 
-        if (proofJwt is null)
+        if (context.ClientRequest is not { DPoPProof: {} proofJwt })
         {
             if (context.ClientInfo.RequireDPoP)
             {
+                LogProofRequiredButMissing("client policy");
                 return new OidcError(
                     ErrorCodes.InvalidDPoPProof,
                     "DPoP proof is required for this client.");
@@ -73,6 +73,7 @@ public partial class DPoPTokenEndpointValidator(
                 // RFC 9449 §10: the authorization request committed to a proof-of-possession
                 // key via dpop_jkt; presenting the auth code without the proof is the very
                 // attack the carry-over closes.
+                LogProofRequiredButMissing("§10 dpop_jkt carry-over");
                 return new OidcError(
                     ErrorCodes.InvalidDPoPProof,
                     "Authorization request committed to a DPoP key but no proof was presented.");
@@ -85,6 +86,7 @@ public partial class DPoPTokenEndpointValidator(
 
         if (proofResult.TryGetFailure(out var proofError))
         {
+            LogProofRejected(proofError.Reason);
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
                 $"DPoP proof rejected ({proofError.Reason}).");
@@ -94,6 +96,7 @@ public partial class DPoPTokenEndpointValidator(
 
         if (committed is not null && committed != proof.ProofKeyThumbprint)
         {
+            LogProofKeyMismatch(committed, proof.ProofKeyThumbprint);
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
                 "DPoP proof key does not match the dpop_jkt committed at the authorization request.");
