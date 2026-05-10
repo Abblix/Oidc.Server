@@ -291,6 +291,14 @@ public record ClientRegistrationRequest
     public bool OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
+    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
+    /// access tokens issued to this client must be sender-constrained via DPoP. Maps to
+    /// <c>ClientInfo.RequireDPoP</c> via <see cref="Map"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -389,6 +397,7 @@ public record ClientRegistrationRequest
             DefaultMaxAge = DefaultMaxAge,
             InitiateLoginUri = InitiateLoginUri,
             OfflineAccessAllowed = OfflineAccessAllowed,
+            DpopBoundAccessTokens = DpopBoundAccessTokens,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 

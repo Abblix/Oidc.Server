@@ -125,6 +125,14 @@ public record ConfigurationResponse
 	public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
+	/// Specifies the JWS signing algorithms accepted on inbound DPoP proofs per
+	/// RFC 9449 §5.1 (<c>dpop_signing_alg_values_supported</c>): the intersection of
+	/// the algorithms the AS validator can verify with the static DPoP-compatible
+	/// whitelist.
+	/// </summary>
+	public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
 	/// Specifies the signing algorithms supported for request objects.
 	/// </summary>
 	public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }

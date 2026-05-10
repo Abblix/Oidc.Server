@@ -87,6 +87,7 @@ public sealed class ConfigurationHandler(
 		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		IdTokenSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
+		DpopSigningAlgValuesSupported = jwtAlgorithms.DpopSigningAlgorithmsSupported,
 
 		BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler.TokenDeliveryModesSupported,

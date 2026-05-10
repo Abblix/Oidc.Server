@@ -77,6 +77,7 @@ public record ConfigurationResponse
         public const string RequestParameterSupported = "request_parameter_supported";
         public const string RequestObjectSigningAlgValuesSupported = "request_object_signing_alg_values_supported";
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
+        public const string DpopSigningAlgValuesSupported = "dpop_signing_alg_values_supported";
         public const string PushedAuthorizationRequestEndpoint = "pushed_authorization_request_endpoint";
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
         public const string RequireSignedRequestObject = "require_signed_request_object";
@@ -294,6 +295,13 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSigningAlgValuesSupported)]
     public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// JWS signing algorithms accepted on inbound DPoP proofs per RFC 9449 §5.1
+    /// (<c>dpop_signing_alg_values_supported</c>).
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopSigningAlgValuesSupported)]
+    public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for request objects.

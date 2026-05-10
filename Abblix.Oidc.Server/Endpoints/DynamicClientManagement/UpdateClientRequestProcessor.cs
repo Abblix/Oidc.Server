@@ -70,6 +70,8 @@ public class UpdateClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
+            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            RequireDPoP = model.DpopBoundAccessTokens ?? false,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -162,6 +164,9 @@ public class UpdateClientRequestProcessor(
             TlsClientAuthSanUri = updatedClient.TlsClientAuth?.SanUris,
             TlsClientAuthSanIp = updatedClient.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = updatedClient.TlsClientAuth?.SanEmails,
+            // RFC 9449 §5.2: echo dpop_bound_access_tokens so the client can confirm the
+            // current binding state.
+            DpopBoundAccessTokens = updatedClient.RequireDPoP,
         };
     }
 

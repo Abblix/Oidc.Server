@@ -329,6 +329,16 @@ public record ClientRegistrationRequest
     public bool? OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
+    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
+    /// access tokens issued to this client must be sender-constrained via DPoP (the server
+    /// will require a valid DPoP proof on every token request and bind <c>cnf.jkt</c> on
+    /// the issued token). Maps to <see cref="ClientInfo.RequireDPoP"/>. When omitted, treated
+    /// as <c>false</c> per RFC 9449 §5.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
     /// that the OP calls server-to-server with a logout token to terminate the user's session at the client.
     /// </summary>
@@ -465,6 +475,7 @@ public record ClientRegistrationRequest
         public const string RequestUris = "request_uris";
         public const string PkceRequired = "pkce_required";
         public const string OfflineAccessAllowed = "offline_access_allowed";
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
         public const string BackChannelLogoutUri = "backchannel_logout_uri";
         public const string BackChannelLogoutSessionRequired = "backchannel_logout_session_required";
         public const string FrontChannelLogoutUri = "frontchannel_logout_uri";

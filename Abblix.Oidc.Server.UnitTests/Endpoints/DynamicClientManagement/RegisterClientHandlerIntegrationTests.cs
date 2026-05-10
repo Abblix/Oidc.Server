@@ -96,6 +96,14 @@ public class RegisterClientHandlerIntegrationTests
         GrantTypes = grantTypes ?? [GrantTypes.AuthorizationCode],
     };
 
+    private static ClientRegistrationRequest CreateDpopBoundRequest() => new()
+    {
+        RedirectUris = [new Uri("https://client.example.com/callback")],
+        ResponseTypes = [[ResponseTypes.Code]],
+        GrantTypes = [GrantTypes.AuthorizationCode],
+        DpopBoundAccessTokens = true,
+    };
+
     /// <summary>
     /// Default registration with the Code Flow defaults must succeed against a stock host:
     /// no opt-ins required, <c>response_types=["code"]</c> + <c>grant_types=["authorization_code"]</c>
@@ -198,5 +206,75 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    /// <summary>
+    /// RFC 9449 §5.2: a registration request carrying <c>dpop_bound_access_tokens=true</c>
+    /// must round-trip into the persisted <see cref="ClientInfo.RequireDPoP"/> flag and be
+    /// echoed on the success response (RFC 7591 §3.2.1) so the client can confirm the binding.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DpopBoundAccessTokensTrue_RoundTripsAndEchoes()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
+
+        var request = CreateDpopBoundRequest();
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var success),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+        Assert.True(success.DpopBoundAccessTokens);
+
+        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        Assert.NotNull(stored);
+        Assert.True(stored.RequireDPoP);
+    }
+
+    /// <summary>
+    /// RFC 9449 §5.2: when the client metadata omits <c>dpop_bound_access_tokens</c>, the
+    /// effective value is <c>false</c>. Locks the default-on-omission contract end-to-end.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DpopBoundAccessTokensOmitted_DefaultsFalse()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
+
+        var result = await handler.HandleAsync(CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.False(success.DpopBoundAccessTokens);
+
+        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        Assert.NotNull(stored);
+        Assert.False(stored.RequireDPoP);
+    }
+
+    /// <summary>
+    /// RFC 7591 §3.2.1: the registration response echoes registered client metadata so the
+    /// client can confirm what was stored without a follow-up read. Locks that the
+    /// extended echo (added alongside DPoP) actually surfaces a representative subset of
+    /// fields — <c>redirect_uris</c>, <c>token_endpoint_auth_method</c>, and the
+    /// DPoP-binding flag — rather than only the minimal pre-extension surface.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_RegistrationResponse_EchoesRegisteredMetadata()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var request = CreateDpopBoundRequest();
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.NotNull(success.RedirectUris);
+        Assert.Single(success.RedirectUris);
+        Assert.Equal(new Uri("https://client.example.com/callback"), success.RedirectUris[0]);
+        Assert.True(success.DpopBoundAccessTokens);
     }
 }
