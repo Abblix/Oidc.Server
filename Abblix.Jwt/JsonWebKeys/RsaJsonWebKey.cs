@@ -125,7 +125,7 @@ public sealed record RsaJsonWebKey : JsonWebKey
     {
         return includePrivateKeys switch
         {
-            true when PrivateExponent is { Length: > 0 } => this,
+            true when HasPrivateKey => this,
             true => throw new InvalidOperationException($"There is no private key for kid={KeyId}"),
             false => this with
             {
@@ -149,11 +149,19 @@ public sealed record RsaJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// For RSA keys, returns true if private key material (PrivateExponent) is present.
-    /// Private key enables decryption and signing operations.
+    /// For RSA keys, returns true if any RFC 7518 §6.3.2 private-key member is present —
+    /// not just <c>d</c>. The DPoP §4.2 «MUST NOT contain private key» check needs to
+    /// catch a JWK that omits <c>d</c> but still leaks CRT factors (<c>p</c>, <c>q</c>,
+    /// <c>dp</c>, <c>dq</c>, <c>qi</c>), since those alone reconstruct the private key.
     /// </remarks>
     [JsonIgnore]
-    public override bool HasPrivateKey => PrivateExponent is { Length: > 0 };
+    public override bool HasPrivateKey
+        => PrivateExponent is { Length: > 0 }
+        || FirstPrimeFactor is { Length: > 0 }
+        || SecondPrimeFactor is { Length: > 0 }
+        || FirstFactorCrtExponent is { Length: > 0 }
+        || SecondFactorCrtExponent is { Length: > 0 }
+        || FirstCrtCoefficient is { Length: > 0 };
 
     /// <inheritdoc/>
     /// <remarks>

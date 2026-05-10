@@ -263,6 +263,19 @@ public class ProofValidatorTests
     }
 
     [Fact]
+    public async Task ValidateAsync_JtiTooShort_ReturnsJtiMissing()
+    {
+        // RFC 9449 §11.1 RECOMMENDS at least 96 bits of effective entropy in the jti
+        // claim — anything shorter is rejected to harden the replay defence.
+        var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "short" }.Build();
+
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ProofErrorReasons.JwtIdMissing, error.Reason);
+    }
+
+    [Fact]
     public async Task ValidateAsync_SameJtiPresentedTwice_SecondReturnsReplayDetected()
     {
         // Same builder produces the same jti on every Build() — two consecutive validates

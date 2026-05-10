@@ -116,16 +116,27 @@ public class WwwAuthenticateBuilderTests
     }
 
     [Fact]
-    public void BuildBearerChallenge_QuoteInDescription_ReplacedWithSingleQuote()
+    public void BuildBearerChallenge_QuoteInDescription_BackslashEscaped()
     {
-        // Quoted-string values cannot contain bare double quotes (RFC 7235 §2.1). The
-        // builder substitutes them with single quotes to keep the value parseable without
-        // escaping logic at every call site.
+        // RFC 7235 §2.2 / RFC 9110 §5.6.4: inside a quoted-string each `"` MUST be
+        // backslash-escaped. The builder preserves the original character rather than
+        // substituting a different glyph so the on-wire value round-trips.
         var error = new OidcError(ErrorCodes.InvalidToken, "value with \"quotes\" inside");
 
         var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: null);
 
-        Assert.Contains("error_description=\"value with 'quotes' inside\"", challenge);
-        Assert.DoesNotContain("\"value with \"", challenge);
+        Assert.Contains("error_description=\"value with \\\"quotes\\\" inside\"", challenge);
+    }
+
+    [Fact]
+    public void BuildBearerChallenge_BackslashInDescription_DoubledForRfc7235()
+    {
+        // A literal backslash inside a quoted-string is itself the escape character,
+        // so it MUST be doubled per RFC 7235 §2.2.
+        var error = new OidcError(ErrorCodes.InvalidToken, @"value with \ inside");
+
+        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: null);
+
+        Assert.Contains(@"error_description=""value with \\ inside""", challenge);
     }
 }

@@ -112,10 +112,20 @@ public static class WwwAuthenticateBuilder
             _builder
                 .Append(_first ? " " : ", ")
                 .Append(name)
-                .Append("=\"")
-                .Append(value.Replace("\"", "'"))
-                .Append('"');
+                .Append("=\"");
 
+            // RFC 7235 §2.2 / RFC 9110 §5.6.4: inside a quoted-string each `"` MUST be
+            // backslash-escaped, and `\` itself MUST be doubled. Anything else (CR/LF
+            // and other control bytes) is rejected upstream — mutating values silently
+            // would obscure malformed inputs.
+            foreach (var c in value)
+            {
+                if (c is '"' or '\\')
+                    _builder.Append('\\');
+                _builder.Append(c);
+            }
+
+            _builder.Append('"');
             _first = false;
         }
 

@@ -67,8 +67,8 @@ public sealed record OctetJsonWebKey : JsonWebKey
     {
         return includePrivateKeys switch
         {
-            true when KeyValue is { Length: > 0 } => this,
-            true => throw new InvalidOperationException($"There is no key value for kid={KeyId}"),
+            true when HasPrivateKey => this,
+            true => throw new InvalidOperationException($"There is no private key for kid={KeyId}"),
             false => this with { KeyValue = null },
         };
     }
