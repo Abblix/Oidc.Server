@@ -63,7 +63,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
 using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
-using Legacy = Abblix.Oidc.Server.Features.JwtBearer;
+using JwtBearer = Abblix.Oidc.Server.Features.JwtBearer;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -285,7 +285,7 @@ public static class ServiceCollectionExtensions
         // singleton registered concretely; both the canonical interface and the deprecated
         // JwtBearer.IJwtReplayCache alias resolve to the same instance for back-compat.
 #pragma warning disable CS0618 // intentional registration of the deprecated shim
-        services.TryAddSingleton<Legacy.IJwtReplayCache, Legacy.DistributedJwtReplayCache>();
+        services.TryAddSingleton<JwtBearer.IJwtReplayCache, JwtBearer.DistributedJwtReplayCache>();
 #pragma warning restore CS0618
 
         // Register keyed caching decorator for JWT Bearer JWKS fetching
