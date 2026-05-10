@@ -242,7 +242,11 @@ internal sealed class ProofValidator(
         {
             iatNullable = payload.IssuedAt;
         }
-        catch
+        // The accessor parses a Unix-time numeric out of the underlying JsonObject; a
+        // malformed iat surfaces as one of these conversion exceptions. Anything else
+        // (OperationCanceledException, OutOfMemoryException, ...) propagates so we
+        // don't mask unrelated bugs as «invalid iat».
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException or OverflowException)
         {
             return new ProofError(
                 ProofErrorReasons.IssuedAtInvalid,

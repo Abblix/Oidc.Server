@@ -44,7 +44,9 @@ public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
     /// <returns>
     /// A task that returns the formatted action result.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response)
+    public Task<ActionResult> FormatResponseAsync(
+        ClientRequest request,
+        Result<RemoveClientSuccessfulResponse, OidcError> response)
         => Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new NoContentResult(),
             onFailure: error => error.Format(StatusCodes.Status400BadRequest)));

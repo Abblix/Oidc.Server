@@ -135,7 +135,7 @@ public record AuthorizationContext
     /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
     /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
     /// </summary>
-    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
+    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")] // NOSONAR S1133: permanent backward-compat alias; removal is a major-version concern.
     public string? X509CertificateSha256Thumbprint
     {
         get => CertificateSha256Thumbprint;

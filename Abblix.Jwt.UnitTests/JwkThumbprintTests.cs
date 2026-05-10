@@ -35,6 +35,12 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JwkThumbprintTests
 {
+    // RFC 9449 §6.1 reference EC key Y coordinate. Reused across the canonical-vector
+    // test plus the «optional members are ignored» variants that derive the same key
+    // shape with use/alg/kid metadata bolted on.
+    private const string EcReferenceY = "9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA";
+
+
     /// <summary>
     /// RFC 7638 §3.1 reference vector. The kid="2011-04-29" RSA key produces base64url
     /// thumbprint <c>NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs</c>. The optional
@@ -78,7 +84,7 @@ public class JwkThumbprintTests
         {
             Curve = EllipticCurveTypes.P256,
             X = Base64Url.DecodeFromChars("l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs"),
-            Y = Base64Url.DecodeFromChars("9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA"),
+            Y = Base64Url.DecodeFromChars(EcReferenceY),
         };
 
         Assert.Equal(
@@ -115,7 +121,7 @@ public class JwkThumbprintTests
         {
             Curve = EllipticCurveTypes.P256,
             X = Base64Url.DecodeFromChars("l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs"),
-            Y = Base64Url.DecodeFromChars("9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA"),
+            Y = Base64Url.DecodeFromChars(EcReferenceY),
         };
         var withOptionals = minimal with
         {
@@ -149,7 +155,7 @@ public class JwkThumbprintTests
         var key = new EllipticCurveJsonWebKey
         {
             X = Base64Url.DecodeFromChars("l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs"),
-            Y = Base64Url.DecodeFromChars("9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA"),
+            Y = Base64Url.DecodeFromChars(EcReferenceY),
         };
 
         Assert.Throws<InvalidOperationException>(() => key.ComputeJwkThumbprint());
@@ -161,7 +167,7 @@ public class JwkThumbprintTests
         var key = new EllipticCurveJsonWebKey
         {
             Curve = EllipticCurveTypes.P256,
-            Y = Base64Url.DecodeFromChars("9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA"),
+            Y = Base64Url.DecodeFromChars(EcReferenceY),
         };
 
         Assert.Throws<InvalidOperationException>(() => key.ComputeJwkThumbprint());

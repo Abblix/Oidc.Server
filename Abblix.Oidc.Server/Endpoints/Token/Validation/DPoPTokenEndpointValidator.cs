@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -46,10 +47,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// proof is silently accepted (Bearer token issued downstream) and a present-and-valid
 /// proof still binds the token (RFC 9449 §5.2 server-side opportunistic binding).
 /// </remarks>
-public class DPoPTokenEndpointValidator(
+public partial class DPoPTokenEndpointValidator(
+    ILogger<DPoPTokenEndpointValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options) : ITokenContextValidator
+    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), ITokenContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
@@ -108,34 +110,4 @@ public class DPoPTokenEndpointValidator(
         context.ProofKeyThumbprint = proof.ProofKeyThumbprint;
         return null;
     }
-
-    /// <summary>
-    /// Enforces the nonce policy at the token endpoint per RFC 9449 §8: the proof MUST
-    /// carry a <c>nonce</c> claim accepted by <see cref="INonceService"/>; when missing or
-    /// stale, mints a fresh nonce and surfaces it as a
-    /// <see cref="UseDPoPNonceError"/> so the response formatter can attach the
-    /// <c>DPoP-Nonce</c> header to the error response.
-    /// </summary>
-    private async Task<OidcError?> EnforceNonceAsync(Proof proof)
-    {
-        var nonceClaim = proof.Token.Payload.Nonce;
-        if (nonceClaim is null)
-            return await UseDPoPNonce();
-
-        var failure = await nonceService.ValidateAsync(nonceClaim);
-        if (failure is not null)
-            return await UseDPoPNonce();
-
-        return null;
-    }
-
-    /// <summary>
-    /// Mints a fresh nonce via <see cref="INonceService"/> and wraps it in a
-    /// <see cref="UseDPoPNonceError"/>. Shared between the missing-nonce and
-    /// stale-nonce branches of <see cref="EnforceNonceAsync"/>: both surface the same
-    /// challenge to the client and both need a freshly issued nonce so the response
-    /// formatter can attach it on the <c>DPoP-Nonce</c> header.
-    /// </summary>
-    private async Task<UseDPoPNonceError> UseDPoPNonce()
-        => new(await nonceService.IssueAsync());
 }

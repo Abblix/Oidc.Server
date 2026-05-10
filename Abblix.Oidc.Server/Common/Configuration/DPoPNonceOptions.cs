@@ -29,21 +29,28 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// Inherits the generic primitive's <c>AcceptanceWindow</c> and
 /// <c>RotationInterval</c> so DPoP can override them independently of any
 /// other nonce-service consumer, and adds the per-endpoint policy that says
-/// which OAuth endpoints reject requests whose DPoP proof omits the
-/// <c>nonce</c> claim (responding with <c>use_dpop_nonce</c> and a fresh
-/// <c>DPoP-Nonce</c> header).
+/// which OAuth endpoints reject DPoP proofs without a <c>nonce</c> claim
+/// (responding with <c>use_dpop_nonce</c> and a fresh <c>DPoP-Nonce</c>
+/// header).
 /// </summary>
 /// <remarks>
+/// Per-endpoint flags exist only for endpoints where RFC 9449 specifies DPoP
+/// applicability: the token endpoint (§5) and protected resources / UserInfo
+/// (§7). RFC 9449 §6.2 explicitly disclaims DPoP at the introspection
+/// endpoint and stays silent on the revocation endpoint, so flags for those
+/// endpoints would be misleading non-spec promises and are intentionally
+/// absent.
+/// <para>
 /// DPoP is the only nonce-service consumer at present, so the active
 /// <c>RollingHmacNonceService</c> binds directly against this type via
 /// <see cref="OidcOptions.DPoP"/>.<see cref="DPoPOptions.Nonce"/>; the
 /// inherited <see cref="NonceOptions.AcceptanceWindow"/> and
-/// <see cref="NonceOptions.RotationInterval"/> drive issuance, the DPoP-
-/// specific bools below are consumed by the token-endpoint integration
-/// slice. When a second consumer (e.g. state-parameter validation) arrives,
-/// it brings its own <see cref="NonceOptions"/>-derived options class and
-/// its own service registration; the inheritance hierarchy is what lets
-/// each consumer diverge on window and rotation independently.
+/// <see cref="NonceOptions.RotationInterval"/> drive issuance. When a
+/// second consumer (e.g. state-parameter validation) arrives, it brings
+/// its own <see cref="NonceOptions"/>-derived options class and its own
+/// service registration; the inheritance hierarchy is what lets each
+/// consumer diverge on window and rotation independently.
+/// </para>
 /// </remarks>
 public class DPoPNonceOptions : NonceOptions
 {
@@ -57,19 +64,7 @@ public class DPoPNonceOptions : NonceOptions
 
     /// <summary>
     /// Same as <see cref="RequireAtTokenEndpoint"/> but for the UserInfo
-    /// endpoint. Defaults to <c>false</c>.
+    /// endpoint per RFC 9449 §7. Defaults to <c>false</c>.
     /// </summary>
     public bool RequireAtUserInfoEndpoint { get; set; } = false;
-
-    /// <summary>
-    /// Same as <see cref="RequireAtTokenEndpoint"/> but for the Introspection
-    /// endpoint. Defaults to <c>false</c>.
-    /// </summary>
-    public bool RequireAtIntrospectionEndpoint { get; set; } = false;
-
-    /// <summary>
-    /// Same as <see cref="RequireAtTokenEndpoint"/> but for the Revocation
-    /// endpoint. Defaults to <c>false</c>.
-    /// </summary>
-    public bool RequireAtRevocationEndpoint { get; set; } = false;
 }

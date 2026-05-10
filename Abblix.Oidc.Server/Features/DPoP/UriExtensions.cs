@@ -56,18 +56,20 @@ internal static class UriExtensions
 
         var sb = new StringBuilder(source.Length);
         sb.Append(source, 0, firstPercent);
-        for (var i = firstPercent; i < source.Length; i++)
+        var i = firstPercent;
+        while (i < source.Length)
         {
             if (source[i] == '%' && i + 2 < source.Length)
             {
                 sb.Append('%');
                 sb.Append(char.ToUpperInvariant(source[i + 1]));
                 sb.Append(char.ToUpperInvariant(source[i + 2]));
-                i += 2;
+                i += 3;
             }
             else
             {
                 sb.Append(source[i]);
+                i++;
             }
         }
         return sb.ToString();

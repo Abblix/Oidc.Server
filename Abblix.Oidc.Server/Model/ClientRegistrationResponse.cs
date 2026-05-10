@@ -33,38 +33,6 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record ClientRegistrationResponse
 {
-    private static class Parameters
-    {
-        public const string ClientId = "client_id";
-        public const string ClientIdIssuedAt = "client_id_issued_at";
-
-        public const string ClientSecret = "client_secret";
-        public const string ClientSecretExpiresAt = "client_secret_expires_at";
-
-        public const string RegistrationAccessToken = "registration_access_token";
-        public const string RegistrationClientUri = "registration_client_uri";
-        public const string InitiateLoginUri = "initiate_login_uri";
-        public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
-
-        public const string ApplicationType = "application_type";
-        public const string RedirectUris = "redirect_uris";
-        public const string ClientName = "client_name";
-        public const string LogoUri = "logo_uri";
-        public const string SubjectType = "subject_type";
-        public const string SectorIdentifierUri = "sector_identifier_uri";
-        public const string JwksUri = "jwks_uri";
-        public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
-        public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
-        public const string Contacts = "contacts";
-        public const string RequestUris = "request_uris";
-        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
-        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
-        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
-        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
-        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
-        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
-    }
-
     /// <summary>
     /// The unique Client Identifier. It must not be currently valid for any other registered client.
     /// This identifier is critical for client identification and for securing client-to-server communication.
@@ -259,4 +227,36 @@ public record ClientRegistrationResponse
     /// </summary>
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
     public bool? DpopBoundAccessTokens { get; init; }
+
+    private static class Parameters
+    {
+        public const string ClientId = "client_id";
+        public const string ClientIdIssuedAt = "client_id_issued_at";
+
+        public const string ClientSecret = "client_secret";
+        public const string ClientSecretExpiresAt = "client_secret_expires_at";
+
+        public const string RegistrationAccessToken = "registration_access_token";
+        public const string RegistrationClientUri = "registration_client_uri";
+        public const string InitiateLoginUri = "initiate_login_uri";
+        public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        public const string ApplicationType = "application_type";
+        public const string RedirectUris = "redirect_uris";
+        public const string ClientName = "client_name";
+        public const string LogoUri = "logo_uri";
+        public const string SubjectType = "subject_type";
+        public const string SectorIdentifierUri = "sector_identifier_uri";
+        public const string JwksUri = "jwks_uri";
+        public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+        public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+        public const string Contacts = "contacts";
+        public const string RequestUris = "request_uris";
+        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+    }
 }

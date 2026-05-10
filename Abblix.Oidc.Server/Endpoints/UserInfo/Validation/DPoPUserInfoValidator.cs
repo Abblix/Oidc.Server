@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
@@ -40,10 +41,11 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 /// <see cref="InvalidDPoPProofError"/> / <see cref="UseDPoPNonceError"/> so the response
 /// formatter can emit the §7.1 <c>WWW-Authenticate: DPoP</c> challenge).
 /// </summary>
-public class DPoPUserInfoValidator(
+public partial class DPoPUserInfoValidator(
+    ILogger<DPoPUserInfoValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options) : IDPoPUserInfoValidator
+    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), IDPoPUserInfoValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(
@@ -61,11 +63,14 @@ public class DPoPUserInfoValidator(
             // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
             // (RFC 9449 §7.1) and presenting it via DPoP would bypass logging/policy
             // gates that key off scheme.
-            return scheme == TokenTypes.DPoP
-                ? new OidcError(
+            if (scheme == TokenTypes.DPoP)
+            {
+                return new OidcError(
                     ErrorCodes.InvalidToken,
-                    "Access token is not DPoP-bound; use the Bearer scheme.")
-                : null;
+                    "Access token is not DPoP-bound; use the Bearer scheme.");
+            }
+
+            return null;
         }
 
         if (scheme != TokenTypes.DPoP)
@@ -98,20 +103,4 @@ public class DPoPUserInfoValidator(
 
         return null;
     }
-
-    private async Task<OidcError?> EnforceNonceAsync(Proof proof)
-    {
-        var nonceClaim = proof.Token.Payload.Nonce;
-        if (nonceClaim is null)
-            return await UseDPoPNonce();
-
-        var failure = await nonceService.ValidateAsync(nonceClaim);
-        if (failure is not null)
-            return await UseDPoPNonce();
-
-        return null;
-    }
-
-    private async Task<UseDPoPNonceError> UseDPoPNonce()
-        => new(await nonceService.IssueAsync());
 }

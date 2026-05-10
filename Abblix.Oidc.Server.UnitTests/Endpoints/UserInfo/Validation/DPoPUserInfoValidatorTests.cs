@@ -36,6 +36,7 @@ using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using Moq;
@@ -74,6 +75,7 @@ public class DPoPUserInfoValidatorTests
         _options.SetupGet(o => o.CurrentValue).Returns(_opts);
 
         _validator = new DPoPUserInfoValidator(
+            Mock.Of<ILogger<DPoPUserInfoValidator>>(),
             _proofValidator.Object,
             _nonceService.Object,
             _options.Object);

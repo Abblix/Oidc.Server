@@ -624,4 +624,33 @@ internal static class LogEvents
             public const int MissingClaims = Base + 2;
         }
     }
+
+    /// <summary>
+    /// Range 10000–10099: <c>Features/DPoP</c> + DPoP-aware endpoint validators per
+    /// RFC 9449.
+    /// </summary>
+    public static class DPoP
+    {
+        /// <summary>
+        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> — RFC 9449 §7
+        /// resource-server enforcement on the UserInfo endpoint (sub-range 10000–10019).
+        /// </summary>
+        public static class DPoPUserInfoValidator
+        {
+            private const int Base = 10000;
+
+            public const int NonceChallengeIssued = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> — RFC 9449 §5
+        /// token-endpoint binding (sub-range 10020–10039).
+        /// </summary>
+        public static class DPoPTokenEndpointValidator
+        {
+            private const int Base = 10020;
+
+            public const int NonceChallengeIssued = Base + 1;
+        }
+    }
 }
