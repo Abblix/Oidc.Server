@@ -436,8 +436,8 @@ public class SymmetricKeyEncryptionTests
 		{
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
-			ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
-			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
+			ResolveTokenDecryptionKeys = _ => encryptionKey.ToAsync(),
+			ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
 		};
 	}
 }

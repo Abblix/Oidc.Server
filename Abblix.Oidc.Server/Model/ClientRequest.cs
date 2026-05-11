@@ -34,11 +34,25 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record ClientRequest
 {
+	/// <summary>
+	/// Wire-level parameter names for OAuth 2.0 client authentication material common to back-channel
+	/// endpoints (RFC 6749 §2.3.1, RFC 7521/7523 client assertions, OIDC Core §9).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>client_id</c> request parameter identifying the registered client.</summary>
 		public const string ClientId = "client_id";
+
+		/// <summary>The <c>client_secret</c> request parameter presented in the body for the
+		/// <c>client_secret_post</c> authentication method.</summary>
 		public const string ClientSecret = "client_secret";
+
+		/// <summary>The <c>client_assertion_type</c> request parameter naming the assertion format
+		/// (e.g. <c>urn:ietf:params:oauth:client-assertion-type:jwt-bearer</c>).</summary>
 		public const string ClientAssertionType = "client_assertion_type";
+
+		/// <summary>The <c>client_assertion</c> request parameter carrying the signed JWT client
+		/// assertion.</summary>
 		public const string ClientAssertion = "client_assertion";
 	}
 
@@ -83,4 +97,14 @@ public record ClientRequest
     /// for certificate-bound access tokens.
     /// </summary>
     public X509Certificate2? ClientCertificate { get; set; }
+
+    /// <summary>
+    /// The compact-form DPoP proof JWT taken from the inbound request's <c>DPoP</c> header
+    /// per RFC 9449 §4.1. Travels alongside <see cref="AuthorizationHeader"/> and
+    /// <see cref="ClientCertificate"/> as transport-level material so the core layer stays
+    /// ASP.NET-Core-free; the MVC binder lifts it from the header. <c>null</c> when no
+    /// proof was presented.
+    /// </summary>
+    [JsonIgnore]
+    public string? DPoPProof { get; set; }
 }

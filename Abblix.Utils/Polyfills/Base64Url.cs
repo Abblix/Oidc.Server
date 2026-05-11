@@ -49,12 +49,65 @@ public static class Base64Url
         if (source.IsEmpty)
             return [];
 
+        // Allocate the maximum possible output: (aligned source / 4) * 3 bytes,
+        // where aligned is source.Length rounded up to a multiple of 4. The
+        // shared TryDecodeFromChars handles alphabet validation, length-mod-4
+        // rejection, and the actual decoding; we only size the buffer here and
+        // surface its sole bool-return ('destination too small') as a throw.
+        var aligned = (source.Length + 3) & ~3;
+        var output = new byte[(aligned >> 2) * 3];
+        if (!TryDecodeFromChars(source, output, out var written))
+            throw new FormatException("base64url decoding failed.");
+
+        return written == output.Length ? output : output[..written];
+    }
+
+    /// <summary>
+    /// Decodes a base64url-encoded character span into <paramref name="destination"/>.
+    /// Mirrors the .NET 9+ BCL surface so consumer code can use a single call shape
+    /// across TFMs. Returns <c>false</c> when <paramref name="destination"/> is too
+    /// small to hold the decoded bytes; throws <see cref="FormatException"/> on
+    /// invalid characters or length-mod-4-of-1 inputs, matching BCL semantics —
+    /// the "Try" prefix here covers buffer-size failures, not malformed input.
+    /// </summary>
+    /// <param name="source">The base64url-encoded characters.</param>
+    /// <param name="destination">Buffer to receive the decoded bytes.</param>
+    /// <param name="bytesWritten">On success, the number of bytes written into
+    /// <paramref name="destination"/>; otherwise <c>0</c>.</param>
+    /// <returns><c>true</c> on successful decode; <c>false</c> when the destination
+    /// is too small.</returns>
+    /// <exception cref="FormatException">Thrown when <paramref name="source"/> contains
+    /// a character outside the base64url alphabet, or when its length leaves a
+    /// 1-character remainder modulo 4.</exception>
+    public static bool TryDecodeFromChars(
+        ReadOnlySpan<char> source,
+        Span<byte> destination,
+        out int bytesWritten)
+    {
+        if (source.IsEmpty)
+        {
+            bytesWritten = 0;
+            return true;
+        }
+
         if (source.Length % 4 == 1)
             throw new FormatException("Invalid base64url length: length mod 4 cannot be 1.");
 
         var aligned = (source.Length + 3) & ~3;
         var buffer = new char[aligned];
+        FillStandardBase64Buffer(source, buffer);
 
+        return Convert.TryFromBase64Chars(buffer, destination, out bytesWritten);
+    }
+
+    /// <summary>
+    /// Translates the base64url alphabet into the standard-base64 alphabet in place
+    /// in <paramref name="buffer"/> and pads the tail with <c>=</c> characters up to
+    /// <paramref name="buffer"/>.Length. Throws <see cref="FormatException"/> on any
+    /// character outside <c>A-Z a-z 0-9 - _</c>.
+    /// </summary>
+    private static void FillStandardBase64Buffer(ReadOnlySpan<char> source, Span<char> buffer)
+    {
         for (var i = 0; i < source.Length; i++)
         {
             var c = source[i];
@@ -63,18 +116,11 @@ public static class Base64Url
                 >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' => c,
                 '-' => '+',
                 '_' => '/',
-                _ => throw new FormatException(
-                    $"Invalid base64url character: '{c}' (0x{(int)c:X4}).")
+                _ => throw new FormatException($"Invalid base64url character: '{c}' (0x{(int)c:X4}).")
             };
         }
-        for (var i = source.Length; i < aligned; i++)
+        for (var i = source.Length; i < buffer.Length; i++)
             buffer[i] = '=';
-
-        var output = new byte[(aligned >> 2) * 3];
-        if (!Convert.TryFromBase64Chars(buffer, output, out var written))
-            throw new FormatException("base64url decoding failed.");
-
-        return written == output.Length ? output : output[..written];
     }
 
     /// <summary>

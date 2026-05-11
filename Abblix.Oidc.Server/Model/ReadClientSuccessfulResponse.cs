@@ -218,6 +218,14 @@ public record ReadClientSuccessfulResponse
     public string[]? TlsClientAuthSanEmail { get; init; }
 
     /// <summary>
+    /// Whether access tokens issued to this client are sender-constrained via DPoP per
+    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>.
+    /// </summary>
+    [JsonPropertyOrder(24)]
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
     /// </summary>
     private static class Parameters
@@ -246,5 +254,6 @@ public record ReadClientSuccessfulResponse
         public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
     }
 }

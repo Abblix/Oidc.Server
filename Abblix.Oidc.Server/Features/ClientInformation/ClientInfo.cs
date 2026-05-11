@@ -171,6 +171,15 @@ public record ClientInfo(string ClientId)
     public TlsClientAuthOptions? TlsClientAuth { get; set; }
 
     /// <summary>
+    /// RFC 9449 §5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
+    /// the client MUST present a valid DPoP proof on the token endpoint and the issued
+    /// access token will be DPoP-bound (<c>cnf.jkt</c>). When <c>false</c>, DPoP is
+    /// opportunistic — a valid proof still binds the token, otherwise a Bearer token is
+    /// issued.
+    /// </summary>
+    public bool RequireDPoP { get; set; } = false;
+
+    /// <summary>
     /// Determines the algorithm used for signing responses from the UserInfo endpoint.
     /// This can enhance the security of transmitted user information.
     /// </summary>

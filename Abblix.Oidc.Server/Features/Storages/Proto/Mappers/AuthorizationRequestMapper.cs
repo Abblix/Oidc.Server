@@ -56,6 +56,7 @@ internal static class AuthorizationRequestMapper
         if (source.CodeChallengeMethod != null) proto.CodeChallengeMethod = source.CodeChallengeMethod;
         if (source.Request != null) proto.Request = source.Request;
         if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
+        if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
 
         if (source.MaxAge.HasValue)
             proto.MaxAge = Duration.FromTimeSpan(source.MaxAge.Value);
@@ -95,6 +96,7 @@ internal static class AuthorizationRequestMapper
             Request = ProtoMapper.GetString(source.Request, source.HasRequest),
             RequestUri = ProtoMapper.GetUri(source.RequestUri, source.HasRequestUri),
             Resources = source.Resources.GetArray(r => new Uri(r)),
+            ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
         };
     }
 }

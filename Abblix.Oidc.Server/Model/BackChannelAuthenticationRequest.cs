@@ -130,19 +130,58 @@ public record BackChannelAuthenticationRequest
     [JsonPropertyName(Parameters.Claims)]
     public RequestedClaims? Claims { get; init; }
 
+    /// <summary>
+    /// Wire-level parameter names accepted at the CIBA backchannel authentication endpoint
+    /// (OpenID Connect CIBA Core 1.0 §7).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>scope</c> CIBA request parameter listing requested scopes.</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>client_notification_token</c> CIBA request parameter; a client-generated token
+        /// the OP echoes back on ping/push notifications so the client can authenticate them.</summary>
         public const string ClientNotificationToken = "client_notification_token";
+
+        /// <summary>The <c>acr_values</c> CIBA request parameter listing requested Authentication Context
+        /// Class Reference values.</summary>
         public const string AcrValues = "acr_values";
+
+        /// <summary>The <c>login_hint_token</c> CIBA request parameter carrying a signed hint about the
+        /// end-user's login identifier.</summary>
         public const string LoginHintToken = "login_hint_token";
+
+        /// <summary>The <c>id_token_hint</c> CIBA request parameter carrying a previously issued ID Token
+        /// as a hint about the end-user.</summary>
         public const string IdTokenHint = "id_token_hint";
+
+        /// <summary>The <c>login_hint</c> CIBA request parameter suggesting the end-user's login identifier.
+        /// </summary>
         public const string LoginHint = "login_hint";
+
+        /// <summary>The <c>binding_message</c> CIBA request parameter; a short human-readable message the
+        /// authorisation device displays so the user can correlate consumption- and authentication-device
+        /// flows.</summary>
         public const string BindingMessage = "binding_message";
+
+        /// <summary>The <c>user_code</c> CIBA request parameter carrying a secret the user provides on the
+        /// authorisation device.</summary>
         public const string UserCode = "user_code";
+
+        /// <summary>The <c>requested_expiry</c> CIBA request parameter specifying the requested lifetime
+        /// (in seconds) of the resulting <c>auth_req_id</c>.</summary>
         public const string RequestedExpiry = "requested_expiry";
+
+        /// <summary>The <c>request</c> CIBA request parameter carrying the entire request as a signed
+        /// (and optionally encrypted) JWT.</summary>
         public const string Request = "request";
+
+        /// <summary>The <c>resource</c> CIBA request parameter (RFC 8707) targeting a specific protected
+        /// resource for the resulting tokens.</summary>
         public const string Resource = "resource";
+
+        /// <summary>The <c>claims</c> CIBA request parameter carrying a structured request for specific
+        /// claims in the issued ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
     }
 }

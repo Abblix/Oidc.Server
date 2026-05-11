@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
@@ -62,7 +63,11 @@ public class UserInfoResponseFormatter(
         return await response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer())));
+                error.Format(
+                    StatusCodes.Status401Unauthorized,
+                    issuerProvider.GetIssuer(),
+                    DPoPAlgorithms.Allowed,
+                    advertiseBearer: true)));
     }
 
     private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)

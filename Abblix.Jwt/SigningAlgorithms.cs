@@ -110,4 +110,20 @@ public static class SigningAlgorithms
 	/// requires a shared symmetric key of at least 512 bits.
 	/// </summary>
 	public const string HS512 = "HS512";
+
+	/// <summary>
+	/// The set of every <c>alg</c> identifier this library recognises. Per RFC 7515 §5.3 and
+	/// §10.13 the comparison is byte-exact, so case-variants like <c>None</c>/<c>NONE</c> are
+	/// not members of this set and must be rejected as unknown algorithms — not silently
+	/// stream into the signature-verification path where they would surface as the
+	/// (semantically incorrect) "invalid signature" failure.
+	/// </summary>
+	public static readonly IReadOnlySet<string> Known = new HashSet<string>(StringComparer.Ordinal)
+	{
+		None,
+		RS256, RS384, RS512,
+		PS256, PS384, PS512,
+		ES256, ES384, ES512,
+		HS256, HS384, HS512,
+	};
 }

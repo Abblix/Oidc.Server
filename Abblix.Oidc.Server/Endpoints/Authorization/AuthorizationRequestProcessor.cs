@@ -146,6 +146,7 @@ public class AuthorizationRequestProcessor(
 			Nonce = model.Nonce,
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
+			ProofKeyThumbprint = model.ProofKeyThumbprint,
 		};
 
 		// Mark the client as affected by this session and update the session's state.

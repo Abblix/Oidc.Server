@@ -88,7 +88,7 @@ internal class JsonWebTokenValidator(
         ValidationParameters parameters)
     {
         if (string.IsNullOrWhiteSpace(jwt))
-            return new JwtValidationError(JwtError.InvalidToken, "JWT is null or empty");
+            return new JwtValidationError(JwtError.MalformedToken, "JWT is null or empty");
 
         var jwtParts = jwt.Split('.');
         return jwtParts.Length switch
@@ -96,7 +96,7 @@ internal class JsonWebTokenValidator(
             3 => await ValidateJwsAsync(jwtParts, parameters),
             5 => await DecryptJweAsync(jwtParts, parameters),
             _ => new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.MalformedToken,
                 $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
         };
     }
@@ -111,12 +111,13 @@ internal class JsonWebTokenValidator(
     {
         return await ParseJws(jwtParts).BindAsync<JsonWebToken>(async token =>
         {
-            var error = await ValidateSignatureAsync(token, jwtParts, parameters)
-                        ?? ValidateCriticalHeaders(token.Header)
-                        ?? ValidateTokenType(token.Header, parameters)
-                        ?? await ValidateIssuerAsync(token.Payload.Issuer, parameters)
-                        ?? await ValidateAudienceAsync(token.Payload.Audiences, parameters)
-                        ?? ValidateLifetime(token.Payload, parameters);
+            var error =
+                await ValidateSignatureAsync(token, jwtParts, parameters) ??
+                ValidateCriticalHeaders(token.Header) ??
+                ValidateTokenType(token.Header, parameters) ??
+                await ValidateIssuerAsync(token.Payload.Issuer, parameters) ??
+                await ValidateAudienceAsync(token.Payload.Audiences, parameters) ??
+                ValidateLifetime(token.Payload, parameters);
 
             return error != null ? error : token;
         });
@@ -135,14 +136,14 @@ internal class JsonWebTokenValidator(
         }
         catch
         {
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWT format: base64url decoding failed");
+            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWT format: base64url decoding failed");
         }
 
         if (!TryParseJsonObject(headerPart, out var headerObject))
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWS header: must be a JSON object");
+            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWS header: must be a JSON object");
 
         if (!TryParseJsonObject(payloadPart, out var payloadObject))
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWS payload: must be a JSON object");
+            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWS payload: must be a JSON object");
 
         var token = new JsonWebToken
         {
@@ -178,7 +179,30 @@ internal class JsonWebTokenValidator(
         // Per RFC 7515 Section 4.1.1, 'alg' parameter is REQUIRED
         var algorithm = token.Header.Algorithm;
         if (algorithm == null)
-            return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "Missing algorithm in JWT header");
+
+        // Reject anything outside the registered RFC 7518 §3 alg taxonomy with the matching
+        // taxonomy-level error. Without this gate, an unknown alg (e.g. byte-variant 'None')
+        // streams into the signature-verification path and surfaces as InvalidSignature,
+        // which is the wrong category — the cryptographic check never had a chance to run
+        // because the algorithm itself is unrecognised.
+        if (!SigningAlgorithms.Known.Contains(algorithm))
+        {
+            return new JwtValidationError(
+                JwtError.InvalidAlgorithm,
+                $"Unknown signing algorithm '{algorithm}' (RFC 7515 §5.3 byte-exact comparison).");
+        }
+
+        // Optional caller-supplied algorithm whitelist. Enforced before any other
+        // alg-related branching so policy violations get a specific error rather than
+        // routing through the (looser) signer-resolution failure path.
+        if (parameters.AllowedSigningAlgorithms is { Count: > 0 } whitelist
+            && !whitelist.Contains(algorithm))
+        {
+            return new JwtValidationError(
+                JwtError.InvalidAlgorithm,
+                $"Algorithm '{algorithm}' is not in the allowed signing algorithms.");
+        }
 
         // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
         // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
@@ -186,11 +210,11 @@ internal class JsonWebTokenValidator(
         {
             case SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens):
                 return new JwtValidationError(
-                    JwtError.InvalidToken, "Unsigned tokens are not allowed");
+                    JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed");
 
             case SigningAlgorithms.None when jwtParts[2].HasValue():
                 return new JwtValidationError(
-                    JwtError.InvalidToken, "Unsigned token must have empty signature");
+                    JwtError.MalformedToken, "Unsigned token must have empty signature");
 
             case not SigningAlgorithms.None
                 when parameters.Options.HasAnyFlag(ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey):
@@ -200,6 +224,81 @@ internal class JsonWebTokenValidator(
                 return null;
         }
 
+        // Two trust-model branches selected by the caller via UseEmbeddedVerificationKey:
+        // either the JOSE header's 'jwk' is the signing key (DPoP-style proofs), or the
+        // payload's 'iss' selects keys via the resolver delegate (id_token-style flows).
+        // The selection is binary; mixing leads to attacker-controlled trust escalation.
+        return parameters.Options.HasFlag(ValidationOptions.UseEmbeddedVerificationKey)
+            ? await ValidateEmbeddedKeyAsync(token, jwtParts)
+            : await ValidateIssuerSignatureAsync(token, jwtParts, parameters);
+    }
+
+    /// <summary>
+    /// Verifies the JWS signature against the key embedded in the JOSE header's <c>jwk</c>
+    /// parameter. This is the trust model RFC 9449 §4.2 prescribes for DPoP proofs — the
+    /// proof carries its own public key and the validator's job is solely to confirm that
+    /// the signature matches that key. The issuer-resolved-keys delegate is intentionally
+    /// not consulted: in the embedded-key model there is no out-of-band key registry, so
+    /// resolving by <c>iss</c> would either no-op or — worse — reintroduce the auto-trust
+    /// surface this branch exists to keep closed.
+    /// </summary>
+    /// <param name="token">The parsed token; its <see cref="JsonWebTokenHeader.VerificationKey"/>
+    /// supplies the candidate key.</param>
+    /// <param name="jwtParts">The three compact-serialization segments
+    /// (<c>header.payload.signature</c>) needed to recompute and compare the signature.</param>
+    /// <returns><c>null</c> on success, or a <see cref="JwtValidationError"/> with
+    /// <see cref="JwtError.InvalidHeader"/> when the <c>jwk</c> header is malformed or
+    /// absent, or whatever category <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises
+    /// when the cryptographic check fails.</returns>
+    private async Task<JwtValidationError?> ValidateEmbeddedKeyAsync(JsonWebToken token, string[] jwtParts)
+    {
+        JsonWebKey? embeddedJwk;
+        try
+        {
+            embeddedJwk = token.Header.VerificationKey;
+        }
+        catch (JsonException)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidHeader,
+                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' is not a valid JWK");
+        }
+
+        if (embeddedJwk is null)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidHeader,
+                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' is required when {nameof(ValidationOptions.UseEmbeddedVerificationKey)} is set");
+        }
+
+        return await signer.ValidateAsync(jwtParts, token.Header, embeddedJwk.ToAsync());
+    }
+
+    /// <summary>
+    /// Verifies the JWS signature against the candidate-key set yielded by
+    /// <see cref="ValidationParameters.ResolveIssuerSigningKeys"/> for the token's <c>iss</c>
+    /// claim. This is the standard OIDC trust model: the host maintains an out-of-band
+    /// mapping from issuer URL to its current signing JWKs (typically fetched from the
+    /// issuer's <c>jwks_uri</c>) and the validator iterates that set looking for the key
+    /// referenced by the JOSE header's <c>kid</c>.
+    /// </summary>
+    /// <param name="token">The parsed token; its <see cref="JsonWebTokenPayload.Issuer"/>
+    /// is the lookup key for the resolver delegate.</param>
+    /// <param name="jwtParts">The three compact-serialization segments
+    /// (<c>header.payload.signature</c>) needed to recompute and compare the signature.</param>
+    /// <param name="parameters">Validation parameters; <see cref="ValidationParameters.ResolveIssuerSigningKeys"/>
+    /// must be configured for this branch and is dereferenced via
+    /// <see cref="ObjectExtensions.NotNull{T}(T?, string)"/> so a missing resolver fails
+    /// loud rather than silently accepting an unverifiable token.</param>
+    /// <returns><c>null</c> on success, or a <see cref="JwtValidationError"/> with
+    /// <see cref="JwtError.InvalidToken"/> when <c>iss</c> is missing, or whatever category
+    /// <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises (typically
+    /// <see cref="JwtError.InvalidSignature"/>) when no resolved key verifies.</returns>
+    private async Task<JwtValidationError?> ValidateIssuerSignatureAsync(
+        JsonWebToken token,
+        string[] jwtParts,
+        ValidationParameters parameters)
+    {
         var issuer = token.Payload.Issuer;
         if (issuer == null)
         {
@@ -308,7 +407,7 @@ internal class JsonWebTokenValidator(
         if (typ is null)
         {
             return new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.InvalidTokenType,
                 $"JWT 'typ' header is missing — expected one of: {string.Join(", ", expected)}");
         }
 
@@ -316,7 +415,7 @@ internal class JsonWebTokenValidator(
         if (!expected.Contains(normalized))
         {
             return new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.InvalidTokenType,
                 $"JWT 'typ' header '{typ}' does not match expected token type(s): {string.Join(", ", expected)}");
         }
 
@@ -414,4 +513,5 @@ internal class JsonWebTokenValidator(
 
         return null;
     }
+
 }

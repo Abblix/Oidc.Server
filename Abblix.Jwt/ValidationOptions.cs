@@ -70,6 +70,23 @@ public enum ValidationOptions
 	ValidateLifetime = 1 << 6,
 
 	/// <summary>
+	/// Switches signature validation to the embedded-key trust model: the signing key
+	/// is taken from the JOSE header's <c>jwk</c> parameter
+	/// (<see cref="JsonWebTokenHeader.VerificationKey"/>) and the issuer-resolved-keys
+	/// delegate is bypassed entirely. Set this flag only on validation paths whose
+	/// protocol design explicitly trusts the proof to carry its own key (DPoP per
+	/// RFC 9449 §4.2 is the canonical example).
+	/// </summary>
+	/// <remarks>
+	/// Auto-trusting an embedded JWK without an opt-in is a known JWT antipattern: an
+	/// attacker who controls the token header could substitute their own key. The flag
+	/// is the explicit caller-side declaration "I am validating a proof whose trust
+	/// model is embedded-key, not issuer-resolved-key." When the flag is set the JOSE
+	/// header MUST carry a valid <c>jwk</c> parameter; absence is an error.
+	/// </remarks>
+	UseEmbeddedVerificationKey = 1 << 7,
+
+	/// <summary>
 	/// Requires and validates the issuer claim (iss).
 	/// Combines RequireIssuer and ValidateIssuer flags.
 	/// </summary>

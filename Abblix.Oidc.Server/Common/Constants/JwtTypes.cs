@@ -65,4 +65,12 @@ public static class JwtTypes
 	/// per RFC 7591 Section 3.
 	/// </summary>
 	public const string InitialAccessToken = "initial_access+jwt";
+
+	/// <summary>
+	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
+	/// value so a relying party that trusts the same client across multiple JWT classes
+	/// (id_token, request_object, DPoP proof) cannot have one class replayed as another
+	/// per the RFC 8725 §3.11 token-class-confusion guidance.
+	/// </summary>
+	public const string DPoPProof = "dpop+jwt";
 }

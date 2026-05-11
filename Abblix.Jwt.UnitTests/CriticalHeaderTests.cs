@@ -253,7 +253,7 @@ public class CriticalHeaderTests
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),
             Options = ValidationOptions.Default,
         };
         return await validator.ValidateAsync(jwt, parameters);

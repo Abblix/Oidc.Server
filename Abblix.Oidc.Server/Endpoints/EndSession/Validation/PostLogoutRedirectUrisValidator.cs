@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.UriValidation;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.EndSessionRequest;
 
@@ -61,7 +60,7 @@ public partial class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectU
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        LogInvalidPostLogoutRedirectUri(Sanitized.Value(redirectUri), context.ClientInfo.ClientId);
+        LogInvalidPostLogoutRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
         return new OidcError(
             ErrorCodes.InvalidRequest,

@@ -26,7 +26,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -76,7 +75,7 @@ public partial class NoneClientAuthenticator(
         switch (client)
         {
             case null:
-                LogClientNotFound(Value(clientId));
+                LogClientNotFound(clientId);
                 return null;
 
             case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:

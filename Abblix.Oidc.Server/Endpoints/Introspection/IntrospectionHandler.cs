@@ -48,8 +48,8 @@ public class IntrospectionHandler(
     /// <param name="clientRequest">Supplementary information about the client making the request,
     /// useful for contextual validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to an <see cref="IntrospectionResponse"/>, which includes the token's
-    /// active status and potentially other metadata, or an error response if the request is invalid.
+    /// A <see cref="Task"/> that resolves to an <see cref="IntrospectionSuccess"/>, which includes the token's
+    /// active status and potentially other metadata, or an <see cref="OidcError"/> if the request is invalid.
     /// </returns>
     /// <remarks>
     /// Implementations of this method are crucial for maintaining the integrity and security of token-based

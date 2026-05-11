@@ -22,19 +22,19 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Abblix.Oidc.Server.Features.JwtBearer;
+namespace Abblix.Oidc.Server.Features.Nonces;
 
-partial class DistributedJwtReplayCache
+partial class RollingHmacNonceService
 {
-	[LoggerMessage(
-		EventId = LogEvents.Tokens.DistributedJwtReplayCache.ReplayDetected,
-		Level = LogLevel.Debug,
-		Message = "JWT replay detected for jti {JwtId}")]
-	private partial void LogReplayDetected(string JwtId);
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.RollingHmacNonceService.SecretGenerated,
+        Level = LogLevel.Debug,
+        Message = "Nonce-service secret generated for bucket {Bucket}")]
+    private partial void LogSecretGenerated(long Bucket);
 
-	[LoggerMessage(
-		EventId = LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed,
-		Level = LogLevel.Debug,
-		Message = "Marked jti {JwtId} as used, expires in {Expiration}")]
-	private partial void LogMarkedAsUsed(string JwtId, TimeSpan Expiration);
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.RollingHmacNonceService.ValidationFailed,
+        Level = LogLevel.Debug,
+        Message = "Nonce-service validation failed: {Failure}")]
+    private partial void LogValidationFailed(NonceValidationFailure Failure);
 }

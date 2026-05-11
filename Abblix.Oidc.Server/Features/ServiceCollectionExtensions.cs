@@ -33,19 +33,20 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
-using Abblix.Oidc.Server.Features.DeviceAuthorization;
-using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.DeviceAuthorization;
+using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
-using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.SessionManagement;
@@ -59,6 +60,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features;
@@ -569,5 +571,40 @@ public static class ServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers the generic stateless-nonce service. The default
+    /// <see cref="RollingHmacNonceService"/> implementation is shared across
+    /// any feature that needs server-issued, time-bounded opaque tokens
+    /// (DPoP-Nonce per RFC 9449 §8 / §9 is the current consumer; future
+    /// candidates include state-parameter validation and challenge-response
+    /// patterns). Idempotent via <c>TryAdd</c> so feature-level
+    /// <c>Add*</c> methods can declare the dependency without contention.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection AddNonces(this IServiceCollection services)
+    {
+        services.TryAddSingleton<INonceService, RollingHmacNonceService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the OAuth 2.0 DPoP (RFC 9449) infrastructure: the proof
+    /// validator, the JWT replay cache it depends on (via defensive
+    /// <c>TryAdd</c> so DPoP-only deployments do not need to enable JWT Bearer
+    /// just to get the cache), and the shared nonce-service via
+    /// <see cref="AddNonces"/>.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection AddDPoP(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IProofValidator, ProofValidator>();
+        services.TryAddSingleton<
+            ReplayPrevention.IJwtReplayCache,
+            ReplayPrevention.DistributedJwtReplayCache>();
+        return services.AddNonces();
     }
 }

@@ -32,9 +32,17 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record RevocationRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the OAuth 2.0 revocation endpoint (RFC 7009 §2.1).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>token</c> revocation request parameter carrying the access or refresh token
+		/// to be revoked.</summary>
 		public const string Token = "token";
+
+		/// <summary>The <c>token_type_hint</c> revocation request parameter advising whether the token is
+		/// an <c>access_token</c> or a <c>refresh_token</c>.</summary>
 		public const string TokenTypeHint = "token_type_hint";
 	}
 

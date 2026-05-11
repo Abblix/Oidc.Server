@@ -79,7 +79,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="TService">The enumerable service type to register the alias under.</typeparam>
     /// <typeparam name="TImplementation">The implementation type already registered as a
-    /// concrete (or as another <see cref="TService"/>) in the service collection.</typeparam>
+    /// concrete (or as another <typeparamref name="TService"/>) in the service collection.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     /// <exception cref="InvalidOperationException">No registration was found for

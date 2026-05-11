@@ -39,6 +39,20 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// This record encapsulates information about errors encountered during the processing of an authorization request.
 /// It includes details that can be returned to the client to indicate what went wrong. This structure facilitates
 /// compliance with OAuth 2.0 and OpenID Connect specifications by providing a standardized format for error reporting.
+/// <para>
+/// This is the response-stage error type, a variant of the <see cref="AuthorizationResponse"/> polymorphic
+/// hierarchy alongside <see cref="LoginRequired"/>, <see cref="ConsentRequired"/>,
+/// <see cref="SuccessfullyAuthenticated"/> etc. The validator pipeline produces the lighter
+/// <see cref="AuthorizationRequestValidationError"/>; this type wraps it (via the secondary constructor)
+/// with the originating <c>Model</c> needed for state propagation through the formatter, plus the optional
+/// <c>error_uri</c>.
+/// </para>
+/// <para>
+/// Two parallel error types exist because of the layered architecture: the validator pipeline operates on
+/// the generic <see cref="Abblix.Utils.Result{TSuccess,TFailure}"/> envelope and stays free of response-level
+/// concerns. The cost is field duplication (<c>Error</c>, <c>ErrorDescription</c>, <c>ResponseMode</c>,
+/// <c>RedirectUri</c>) — accepted for the architectural seam.
+/// </para>
 /// </remarks>
 public record AuthorizationError(
 	AuthorizationRequest Model,

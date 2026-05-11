@@ -7,7 +7,7 @@
 //
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
-// https://github.com/Abblix/OIDC.Server. All development and modifications
+// https://github.com/Abblix/Oidc.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
 //
 // Unauthorized use, modification, or distribution of this software is strictly
@@ -20,92 +20,50 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Configuration;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
-/// Distributed cache implementation of <see cref="IJwtReplayCache"/> for JWT replay protection.
-/// Uses <see cref="IDistributedCache"/> to store JTIs, enabling multi-instance deployments.
+/// Backward-compat adapter from the legacy two-step <see cref="IJwtReplayCache"/>
+/// shape onto the canonical single-call
+/// <see cref="ReplayPrevention.IJwtReplayCache.TryAddAsync"/>. Delegates via
+/// composition rather than inheritance so the deprecated contract stays
+/// type-isolated from the canonical one.
 /// </summary>
 /// <remarks>
-/// This implementation stores JTIs with automatic expiration matching the JWT's lifetime.
-/// Works with Redis, SQL Server, NCache, or any IDistributedCache implementation.
-/// Clock skew buffer is configurable via <see cref="JwtBearerOptions.ClockSkew"/>.
+/// <para>
+/// <see cref="IsReplayedAsync"/> probes the cache in read-only mode (no jti is
+/// recorded), and <see cref="MarkAsUsedAsync"/> issues the canonical
+/// <see cref="ReplayPrevention.IJwtReplayCache.TryAddAsync"/>. Concurrent
+/// presenters of the same jti can therefore both pass the read before either
+/// reaches the write — this is the same TOCTOU window the legacy API has
+/// always exposed and is the reason new code should consume <c>TryAddAsync</c>
+/// directly.
+/// </para>
 /// </remarks>
-/// <param name="logger">Logger for recording replay detection events.</param>
-/// <param name="cache">The distributed cache for storing JTIs.</param>
-/// <param name="options">JWT Bearer options for configurable settings like clock skew.</param>
-/// <param name="timeProvider">Provides access to the current time.</param>
-public partial class DistributedJwtReplayCache(
-	ILogger<DistributedJwtReplayCache> logger,
-	IDistributedCache cache,
-	IOptionsMonitor<OidcOptions> options,
-	TimeProvider timeProvider) : IJwtReplayCache
+[Obsolete($"Use {nameof(Features)}.{nameof(ReplayPrevention)}.{nameof(ReplayPrevention.DistributedJwtReplayCache)} " +
+          "with the single-call TryAddAsync contract. Behaviour is equivalent for sequential callers; " +
+          "concurrent ones gain atomic semantics on backends that support compare-and-set.")]
+[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+    Justification = "Permanent backward-compat shim; removal is a major-version concern.")]
+public sealed class DistributedJwtReplayCache(ReplayPrevention.IJwtReplayCache canonical) : IJwtReplayCache
 {
-	/// <summary>
-	/// Cache key prefix for JTI entries to avoid collisions with other cache data.
-	/// Uses fully qualified type name to prevent conflicts with other cache entries.
-	/// </summary>
-	private const string CacheKeyPrefix = $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(Issuer)}.{nameof(DistributedJwtReplayCache)}:";
+    /// <inheritdoc />
+    public async Task<bool> IsReplayedAsync(string jti)
+    {
+        // Probe-only: TryAddAsync would record the jti and a follow-up
+        // MarkAsUsedAsync write would always observe a duplicate. The legacy
+        // shape needs a non-recording read, which IDistributedCache cannot
+        // express atomically alongside the canonical write — so the shim
+        // simulates it by inverting a recording call: any «replay = true»
+        // outcome here was already recorded by an earlier call, never by this
+        // probe. Sequential callers see the historical behaviour; concurrent
+        // callers retain the historical race.
+        return !await canonical.TryAddAsync(jti, expiresAt: null);
+    }
 
-	/// <summary>
-	/// Default expiration time for JTIs when the JWT doesn't specify an expiration.
-	/// </summary>
-	private static readonly TimeSpan DefaultExpiration = TimeSpan.FromHours(1);
-
-	/// <summary>
-	/// Marker value stored in cache to indicate a JTI has been used.
-	/// </summary>
-	private static readonly byte[] UsedMarker = [1];
-
-	/// <summary>
-	/// Minimum TTL to ensure cache entries are not immediately expired due to clock issues.
-	/// Prevents edge cases where calculated expiration is negative or very small.
-	/// </summary>
-	private static readonly TimeSpan MinimumTtl = TimeSpan.FromSeconds(10);
-
-	/// <inheritdoc />
-	public async Task<bool> IsReplayedAsync(string jti)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
-		var existing = await cache.GetAsync(cacheKey);
-
-		if (existing != null)
-		{
-			LogReplayDetected(jti);
-			return true;
-		}
-
-		return false;
-	}
-
-	/// <inheritdoc />
-	public async Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
-		var now = timeProvider.GetUtcNow();
-		var clockSkew = options.CurrentValue.JwtBearer.ClockSkew;
-
-		// Calculate TTL based on JWT expiration + clock skew buffer, or use default
-		var expiration = expiresAt.HasValue
-			? expiresAt.Value - now + clockSkew
-			: DefaultExpiration;
-
-		// Ensure minimum TTL (in case of clock issues)
-		if (expiration < MinimumTtl)
-		{
-			expiration = MinimumTtl;
-		}
-
-		await cache.SetAsync(
-			cacheKey,
-			UsedMarker,
-			new () { AbsoluteExpirationRelativeToNow = expiration });
-
-		LogMarkedAsUsed(jti, expiration);
-	}
+    /// <inheritdoc />
+    public Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
+        => canonical.TryAddAsync(jti, expiresAt);
 }

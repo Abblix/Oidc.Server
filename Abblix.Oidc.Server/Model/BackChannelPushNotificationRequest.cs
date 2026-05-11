@@ -68,13 +68,34 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
     [JsonPropertyName(Parameters.RefreshToken)]
     public string? RefreshToken { get; init; }
 
+    /// <summary>
+    /// Wire-level parameter names for the CIBA push-mode token delivery payload
+    /// (OpenID Connect CIBA Core 1.0 §10.3.1).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>auth_req_id</c> push payload parameter identifying the original CIBA request.
+        /// </summary>
         public const string AuthReqId = "auth_req_id";
+
+        /// <summary>The <c>access_token</c> push payload parameter carrying the issued access token.
+        /// </summary>
         public const string AccessToken = "access_token";
+
+        /// <summary>The <c>token_type</c> push payload parameter naming the access token type
+        /// (typically <c>Bearer</c>).</summary>
         public const string TokenType = "token_type";
+
+        /// <summary>The <c>expires_in</c> push payload parameter giving the access token lifetime in
+        /// seconds.</summary>
         public const string ExpiresIn = "expires_in";
+
+        /// <summary>The <c>id_token</c> push payload parameter carrying the issued ID Token, when one was
+        /// requested.</summary>
         public const string IdToken = "id_token";
+
+        /// <summary>The <c>refresh_token</c> push payload parameter carrying the issued refresh token,
+        /// when one was issued.</summary>
         public const string RefreshToken = "refresh_token";
     }
 }

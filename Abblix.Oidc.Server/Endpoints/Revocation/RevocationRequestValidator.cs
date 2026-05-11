@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
@@ -93,7 +92,7 @@ public partial class RevocationRequestValidator(
 				// If the token was issued to a different client, log a warning and return an invalid token result.
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
-					LogTokenIssuedToAnotherClient(Value(clientId));
+					LogTokenIssuedToAnotherClient(clientId);
 					return ValidRevocationRequest.InvalidToken(revocationRequest);
 				}
 

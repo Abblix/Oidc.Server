@@ -78,10 +78,7 @@ public partial class SecureHttpFetcher(
                 var contentLength = response.Content.Headers.ContentLength.Value;
                 if (contentLength > options.Value.MaxResponseSizeBytes)
                 {
-                    LogResponseTooLarge(
-                        Sanitized.Value(uri),
-                        contentLength,
-                        options.Value.MaxResponseSizeBytes);
+                    LogResponseTooLarge(uri, contentLength, options.Value.MaxResponseSizeBytes);
 
                     return ErrorFactory.InvalidClientMetadata(
                         $"Response too large. Maximum allowed size is {options.Value.MaxResponseSizeBytes >> 10} KB");
@@ -103,7 +100,7 @@ public partial class SecureHttpFetcher(
                     !contentType.Equals(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) &&
                     !contentType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
                 {
-                    LogUnexpectedContentType(Sanitized.Value(uri), contentType);
+                    LogUnexpectedContentType(uri, contentType);
 
                     return ErrorFactory.InvalidClientMetadata(
                         $"Invalid content type. Expected application/json, got {contentType}");
@@ -116,18 +113,18 @@ public partial class SecureHttpFetcher(
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            LogTimeout(ex, Sanitized.Value(uri));
+            LogTimeout(ex, uri);
             return ErrorFactory.InvalidClientMetadata("Request timeout");
         }
         catch (HttpRequestException ex) when (ex.Message.Contains("SSRF protection"))
         {
             // SSRF validation failed (from SsrfValidatingHttpMessageHandler)
-            LogSsrfProtectionBlocked(ex, Sanitized.Value(uri));
+            LogSsrfProtectionBlocked(ex, uri);
             return ErrorFactory.InvalidClientMetadata("URI validation failed: Access to this resource is not allowed");
         }
         catch (Exception ex)
         {
-            LogFetchFailed(ex, Sanitized.Value(uri));
+            LogFetchFailed(ex, uri);
             return ErrorFactory.InvalidClientMetadata("Unable to fetch content");
         }
 

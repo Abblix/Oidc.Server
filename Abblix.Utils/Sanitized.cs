@@ -97,4 +97,15 @@ public readonly record struct Sanitized
 
         return builder?.ToString() ?? source;
     }
+
+    /// <summary>Wraps a raw string in a <see cref="Sanitized"/> value so the
+    /// stripping pass runs once at formatting time.</summary>
+    /// <param name="source">The raw string to sanitize; may be <c>null</c>.</param>
+    public static implicit operator Sanitized(string? source) => Value(source);
+
+    /// <summary>Wraps a <see cref="Uri"/> in a <see cref="Sanitized"/> value so the
+    /// stripping pass runs once at formatting time. The URI is converted to its string
+    /// form before sanitization.</summary>
+    /// <param name="source">The URI to sanitize; may be <c>null</c>.</param>
+    public static implicit operator Sanitized(Uri? source) => Value(source);
 }

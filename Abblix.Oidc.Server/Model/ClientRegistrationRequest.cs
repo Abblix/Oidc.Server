@@ -329,6 +329,16 @@ public record ClientRegistrationRequest
     public bool? OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
+    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
+    /// access tokens issued to this client must be sender-constrained via DPoP (the server
+    /// will require a valid DPoP proof on every token request and bind <c>cnf.jkt</c> on
+    /// the issued token). Maps to <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>. When omitted, treated
+    /// as <c>false</c> per RFC 9449 §5.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
     /// that the OP calls server-to-server with a logout token to terminate the user's session at the client.
     /// </summary>
@@ -425,58 +435,221 @@ public record ClientRegistrationRequest
     [JsonPropertyName(Parameters.SoftwareStatement)]
     public string? SoftwareStatement { get; set; }
 
+    /// <summary>
+    /// Wire-level parameter names for the dynamic client registration request (RFC 7591 and OpenID Connect
+    /// Dynamic Client Registration 1.0). Each constant is the JSON member name expected on the registration
+    /// payload sent to the registration endpoint.
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>redirect_uris</c> registration parameter listing the absolute URIs the OP may
+        /// use to deliver authorization responses to this client.</summary>
         public const string RedirectUris = "redirect_uris";
+
+        /// <summary>The <c>response_types</c> registration parameter declaring the response type values
+        /// the client intends to use at the authorization endpoint.</summary>
         public const string ResponseTypes = "response_types";
+
+        /// <summary>The <c>grant_types</c> registration parameter declaring the grant type values the
+        /// client will use at the token endpoint.</summary>
         public const string GrantTypes = "grant_types";
+
+        /// <summary>The <c>application_type</c> registration parameter that classifies the client as
+        /// a <c>web</c> or <c>native</c> application.</summary>
         public const string ApplicationType = "application_type";
+
+        /// <summary>The <c>contacts</c> registration parameter listing email addresses of people
+        /// responsible for the client.</summary>
         public const string Contacts = "contacts";
+
+        /// <summary>The <c>client_id</c> registration parameter; a client-proposed identifier that the OP
+        /// may accept or ignore.</summary>
         public const string ClientId = "client_id";
+
+        /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name
+        /// shown to end-users on consent screens.</summary>
         public const string ClientName = "client_name";
+
+        /// <summary>The <c>logo_uri</c> registration parameter pointing to an image rendered next to the
+        /// client name during authentication and consent.</summary>
         public const string LogoUri = "logo_uri";
+
+        /// <summary>The <c>client_uri</c> registration parameter pointing to the client application's
+        /// home page.</summary>
         public const string ClientUri = "client_uri";
+
+        /// <summary>The <c>policy_uri</c> registration parameter pointing to the client's privacy policy.
+        /// </summary>
         public const string PolicyUri = "policy_uri";
+
+        /// <summary>The <c>tos_uri</c> registration parameter pointing to the client's terms of service.
+        /// </summary>
         public const string TosUri = "tos_uri";
+
+        /// <summary>The <c>jwks_uri</c> registration parameter referencing the client's published JSON Web
+        /// Key Set.</summary>
         public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>jwks</c> registration parameter carrying the client's JSON Web Key Set inline.
+        /// </summary>
         public const string Jwks = "jwks";
+
+        /// <summary>The <c>sector_identifier_uri</c> registration parameter used when computing pairwise
+        /// pseudonymous subject identifiers.</summary>
         public const string SectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>The <c>subject_type</c> registration parameter selecting <c>public</c> or <c>pairwise</c>
+        /// ID Token <c>sub</c> values.</summary>
         public const string SubjectType = "subject_type";
+
+        /// <summary>The <c>id_token_signed_response_alg</c> registration parameter naming the JWS algorithm
+        /// the OP must use to sign ID Tokens for this client.</summary>
         public const string IdTokenSignedResponseAlg = "id_token_signed_response_alg";
+
+        /// <summary>The <c>id_token_encrypted_response_alg</c> registration parameter naming the JWE
+        /// key-management algorithm used when encrypting ID Tokens.</summary>
         public const string IdTokenEncryptedResponseAlg = "id_token_encrypted_response_alg";
+
+        /// <summary>The <c>id_token_encrypted_response_enc</c> registration parameter naming the JWE
+        /// content-encryption algorithm used with the key-management algorithm above.</summary>
         public const string IdTokenEncryptedResponseEnc = "id_token_encrypted_response_enc";
+
+        /// <summary>The <c>userinfo_signed_response_alg</c> registration parameter naming the JWS algorithm
+        /// the OP must use when signing UserInfo responses for this client.</summary>
         public const string UserInfoSignedResponseAlg = "userinfo_signed_response_alg";
+
+        /// <summary>The <c>userinfo_encrypted_response_alg</c> registration parameter naming the JWE
+        /// key-management algorithm used when encrypting UserInfo responses.</summary>
         public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+
+        /// <summary>The <c>userinfo_encrypted_response_enc</c> registration parameter naming the JWE
+        /// content-encryption algorithm for UserInfo responses.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>request_object_signing_alg</c> registration parameter naming the JWS algorithm
+        /// the client uses when signing Request Objects.</summary>
         public const string RequestObjectSigningAlg = "request_object_signing_alg";
+
+        /// <summary>The <c>request_object_encryption_alg</c> registration parameter naming the JWE
+        /// key-management algorithm used when encrypting Request Objects.</summary>
         public const string RequestObjectEncryptionAlg = "request_object_encryption_alg";
+
+        /// <summary>The <c>request_object_encryption_enc</c> registration parameter naming the JWE
+        /// content-encryption algorithm for Request Objects.</summary>
         public const string RequestObjectEncryptionEnc = "request_object_encryption_enc";
+
+        /// <summary>The <c>token_endpoint_auth_method</c> registration parameter selecting the client
+        /// authentication method used at the token endpoint.</summary>
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>The <c>token_endpoint_auth_signing_alg</c> registration parameter naming the JWS
+        /// algorithm used when the client authenticates with a signed JWT assertion.</summary>
         public const string TokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";
+
+        /// <summary>The <c>tls_client_auth_subject_dn</c> registration parameter (RFC 8705) carrying the
+        /// expected Subject Distinguished Name on the client's mTLS certificate.</summary>
         public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+
+        /// <summary>The <c>tls_client_auth_san_dns</c> registration parameter (RFC 8705) carrying expected
+        /// DNS Subject Alternative Names on the client's mTLS certificate.</summary>
         public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+
+        /// <summary>The <c>tls_client_auth_san_uri</c> registration parameter (RFC 8705) carrying expected
+        /// URI Subject Alternative Names on the client's mTLS certificate.</summary>
         public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+
+        /// <summary>The <c>tls_client_auth_san_ip</c> registration parameter (RFC 8705) carrying expected
+        /// IP-address Subject Alternative Names on the client's mTLS certificate.</summary>
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+
+        /// <summary>The <c>tls_client_auth_san_email</c> registration parameter (RFC 8705) carrying expected
+        /// email Subject Alternative Names on the client's mTLS certificate.</summary>
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+
+        /// <summary>The <c>default_max_age</c> registration parameter specifying the default maximum
+        /// authentication age (in seconds) for authorization requests from this client.</summary>
         public const string DefaultMaxAge = "default_max_age";
+
+        /// <summary>The <c>require_auth_time</c> registration parameter; when <c>true</c>, the OP must
+        /// always include the <c>auth_time</c> claim in ID Tokens for this client.</summary>
         public const string RequireAuthTime = "require_auth_time";
+
+        /// <summary>The <c>default_acr_values</c> registration parameter listing default Authentication
+        /// Context Class Reference values applied when the request omits <c>acr_values</c>.</summary>
         public const string DefaultAcrValues = "default_acr_values";
+
+        /// <summary>The <c>initiate_login_uri</c> registration parameter pointing to a URL the OP may
+        /// invoke to initiate a login flow at the client.</summary>
         public const string InitiateLoginUri = "initiate_login_uri";
+
+        /// <summary>The <c>request_uris</c> registration parameter listing URIs the OP may pre-fetch and
+        /// cache for use as <c>request_uri</c> values.</summary>
         public const string RequestUris = "request_uris";
+
+        /// <summary>The <c>pkce_required</c> registration parameter (server extension) marking the client
+        /// as PKCE-only at the authorization endpoint.</summary>
         public const string PkceRequired = "pkce_required";
+
+        /// <summary>The <c>offline_access_allowed</c> registration parameter (server extension) controlling
+        /// whether the client may request the <c>offline_access</c> scope and obtain refresh tokens.
+        /// </summary>
         public const string OfflineAccessAllowed = "offline_access_allowed";
+
+        /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 §5.2) requiring
+        /// DPoP-bound access tokens for this client.</summary>
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
+        /// back-channel logout endpoint.</summary>
         public const string BackChannelLogoutUri = "backchannel_logout_uri";
+
+        /// <summary>The <c>backchannel_logout_session_required</c> registration parameter; when <c>true</c>,
+        /// the OP must include the <c>sid</c> claim in the logout token.</summary>
         public const string BackChannelLogoutSessionRequired = "backchannel_logout_session_required";
+
+        /// <summary>The <c>frontchannel_logout_uri</c> registration parameter pointing to the client's
+        /// front-channel logout endpoint.</summary>
         public const string FrontChannelLogoutUri = "frontchannel_logout_uri";
+
+        /// <summary>The <c>frontchannel_logout_session_required</c> registration parameter; when <c>true</c>,
+        /// the OP must append <c>iss</c> and <c>sid</c> parameters to the front-channel logout URI.
+        /// </summary>
         public const string FrontChannelLogoutSessionRequired = "frontchannel_logout_session_required";
+
+        /// <summary>The <c>post_logout_redirect_uris</c> registration parameter listing absolute URIs the
+        /// OP may redirect to after RP-initiated logout.</summary>
         public const string PostLogoutRedirectUris = "post_logout_redirect_uris";
+
+        /// <summary>The <c>backchannel_token_delivery_mode</c> CIBA registration parameter selecting how
+        /// tokens are delivered (poll, ping, or push).</summary>
         public const string BackChannelTokenDeliveryMode = "backchannel_token_delivery_mode";
+
+        /// <summary>The <c>backchannel_client_notification_endpoint</c> CIBA registration parameter
+        /// providing the URL at which the OP delivers ping or push notifications.</summary>
         public const string BackChannelClientNotificationEndpoint = "backchannel_client_notification_endpoint";
+
+        /// <summary>The <c>backchannel_authentication_request_signing_alg</c> CIBA registration parameter
+        /// naming the JWS algorithm used to sign backchannel authentication requests.</summary>
         public const string BackChannelAuthenticationRequestSigningAlg = "backchannel_authentication_request_signing_alg";
+
+        /// <summary>The <c>backchannel_user_code_parameter</c> CIBA registration parameter; when <c>true</c>,
+        /// the client may submit a user code with backchannel authentication requests.</summary>
         public const string BackChannelUserCodeParameter = "backchannel_user_code_parameter";
+
+        /// <summary>The <c>scope</c> registration parameter listing scope values the client will use
+        /// (space-separated per RFC 7591 §2).</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>software_id</c> registration parameter identifying the client software product.
+        /// </summary>
         public const string SoftwareId = "software_id";
+
+        /// <summary>The <c>software_version</c> registration parameter naming the client software version.
+        /// </summary>
         public const string SoftwareVersion = "software_version";
+
+        /// <summary>The <c>software_statement</c> registration parameter carrying a signed JWT assertion
+        /// of metadata values about the client software (RFC 7591 §2.3).</summary>
         public const string SoftwareStatement = "software_statement";
     }
 }

@@ -276,10 +276,8 @@ internal static class LogEvents
     /// <summary>
     /// Range 4000–4099: <c>Endpoints/DynamicClientManagement</c>.
     /// </summary>
-    public static class Dcr
+    public static class DynamicClientManagement
     {
-        private const int Base = 4000;
-
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> —
         /// cross-checks supplied <c>client_id</c> against register/update operation type
@@ -355,9 +353,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/JwtBearer/DistributedJwtReplayCache.cs</c> — JWT replay
-        /// protection via <c>IDistributedCache</c> per RFC 7523 Section 5.2
-        /// (sub-range 5040–5059).
+        /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> — JWT replay
+        /// protection via <c>IDistributedCache</c> per RFC 7523 Section 5.2 and
+        /// RFC 9449 §11.1.5 (sub-range 5040–5059).
         /// </summary>
         public static class DistributedJwtReplayCache
         {
@@ -380,6 +378,19 @@ internal static class LogEvents
             public const int InvalidIssuerUri = Base + 2;
             public const int SigningKeysForUntrustedIssuer = Base + 3;
         }
+
+        /// <summary>
+        /// <c>Features/Nonces/RollingHmacNonceService.cs</c> — generic
+        /// stateless-nonce issuance and validation. DPoP-Nonce per RFC 9449
+        /// §8 / §9 is the current consumer (sub-range 5080–5099).
+        /// </summary>
+        public static class RollingHmacNonceService
+        {
+            private const int Base = 5080;
+
+            public const int SecretGenerated = Base + 1;
+            public const int ValidationFailed = Base + 2;
+        }
     }
 
     /// <summary>
@@ -387,8 +398,6 @@ internal static class LogEvents
     /// </summary>
     public static class HttpFetch
     {
-        private const int Base = 6000;
-
         /// <summary>
         /// <c>Features/SecureHttpFetch/SecureHttpFetcher.cs</c> — secure outbound
         /// HTTP fetch with SSRF protection and response validation
@@ -426,8 +435,6 @@ internal static class LogEvents
     /// </summary>
     public static class Device
     {
-        private const int Base = 7000;
-
         /// <summary>
         /// <c>Features/DeviceAuthorization/UserCodeRateLimiter.cs</c> — RFC 8628
         /// brute-force protection for user code verification (sub-range 7000–7009).
@@ -548,8 +555,6 @@ internal static class LogEvents
     /// </summary>
     public static class Licensing
     {
-        private const int Base = 8000;
-
         /// <summary>
         /// <c>Features/Licensing/LicenseChecker.cs</c> — runtime enforcement of
         /// client and issuer caps from the active license (sub-range 8000–8019).
@@ -583,8 +588,6 @@ internal static class LogEvents
     /// </summary>
     public static class Misc
     {
-        private const int Base = 9000;
-
         /// <summary>
         /// <c>Features/RequestObject/RequestObjectFetcher.cs</c> — JWT request object
         /// fetching, validation and binding for OpenID Connect authorization flows
@@ -619,6 +622,42 @@ internal static class LogEvents
 
             public const int UserClaimsNotFound = Base + 1;
             public const int MissingClaims = Base + 2;
+        }
+    }
+
+    /// <summary>
+    /// Range 10000–10099: <c>Features/DPoP</c> + DPoP-aware endpoint validators per
+    /// RFC 9449.
+    /// </summary>
+    public static class DPoP
+    {
+        /// <summary>
+        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> — RFC 9449 §7
+        /// resource-server enforcement on the UserInfo endpoint (sub-range 10000–10019).
+        /// </summary>
+        public static class DPoPUserInfoValidator
+        {
+            private const int Base = 10000;
+
+            public const int NonceChallengeIssued = Base + 1;
+            public const int ProofRequiredButMissing = Base + 2;
+            public const int ProofKeyMismatch = Base + 3;
+            public const int ProofRejected = Base + 4;
+            public const int SchemeBindingMismatch = Base + 5;
+        }
+
+        /// <summary>
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> — RFC 9449 §5
+        /// token-endpoint binding (sub-range 10020–10039).
+        /// </summary>
+        public static class DPoPTokenEndpointValidator
+        {
+            private const int Base = 10020;
+
+            public const int NonceChallengeIssued = Base + 1;
+            public const int ProofRequiredButMissing = Base + 2;
+            public const int ProofKeyMismatch = Base + 3;
+            public const int ProofRejected = Base + 4;
         }
     }
 }

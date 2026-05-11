@@ -75,6 +75,27 @@ public class RegisterClientRequestProcessor(
         {
             ClientSecret = credentials.ClientSecret,
             ClientSecretExpiresAt = credentials.ExpiresAt,
+            // RFC 7591 §3.2.1: echo registered metadata so the client can confirm what was
+            // registered (including server-assigned defaults) without a follow-up read.
+            TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
+            ApplicationType = clientInfo.ApplicationType,
+            RedirectUris = clientInfo.RedirectUris,
+            ClientName = clientInfo.ClientName,
+            LogoUri = clientInfo.LogoUri,
+            SubjectType = clientInfo.SubjectType,
+            SectorIdentifierUri = Uri.TryCreate(clientInfo.SectorIdentifier, UriKind.Absolute, out var sectorUri) ? sectorUri : null,
+            JwksUri = clientInfo.JwksUri,
+            UserInfoEncryptedResponseAlg = clientInfo.UserInfoEncryptedResponseAlgorithm,
+            UserInfoEncryptedResponseEnc = clientInfo.UserInfoEncryptedResponseEncryption,
+            Contacts = clientInfo.Contacts,
+            RequestUris = clientInfo.RequestUris,
+            InitiateLoginUri = clientInfo.InitiateLoginUri,
+            TlsClientAuthSubjectDn = clientInfo.TlsClientAuth?.SubjectDn,
+            TlsClientAuthSanDns = clientInfo.TlsClientAuth?.SanDns,
+            TlsClientAuthSanUri = clientInfo.TlsClientAuth?.SanUris,
+            TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
+            TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
+            DpopBoundAccessTokens = clientInfo.RequireDPoP,
         };
 
         return response;
@@ -98,6 +119,8 @@ public class RegisterClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
+            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            RequireDPoP = model.DpopBoundAccessTokens ?? false,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -130,7 +153,7 @@ public class RegisterClientRequestProcessor(
         };
 
         // Map tls_client_auth metadata if selected
-        if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
         {
             clientInfo.TlsClientAuth = new ()
             {

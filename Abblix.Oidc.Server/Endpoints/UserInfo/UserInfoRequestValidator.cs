@@ -43,13 +43,16 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
 /// <param name="jwtValidator">Validates access-token JWTs issued by this authorization server.</param>
-/// <param name="accessTokenService">Resolves an <see cref="AuthSession"/> and
+/// <param name="accessTokenService">Resolves an <see cref="Abblix.Oidc.Server.Features.UserAuthentication.AuthSession"/> and
 /// <see cref="AuthorizationContext"/> from the access token.</param>
 /// <param name="clientInfoProvider">Loads the <see cref="ClientInfo"/> for the token's client.</param>
+/// <param name="dpopValidator">RFC 9449 §7 DPoP resource-server-side validator that enforces the
+/// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
-	IClientInfoProvider clientInfoProvider) : IUserInfoRequestValidator
+	IClientInfoProvider clientInfoProvider,
+	IDPoPUserInfoValidator dpopValidator) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
@@ -67,7 +70,10 @@ public class UserInfoRequestValidator(
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader != null)
 		{
-			if (authorizationHeader.Scheme != TokenTypes.Bearer)
+			// RFC 9449 §7.1: DPoP-bound access tokens are presented via the DPoP scheme.
+			// The actual scheme/binding compatibility check runs after JWT parse so we can
+			// inspect cnf.jkt — here we only filter out unrecognised schemes.
+			if (authorizationHeader.Scheme is not (TokenTypes.Bearer or TokenTypes.DPoP))
 			{
 				return new OidcError(
 					ErrorCodes.InvalidToken,
@@ -117,6 +123,15 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"Invalid token type: {tokenType}");
 		}
+
+		// RFC 9449 §7.1 RS-side enforcement: when the access token carries cnf.jkt the
+		// request MUST present it via the DPoP scheme together with a valid DPoP proof
+		// whose key thumbprint matches cnf.jkt and whose ath claim matches the access
+		// token. Runs before AuthenticateByAccessTokenAsync so a bad-DPoP token never
+		// surfaces auth-session probes downstream.
+		var dpopError = await dpopValidator.ValidateAsync(clientRequest, token, jwtAccessToken);
+		if (dpopError is not null)
+			return dpopError;
 
 		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
 

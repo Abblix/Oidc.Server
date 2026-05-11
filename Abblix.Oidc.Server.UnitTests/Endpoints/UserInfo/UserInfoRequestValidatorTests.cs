@@ -27,6 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -48,6 +49,7 @@ public class UserInfoRequestValidatorTests
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
+    private readonly Mock<IDPoPUserInfoValidator> _dpopValidator;
     private readonly UserInfoRequestValidator _validator;
 
     public UserInfoRequestValidatorTests(TestInfrastructure.LicenseFixture fixture)
@@ -55,11 +57,16 @@ public class UserInfoRequestValidatorTests
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        _dpopValidator = new Mock<IDPoPUserInfoValidator>(MockBehavior.Strict);
+        _dpopValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), It.IsAny<string>()))
+            .ReturnsAsync((OidcError?)null);
 
         _validator = new UserInfoRequestValidator(
             _jwtValidator.Object,
             _accessTokenService.Object,
-            _clientInfoProvider.Object);
+            _clientInfoProvider.Object,
+            _dpopValidator.Object);
     }
 
     private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)
