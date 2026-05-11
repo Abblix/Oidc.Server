@@ -185,6 +185,13 @@ public record AuthorizationContext
     /// </summary>
     public Uri[]? Resources { get; init; }
 
+    /// <summary>
+    /// Splits the authorization context into its constructor triple, enabling pattern-style
+    /// destructuring at the call site.
+    /// </summary>
+    /// <param name="clientId">Receives the <see cref="ClientId"/>.</param>
+    /// <param name="scope">Receives the <see cref="Scope"/> array.</param>
+    /// <param name="requestedClaims">Receives the optional <see cref="RequestedClaims"/>.</param>
     public void Deconstruct(out string clientId, out string[] scope, out RequestedClaims? requestedClaims)
     {
         clientId = ClientId;

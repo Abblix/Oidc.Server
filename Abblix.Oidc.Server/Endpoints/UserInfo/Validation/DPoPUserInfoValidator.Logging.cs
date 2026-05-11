@@ -26,6 +26,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 
 partial class DPoPUserInfoValidator
 {
+    /// <inheritdoc/>
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPUserInfoValidator.NonceChallengeIssued,
         Level = LogLevel.Debug,

@@ -212,31 +212,100 @@ public record AuthorizationRequest
 	[JsonPropertyName(Parameters.DpopJkt)]
 	public string? ProofKeyThumbprint { get; init; }
 
-	public static class Parameters
+	/// <summary>
+    /// Wire-level parameter names accepted at the authorization endpoint per RFC 6749 §4.1.1,
+    /// OpenID Connect Core 1.0 §3.1.2.1, RFC 7636 (PKCE), RFC 8707 (resource indicators),
+    /// and RFC 9449 §10 (DPoP).
+    /// </summary>
+    public static class Parameters
     {
+        /// <summary>The <c>scope</c> authorization request parameter listing requested OAuth/OIDC scopes.
+        /// </summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>claims</c> authorization request parameter carrying a structured request for
+        /// specific claims to appear in the ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
+
+        /// <summary>The <c>response_type</c> authorization request parameter selecting the grant flow
+        /// (e.g. <c>code</c>, <c>token</c>, <c>id_token</c> or combinations).</summary>
         public const string ResponseType = "response_type";
+
+        /// <summary>The <c>client_id</c> authorization request parameter identifying the relying party.
+        /// </summary>
         public const string ClientId = "client_id";
+
+        /// <summary>The <c>redirect_uri</c> authorization request parameter naming the absolute URI to
+        /// which the authorization response is delivered.</summary>
         public const string RedirectUri = "redirect_uri";
+
+        /// <summary>The <c>state</c> authorization request parameter; an opaque value returned unchanged
+        /// in the response for CSRF protection and correlation.</summary>
         public const string State = "state";
+
+        /// <summary>The <c>response_mode</c> authorization request parameter selecting how the response
+        /// is delivered to the redirect URI (<c>query</c>, <c>fragment</c>, <c>form_post</c>).</summary>
         public const string ResponseMode = "response_mode";
+
+        /// <summary>The <c>nonce</c> authorization request parameter bound into the ID Token to prevent
+        /// token replay.</summary>
         public const string Nonce = "nonce";
+
+        /// <summary>The <c>display</c> authorization request parameter hinting how authentication and
+        /// consent UI should be rendered.</summary>
         public const string Display = "display";
+
+        /// <summary>The <c>prompt</c> authorization request parameter controlling re-prompting for
+        /// authentication and consent.</summary>
         public const string Prompt = "prompt";
+
+        /// <summary>The <c>max_age</c> authorization request parameter bounding the elapsed time since
+        /// the last end-user authentication, in seconds.</summary>
         public const string MaxAge = "max_age";
+
+        /// <summary>The <c>ui_locales</c> authorization request parameter listing preferred UI locales as
+        /// BCP 47 tags.</summary>
         public const string UiLocales = "ui_locales";
+
+        /// <summary>The <c>claims_locales</c> authorization request parameter listing preferred locales
+        /// for localised claim values.</summary>
         public const string ClaimsLocales = "claims_locales";
+
+        /// <summary>The <c>id_token_hint</c> authorization request parameter carrying a previously issued
+        /// ID Token as a hint about the end-user.</summary>
         public const string IdTokenHint = "id_token_hint";
+
+        /// <summary>The <c>login_hint</c> authorization request parameter suggesting the login identifier
+        /// to pre-fill in the authentication UI.</summary>
         public const string LoginHint = "login_hint";
+
+        /// <summary>The <c>acr_values</c> authorization request parameter listing requested Authentication
+        /// Context Class Reference values.</summary>
         public const string AcrValues = "acr_values";
+
+        /// <summary>The <c>code_challenge</c> PKCE parameter (RFC 7636 §4.3) derived from the client's
+        /// code verifier.</summary>
         public const string CodeChallenge = "code_challenge";
+
+        /// <summary>The <c>code_challenge_method</c> PKCE parameter declaring how the code challenge was
+        /// derived (<c>S256</c>, <c>plain</c>).</summary>
         public const string CodeChallengeMethod = "code_challenge_method";
+
+        /// <summary>The <c>resource</c> authorization request parameter (RFC 8707) targeting a specific
+        /// protected resource for the issued access token.</summary>
         public const string Resource = "resource";
 
+        /// <summary>The <c>request</c> authorization request parameter carrying a Request Object as a
+        /// JWT (OpenID Connect Core §6.1).</summary>
         public const string Request = "request";
+
+        /// <summary>The <c>request_uri</c> authorization request parameter referencing a Request Object
+        /// hosted at an HTTPS URL (OpenID Connect Core §6.2).</summary>
         public const string RequestUri = "request_uri";
 
+        /// <summary>The <c>dpop_jkt</c> authorization request parameter (RFC 9449 §10) carrying the
+        /// base64url-encoded JWK Thumbprint of the DPoP key the client will demonstrate at the token
+        /// endpoint.</summary>
         public const string DpopJkt = "dpop_jkt";
     }
 }

@@ -35,19 +35,56 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record TokenRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the token endpoint per RFC 6749 §4, RFC 7636 (PKCE),
+	/// RFC 7523 (JWT Bearer), RFC 8628 (Device Authorization Grant), RFC 8707 (Resource Indicators),
+	/// and OpenID Connect CIBA Core.
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>grant_type</c> token request parameter selecting the grant flow
+		/// (<c>authorization_code</c>, <c>refresh_token</c>, <c>password</c>, etc.).</summary>
 		public const string GrantType = "grant_type";
+		/// <summary>The <c>code</c> token request parameter carrying the authorization code obtained
+		/// from the authorization endpoint.</summary>
 		public const string Code = "code";
+
+		/// <summary>The <c>redirect_uri</c> token request parameter; must match the value supplied at
+		/// the authorization endpoint.</summary>
 		public const string RedirectUri = "redirect_uri";
+
+		/// <summary>The <c>resource</c> token request parameter (RFC 8707) listing target resources for
+		/// the issued access token.</summary>
 		public const string Resource = "resource";
+
+		/// <summary>The <c>refresh_token</c> token request parameter carrying the refresh token to be
+		/// exchanged for a new access token.</summary>
 		public const string RefreshToken = "refresh_token";
+
+		/// <summary>The <c>scope</c> token request parameter listing requested scopes.</summary>
 		public const string Scope = "scope";
+
+		/// <summary>The <c>username</c> token request parameter for the resource-owner password
+		/// credentials grant.</summary>
 		public const string Username = "username";
+
+		/// <summary>The <c>password</c> token request parameter for the resource-owner password
+		/// credentials grant.</summary>
 		public const string Password = "password";
+
+		/// <summary>The <c>code_verifier</c> PKCE token request parameter (RFC 7636).</summary>
 		public const string CodeVerifier = "code_verifier";
+
+		/// <summary>The <c>auth_req_id</c> token request parameter identifying a CIBA backchannel
+		/// authentication request.</summary>
 		public const string AuthenticationRequestId = "auth_req_id";
+
+		/// <summary>The <c>assertion</c> token request parameter carrying a JWT bearer assertion
+		/// (RFC 7523).</summary>
 		public const string Assertion = "assertion";
+
+		/// <summary>The <c>device_code</c> token request parameter for the Device Authorization Grant
+		/// (RFC 8628).</summary>
 		public const string DeviceCode = "device_code";
 	}
 

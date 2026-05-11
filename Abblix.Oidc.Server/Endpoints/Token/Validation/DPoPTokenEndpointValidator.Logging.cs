@@ -26,6 +26,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 partial class DPoPTokenEndpointValidator
 {
+    /// <inheritdoc/>
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.NonceChallengeIssued,
         Level = LogLevel.Debug,

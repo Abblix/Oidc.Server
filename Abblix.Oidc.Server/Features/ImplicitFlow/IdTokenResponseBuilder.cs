@@ -51,6 +51,7 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
     /// <inheritdoc />
     public string ResponseType => ResponseTypes.IdToken;
 
+    /// <inheritdoc />
     public IEnumerable<string> GrantTypesSupported
     {
         get { yield return GrantTypes.Implicit; }

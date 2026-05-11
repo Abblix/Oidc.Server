@@ -48,49 +48,167 @@ public record ConfigurationResponse
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>issuer</c> metadata field carrying the OpenID Provider's issuer identifier.
+        /// </summary>
         public const string Issuer = "issuer";
+
+        /// <summary>The <c>jwks_uri</c> metadata field pointing to the provider's JSON Web Key Set.
+        /// </summary>
         public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>authorization_endpoint</c> metadata field pointing to the authorization endpoint.
+        /// </summary>
         public const string AuthorizationEndpoint = "authorization_endpoint";
+
+        /// <summary>The <c>token_endpoint</c> metadata field pointing to the token endpoint.</summary>
         public const string TokenEndpoint = "token_endpoint";
+
+        /// <summary>The <c>userinfo_endpoint</c> metadata field pointing to the UserInfo endpoint.
+        /// </summary>
         public const string UserInfoEndpoint = "userinfo_endpoint";
+
+        /// <summary>The <c>end_session_endpoint</c> metadata field pointing to the RP-initiated logout
+        /// endpoint.</summary>
         public const string EndSessionEndpoint = "end_session_endpoint";
+
+        /// <summary>The <c>check_session_iframe</c> metadata field pointing to the OP iframe used for
+        /// OpenID Connect Session Management 1.0.</summary>
         public const string CheckSessionIframe = "check_session_iframe";
+
+        /// <summary>The <c>introspection_endpoint</c> metadata field pointing to the token introspection
+        /// endpoint (RFC 7662).</summary>
         public const string IntrospectionEndpoint = "introspection_endpoint";
+
+        /// <summary>The <c>revocation_endpoint</c> metadata field pointing to the token revocation
+        /// endpoint (RFC 7009).</summary>
         public const string RevocationEndpoint = "revocation_endpoint";
+
+        /// <summary>The <c>registration_endpoint</c> metadata field pointing to the dynamic client
+        /// registration endpoint (RFC 7591).</summary>
         public const string RegistrationEndpoint = "registration_endpoint";
+
+        /// <summary>The <c>frontchannel_logout_supported</c> metadata flag advertising front-channel
+        /// logout support (OIDC Front-Channel Logout 1.0).</summary>
         public const string FrontChannelLogoutSupported = "frontchannel_logout_supported";
+
+        /// <summary>The <c>frontchannel_logout_session_supported</c> metadata flag advertising
+        /// front-channel logout session identifier support.</summary>
         public const string FrontChannelLogoutSessionSupported = "frontchannel_logout_session_supported";
+
+        /// <summary>The <c>backchannel_logout_supported</c> metadata flag advertising back-channel
+        /// logout support (OIDC Back-Channel Logout 1.0).</summary>
         public const string BackChannelLogoutSupported = "backchannel_logout_supported";
+
+        /// <summary>The <c>backchannel_logout_session_supported</c> metadata flag advertising
+        /// back-channel logout session identifier support.</summary>
         public const string BackChannelLogoutSessionSupported = "backchannel_logout_session_supported";
+
+        /// <summary>The <c>claims_parameter_supported</c> metadata flag advertising support for the
+        /// <c>claims</c> request parameter.</summary>
         public const string ClaimsParameterSupported = "claims_parameter_supported";
+
+        /// <summary>The <c>scopes_supported</c> metadata field listing scope values the provider
+        /// recognises.</summary>
         public const string ScopesSupported = "scopes_supported";
+
+        /// <summary>The <c>claims_supported</c> metadata field listing claim names the provider may
+        /// emit.</summary>
         public const string ClaimsSupported = "claims_supported";
+
+        /// <summary>The <c>grant_types_supported</c> metadata field listing grant types the provider
+        /// accepts at the token endpoint.</summary>
         public const string GrantTypesSupported = "grant_types_supported";
+
+        /// <summary>The <c>response_types_supported</c> metadata field listing response type combinations
+        /// the authorization endpoint accepts.</summary>
         public const string ResponseTypesSupported = "response_types_supported";
+
+        /// <summary>The <c>response_modes_supported</c> metadata field listing response modes the
+        /// authorization endpoint supports.</summary>
         public const string ResponseModesSupported = "response_modes_supported";
+
+        /// <summary>The <c>token_endpoint_auth_methods_supported</c> metadata field listing client
+        /// authentication methods accepted at the token endpoint.</summary>
         public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
+
+        /// <summary>The <c>token_endpoint_auth_signing_alg_values_supported</c> metadata field listing
+        /// JWS algorithms accepted on client authentication assertions.</summary>
         public const string TokenEndpointAuthSigningAlgValuesSupported = "token_endpoint_auth_signing_alg_values_supported";
+
+        /// <summary>The <c>id_token_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign ID Tokens.</summary>
         public const string IdTokenSigningAlgValuesSupported = "id_token_signing_alg_values_supported";
+
+        /// <summary>The <c>subject_types_supported</c> metadata field listing subject identifier types
+        /// the provider can issue (<c>public</c>, <c>pairwise</c>).</summary>
         public const string SubjectTypesSupported = "subject_types_supported";
+
+        /// <summary>The <c>code_challenge_methods_supported</c> metadata field listing PKCE code-challenge
+        /// methods the provider accepts (RFC 7636).</summary>
         public const string CodeChallengeMethodsSupported = "code_challenge_methods_supported";
+
+        /// <summary>The <c>prompt_values_supported</c> metadata field listing valid <c>prompt</c> parameter
+        /// values.</summary>
         public const string PromptValuesSupported = "prompt_values_supported";
+
+        /// <summary>The <c>request_parameter_supported</c> metadata flag advertising support for the
+        /// <c>request</c> request object parameter.</summary>
         public const string RequestParameterSupported = "request_parameter_supported";
+
+        /// <summary>The <c>request_object_signing_alg_values_supported</c> metadata field listing JWS
+        /// algorithms accepted on Request Objects.</summary>
         public const string RequestObjectSigningAlgValuesSupported = "request_object_signing_alg_values_supported";
+
+        /// <summary>The <c>userinfo_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider may use when signing UserInfo responses.</summary>
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
+
+        /// <summary>The <c>dpop_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// accepted on DPoP proofs (RFC 9449 §5.1).</summary>
         public const string DpopSigningAlgValuesSupported = "dpop_signing_alg_values_supported";
+
+        /// <summary>The <c>pushed_authorization_request_endpoint</c> metadata field pointing to the PAR
+        /// endpoint (RFC 9126).</summary>
         public const string PushedAuthorizationRequestEndpoint = "pushed_authorization_request_endpoint";
+
+        /// <summary>The <c>require_pushed_authorization_requests</c> metadata flag indicating PAR is
+        /// mandatory at the authorization endpoint (RFC 9126).</summary>
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>The <c>require_signed_request_object</c> metadata flag indicating signed Request
+        /// Objects are mandatory.</summary>
         public const string RequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>The <c>backchannel_token_delivery_modes_supported</c> metadata field listing CIBA
+        /// token delivery modes (<c>poll</c>, <c>ping</c>, <c>push</c>).</summary>
         public const string BackchannelTokenDeliveryModesSupported = "backchannel_token_delivery_modes_supported";
+
+        /// <summary>The <c>backchannel_authentication_endpoint</c> metadata field pointing to the CIBA
+        /// backchannel authentication endpoint.</summary>
         public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
+
+        /// <summary>The <c>backchannel_authentication_request_signing_alg_values_supported</c> metadata
+        /// field listing JWS algorithms accepted on signed CIBA requests.</summary>
         public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
+
+        /// <summary>The <c>backchannel_user_code_parameter_supported</c> metadata flag advertising the
+        /// CIBA <c>user_code</c> parameter.</summary>
         public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
-        // RFC 8628 Device Authorization Grant
+
+        /// <summary>The <c>device_authorization_endpoint</c> metadata field pointing to the Device
+        /// Authorization Grant endpoint (RFC 8628).</summary>
         public const string DeviceAuthorizationEndpoint = "device_authorization_endpoint";
-        // RFC 8705 mTLS endpoint aliases
+
+        /// <summary>The <c>mtls_endpoint_aliases</c> metadata block carrying mTLS-bound alternative
+        /// endpoint URLs (RFC 8705 §5).</summary>
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
+
+        /// <summary>The <c>acr_values_supported</c> metadata field listing Authentication Context Class
+        /// Reference values the provider can satisfy.</summary>
         public const string AcrValuesSupported = "acr_values_supported";
-        // RFC 9207 Authorization Server Issuer Identification
+
+        /// <summary>The <c>authorization_response_iss_parameter_supported</c> metadata flag advertising
+        /// inclusion of the <c>iss</c> parameter in authorization responses (RFC 9207).</summary>
         public const string AuthorizationResponseIssParameterSupported = "authorization_response_iss_parameter_supported";
     }
 

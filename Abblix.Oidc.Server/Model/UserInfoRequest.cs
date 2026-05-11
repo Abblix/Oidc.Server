@@ -31,8 +31,15 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record UserInfoRequest
 {
+    /// <summary>
+    /// Wire-level parameter names accepted at the OIDC UserInfo endpoint (OIDC Core §5.3,
+    /// RFC 6750 §2 token transport).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>access_token</c> form parameter carrying the bearer access token when the
+        /// client submits it in the request body rather than the <c>Authorization</c> header
+        /// (RFC 6750 §2.2).</summary>
         public const string AccessToken = "access_token";
     }
 
