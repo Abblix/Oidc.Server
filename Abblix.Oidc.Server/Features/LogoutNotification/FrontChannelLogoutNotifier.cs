@@ -47,12 +47,16 @@ public class FrontChannelLogoutNotifier: ILogoutNotifier
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSupported => true;
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSessionSupported => true;
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSupported => false;
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSessionSupported => false;
 
     private static void NotifyClient(ClientInfo clientInfo, LogoutContext logoutContext)

@@ -42,8 +42,11 @@ internal static class AuthorizationContextMapper
         if (source.RequestedClaims != null)
             proto.RequestedClaims = source.RequestedClaims.ToProto();
 
-        if (source.X509CertificateSha256Thumbprint != null)
-            proto.X509CertificateSha256Thumbprint = source.X509CertificateSha256Thumbprint;
+        if (source.CertificateSha256Thumbprint != null)
+            proto.CertificateSha256Thumbprint = source.CertificateSha256Thumbprint;
+
+        if (source.ProofKeyThumbprint != null)
+            proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
 
         if (source.RedirectUri != null)
             proto.RedirectUri = source.RedirectUri.ToString();
@@ -72,7 +75,8 @@ internal static class AuthorizationContextMapper
             source.Scope.ToArray(),
             source.RequestedClaims.FromProto())
         {
-            X509CertificateSha256Thumbprint = ProtoMapper.GetString(source.X509CertificateSha256Thumbprint, source.HasX509CertificateSha256Thumbprint),
+            CertificateSha256Thumbprint = ProtoMapper.GetString(source.CertificateSha256Thumbprint, source.HasCertificateSha256Thumbprint),
+            ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
             RedirectUri = ProtoMapper.GetUri(source.RedirectUri, source.HasRedirectUri),
             Nonce = ProtoMapper.GetString(source.Nonce, source.HasNonce),
             CodeChallenge = ProtoMapper.GetString(source.CodeChallenge, source.HasCodeChallenge),

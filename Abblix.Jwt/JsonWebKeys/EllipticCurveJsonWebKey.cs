@@ -113,4 +113,13 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
     /// </remarks>
     [JsonIgnore]
     public override bool HasPrivateKey => PrivateKey is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Required EC members per RFC 7638 §3.2 in lexicographic order: <c>crv</c>,
+    /// <c>kty</c>, <c>x</c>, <c>y</c>. The interpolated <c>crv</c> identifier and the
+    /// base64url-encoded coordinates contain only characters that need no JSON escaping.
+    /// </remarks>
+    protected override string CanonicalJson()
+        => $$"""{"crv":"{{Require(JsonWebKeyPropertyNames.Curve, Curve)}}","kty":"{{KeyType}}","x":"{{Encode(JsonWebKeyPropertyNames.EllipticCurveX, X)}}","y":"{{Encode(JsonWebKeyPropertyNames.EllipticCurveY, Y)}}"}""";
 }

@@ -71,9 +71,9 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
     /// <param name="options">Options for the serializer.</param>
     public override void Write(Utf8JsonWriter writer, byte[]? value, JsonSerializerOptions options)
     {
-        if (value != null)
-            writer.WriteStringValue(Base64Url.EncodeToString(value));
-        else
+        if (value == null)
             writer.WriteNullValue();
+        else
+            writer.WriteStringValue(Base64Url.EncodeToString(value));
     }
 }

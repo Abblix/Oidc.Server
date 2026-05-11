@@ -55,7 +55,12 @@ public record DeviceAuthorizationRequest
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>scope</c> device authorization request parameter listing requested scopes
+        /// (RFC 8628 §3.1).</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>resource</c> device authorization request parameter (RFC 8707) targeting a
+        /// specific protected resource for the resulting tokens.</summary>
         public const string Resource = "resource";
     }
 }

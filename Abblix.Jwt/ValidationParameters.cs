@@ -74,6 +74,21 @@ public record ValidationParameters
 	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
 
 	/// <summary>
+	/// JWS signing algorithms (per RFC 7518) that the validator MUST accept; any other
+	/// <c>alg</c> in the JOSE header causes rejection. When <c>null</c> or empty the
+	/// check is skipped — the validator only enforces the basic
+	/// <see cref="ValidationOptions.RequireSignedTokens"/> rule (which forbids
+	/// <c>none</c>) and lets any registered signer match.
+	/// </summary>
+	/// <remarks>
+	/// Use this to express policy beyond "signed-or-not" without writing per-algorithm
+	/// matchers in callers: pass the asymmetric-only set to enforce DPoP RFC 9449 §4.2,
+	/// pass {RS256, ES256} to require small-footprint algorithms only, and so on.
+	/// Comparison is byte-exact per RFC 7515 §5.3.
+	/// </remarks>
+	public IReadOnlySet<string>? AllowedSigningAlgorithms { get; init; }
+
+	/// <summary>
 	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.
 	/// </summary>
 	/// <param name="issuer">Issuer whose signing keys are to be resolved.</param>

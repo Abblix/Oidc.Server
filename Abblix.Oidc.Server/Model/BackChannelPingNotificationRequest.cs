@@ -36,8 +36,14 @@ public sealed record BackChannelPingNotificationRequest : IBackChannelNotificati
     [JsonPropertyName(Parameters.AuthReqId)]
     public required string AuthenticationRequestId { get; init; }
 
+    /// <summary>
+    /// Wire-level parameter names for the CIBA ping-mode notification payload
+    /// (OpenID Connect CIBA Core 1.0 §10.2).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>auth_req_id</c> notification parameter identifying the CIBA request that is
+        /// now ready for token retrieval.</summary>
         public const string AuthReqId = "auth_req_id";
     }
 }

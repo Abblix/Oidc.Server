@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -121,7 +120,7 @@ public partial class SubjectTypeValidator(
         var missingUris = sectorIdentifierContent.Except(redirectUris).ToArray();
         if (missingUris.Length > 0)
         {
-            LogSectorIdentifierMissingUris(Sanitized.Value(sectorIdentifierUri), missingUris);
+            LogSectorIdentifierMissingUris(sectorIdentifierUri, missingUris);
 
             return ErrorFactory.InvalidClientMetadata(
                 $"The content received from the {Parameters.SectorIdentifierUri} contains one or more URIs that are not in the registered list of redirect URIs");

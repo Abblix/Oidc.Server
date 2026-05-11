@@ -66,9 +66,16 @@ public record DeviceAuthorizationRequest
         };
     }
 
+    /// <summary>
+    /// Wire-level names of the OAuth 2.0 Device Authorization (RFC 8628) request parameters.
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>scope</c> parameter naming the requested scopes.</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>resource</c> parameter naming the resource indicators the client
+        /// wants the issued token to be valid for (RFC 8707).</summary>
         public const string Resource = "resource";
     }
 }

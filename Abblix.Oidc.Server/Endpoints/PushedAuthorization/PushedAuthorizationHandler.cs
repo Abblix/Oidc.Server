@@ -76,11 +76,7 @@ public class PushedAuthorizationHandler(
 
         return await validationResult.MatchAsync(
             onSuccess: processor.ProcessAsync,
-            onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(
-                authorizationRequest,
-                error.Error,
-                error.ErrorDescription,
-                error.ResponseMode,
-                error.RedirectUri)));
+            onFailure: error => Task.FromResult<AuthorizationResponse>(
+                new AuthorizationError(authorizationRequest, error)));
     }
 }

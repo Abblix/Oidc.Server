@@ -33,9 +33,17 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record IntrospectionRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the OAuth 2.0 introspection endpoint (RFC 7662 §2.1).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>token</c> introspection request parameter carrying the token to be inspected.
+		/// </summary>
 		public const string Token = "token";
+
+		/// <summary>The <c>token_type_hint</c> introspection request parameter advising which token type
+		/// the server should try first.</summary>
 		public const string TokenTypeHint = "token_type_hint";
 	}
 

@@ -116,7 +116,8 @@ public static class ServiceCollectionExtensions
 			.AddUserInfo()
 			.AddRequestObject()
 			.AddBackChannelAuthentication()
-			.AddDeviceAuthorization();
+			.AddDeviceAuthorization()
+			.AddDPoP();
 			// AddSecureHttpFetch() moved to AddOidcCore() to run before AddEndpoints()
 	}
 

@@ -79,13 +79,36 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 ? GetClientReadUrl(success.ClientId)
                 : null,
 
-            InitiateLoginUri = request.InitiateLoginUri,
-            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod,
+            // Prefer the resolved server-side value from `success` (which reflects defaults
+            // applied by the registration pipeline) over the raw request — RFC 7591 §3.2.1
+            // requires the response to echo registered values, not the literal request input.
+            InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
+            TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
 
             Scope = request.Scope,
             SoftwareId = request.SoftwareId,
             SoftwareVersion = request.SoftwareVersion,
             SoftwareStatement = request.SoftwareStatement,
+
+            // RFC 7591 §3.2.1: echo registered metadata so clients can confirm what was stored.
+            ApplicationType = success.ApplicationType,
+            RedirectUris = success.RedirectUris,
+            ClientName = success.ClientName,
+            LogoUri = success.LogoUri,
+            SubjectType = success.SubjectType,
+            SectorIdentifierUri = success.SectorIdentifierUri,
+            JwksUri = success.JwksUri,
+            UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
+            UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
+            Contacts = success.Contacts,
+            RequestUris = success.RequestUris,
+            TlsClientAuthSubjectDn = success.TlsClientAuthSubjectDn,
+            TlsClientAuthSanDns = success.TlsClientAuthSanDns,
+            TlsClientAuthSanUri = success.TlsClientAuthSanUri,
+            TlsClientAuthSanIp = success.TlsClientAuthSanIp,
+            TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
+            // RFC 9449 §5.2: dpop_bound_access_tokens echo.
+            DpopBoundAccessTokens = success.DpopBoundAccessTokens,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

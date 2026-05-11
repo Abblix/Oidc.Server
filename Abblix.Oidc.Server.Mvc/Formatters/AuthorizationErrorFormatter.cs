@@ -41,6 +41,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// which includes details like state and error descriptions.</param>
 /// <param name="issuerProvider">The provider for the issuer URL, ensuring the 'iss' claim is correctly
 /// included in error responses if applicable.</param>
+/// <param name="authorizationMetadata">Provider for the discovery metadata needed to map the requested
+/// response mode onto the corresponding redirect-handling strategy.</param>
 public class AuthorizationErrorFormatter(
     IParametersProvider parametersProvider,
     IIssuerProvider issuerProvider,

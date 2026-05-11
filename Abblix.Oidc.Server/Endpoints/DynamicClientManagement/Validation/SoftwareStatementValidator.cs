@@ -125,7 +125,7 @@ public partial class SoftwareStatementValidator(
     private static TrustedIssuer? FindTrustedIssuer(SoftwareStatementOptions statementOptions, string issuer)
     {
         return statementOptions.TrustedIssuers.FirstOrDefault(
-            ti => string.Equals(ti.Issuer, issuer, StringComparison.Ordinal));
+            ti => ti.Issuer == issuer);
     }
 
     /// <summary>

@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
@@ -37,4 +38,8 @@ public sealed class JwtAlgorithmsProvider(
 
 	/// <inheritdoc />
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> DpopSigningAlgorithmsSupported
+		=> jwtValidator.SigningAlgorithmsSupported.Where(DPoPAlgorithms.Allowed.Contains);
 }

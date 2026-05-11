@@ -70,7 +70,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (client == null)
             return null;
 
-        if (!string.Equals(client.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
             return null;
 
         var options = client.TlsClientAuth;

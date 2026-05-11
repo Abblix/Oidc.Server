@@ -153,7 +153,7 @@ public static class JsonWebKeyFactory
             ({} x, {} y) => x.Concat(y),
             ({} x, null) => x,
             (null, {} y) => y,
-            (null, null) => Array.Empty<byte>(),
+            (null, null) => [],
         };
 
         return SHA256.HashData(keyMaterial).ToHexString();

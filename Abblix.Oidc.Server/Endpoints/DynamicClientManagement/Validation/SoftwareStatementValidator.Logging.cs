@@ -27,13 +27,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 partial class SoftwareStatementValidator
 {
     [LoggerMessage(
-        EventId = LogEvents.Dcr.SoftwareStatementValidator.ValidationFailed,
+        EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.ValidationFailed,
         Level = LogLevel.Warning,
         Message = "Software statement validation failed: {Error}")]
     private partial void LogValidationFailed(string Error);
 
     [LoggerMessage(
-        EventId = LogEvents.Dcr.SoftwareStatementValidator.IssuerNotTrusted,
+        EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted,
         Level = LogLevel.Debug,
         Message = "Software statement issuer {Issuer} is not trusted")]
     private partial void LogIssuerNotTrusted(string Issuer);

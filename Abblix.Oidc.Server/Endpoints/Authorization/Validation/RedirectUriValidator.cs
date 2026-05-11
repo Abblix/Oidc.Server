@@ -23,8 +23,6 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
-
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -55,7 +53,7 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
         var redirectUri = context.Request.RedirectUri;
         if (redirectUri == null || !uriValidator.IsValid(redirectUri))
         {
-            LogInvalidRedirectUri(Value(redirectUri), context.ClientInfo.ClientId);
+            LogInvalidRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
             return context.InvalidRequest("The redirect URI is not valid for specified client");
         }

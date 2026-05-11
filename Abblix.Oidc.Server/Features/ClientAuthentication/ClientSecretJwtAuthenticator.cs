@@ -126,7 +126,7 @@ public partial class ClientSecretJwtAuthenticator(
     {
         if (context.ClientInfo != null)
         {
-            if (!string.Equals(issuer, context.ClientInfo.ClientId, StringComparison.Ordinal))
+            if (issuer != context.ClientInfo.ClientId)
             {
                 throw new InvalidOperationException(
                     $"Trying to validate issuer {issuer}, but already has info about client {context.ClientInfo.ClientId}");
@@ -137,7 +137,7 @@ public partial class ClientSecretJwtAuthenticator(
 
         switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck())
         {
-            case { } clientInfo when !string.Equals(clientInfo.TokenEndpointAuthMethod, ClientAuthenticationMethods.ClientSecretJwt, StringComparison.Ordinal):
+            case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
                 LogWrongAuthMethod(issuer);
                 return false;
 

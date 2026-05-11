@@ -33,14 +33,38 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record EndSessionRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the OP's <c>end_session_endpoint</c>
+	/// (OpenID Connect RP-Initiated Logout 1.0).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>id_token_hint</c> end-session request parameter carrying a previously issued
+		/// ID Token that identifies the end-user being logged out.</summary>
 		public const string IdTokenHint = "id_token_hint";
+
+		/// <summary>The <c>logout_hint</c> end-session request parameter; an opaque hint about the
+		/// end-user's login identifier when no ID Token hint is available.</summary>
 		public const string LogoutHint = "logout_hint";
+
+		/// <summary>The <c>client_id</c> end-session request parameter identifying the relying party.
+		/// </summary>
 		public const string ClientId = "client_id";
+
+		/// <summary>The <c>post_logout_redirect_uri</c> end-session request parameter naming the URI the
+		/// user agent is redirected to after logout completes.</summary>
 		public const string PostLogoutRedirectUri = "post_logout_redirect_uri";
+
+		/// <summary>The <c>state</c> end-session request parameter; an opaque value echoed back on the
+		/// post-logout redirect for correlation.</summary>
 		public const string State = "state";
+
+		/// <summary>The <c>ui_locales</c> end-session request parameter listing preferred UI locales for
+		/// the logout confirmation page.</summary>
 		public const string UiLocales = "ui_locales";
+
+		/// <summary>The <c>confirmed</c> end-session form field used to carry the end-user's answer to the
+		/// logout confirmation prompt back to the OP.</summary>
 		public const string Confirmed = "confirmed";
 	}
 

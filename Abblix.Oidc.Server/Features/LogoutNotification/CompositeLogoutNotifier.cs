@@ -54,11 +54,15 @@ public class CompositeLogoutNotifier(ILogoutNotifier[] logoutNotifiers) : ILogou
         return Task.WhenAll(tasks);
     }
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSupported => logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSupported);
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSessionSupported => logoutNotifiers.Any(notifier => notifier.FrontChannelLogoutSessionSupported);
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSupported => logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSupported);
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSessionSupported => logoutNotifiers.Any(notifier => notifier.BackChannelLogoutSessionSupported);
 }

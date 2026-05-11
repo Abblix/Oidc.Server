@@ -101,6 +101,7 @@ public class ConfigurationResponseFormatter(
 			RequireSignedRequestObject = response.RequireSignedRequestObject,
 
 			UserInfoSigningAlgValuesSupported = response.UserInfoSigningAlgValuesSupported,
+			DpopSigningAlgValuesSupported = response.DpopSigningAlgValuesSupported,
 
 			BackChannelTokenDeliveryModesSupported = response.BackChannelTokenDeliveryModesSupported,
 			BackChannelAuthenticationRequestSigningAlgValuesSupported = response.BackChannelAuthenticationRequestSigningAlgValuesSupported,

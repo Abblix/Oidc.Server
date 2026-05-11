@@ -57,6 +57,11 @@ public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
         return result;
     }
 
+    /// <summary>
+    /// Reads a <see cref="JsonWebKey"/> from the JSON payload, dispatching to the matching
+    /// concrete subtype (<see cref="RsaJsonWebKey"/>, <see cref="EllipticCurveJsonWebKey"/>,
+    /// or <see cref="OctetJsonWebKey"/>) based on the <c>kty</c> property.
+    /// </summary>
     public override JsonWebKey? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -90,6 +95,11 @@ public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
         };
     }
 
+    /// <summary>
+    /// Writes a <see cref="JsonWebKey"/> to JSON in its concrete-subtype shape, so the
+    /// resulting object includes the <c>kty</c> discriminator and every key-type-specific
+    /// member.
+    /// </summary>
     public override void Write(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)
     {
         var serializerOptions = CreateOptionsForDerivedType(options);

@@ -25,7 +25,6 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -61,18 +60,18 @@ public abstract partial class ClientSecretAuthenticator(
 		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (client == null)
 		{
-			LogClientNotFound(Value(clientId));
+			LogClientNotFound(clientId);
 			return null;
 		}
 
 		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
-			LogWrongAuthMethod(Value(clientId));
+			LogWrongAuthMethod(clientId);
 			return null;
 		}
 
 		if (client is not { ClientSecrets.Length: > 0 })
 		{
-			LogNoSecretsConfigured(Value(clientId));
+			LogNoSecretsConfigured(clientId);
 			return null;
 		}
 

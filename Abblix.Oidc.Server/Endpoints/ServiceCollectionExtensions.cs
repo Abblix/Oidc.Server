@@ -32,13 +32,13 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -61,7 +61,10 @@ using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-
+using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
+using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
+using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
+using JwtBearer = Abblix.Oidc.Server.Features.JwtBearer;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -147,7 +150,7 @@ public static class ServiceCollectionExtensions
 
         // Compose the individual fetchers into a composite fetcher
         return services
-            .Compose<IAuthorizationRequestFetcher, Authorization.RequestFetching.CompositeRequestFetcher>();
+            .Compose<IAuthorizationRequestFetcher, CompositeRequestFetcher>();
     }
 
     /// <summary>
@@ -173,7 +176,8 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
-            ServiceDescriptor.Singleton<IAuthorizationContextValidator, PkceValidator>()
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, PkceValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, ProofKeyThumbprintValidator>()
         ]);
         return services.Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
     }
@@ -233,11 +237,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
     {
         // Register individual validators that will participate in a composite pattern.
+        // Order is load-bearing: ClientValidator must precede DPoPTokenEndpointValidator
+        // because the latter reads ClientInfo.RequireDPoP to decide whether DPoP
+        // is mandatory or opportunistic.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>()
+            ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>()
         ]);
         // Combine all registered ITokenContextValidator into a single composite validator.
         // This composite approach allows the application to apply multiple validation checks sequentially.
@@ -272,6 +280,14 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
         services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+
+        // The replay-cache implementation now lives in Features.ReplayPrevention so DPoP
+        // and any future consumer can share it. The JwtBearer-namespaced shim is the
+        // singleton registered concretely; both the canonical interface and the deprecated
+        // JwtBearer.IJwtReplayCache alias resolve to the same instance for back-compat.
+#pragma warning disable CS0618 // intentional registration of the deprecated shim
+        services.TryAddSingleton<JwtBearer.IJwtReplayCache, JwtBearer.DistributedJwtReplayCache>();
+#pragma warning restore CS0618
 
         // Register keyed caching decorator for JWT Bearer JWKS fetching
         // DecorateKeyed will find the non-keyed ISecureHttpFetcher and create a keyed decorated version
@@ -333,6 +349,9 @@ public static class ServiceCollectionExtensions
     /// must be registered through this helper so the dual-presence invariant cannot be silently
     /// missed when a new grant handler is added.
     /// </summary>
+    /// <typeparam name="TImpl">The concrete grant-handler implementation to register.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationGrant<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationGrantHandler
     {
@@ -351,6 +370,9 @@ public static class ServiceCollectionExtensions
     /// through this helper so each processor's declared grant type lands in the
     /// <see cref="IGrantTypeInformer"/> chain without an extra registration step.
     /// </summary>
+    /// <typeparam name="TImpl">The concrete response-builder implementation to register.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationResponseBuilder
     {
@@ -427,6 +449,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
         services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
         services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
+        services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();
         return services;
     }
 
@@ -526,6 +549,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of end-session context validators into the service
+    /// collection. Validators run in sequence to verify the <c>id_token_hint</c>, the client,
+    /// the post-logout redirect URI, and the confirmation claim before an end-session request
+    /// is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the end-session context validators will be added.</param>
+    /// <returns>The modified service collection with the registered end-session context validators.</returns>
     public static IServiceCollection AddEndSessionContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([
@@ -555,6 +586,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of back-channel authentication context validators
+    /// into the service collection. Validators run in sequence to verify the client, the
+    /// requested resources and scopes, the user identity hint, the requested expiry, the user
+    /// code, and the ping-mode configuration before a CIBA request is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the back-channel authentication context validators will be added.</param>
+    /// <returns>The modified service collection with the registered back-channel authentication context validators.</returns>
     public static IServiceCollection AddBackChannelAuthenticationContextValidators(this IServiceCollection services)
     {
         // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
@@ -585,6 +624,13 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of device authorization context validators into the
+    /// service collection. Validators run in sequence to verify the client, the requested scopes,
+    /// and the requested resources before a device authorization request (RFC 8628) is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the device authorization context validators will be added.</param>
+    /// <returns>The modified service collection with the registered device authorization context validators.</returns>
     public static IServiceCollection AddDeviceAuthorizationContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([

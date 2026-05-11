@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -247,4 +248,10 @@ public record OidcOptions
 	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
 	/// </summary>
 	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();
+
+	/// <summary>
+	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the
+	/// <see cref="ProofValidator"/> behaviour and related primitives.
+	/// </summary>
+	public DPoPOptions DPoP { get; set; } = new();
 }

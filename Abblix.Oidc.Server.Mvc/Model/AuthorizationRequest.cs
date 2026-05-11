@@ -196,6 +196,19 @@ public record AuthorizationRequest
 	[BindProperty(SupportsGet = true, Name = Parameters.Resource)]
 	public Uri[]? Resources { get; set; }
 
+	/// <summary>
+	/// Client's pre-commitment to a DPoP proof-of-possession key per RFC 9449 §10
+	/// (<c>dpop_jkt</c>): base64url JWK Thumbprint of the key the client will demonstrate
+	/// at the token endpoint.
+	/// </summary>
+	[BindProperty(SupportsGet = true, Name = Parameters.DpopJkt)]
+	public string? ProofKeyThumbprint { get; init; }
+
+	/// <summary>
+	/// Projects this MVC-binding model onto its core <see cref="Core.AuthorizationRequest"/>
+	/// counterpart, copying every bound parameter so the core pipeline operates on a
+	/// transport-agnostic shape.
+	/// </summary>
 	public Core.AuthorizationRequest Map() => new()
 	{
 		Nonce = Nonce,
@@ -219,5 +232,6 @@ public record AuthorizationRequest
 		IdTokenHint = IdTokenHint,
 		ClaimsLocales = ClaimsLocales,
 		Resources = Resources,
+		ProofKeyThumbprint = ProofKeyThumbprint,
 	};
 }

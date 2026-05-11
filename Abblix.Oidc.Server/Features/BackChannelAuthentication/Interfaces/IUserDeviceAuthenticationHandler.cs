@@ -119,12 +119,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   </item>
 ///   <item>
 ///     <strong>Ping Mode:</strong> Stores tokens and sends HTTP POST notification via
-///     <see cref="IBackChannelNotificationService"/> to the client's <c>client_notification_endpoint</c>
+///     <see cref="INotificationDeliveryService"/> to the client's <c>client_notification_endpoint</c>
 ///     with the <c>auth_req_id</c>. Client then retrieves tokens from the token endpoint.
 ///   </item>
 ///   <item>
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
-///     them directly via <see cref="IBackChannelPushService"/> to the client's
+///     them directly via <see cref="INotificationDeliveryService"/> to the client's
 ///     <c>client_notification_endpoint</c>. Tokens are removed from storage after successful delivery
 ///     per CIBA specification section 10.3.1.
 ///   </item>

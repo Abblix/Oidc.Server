@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -91,6 +92,34 @@ public class ServiceCollectionOverrideTests
         var secondCount = services.Count(d => d.ServiceType == typeof(IClientAuthenticator));
 
         Assert.Equal(firstCount, secondCount);
+    }
+
+    [Fact]
+    public void AddDPoP_HostPreregisteredProofValidator_Wins()
+    {
+        var services = new ServiceCollection();
+        var stub = new Mock<IProofValidator>().Object;
+        services.AddSingleton<IProofValidator>(stub);
+
+        services.AddDPoP();
+
+        var descriptors = services
+            .Where(d => d.ServiceType == typeof(IProofValidator))
+            .ToList();
+
+        Assert.Single(descriptors);
+        Assert.Same(stub, descriptors[0].ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddDPoP_InvokedTwice_DefaultsRegisteredOnce()
+    {
+        var services = new ServiceCollection();
+
+        services.AddDPoP();
+        services.AddDPoP();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IProofValidator));
     }
 
     [Fact]

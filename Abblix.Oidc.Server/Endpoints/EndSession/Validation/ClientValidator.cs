@@ -49,7 +49,7 @@ public partial class ClientValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            LogClientNotFound(Sanitized.Value(context.ClientId));
+            LogClientNotFound(context.ClientId);
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");

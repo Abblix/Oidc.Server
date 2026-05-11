@@ -47,6 +47,20 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// </remarks>
 public class AuthorizationHandler : IAuthorizationHandler
 {
+    /// <summary>
+    /// Initialises a new <see cref="AuthorizationHandler"/> and computes the discovery
+    /// metadata (<c>response_types_supported</c> and <c>grant_types_supported</c>) in a
+    /// single pass over the supplied response builders.
+    /// </summary>
+    /// <param name="fetcher">Resolves the effective authorization request, including
+    /// dereferencing pushed (RFC 9126) or request-object (OIDC Core §6) variants.</param>
+    /// <param name="validator">Performs protocol-level validation of the resolved
+    /// request prior to processing.</param>
+    /// <param name="processor">Produces the validated authorization result that the
+    /// selected response builder then projects onto the wire.</param>
+    /// <param name="responseBuilders">The set of registered response builders. Each
+    /// declares the response-type it owns and the grant-types it exposes, so adding a
+    /// builder automatically extends both discovery lists.</param>
     public AuthorizationHandler(
         IAuthorizationRequestFetcher fetcher,
         IAuthorizationRequestValidator validator,

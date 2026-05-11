@@ -66,8 +66,8 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         if (request.ClientCertificate != null)
         {
             var authMethod = request.ClientInfo.TokenEndpointAuthMethod;
-            if (string.Equals(authMethod, ClientAuthenticationMethods.SelfSignedTlsClientAuth, StringComparison.Ordinal)
-                || string.Equals(authMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+            if (authMethod == ClientAuthenticationMethods.SelfSignedTlsClientAuth
+                || authMethod == ClientAuthenticationMethods.TlsClientAuth)
             {
                 thumbprint = Base64Url.EncodeToString(SHA256.HashData(request.ClientCertificate.RawData));
             }
@@ -77,7 +77,8 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         {
             Scope = scope,
             Resources = resources,
-            X509CertificateSha256Thumbprint = thumbprint,
+            CertificateSha256Thumbprint = thumbprint,
+            ProofKeyThumbprint = request.ProofKeyThumbprint,
         };
     }
 }

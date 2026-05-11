@@ -48,8 +48,8 @@ public class UserInfoHandler(
     /// <param name="clientRequest">Additional information about the client making the request, useful for contextual
     /// validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="UserInfoResponse"/>, which contains the requested user
-    /// information in case of a valid request, or an error detailing the reason for failure.
+    /// A <see cref="Task"/> that resolves to a <see cref="UserInfoFoundResponse"/>, which contains the requested user
+    /// information in case of a valid request, or an <see cref="OidcError"/> detailing the reason for failure.
     /// </returns>
     /// <remarks>
     /// This method is pivotal for ensuring that only authenticated and authorized requests gain access to sensitive

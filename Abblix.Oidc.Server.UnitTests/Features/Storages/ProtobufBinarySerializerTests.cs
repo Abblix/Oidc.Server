@@ -164,7 +164,7 @@ public class ProtobufSerializerTests
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
             })
         {
-            X509CertificateSha256Thumbprint = "abc123def456",
+            CertificateSha256Thumbprint = "abc123def456",
             RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
@@ -180,7 +180,7 @@ public class ProtobufSerializerTests
         Assert.NotNull(result);
         Assert.Equal(context.ClientId, result.ClientId);
         Assert.Equal(context.Scope, result.Scope);
-        Assert.Equal(context.X509CertificateSha256Thumbprint, result.X509CertificateSha256Thumbprint);
+        Assert.Equal(context.CertificateSha256Thumbprint, result.CertificateSha256Thumbprint);
         Assert.Equal(context.RedirectUri, result.RedirectUri);
         Assert.Equal(context.Nonce, result.Nonce);
         Assert.Equal(context.CodeChallenge, result.CodeChallenge);
