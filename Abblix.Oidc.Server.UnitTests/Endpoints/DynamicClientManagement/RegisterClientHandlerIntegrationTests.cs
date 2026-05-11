@@ -71,9 +71,9 @@ public class RegisterClientHandlerIntegrationTests
             opts.Issuer = TestConstants.DefaultIssuer;
 
             // Generate an in-memory RS256 signing key for the registration access token the
-            // success-path test asserts on. Production hosts feed real certificates here;
-            // tests need only a freshly minted key — RsaJsonWebKey is a self-contained PoCo
-            // so this stays a simple Add without any further DI plumbing.
+            // success-path test asserts on. Production hosts feed real certificates in this
+            // slot, but tests need only a freshly minted key. RsaJsonWebKey is a self-contained
+            // POCO, so this stays a simple Add without any further DI plumbing.
             opts.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
 
             // Anonymous registration: opt out of RFC 7591 §3 initial access token gating so
