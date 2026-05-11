@@ -61,6 +61,7 @@ using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
 using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
 using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
 using JwtBearer = Abblix.Oidc.Server.Features.JwtBearer;
@@ -149,7 +150,7 @@ public static class ServiceCollectionExtensions
 
         // Compose the individual fetchers into a composite fetcher
         return services
-            .Compose<IAuthorizationRequestFetcher, Authorization.RequestFetching.CompositeRequestFetcher>();
+            .Compose<IAuthorizationRequestFetcher, CompositeRequestFetcher>();
     }
 
     /// <summary>
@@ -348,6 +349,9 @@ public static class ServiceCollectionExtensions
     /// must be registered through this helper so the dual-presence invariant cannot be silently
     /// missed when a new grant handler is added.
     /// </summary>
+    /// <typeparam name="TImpl">The concrete grant-handler implementation to register.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationGrant<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationGrantHandler
     {
@@ -366,6 +370,9 @@ public static class ServiceCollectionExtensions
     /// through this helper so each processor's declared grant type lands in the
     /// <see cref="IGrantTypeInformer"/> chain without an extra registration step.
     /// </summary>
+    /// <typeparam name="TImpl">The concrete response-builder implementation to register.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationResponseBuilder
     {
@@ -542,6 +549,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of end-session context validators into the service
+    /// collection. Validators run in sequence to verify the <c>id_token_hint</c>, the client,
+    /// the post-logout redirect URI, and the confirmation claim before an end-session request
+    /// is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the end-session context validators will be added.</param>
+    /// <returns>The modified service collection with the registered end-session context validators.</returns>
     public static IServiceCollection AddEndSessionContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([
@@ -571,6 +586,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of back-channel authentication context validators
+    /// into the service collection. Validators run in sequence to verify the client, the
+    /// requested resources and scopes, the user identity hint, the requested expiry, the user
+    /// code, and the ping-mode configuration before a CIBA request is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the back-channel authentication context validators will be added.</param>
+    /// <returns>The modified service collection with the registered back-channel authentication context validators.</returns>
     public static IServiceCollection AddBackChannelAuthenticationContextValidators(this IServiceCollection services)
     {
         // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
@@ -601,6 +624,13 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Configures and registers a composite of device authorization context validators into the
+    /// service collection. Validators run in sequence to verify the client, the requested scopes,
+    /// and the requested resources before a device authorization request (RFC 8628) is accepted.
+    /// </summary>
+    /// <param name="services">The service collection to which the device authorization context validators will be added.</param>
+    /// <returns>The modified service collection with the registered device authorization context validators.</returns>
     public static IServiceCollection AddDeviceAuthorizationContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([

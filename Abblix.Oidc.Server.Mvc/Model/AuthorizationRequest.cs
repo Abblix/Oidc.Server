@@ -204,6 +204,11 @@ public record AuthorizationRequest
 	[BindProperty(SupportsGet = true, Name = Parameters.DpopJkt)]
 	public string? ProofKeyThumbprint { get; init; }
 
+	/// <summary>
+	/// Projects this MVC-binding model onto its core <see cref="Core.AuthorizationRequest"/>
+	/// counterpart, copying every bound parameter so the core pipeline operates on a
+	/// transport-agnostic shape.
+	/// </summary>
 	public Core.AuthorizationRequest Map() => new()
 	{
 		Nonce = Nonce,

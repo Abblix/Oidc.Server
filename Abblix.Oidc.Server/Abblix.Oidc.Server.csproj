@@ -4,6 +4,7 @@
         <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>true</ImplicitUsings>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageId>Abblix.OIDC.Server</PackageId>
         <Title>Abblix OIDC Server</Title>
         <Description>Flexible OpenID Connect and OAuth 2.0 server-side implementation for modern ASP.NET projects</Description>
