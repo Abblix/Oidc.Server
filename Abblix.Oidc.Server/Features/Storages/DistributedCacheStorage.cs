@@ -61,7 +61,7 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	/// <summary>
 	/// Asynchronously retrieves an object from the distributed cache.
 	/// When removeOnRetrieval is true, uses atomic get-and-remove operation via
-	/// <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
 	/// </summary>
 	/// <typeparam name="T">The type of the object to retrieve.</typeparam>
 	/// <param name="key">The key associated with the object to retrieve.</param>

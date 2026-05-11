@@ -40,8 +40,9 @@ public interface IAuthorizationRequestFetcher
     /// The initial authorization request, which may contain a reference to a request object or inline request parameters.
     /// </param>
     /// <returns>
-    /// A task that returns the processed authorization request
-    /// details, encapsulated within a <see cref="FetchResult"/>.</returns>
+    /// A task that returns the processed authorization request details, encapsulated within a
+    /// <see cref="Result{TSuccess,TFailure}"/> of <see cref="AuthorizationRequest"/> on success or
+    /// <see cref="AuthorizationRequestValidationError"/> on failure.</returns>
     /// <remarks>
     /// This method is responsible for handling the specifics of fetching and interpreting the authorization request,
     /// which may include retrieving a request object from a remote location specified by the 'request_uri' parameter,

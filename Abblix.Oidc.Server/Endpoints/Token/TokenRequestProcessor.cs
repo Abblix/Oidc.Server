@@ -53,8 +53,8 @@ public class TokenRequestProcessor(
 	/// </summary>
 	/// <param name="request">The validated token request containing client and authorization session information.
 	/// </param>
-	/// <returns>A task representing the asynchronous operation, yielding a <see cref="TokenResponse"/> containing
-	/// the generated tokens.</returns>
+	/// <returns>A task representing the asynchronous operation, yielding a <see cref="TokenIssued"/> containing
+	/// the generated tokens, or an <see cref="OidcError"/> if processing fails.</returns>
 	/// <remarks>
 	/// Access tokens authorize clients for resource access; refresh tokens enable long-lived sessions by allowing
 	/// new access tokens to be obtained without re-authentication; ID tokens provide identity information about

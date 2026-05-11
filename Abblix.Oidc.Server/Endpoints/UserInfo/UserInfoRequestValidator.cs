@@ -43,9 +43,11 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
 /// <param name="jwtValidator">Validates access-token JWTs issued by this authorization server.</param>
-/// <param name="accessTokenService">Resolves an <see cref="AuthSession"/> and
+/// <param name="accessTokenService">Resolves an <see cref="Abblix.Oidc.Server.Features.UserAuthentication.AuthSession"/> and
 /// <see cref="AuthorizationContext"/> from the access token.</param>
 /// <param name="clientInfoProvider">Loads the <see cref="ClientInfo"/> for the token's client.</param>
+/// <param name="dpopValidator">RFC 9449 §7 DPoP resource-server-side validator that enforces the
+/// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,

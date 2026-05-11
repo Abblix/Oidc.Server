@@ -332,7 +332,7 @@ public record ClientRegistrationRequest
     /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
     /// access tokens issued to this client must be sender-constrained via DPoP (the server
     /// will require a valid DPoP proof on every token request and bind <c>cnf.jkt</c> on
-    /// the issued token). Maps to <see cref="ClientInfo.RequireDPoP"/>. When omitted, treated
+    /// the issued token). Maps to <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>. When omitted, treated
     /// as <c>false</c> per RFC 9449 §5.2.
     /// </summary>
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]

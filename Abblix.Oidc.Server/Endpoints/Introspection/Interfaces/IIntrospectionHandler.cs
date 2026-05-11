@@ -41,10 +41,10 @@ public interface IIntrospectionHandler
     /// <param name="clientRequest">Additional information about the client making the request, which may be necessary
     /// for validating the request in certain contexts.</param>
     /// <returns>
-    /// A <see cref="Task"/> that, when completed successfully, results in an <see cref="IntrospectionResponse"/>.
-    /// This response contains information about the token's current state, such as whether it is active,
-    /// and potentially other metadata. In case of an invalid request,
-    /// the response will detail the reasons for rejection.
+    /// A <see cref="Task"/> that, when completed successfully, results in an <see cref="IntrospectionSuccess"/>
+    /// or an <see cref="OidcError"/>. The success response contains information about the token's current state,
+    /// such as whether it is active, and potentially other metadata. In case of an invalid request,
+    /// the error response will detail the reasons for rejection.
     /// </returns>
     /// <remarks>
     /// Implementations of this interface play a critical role in the security of OAuth 2.0 and OIDC systems

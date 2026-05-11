@@ -219,7 +219,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// Whether access tokens issued to this client are sender-constrained via DPoP per
-    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes <see cref="ClientInfo.RequireDPoP"/>.
+    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>.
     /// </summary>
     [JsonPropertyOrder(24)]
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
