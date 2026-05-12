@@ -23,9 +23,12 @@
 namespace Abblix.Utils;
 
 /// <summary>
-/// Extension methods for <see cref="Enum"/> values that complement the BCL surface.
+/// Extension methods for <c>[Flags]</c> enum values that complement the BCL surface.
+/// Named with the <c>Flag</c> qualifier so it does not collide with the very common
+/// <c>EnumExtensions</c> class name used by other libraries (e.g. <c>Fido2NetLib.EnumExtensions</c>),
+/// which would surface as <c>CS0104</c> in any consumer that imports both namespaces.
 /// </summary>
-public static class EnumExtensions
+public static class EnumFlagExtensions
 {
     /// <summary>
     /// Returns <c>true</c> when at least one flag in <paramref name="mask"/> is set in
