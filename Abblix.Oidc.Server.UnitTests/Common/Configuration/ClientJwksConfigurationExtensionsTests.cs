@@ -278,18 +278,18 @@ public class ClientJwksConfigurationExtensionsTests
     }
 
     /// <summary>
-    /// Host-defined ClientInfo subtype (mirrors AuthSvc's
-    /// <c>Authentication.DomainModel.Entities.ClientInfo</c> inheriting from the OIDC-Server base) —
-    /// used to verify the generic extension preserves the array's runtime AND static type when
-    /// consumers pass derived ClientInfo collections.
+    /// Compile-time guard: a host that wraps <see cref="ClientInfo"/> in its own derived
+    /// record (with extra metadata like logos, external provider mappings, …) must be able
+    /// to assign the extension's return value back to its strongly-typed <c>Clients</c>
+    /// array without a cast. Regression for the type-preserving generic signature.
     /// </summary>
-    private record DerivedTestClient(string Id) : ClientInfo(Id)
+    public sealed record DerivedClientInfo(string ClientId) : ClientInfo(ClientId)
     {
-        public string? ExtraProperty { get; init; }
+        public string? Label { get; init; }
     }
 
     [Fact]
-    public void PreservesDerivedClientInfoArrayType()
+    public void Generic_PreservesDerivedArrayType_AcrossCallsite()
     {
         const string json = """
             {
@@ -297,7 +297,7 @@ public class ClientJwksConfigurationExtensionsTests
                 {
                   "ClientId": "derived-client",
                   "Jwks": {
-                    "keys": [{ "kty": "RSA", "kid": "d", "n": "AQAB", "e": "AQAB" }]
+                    "Keys": [{ "kty": "RSA", "kid": "dk", "n": "AQAB", "e": "AQAB" }]
                   }
                 }
               ]
@@ -307,14 +307,15 @@ public class ClientJwksConfigurationExtensionsTests
             .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
             .Build();
 
-        var clients = new[] { new DerivedTestClient("derived-client") { ExtraProperty = "preserved" } };
+        DerivedClientInfo[] source = [new DerivedClientInfo("derived-client") { Label = "preserved" }];
 
-        DerivedTestClient[] result = clients.WithJwksFromConfiguration(config.GetSection("Clients"));
+        // Critical: return type must be DerivedClientInfo[], not ClientInfo[]
+        DerivedClientInfo[] result = source.WithJwksFromConfiguration(config.GetSection("Clients"));
 
-        Assert.IsType<DerivedTestClient[]>(result);
-        Assert.Same(clients, result);
-        Assert.Equal("preserved", result.Single().ExtraProperty);
-        Assert.NotNull(result.Single().Jwks);
+        var derived = Assert.Single(result);
+        Assert.Equal("preserved", derived.Label);
+        Assert.NotNull(derived.Jwks);
+        Assert.Equal("dk", derived.Jwks.Keys.Single().KeyId);
     }
 
     [Fact]

@@ -53,9 +53,13 @@ public static class ClientJwksConfigurationExtensions
     /// <summary>
     /// Returns the same client collection with <see cref="ClientInfo.Jwks"/> populated for
     /// each entry whose configuration counterpart includes an inline <c>Jwks</c> sub-section.
-    /// Mutates in place when the input is already a <see cref="ClientInfo"/> array; otherwise
+    /// Mutates in place when the input is already a <typeparamref name="T"/> array; otherwise
     /// materialises a fresh array.
     /// </summary>
+    /// <typeparam name="T">A concrete client type — either <see cref="ClientInfo"/> directly
+    /// or a host-supplied derived type (e.g. carrying app-specific metadata). The return type
+    /// preserves <typeparamref name="T"/> so the host can assign the result back to its own
+    /// strongly-typed <c>Clients</c> array without casting.</typeparam>
     /// <param name="clients">The clients whose <c>Jwks</c> should be populated.</param>
     /// <param name="clientsSection">The configuration section that holds the Clients tree —
     /// typically <c>configuration.GetSection("Clients")</c>.</param>
