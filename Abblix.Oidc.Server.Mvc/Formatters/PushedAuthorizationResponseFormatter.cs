@@ -68,13 +68,7 @@ public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponse
                 StatusCode = StatusCodes.Status201Created,
             },
 
-            AuthorizationError error => new JsonResult(
-                new
-                {
-                    error = error.Error,
-                    error_description = error.ErrorDescription,
-                    error_uri = error.ErrorUri?.OriginalString,
-                })
+            AuthorizationError error => new JsonResult(new ErrorResponse(error.Error, error.ErrorDescription))
             {
                 StatusCode = error.Error switch
                 {

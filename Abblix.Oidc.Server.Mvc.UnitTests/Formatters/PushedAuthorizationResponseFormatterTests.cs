@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -77,9 +76,9 @@ public class PushedAuthorizationResponseFormatterTests
 
         var json = Assert.IsType<JsonResult>(result);
         Assert.Equal(StatusCodes.Status401Unauthorized, json.StatusCode);
-        var body = json.Value!.GetType().GetProperties();
-        Assert.Equal(ErrorCodes.InvalidClient, body.First(p => p.Name == "error").GetValue(json.Value));
-        Assert.Equal("Client authentication failed", body.First(p => p.Name == "error_description").GetValue(json.Value));
+        var body = Assert.IsType<ErrorResponse>(json.Value);
+        Assert.Equal(ErrorCodes.InvalidClient, body.Error);
+        Assert.Equal("Client authentication failed", body.ErrorDescription);
     }
 
     [Fact]
