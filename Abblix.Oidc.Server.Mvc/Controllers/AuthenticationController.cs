@@ -78,7 +78,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </remarks>
     [HttpPost(Path.PushAuthorizationRequest)]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
+    [Produces(MediaTypeNames.Application.Json)]
     [EnabledBy(OidcEndpoints.PushedAuthorizationRequest)]
     public async Task<ActionResult<AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,

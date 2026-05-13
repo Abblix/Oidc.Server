@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -33,9 +34,13 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Implements response formatting for pushed authorization requests.
 /// </summary>
-/// <param name="errorFormatter">The formatter for handling authorization errors.</param>
-public class PushedAuthorizationResponseFormatter(IAuthorizationErrorFormatter errorFormatter)
-    : IPushedAuthorizationResponseFormatter
+/// <remarks>
+/// PAR is a server-to-server endpoint per RFC 9126; responses are always JSON. Error responses
+/// never redirect — that would land programmatic OAuth clients on a user-facing login page.
+/// For the same reason this formatter does not delegate to <see cref="IAuthorizationErrorFormatter"/>,
+/// which is intended for the authorization endpoint's browser flow.
+/// </remarks>
+public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response to a pushed authorization request.
@@ -47,27 +52,40 @@ public class PushedAuthorizationResponseFormatter(IAuthorizationErrorFormatter e
     /// <returns>A task that resolves to an action result suitable for returning from an MVC action,
     /// representing the formatted response. This could include setting specific HTTP status codes
     /// or returning error information.</returns>
-    public async Task<ActionResult> FormatResponseAsync(
+    public Task<ActionResult> FormatResponseAsync(
         AuthorizationRequest request,
         AuthorizationResponse response)
     {
-        switch (response)
+        ActionResult result = response switch
         {
-            case PushedAuthorizationResponse par:
-
-                var modelResponse = new Model.PushedAuthorizationResponse
+            PushedAuthorizationResponse par => new JsonResult(
+                new Model.PushedAuthorizationResponse
                 {
                     RequestUri = par.RequestUri,
                     ExpiresIn = par.ExpiresIn,
-                };
+                })
+            {
+                StatusCode = StatusCodes.Status201Created,
+            },
 
-                return new JsonResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
+            AuthorizationError error => new JsonResult(
+                new
+                {
+                    error = error.Error,
+                    error_description = error.ErrorDescription,
+                    error_uri = error.ErrorUri?.OriginalString,
+                })
+            {
+                StatusCode = error.Error switch
+                {
+                    ErrorCodes.InvalidClient => StatusCodes.Status401Unauthorized,
+                    _ => StatusCodes.Status400BadRequest,
+                },
+            },
 
-            case AuthorizationError error:
-                return await errorFormatter.FormatResponseAsync(request, error);
+            _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
+        };
 
-            default:
-                throw new UnexpectedTypeException(nameof(response), response.GetType());
-        }
+        return Task.FromResult(result);
     }
 }
