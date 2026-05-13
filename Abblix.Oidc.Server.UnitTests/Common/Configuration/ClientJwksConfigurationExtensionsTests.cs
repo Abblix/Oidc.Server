@@ -277,6 +277,46 @@ public class ClientJwksConfigurationExtensionsTests
         }
     }
 
+    /// <summary>
+    /// Host-defined ClientInfo subtype (mirrors AuthSvc's
+    /// <c>Authentication.DomainModel.Entities.ClientInfo</c> inheriting from the OIDC-Server base) —
+    /// used to verify the generic extension preserves the array's runtime AND static type when
+    /// consumers pass derived ClientInfo collections.
+    /// </summary>
+    private record DerivedTestClient(string Id) : ClientInfo(Id)
+    {
+        public string? ExtraProperty { get; init; }
+    }
+
+    [Fact]
+    public void PreservesDerivedClientInfoArrayType()
+    {
+        const string json = """
+            {
+              "Clients": [
+                {
+                  "ClientId": "derived-client",
+                  "Jwks": {
+                    "keys": [{ "kty": "RSA", "kid": "d", "n": "AQAB", "e": "AQAB" }]
+                  }
+                }
+              ]
+            }
+            """;
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build();
+
+        var clients = new[] { new DerivedTestClient("derived-client") { ExtraProperty = "preserved" } };
+
+        DerivedTestClient[] result = clients.WithJwksFromConfiguration(config.GetSection("Clients"));
+
+        Assert.IsType<DerivedTestClient[]>(result);
+        Assert.Same(clients, result);
+        Assert.Equal("preserved", result.Single().ExtraProperty);
+        Assert.NotNull(result.Single().Jwks);
+    }
+
     [Fact]
     public void OidcOptionsWrapper_DelegatesToClientArrayExtension()
     {

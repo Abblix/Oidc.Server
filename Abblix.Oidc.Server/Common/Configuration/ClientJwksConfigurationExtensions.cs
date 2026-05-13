@@ -76,11 +76,12 @@ public static class ClientJwksConfigurationExtensions
     /// with a missing or unsupported <c>kty</c> discriminator.</exception>
     /// <exception cref="FormatException">A byte-array member of a JWK is not valid
     /// base64url.</exception>
-    public static ClientInfo[] WithJwksFromConfiguration(
-        this IEnumerable<ClientInfo> clients,
+    public static T[] WithJwksFromConfiguration<T>(
+        this IEnumerable<T> clients,
         IConfigurationSection clientsSection)
+        where T : ClientInfo
     {
-        var array = clients as ClientInfo[] ?? clients.ToArray();
+        var array = clients as T[] ?? clients.ToArray();
         if (!clientsSection.Exists() || array.Length == 0)
             return array;
 
