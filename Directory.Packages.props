@@ -21,10 +21,12 @@
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.6.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
-    <!-- HOLD: Microsoft.Testing.Extensions.CodeCoverage 18.x and TrxReport 2.x bring
-         Microsoft.Testing.Platform 2.x, which deprecates the VSTest mode of `dotnet test`
-         on the .NET 10 SDK and requires migration to MTP mode (global.json runner switch
-         + CI workflow edits). Bump deferred until that migration lands; see GitHub issue. -->
+    <!-- HOLD: Microsoft.Testing.Extensions.* 18.6.x / 2.2.x pull Microsoft.Testing.Platform 2.x,
+         which makes a breaking ABI change to ITestApplicationBuilder.AddSelfRegisteredExtensions
+         (and friends) that xunit.v3's MicrosoftTestingPlatform integration is not yet compatible
+         with. Attempted 2026-05-14 — all test projects fail to launch with "error run failed"
+         from Xunit.MicrosoftTestingPlatform.TestPlatformTestFramework. Hold until xunit.v3
+         ships an MTP-2.x-compatible adapter (track upstream). -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.0.6" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
