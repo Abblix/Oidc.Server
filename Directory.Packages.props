@@ -23,10 +23,11 @@
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
     <!-- HOLD: Microsoft.Testing.Extensions.* 18.6.x / 2.2.x pull Microsoft.Testing.Platform 2.x,
          which makes a breaking ABI change to ITestApplicationBuilder.AddSelfRegisteredExtensions
-         (and friends) that xunit.v3's MicrosoftTestingPlatform integration is not yet compatible
-         with. Attempted 2026-05-14 — all test projects fail to launch with "error run failed"
-         from Xunit.MicrosoftTestingPlatform.TestPlatformTestFramework. Hold until xunit.v3
-         ships an MTP-2.x-compatible adapter (track upstream). -->
+         (and friends) that xunit.v3 3.2.2 (current stable) cannot consume — all test projects
+         fail to launch with "error run failed" from
+         Xunit.MicrosoftTestingPlatform.TestPlatformTestFramework. xunit.v3 4.x is pre-release
+         only; we stay on the 3.x stable line, so this HOLD stays until xunit.v3 ships a stable
+         release that targets MTP 2.x. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.0.6" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
