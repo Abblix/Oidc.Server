@@ -322,15 +322,16 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// Verifies that a 5-segment JWE-shaped input on a validation path that does not wire a
-    /// decryption-key resolver returns <see cref="JwtError.MalformedToken"/> instead of
-    /// throwing <see cref="InvalidOperationException"/>. Caught 2026-05-14 against the
-    /// DPoP-proof validation path (RFC 9449 §4.2 requires JWS proofs): when the OIDF
-    /// Conformance Suite sent a JWE-shaped DPoP proof to test rejection, the validator
-    /// surfaced an unhandled <c>ResolveTokenDecryptionKeys is expected to be not null</c>
-    /// and produced a 500 instead of a typed validation error.
+    /// decryption-key resolver returns <see cref="JwtError.InvalidToken"/> instead of
+    /// throwing <see cref="InvalidOperationException"/>. Caught 2026-05-14 at /connect/userinfo
+    /// against an OIDF FAPI 2.0 sub-test that injected two DPoP HTTP headers — ASP.NET Core
+    /// concatenated them with a comma producing a 5-segment string, which routed the
+    /// validator to the JWE branch and crashed it. The token itself may be a perfectly
+    /// well-formed JWE; the failure here is a callsite category mismatch (this path
+    /// validates JWS only), not malformed input.
     /// </summary>
     [Fact]
-    public async Task MalformedJwt_WithJweShapeAndNoDecryptionKeys_FailsValidation()
+    public async Task JweWithoutDecryptionKeys_ReturnsInvalidTokenError()
     {
         var jweShapedJwt = "header.encryptedKey.iv.ciphertext.tag";
 
@@ -340,8 +341,34 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jweShapedJwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.MalformedToken, error.Error);
+        Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("decryption keys", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Symmetric to <see cref="JweWithoutDecryptionKeys_ReturnsInvalidTokenError"/>: a 3-segment
+    /// JWS on the issuer-keys trust branch without a ResolveIssuerSigningKeys resolver returns
+    /// <see cref="JwtError.InvalidToken"/> rather than throwing
+    /// <see cref="InvalidOperationException"/>. Closes the second of the two NotNull-throw
+    /// hotspots in <c>JsonWebTokenValidator</c>.
+    /// </summary>
+    [Fact]
+    public async Task JwsWithoutSigningKeysResolver_ReturnsInvalidTokenError()
+    {
+        var token = CreateValidToken();
+        var signedJwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        // ValidationOptions.Default selects the issuer-resolved-keys trust branch, but the
+        // host did not provide a ResolveIssuerSigningKeys resolver — the validator must
+        // return a typed error, not throw an InvalidOperationException.
+        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+
+        var result = await validator.ValidateAsync(signedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("ResolveIssuerSigningKeys", error.ErrorDescription);
     }
 
     /// <summary>
