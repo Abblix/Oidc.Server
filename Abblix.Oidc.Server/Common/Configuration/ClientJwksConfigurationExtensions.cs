@@ -100,7 +100,16 @@ public static class ClientJwksConfigurationExtensions
                 continue;
 
             var client = Array.Find(array, c => c.ClientId == clientId);
-            if (client is null || client.Jwks is not null)
+            if (client is null)
+                continue;
+
+            // Treat "Jwks set but Keys empty" as "needs binding" too. On .NET 10
+            // the standard configuration binder pre-creates a JsonWebKeySet with an
+            // empty Keys array (it constructs the wrapper but cannot construct the
+            // polymorphic JsonWebKey entries), so a plain "Jwks is not null" guard
+            // skips clients whose JWKs the host actually does want bound from config,
+            // leaving signature verification at runtime with zero keys for the issuer.
+            if (client.Jwks is { Keys: { Length: > 0 } })
                 continue;
 
             if (jwksSection.Get<JsonWebKeySetSettings>() is {} jwks)
