@@ -67,6 +67,20 @@ internal sealed class ProofValidator(
         string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
+        // RFC 9449 §7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
+        // string FromHeader binder joins repeated header values with a comma. The DPoP
+        // proof is JWS compact serialization (RFC 7515 §3.1), whose alphabet is
+        // base64url + '.' — no comma is permitted — so a comma in the proof string
+        // is unambiguous evidence that the client sent the header twice. Reject before
+        // the downstream JWS validator sees a string with 5 dot-separated parts (which
+        // it would route to the JWE branch and surface a category error).
+        if (proofJwt.Contains(','))
+        {
+            return new ProofError(
+                ProofErrorReasons.MalformedJwt,
+                "Multiple DPoP header values are not permitted (RFC 9449 §7.1).");
+        }
+
         var jwtResult = await jwtValidator.ValidateAsync(
             proofJwt,
             new ()

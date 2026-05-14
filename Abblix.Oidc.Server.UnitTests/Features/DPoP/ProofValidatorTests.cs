@@ -119,6 +119,33 @@ public class ProofValidatorTests
         Assert.True(result.TryGetSuccess(out _));
     }
 
+    /// <summary>
+    /// RFC 9449 §7.1: a request must carry at most one DPoP header. ASP.NET Core's string
+    /// FromHeader binder joins repeated header values with a comma — the proof string
+    /// arrives at the validator looking like "&lt;jwt1&gt;,&lt;jwt2&gt;". Because JWS
+    /// compact serialization (RFC 7515 §3.1) uses only base64url + '.', a comma is
+    /// unambiguous evidence of HTTP-level concatenation. The validator must reject before
+    /// the downstream JsonWebTokenValidator sees a string with 5 dot-separated parts,
+    /// which would route to the JWE branch and crash with "ResolveTokenDecryptionKeys is
+    /// expected to be not null". Caught 2026-05-14 against OIDF FAPI 2.0 DPoP-negative
+    /// "AddMultipleDpopHeaderForResourceEndpointRequest" sub-test (the multi-DPoP-header
+    /// scenario produced exactly this 500-instead-of-401 outcome at /connect/userinfo).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MultipleDpopHeaderValues_ReturnsMalformed()
+    {
+        var first = new DPoPProofBuilder(_time.GetUtcNow()).Build();
+        var second = new DPoPProofBuilder(_time.GetUtcNow()).Build();
+        var concatenated = $"{first},{second}";
+
+        var result = await _sut.ValidateAsync(concatenated, cancellationToken: Ct);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ProofErrorReasons.MalformedJwt, error.Reason);
+        Assert.NotNull(error.Detail);
+        Assert.Contains("RFC 9449", error.Detail);
+    }
+
     [Theory]
     [InlineData("openid+jwt")]
     [InlineData("JWT")]

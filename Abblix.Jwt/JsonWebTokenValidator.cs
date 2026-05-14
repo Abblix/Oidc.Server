@@ -306,8 +306,18 @@ internal class JsonWebTokenValidator(
                 JwtError.InvalidToken, "Missing issuer in JWT payload for signature validation");
         }
 
-        var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys
-            .NotNull(nameof(parameters.ResolveIssuerSigningKeys));
+        // Symmetric with the JWE path: the validator's other trust mode looks up signing
+        // keys by issuer (via parameters.ResolveIssuerSigningKeys, typically the host's
+        // JWKS lookup). A caller routed here without wiring that delegate is a category
+        // mismatch — surface a typed JwtValidationError so the request fails with a 401,
+        // not an unhandled NotNull throw that propagates as 500.
+        var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys;
+        if (resolveIssuerSigningKeys is null)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "No signing-key resolver configured: this validation path expected to look up signing keys by 'iss' but the host did not provide ResolveIssuerSigningKeys.");
+        }
 
         return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
     }
@@ -382,18 +392,19 @@ internal class JsonWebTokenValidator(
         string[] jwtParts,
         ValidationParameters parameters)
     {
-        // A JWE-shaped input where the caller didn't wire a decryption-key resolver is a
-        // category error in this validator's contract: most callsites validate JWS only
-        // (DPoP proofs per RFC 9449 §4.2, client_assertion per RFC 7521, etc.), and
-        // throwing an unhandled InvalidOperationException turns a malformed-input case
-        // into a 500 for the caller and a noisy server log. Surface the same outcome as a
-        // typed validation error so the inbound payload gets rejected gracefully.
+        // The token may be a perfectly well-formed JWE — the failure mode here is that
+        // this validation path was not wired with a decryption-key resolver. Most callsites
+        // validate JWS only (DPoP proofs per RFC 9449 §4.2, client_assertion per RFC 7521,
+        // etc.) and intentionally pass ResolveTokenDecryptionKeys = null. Throwing
+        // InvalidOperationException from .NotNull turns a category mismatch into a 500
+        // and a noisy server log; return a typed validation error instead so the caller
+        // can map it onto the right HTTP error.
         var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys;
         if (resolveTokenDecryptionKeys is null)
         {
             return new JwtValidationError(
-                JwtError.MalformedToken,
-                "Received a JWE-shaped token (5 segments) but no decryption keys are configured for this validation path.");
+                JwtError.InvalidToken,
+                "Received a JWE-encrypted token but no decryption keys are configured for this validation path; this endpoint accepts JWS only.");
         }
         var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
