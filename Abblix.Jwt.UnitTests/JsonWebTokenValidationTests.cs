@@ -321,6 +321,30 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// Verifies that a 5-segment JWE-shaped input on a validation path that does not wire a
+    /// decryption-key resolver returns <see cref="JwtError.MalformedToken"/> instead of
+    /// throwing <see cref="InvalidOperationException"/>. Caught 2026-05-14 against the
+    /// DPoP-proof validation path (RFC 9449 §4.2 requires JWS proofs): when the OIDF
+    /// Conformance Suite sent a JWE-shaped DPoP proof to test rejection, the validator
+    /// surfaced an unhandled <c>ResolveTokenDecryptionKeys is expected to be not null</c>
+    /// and produced a 500 instead of a typed validation error.
+    /// </summary>
+    [Fact]
+    public async Task MalformedJwt_WithJweShapeAndNoDecryptionKeys_FailsValidation()
+    {
+        var jweShapedJwt = "header.encryptedKey.iv.ciphertext.tag";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+
+        var result = await validator.ValidateAsync(jweShapedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.MalformedToken, error.Error);
+        Assert.Contains("decryption keys", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Verifies that empty string input fails validation.
     /// Tests edge case of completely empty token input.
     /// Returns JwtError.MalformedToken.

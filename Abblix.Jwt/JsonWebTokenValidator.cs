@@ -382,7 +382,19 @@ internal class JsonWebTokenValidator(
         string[] jwtParts,
         ValidationParameters parameters)
     {
-        var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys.NotNull(nameof(parameters.ResolveTokenDecryptionKeys));
+        // A JWE-shaped input where the caller didn't wire a decryption-key resolver is a
+        // category error in this validator's contract: most callsites validate JWS only
+        // (DPoP proofs per RFC 9449 §4.2, client_assertion per RFC 7521, etc.), and
+        // throwing an unhandled InvalidOperationException turns a malformed-input case
+        // into a 500 for the caller and a noisy server log. Surface the same outcome as a
+        // typed validation error so the inbound payload gets rejected gracefully.
+        var resolveTokenDecryptionKeys = parameters.ResolveTokenDecryptionKeys;
+        if (resolveTokenDecryptionKeys is null)
+        {
+            return new JwtValidationError(
+                JwtError.MalformedToken,
+                "Received a JWE-shaped token (5 segments) but no decryption keys are configured for this validation path.");
+        }
         var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
         var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
