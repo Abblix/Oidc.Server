@@ -86,11 +86,21 @@ public class AuthorizationResponseFormatter(
 
             case SuccessfullyAuthenticated { Model.RedirectUri: { } redirectUri } success:
 
+                // Scope is only carried in the authorization response for implicit and hybrid
+                // flows (OIDC Core §3.2.2.5 / §3.3.2.5), where the response itself delivers an
+                // access_token and/or id_token whose granted scope is asserted up-front. The
+                // pure code flow (OAuth 2.0 §4.1.2 / OIDC Core §3.1.2.5) returns only code +
+                // state (+ optional iss per RFC 9207); the granted scope is resolved later at
+                // the token endpoint. Emitting scope on the code-flow callback is a non-spec
+                // extension that OIDF Conformance flags as "unexpected parameters" and FAPI 2.0
+                // explicitly disallows in §5.3.1 (response_type=code only). Gate on the
+                // implicit/hybrid markers (any token-bearing field) so code-only flows omit it.
+                var carriesTokens = success.AccessToken != null || success.IdToken != null;
                 var modelResponse = new AuthorizationResponse
                 {
                     State = response.Model.State,
                     Issuer = authorizationMetadata.AuthorizationResponseIssParameterSupported ? issuerProvider.GetIssuer() : null,
-                    Scope = string.Join(' ', response.Model.Scope),
+                    Scope = carriesTokens ? string.Join(' ', response.Model.Scope) : null,
                     Code = success.Code,
                     TokenType = success.TokenType,
                     AccessToken = success.AccessToken?.EncodedJwt,
