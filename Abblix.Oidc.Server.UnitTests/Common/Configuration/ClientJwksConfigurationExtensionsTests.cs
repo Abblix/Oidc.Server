@@ -344,6 +344,120 @@ public class ClientJwksConfigurationExtensionsTests
         Assert.Equal("w", key.KeyId);
     }
 
+    /// <summary>
+    /// Regression coverage for the .NET 10 binder edge case. On .NET 10 the standard
+    /// configuration binder pre-creates a non-null <see cref="JsonWebKeySet"/> for the
+    /// <c>Jwks</c> property with an empty <c>Keys</c> array (it constructs the wrapper but
+    /// cannot construct the polymorphic <see cref="JsonWebKey"/> entries). The previous
+    /// <c>Jwks is not null</c> guard then skipped the bind-from-config work and clients
+    /// ended up with zero signing keys at runtime, producing
+    /// <c>"no signing keys configured for issuer"</c> for every <c>private_key_jwt</c>
+    /// client_assertion. Caught against AuthSvc 2026-05-14 while running the OIDF
+    /// Conformance FAPI 2.0 PAR test against prod (auth-service v365).
+    /// </summary>
+    public sealed class SettingsLike
+    {
+        public ClientInfo[] Clients { get; set; } = [];
+    }
+
+    [Fact]
+    public void EndToEndConfigGet_NetTenBinder_PrePopulatesEmptyJwks_BindOverwrites()
+    {
+        const string json = """
+            {
+              "Clients": [
+                {
+                  "ClientId": "oidf-fapi2-test",
+                  "TokenEndpointAuthMethod": "private_key_jwt",
+                  "RequireDPoP": true,
+                  "Jwks": {
+                    "keys": [
+                      {
+                        "kty": "RSA",
+                        "kid": "abblix-fapi2-client1-3c896038",
+                        "use": "sig",
+                        "alg": "PS256",
+                        "n": "ulOIreKtMsORZrW2pI1obZ67NEV649xerW6Q9LNzOgQ0RUGrpNBub-AA2GqPWH0EgZ13BEXIHviqlk3BD94335ULNWiTbEL_vQso0xDmSBaRoRd5flEsjjcnAVt7bvkK_pLvpZgDZg869e6hG1zKuHD5Oa4CBfwg1F6Zy4uT_SwiKgEyAzOeGjZVO5Zcg17iIJll4tRB0D4pXNNrL9pW1Aih7EfKZZwffuPHMjvo57R4vyHglwuoA8Mcrf7oeuQIVVjOjZF-sFD-KVdNXuFPeWKjuIpu4_nRBLebcn6KHU276kXZtKYxrk-SpKoej1BYlvuKrWLwOvaFpH4fc9DHHQ",
+                        "e": "AQAB"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            """;
+
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build();
+
+        // Step 1: same as Program.cs line 98 — configuration.Get<Settings>()
+        var settings = config.Get<SettingsLike>();
+        Assert.NotNull(settings);
+        Assert.Single(settings.Clients);
+        Assert.Equal("oidf-fapi2-test", settings.Clients[0].ClientId);
+
+        // CRITICAL — on .NET 10, the binder DOES populate Jwks natively, BUT with what?
+        // Inspect raw state.
+        // After Get<T>(), the .NET 10 binder pre-creates a non-null JsonWebKeySet with
+        // an empty Keys array because it cannot construct the polymorphic JsonWebKey
+        // entries. WithJwksFromConfiguration must treat this as "needs binding".
+        Assert.NotNull(settings.Clients[0].Jwks);
+        Assert.Empty(settings.Clients[0].Jwks!.Keys);
+
+        // Step 2: same as Program.cs line 99
+        settings.Clients = settings.Clients.WithJwksFromConfiguration(config.GetSection("Clients"));
+
+        // After WithJwksFromConfiguration, Keys must be populated from the JSON.
+        var jwksAfter = settings.Clients[0].Jwks;
+        Assert.NotNull(jwksAfter);
+        var key = Assert.IsType<RsaJsonWebKey>(jwksAfter.Keys.Single());
+        Assert.Equal("abblix-fapi2-client1-3c896038", key.KeyId);
+        Assert.Equal("PS256", key.Algorithm);
+        Assert.Equal("sig", key.Usage);
+        Assert.NotNull(key.Modulus);
+        Assert.NotEmpty(key.Modulus);
+    }
+
+    /// <summary>
+    /// Reproduces the AuthSvc prod configuration shape: top-level "Clients" array, lowercase
+    /// "keys" inside "Jwks", actual base64url RSA modulus from oidf-fapi2-test. Sanity-check that
+    /// the binding produces a non-empty Jwks for this exact layout before chasing config issues elsewhere.
+    /// </summary>
+    [Fact]
+    public void AuthSvcShape_BindsLowercaseKeysWithRealRsaModulus()
+    {
+        const string json = """
+            {
+              "Clients": [
+                {
+                  "ClientId": "oidf-fapi2-test",
+                  "Jwks": {
+                    "keys": [
+                      {
+                        "kty": "RSA",
+                        "kid": "abblix-fapi2-client1-3c896038",
+                        "use": "sig",
+                        "alg": "PS256",
+                        "n": "ulOIreKtMsORZrW2pI1obZ67NEV649xerW6Q9LNzOgQ0RUGrpNBub-AA2GqPWH0EgZ13BEXIHviqlk3BD94335ULNWiTbEL_vQso0xDmSBaRoRd5flEsjjcnAVt7bvkK_pLvpZgDZg869e6hG1zKuHD5Oa4CBfwg1F6Zy4uT_SwiKgEyAzOeGjZVO5Zcg17iIJll4tRB0D4pXNNrL9pW1Aih7EfKZZwffuPHMjvo57R4vyHglwuoA8Mcrf7oeuQIVVjOjZF-sFD-KVdNXuFPeWKjuIpu4_nRBLebcn6KHU276kXZtKYxrk-SpKoej1BYlvuKrWLwOvaFpH4fc9DHHQ",
+                        "e": "AQAB"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            """;
+        var clients = ApplyConfig(json, new ClientInfo("oidf-fapi2-test"));
+
+        var jwks = clients.Single().Jwks;
+        Assert.NotNull(jwks);
+        var key = Assert.IsType<RsaJsonWebKey>(jwks.Keys.Single());
+        Assert.Equal("abblix-fapi2-client1-3c896038", key.KeyId);
+        Assert.Equal("sig", key.Usage);
+        Assert.Equal("PS256", key.Algorithm);
+    }
+
     private static ClientInfo[] ApplyConfig(string json, params ClientInfo[] clients)
     {
         var config = new ConfigurationBuilder()
