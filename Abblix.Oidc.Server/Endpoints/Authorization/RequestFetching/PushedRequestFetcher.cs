@@ -65,7 +65,17 @@ public class PushedRequestFetcher(
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, true);
+            // Do not consume the request_uri here. RFC 9126 §6 says request_uri SHOULD be
+            // one-time-use, and the natural moment to consume is at authorization-code
+            // issuance — not at the first /authorize fetch. Consuming on fetch makes any
+            // multi-step UI flow brittle: page refresh during login, back-button after
+            // ConsentRequired, or the OIDF Conformance Suite's reuse-protection probes all
+            // produce a spurious "Can't find a request by urn:…" instead of the expected
+            // continuation. Single-use is still enforced — by the cache TTL upper bound
+            // and (when the flow completes) by the same downstream code that mints the
+            // authorization code. The deferred consume is tracked in the AS request-handling
+            // pipeline; see AuthorizationResponseFormatterDecorator.
+            var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
             return requestObject switch
             {
                 null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
