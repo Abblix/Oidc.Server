@@ -8,25 +8,29 @@
 
   <ItemGroup>
     <PackageVersion Include="Google.Protobuf" Version="3.34.1" />
-    <PackageVersion Include="Grpc.Tools" Version="2.78.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.9" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.5.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.201" />
+    <PackageVersion Include="Grpc.Tools" Version="2.80.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.6.0" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
+    <!-- HOLD: Microsoft.Testing.Extensions.CodeCoverage 18.x and TrxReport 2.x bring
+         Microsoft.Testing.Platform 2.x, which deprecates the VSTest mode of `dotnet test`
+         on the .NET 10 SDK and requires migration to MTP mode (global.json runner switch
+         + CI workflow edits). Bump deferred until that migration lands; see GitHub issue. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.0.6" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
-    <PackageVersion Include="MinVer" Version="6.0.0" />
+    <PackageVersion Include="MinVer" Version="7.0.0" />
     <PackageVersion Include="Moq" Version="4.20.72" />
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.24.0.138807" />
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.25.0.139117" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
     <PackageVersion Include="System.Linq.Async" Version="7.0.1" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
   </ItemGroup>
