@@ -210,6 +210,11 @@ public record ConfigurationResponse
         /// <summary>The <c>authorization_response_iss_parameter_supported</c> metadata flag advertising
         /// inclusion of the <c>iss</c> parameter in authorization responses (RFC 9207).</summary>
         public const string AuthorizationResponseIssParameterSupported = "authorization_response_iss_parameter_supported";
+
+        /// <summary>The <c>signed_metadata</c> field carrying a JWS whose claims duplicate this
+        /// metadata, signed by the provider so clients can verify its origin (RFC 8414 §2.1).
+        /// </summary>
+        public const string SignedMetadata = "signed_metadata";
     }
 
     /// <summary>
@@ -488,4 +493,15 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationResponseIssParameterSupported)]
     public bool? AuthorizationResponseIssParameterSupported { get; init; }
+
+    /// <summary>
+    /// RFC 8414 §2.1: a JWS whose payload restates this entire metadata set, signed with the
+    /// provider's signing key. When present, a client that verifies the signature against the
+    /// keys at <see cref="JwksUri"/> may trust the configuration's origin beyond the TLS layer;
+    /// signed values take precedence over the corresponding plain-JSON fields. Emitted only
+    /// when <c>DiscoveryOptions.SignedMetadata</c> is enabled, and computed last so the signed
+    /// payload never contains this field itself.
+    /// </summary>
+    [JsonPropertyName(Parameters.SignedMetadata)]
+    public string? SignedMetadata { get; init; }
 }

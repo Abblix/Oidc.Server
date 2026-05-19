@@ -28,6 +28,7 @@ Abblix OIDC Server implements a comprehensive suite of standards for authorizati
 - **Device Authorization Grant**: [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)
 - **Dynamic Client Registration**: [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) and [RFC 7592](https://datatracker.ietf.org/doc/html/rfc7592)
 - **Mutual-TLS Client Authentication**: [RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705)
+- **Demonstrating Proof of Possession (DPoP)**: [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)
 - **Resource Indicators**: [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)
 - **JWT Access Tokens**: [RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068)
 - **JWT-Secured Authorization Request (JAR)**: [RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)
