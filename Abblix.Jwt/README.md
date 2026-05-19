@@ -23,6 +23,7 @@
 - **JSON Web Signature (JWS)**: [RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)
 - **JSON Web Encryption (JWE)**: [RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)
 - **JSON Web Key (JWK)**: [RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517)
+- **JWK Thumbprint**: [RFC 7638](https://datatracker.ietf.org/doc/html/rfc7638)
 - **JSON Web Algorithms (JWA)**: [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)
 - **JSON Web Token (JWT)**: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)
 
