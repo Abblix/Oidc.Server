@@ -20,10 +20,16 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
@@ -36,14 +42,28 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
-	IEndpointResolver endpointResolver) : IConfigurationResponseFormatter
+	IEndpointResolver endpointResolver,
+	IJsonWebTokenCreator jwtCreator,
+	IAuthServiceKeysProvider serviceKeysProvider,
+	TimeProvider clock) : IConfigurationResponseFormatter
 {
+	/// <summary>
+	/// Serializes the metadata into the <c>signed_metadata</c> JWS payload with the same
+	/// null-omission semantics the wire JSON uses (see <see cref="JsonIgnoreNullsModifier"/>
+	/// wired in <c>AddOidcControllers</c>). Without re-attaching the modifier here the signed
+	/// copy would carry <c>"field": null</c> entries the plain JSON omits, and RFC 8414 §2.1
+	/// "signed values take precedence" would then assert those nulls onto clients.
+	/// </summary>
+	private static readonly JsonSerializerOptions SignedMetadataSerializerOptions = new()
+	{
+		TypeInfoResolver = new DefaultJsonTypeInfoResolver().WithAddedModifier(JsonIgnoreNullsModifier.Apply),
+	};
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
 	/// </summary>
 	/// <param name="response">Framework-agnostic configuration response with metadata.</param>
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
-	public Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
+	public async Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
 	{
 		var tokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token);
 		var revocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation);
@@ -130,7 +150,57 @@ public class ConfigurationResponseFormatter(
 			};
 		}
 
-		return Task.FromResult<ActionResult<ModelResponse>>(mvcResponse);
+		if (options.Value.Discovery.SignedMetadata)
+		{
+			mvcResponse = mvcResponse with { SignedMetadata = await SignAsync(mvcResponse) };
+		}
+
+		return mvcResponse;
+	}
+
+	/// <summary>
+	/// Produces the RFC 8414 §2.1 <c>signed_metadata</c> value: a compact JWS whose payload
+	/// restates the supplied metadata plus a mandatory <c>iss</c> claim. The result is always
+	/// a pure JWS — <see cref="IJsonWebTokenCreator.IssueAsync"/> is called without an
+	/// encryption key, so a deployment that also issues JWE access tokens does not turn this
+	/// into a JWE the client cannot verify against <c>jwks_uri</c>.
+	/// </summary>
+	/// <param name="metadata">The fully assembled metadata, including resolved endpoint URLs
+	/// and mTLS aliases, but without <c>signed_metadata</c> itself.</param>
+	/// <returns>The compact-serialized JWS string.</returns>
+	private async Task<string> SignAsync(ModelResponse metadata)
+	{
+		var signingKey = await serviceKeysProvider.GetSigningKeys(true).FirstOrDefaultAsync();
+		if (signingKey is null)
+		{
+			throw new InvalidOperationException(
+				$"{nameof(DiscoveryOptions)}.{nameof(DiscoveryOptions.SignedMetadata)} is enabled but no signing keys are configured. " +
+				"Configure signing certificates so the discovery document can be signed (RFC 8414 §2.1).");
+		}
+
+		// Serialized before signed_metadata is set on the outer object, so the signed payload
+		// never contains signed_metadata itself (RFC 8414 §2.1).
+		var payload = JsonSerializer.SerializeToNode(metadata, SignedMetadataSerializerOptions) switch
+		{
+			JsonObject jsonObject => jsonObject,
+
+			_ => throw new InvalidOperationException(
+				"Discovery metadata serialized to a non-object JSON node. The metadata must serialize to a JSON object so it " +
+				"can form the signed_metadata JWS payload (RFC 8414 §2.1); " +
+				"a different node kind indicates a broken serializer or type-info resolver."),
+		};
+
+		var token = new JsonWebToken
+		{
+			Header = { Algorithm = signingKey.Algorithm },
+			Payload = new JsonWebTokenPayload(payload)
+			{
+				Issuer = metadata.Issuer,
+				IssuedAt = clock.GetUtcNow(),
+			},
+		};
+
+		return await jwtCreator.IssueAsync(token, signingKey);
 	}
 
 	/// <summary>
