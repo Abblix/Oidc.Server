@@ -22,11 +22,14 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -62,7 +65,14 @@ public class DiscoveryControllerMtlsTests
 
         SetupEndpointResolver();
 
-        _formatter = new ConfigurationResponseFormatter(_optionsMock.Object, _endpointResolverMock.Object);
+        // SignedMetadata defaults off in these fixtures, so the signing collaborators are
+        // never exercised — supplied only to satisfy the constructor.
+        _formatter = new ConfigurationResponseFormatter(
+            _optionsMock.Object,
+            _endpointResolverMock.Object,
+            Mock.Of<IJsonWebTokenCreator>(),
+            Mock.Of<IAuthServiceKeysProvider>(),
+            new FakeTimeProvider());
     }
 
     /// <summary>
