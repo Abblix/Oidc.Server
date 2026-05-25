@@ -1,0 +1,56 @@
+name: CodeQL
+
+# Restricted-trigger custom workflow (Рычаг 2). Default Setup is
+# intentionally left `not-configured` because it cannot disable the
+# weekly schedule or PR triggers via API; only a custom workflow gives
+# full control. See .github/codeql/README.md for the policy and the
+# May 2026 incident that led to the restrictions.
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (CodeQL)
+    runs-on: ubuntu-latest
+    # 15m total cap covers compile + analyze. Higher than the 5m
+    # baseline because CodeQL semantic analysis needs the project to
+    # build first; historical runs sat around 7-9m wall-clock.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        timeout-minutes: 3
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: github/codeql-action/init@fee9466b8957867761f2d78f922ab084e3e2dd17 # v3
+        timeout-minutes: 3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - uses: github/codeql-action/autobuild@fee9466b8957867761f2d78f922ab084e3e2dd17 # v3
+        timeout-minutes: 5
+
+      - uses: github/codeql-action/analyze@fee9466b8957867761f2d78f922ab084e3e2dd17 # v3
+        timeout-minutes: 5
