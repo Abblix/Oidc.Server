@@ -38,7 +38,7 @@ jobs:
   pack-and-publish:
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
       packages: write
@@ -49,6 +49,7 @@ jobs:
           egress-policy: audit
           disable-telemetry: true
 
+        timeout-minutes: 3
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           # MinVer needs the full commit history and tag refs to derive
@@ -56,23 +57,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
 
+        timeout-minutes: 3
       - name: Restore
         run: dotnet restore
 
+        timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release
 
+        timeout-minutes: 3
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
 
+        timeout-minutes: 3
       - name: Pack
         run: dotnet pack --no-build -c Release -o nupkg
 
+        timeout-minutes: 3
       - name: Push to GitHub Packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,6 +93,7 @@ jobs:
               --skip-duplicate
           done
 
+        timeout-minutes: 3
       - name: Summary
         run: |
           set -euo pipefail
@@ -103,3 +111,4 @@ jobs:
               echo "Consumers floating \`2.3.0-dev.*\` will pick this up on next \`dotnet restore\`."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+        timeout-minutes: 3

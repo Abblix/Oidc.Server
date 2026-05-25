@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   versioning:
@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+        timeout-minutes: 3
       - name: Resolve version
         id: set_version
         env:
@@ -53,6 +54,8 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   build-and-test:
     needs: versioning
     runs-on: ubuntu-latest
@@ -64,10 +67,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
+        timeout-minutes: 3
       - name: Restore dependencies
         run: dotnet restore
       # MinVerVersionOverride forces MinVer to use the workflow-supplied
@@ -75,12 +80,16 @@ jobs:
       # subsequent create-release job then tags this exact version, so
       # the produced .nupkg files and the resulting GitHub Release stay
       # in lock-step.
+        timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION"
+        timeout-minutes: 3
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
+        timeout-minutes: 3
       - name: Pack
         run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION"
+        timeout-minutes: 3
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -89,6 +98,8 @@ jobs:
             nupkg/*.nupkg
             nupkg/*.snupkg
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   test-getting-started:
     needs: [versioning, build-and-test]
     runs-on: ubuntu-latest
@@ -101,33 +112,40 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: main-repo
+        timeout-minutes: 3
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           path: getting-started
+        timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: nuget-packages
           path: local-packages
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
+        timeout-minutes: 3
       - name: Setup local package source
         run: |
           dotnet nuget add source "$(pwd)/local-packages" --name "LocalAbblix"
           dotnet nuget locals all --clear
+        timeout-minutes: 3
       - name: Update package references
         run: |
           cd getting-started
           sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+        timeout-minutes: 3
       - name: Test GettingStarted builds
         run: |
           cd getting-started
           dotnet restore
           dotnet build
+        timeout-minutes: 3
       - name: Test OpenIDProviderApp runs
         run: |
           cd getting-started/OpenIDProviderApp
@@ -147,6 +165,8 @@ jobs:
           done
           kill "$APP_PID" 2>/dev/null || true
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   create-release:
     needs: [versioning, build-and-test, test-getting-started]
     runs-on: ubuntu-latest
@@ -169,14 +189,17 @@ jobs:
           else
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
+        timeout-minutes: 3
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+        timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: nuget-packages
           path: nupkg
+        timeout-minutes: 3
       - name: Create or verify tag
         run: |
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
@@ -188,6 +211,7 @@ jobs:
             git tag -a "v$VERSION" -m "Release v$VERSION"
             git push origin "v$VERSION"
           fi
+        timeout-minutes: 3
       - name: Generate changelog
         id: changelog
         run: |
@@ -224,6 +248,7 @@ jobs:
             echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)"
             echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)"
           } >> CHANGELOG.md
+        timeout-minutes: 3
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
@@ -238,6 +263,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   publish-github-packages:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
@@ -250,10 +277,12 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
           echo "Packages ready for publishing to GitHub Packages:"
@@ -261,6 +290,7 @@ jobs:
             echo "  - $(basename "$pkg")"
           done
           echo "Publishing destination: https://nuget.pkg.github.com/Abblix/index.json"
+        timeout-minutes: 3
       - name: Publish to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -273,6 +303,7 @@ jobs:
               --skip-duplicate
           done
           echo "GitHub Packages publishing completed"
+        timeout-minutes: 3
       - name: Verify publication
         run: |
           echo "Verification: https://github.com/Abblix/Oidc.Server/packages"
@@ -282,6 +313,8 @@ jobs:
             echo "  - $PACKAGE_NAME"
           done
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   publish-nuget-org:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
@@ -294,10 +327,12 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
           echo "Packages ready for publishing to NuGet.org:"
@@ -306,6 +341,7 @@ jobs:
           done
           echo "Publishing destination: https://api.nuget.org/v3/index.json"
           echo "This step requires manual approval in GitHub Actions."
+        timeout-minutes: 3
       - name: Publish to NuGet.org
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
@@ -318,6 +354,7 @@ jobs:
               --skip-duplicate
           done
           echo "NuGet.org publishing completed"
+        timeout-minutes: 3
       - name: Verify publication
         run: |
           echo "Verification: https://www.nuget.org/packages?q=Abblix"
@@ -328,6 +365,8 @@ jobs:
             echo "  - $PACKAGE_NAME"
           done
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   update-getting-started:
     needs: [versioning, create-release, publish-nuget-org]
     runs-on: ubuntu-latest
@@ -343,9 +382,11 @@ jobs:
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+        timeout-minutes: 3
       - name: Update package references to released version
         run: |
           sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+        timeout-minutes: 3
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
@@ -353,3 +394,5 @@ jobs:
           git add .
           git commit -m "Update Abblix packages to v$VERSION" || exit 0
           git push
+        timeout-minutes: 3
+    timeout-minutes: 5

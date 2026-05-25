@@ -2,7 +2,7 @@ name: PR tests
 
 on:
   pull_request:
-    branches: [ "master", "develop" ]
+    branches: ["master", "develop"]
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
   test:
     name: Unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -24,11 +24,13 @@ jobs:
           # disables the shallow clone so all tags and commits are visible.
           fetch-depth: 0
 
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.x'
 
+        timeout-minutes: 3
       - name: Cache NuGet packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -36,12 +38,15 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+        timeout-minutes: 3
       - name: Restore
         run: dotnet restore Abblix.Oidc.slnx
 
+        timeout-minutes: 3
       - name: Build
         run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
 
+        timeout-minutes: 3
       - name: Test
         run: |
           dotnet test Abblix.Oidc.slnx --configuration Release --no-build -- \
@@ -52,6 +57,7 @@ jobs:
       # `dotnet test Abblix.Oidc.slnx -- --results-directory ./TestResults` resolves
       # the relative path PER TEST PROJECT (each MTP runner uses its own working
       # directory), not at solution root. Files land at <Project>/TestResults/.
+        timeout-minutes: 3
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -61,3 +67,4 @@ jobs:
             **/TestResults/*.trx
             **/TestResults/**/*.cobertura.xml
           retention-days: 7
+        timeout-minutes: 3
