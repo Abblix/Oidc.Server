@@ -27,6 +27,7 @@ jobs:
         with:
           persist-credentials: false
 
+        timeout-minutes: 3
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.12'
@@ -36,14 +37,18 @@ jobs:
       # locks both the resolved version and the artifact bytes — a malicious
       # PyPI release with the same version cannot pass the hash check (closes
       # Sonar S8544).
+        timeout-minutes: 3
       - name: Install PyYAML
         run: |
           pip install --disable-pip-version-check --only-binary :all: \
             --require-hashes -r .github/workflows/requirements/lint-workflows.txt
 
+        timeout-minutes: 3
       - name: "Block inline untrusted-input interpolation in run: blocks"
         run: python .github/scripts/lint-no-inline-secrets.py
 
+        timeout-minutes: 3
+    timeout-minutes: 5
   actionlint:
     name: actionlint (schema + shellcheck)
     runs-on: ubuntu-latest
@@ -56,11 +61,15 @@ jobs:
         with:
           persist-credentials: false
 
+        timeout-minutes: 3
       - name: Install actionlint
         run: |
           curl --proto '=https' -fsSL -o actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           tar -xzf actionlint.tar.gz actionlint
           chmod +x actionlint
 
+        timeout-minutes: 3
       - name: Run actionlint
         run: ./actionlint -color
+        timeout-minutes: 3
+    timeout-minutes: 5
