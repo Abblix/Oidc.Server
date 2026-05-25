@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/**'
       - '.github/scripts/lint-no-inline-secrets.py'
+      - '.github/codeql/**'
   push:
     branches: [master, develop]
   workflow_dispatch:
