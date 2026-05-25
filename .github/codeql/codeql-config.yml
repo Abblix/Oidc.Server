@@ -1,0 +1,27 @@
+# CodeQL scan scope — Abblix billing-protection policy
+#
+# Dormant config: only applies when CodeQL is enabled
+# (Default Setup or custom workflow). Reduces scan duration
+# by ~20-40% via query-suite narrowing + path exclusions.
+#
+# Activate by enabling Default Setup with the parameters
+# documented in .github/codeql/README.md.
+
+name: "Abblix CodeQL config"
+
+# security-and-quality is the lighter standard suite.
+# security-extended adds expensive taint-tracking queries
+# that doubled May 2026 runtime — avoid until proven needed.
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  - "**/bin/**"
+  - "**/obj/**"
+  - "**/node_modules/**"
+  - "**/*.Tests/**"
+  - "**/*.IntegrationTests/**"
+  - "**/*.ConformanceTests/**"
+  - "external/**"          # vendored / submodule code — owned upstream
+  - "**/Generated/**"      # codegen output
+  - "**/wwwroot/**"        # static client assets
