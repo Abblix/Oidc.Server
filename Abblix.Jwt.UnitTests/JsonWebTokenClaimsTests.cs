@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -734,6 +735,59 @@ public class JsonWebTokenClaimsTests
 
         Assert.Equal(3, result.Length);
         Assert.Equal(["red", GreenColor, "blue"], result);
+    }
+
+    /// <summary>
+    /// Verifies that the <c>authorization_details</c> claim (RFC 9396 §7) round-trips through the
+    /// full sign/encrypt/decrypt/validate pipeline via the typed
+    /// <see cref="JsonWebTokenPayload.AuthorizationDetails"/> accessor. Both standardised
+    /// RFC 9396 §2.2 members and type-specific payload in
+    /// <see cref="AuthorizationDetail.ExtensionData"/> survive the cycle.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizationDetailsClaim_RoundTrip_PreservesStandardisedAndExtensionMembers()
+    {
+        var token = CreateToken();
+        token.Payload.AuthorizationDetails = new[]
+        {
+            new AuthorizationDetail
+            {
+                Type = "payment_initiation",
+                Actions = new[] { "initiate", "status" },
+                Locations = new[] { "https://api.bank.example/payments" },
+                ExtensionData = new Dictionary<string, JsonElement>
+                {
+                    ["instructedAmount"] = JsonSerializer.Deserialize<JsonElement>(
+                        """{"currency":"EUR","amount":"500.00"}"""),
+                    ["creditorName"] = JsonSerializer.Deserialize<JsonElement>("\"Merchant A\""),
+                },
+            },
+            new AuthorizationDetail
+            {
+                Type = "account_information",
+                Identifier = "acct-001",
+            },
+        };
+
+        var roundTripToken = await SignEncryptAndValidate(token);
+
+        var actual = roundTripToken.Payload.AuthorizationDetails?.ToArray();
+        Assert.NotNull(actual);
+        Assert.Equal(2, actual.Length);
+
+        Assert.Equal("payment_initiation", actual[0].Type);
+        Assert.Equal(new[] { "initiate", "status" }, actual[0].Actions);
+        Assert.Equal(new[] { "https://api.bank.example/payments" }, actual[0].Locations);
+        Assert.Equal(
+            "EUR",
+            actual[0].ExtensionData?["instructedAmount"].GetProperty("currency").GetString());
+        Assert.Equal(
+            "500.00",
+            actual[0].ExtensionData?["instructedAmount"].GetProperty("amount").GetString());
+        Assert.Equal("Merchant A", actual[0].ExtensionData?["creditorName"].GetString());
+
+        Assert.Equal("account_information", actual[1].Type);
+        Assert.Equal("acct-001", actual[1].Identifier);
     }
 
     private static JsonWebToken CreateToken()
