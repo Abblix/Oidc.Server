@@ -195,23 +195,37 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
     //                           through unchanged (PR #135 baseline)
     // ───────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Drives PAR / authorize / token with a consent-side override and asserts the issued
+    /// access token's <c>authorization_details</c> claim equals the override byte-exact.
+    /// Returns the claim so callers can layer additional assertions.
+    /// </summary>
+    private async Task<JsonArray> AssertConsentNarrowSurvivesToAccessTokenAsync(
+        string requestedWireJson,
+        string grantedWireJson)
+    {
+        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(
+            (JsonArray)JsonNode.Parse(grantedWireJson)!);
+
+        var tokenResponse = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, requestedWireJson);
+
+        var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
+        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        Assert.Equal(grantedWireJson, claim.ToJsonString());
+        return claim;
+    }
+
     [Fact]
     public async Task Consent_narrowing_authorization_details_propagates_to_access_token()
     {
         const string narrowedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"200.00"}}]""";
-        var narrowedNode = (JsonArray)JsonNode.Parse(narrowedWireJson)!;
 
-        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(narrowedNode);
+        var claim = await AssertConsentNarrowSurvivesToAccessTokenAsync(
+            PaymentInitiationWireJson, narrowedWireJson);
 
-        var tokenResponse = await PerformParFlowAsync(
-            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
-            TestConstants.RedirectUri, PaymentInitiationWireJson);
-
-        // Access token reflects the consent-narrowed set, not the 500.00 originally requested.
-        var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
-        Assert.Equal(narrowedWireJson, claim.ToJsonString());
         Assert.DoesNotContain("500.00", claim.ToJsonString());
     }
 
@@ -245,6 +259,40 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         });
 
         Assert.Equal("access_denied", error);
+    }
+
+    [Fact]
+    public async Task Consent_drop_entry_from_multi_set_token_carries_only_remaining_entries()
+    {
+        // RFC 9396 §5 partial-consent drop-entry, E2E. Client requested two entries;
+        // consent provider returns Granted.AuthorizationDetails with one entry only.
+        const string requestedWireJson =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
+        const string survivingWireJson =
+            """[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
+
+        var claim = await AssertConsentNarrowSurvivesToAccessTokenAsync(
+            requestedWireJson, survivingWireJson);
+
+        Assert.Single(claim);
+        Assert.DoesNotContain("\"amount\":\"500.00\"", claim.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Consent_cross_detail_total_amount_cap_propagates_to_access_token()
+    {
+        // RFC 9396 §5 cross-detail policy, E2E. Three entries of 500.00 each; consent
+        // provider zeroes the last to stay under a total-amount cap of 1000.00.
+        const string requestedWireJson =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
+        const string cappedWireJson =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"0.00"}}]""";
+
+        var claim = await AssertConsentNarrowSurvivesToAccessTokenAsync(
+            requestedWireJson, cappedWireJson);
+
+        Assert.Equal(3, claim.Count);
+        Assert.Equal("0.00", claim[2]!["instructedAmount"]!["amount"]!.GetValue<string>());
     }
 
     [Fact]

@@ -251,11 +251,12 @@ public class AuthorizationDetailsPolicyTests
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 §5 mutation pipeline — five concrete scenarios.
-    // The first three exercise mutations the current API supports today;
-    // scenarios 3 and 5 require API extensions (drop-entry, cross-detail
-    // post-processing) and are documented as Skip with a sketch of the
-    // shape the API would need.
+    // RFC 9396 §5 validator-side mutation pipeline. Per-type validators see
+    // one entry at a time and may narrow or normalise it; mutations propagate
+    // through ApplyAsync's rebuild from the validated typed list. Cross-entry
+    // policy (drop-entry, total-amount cap across the whole list) is the
+    // consent layer's responsibility (#142) -- IUserConsentsProvider sees the
+    // full Granted.AuthorizationDetails and can subset / cap arbitrarily.
     // ───────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -305,19 +306,6 @@ public class AuthorizationDetailsPolicyTests
         Assert.DoesNotContain("5000.00", wire);
     }
 
-    [Fact(Skip = "Requires API extension: per-type validator must be able to return Optional<AuthorizationDetail> (null = drop). Tracked as part of #140 follow-up.")]
-    public async Task Scenario3_partial_consent_drops_entry_user_denied()
-    {
-        // Client requests [account_information, payment_initiation]. User agrees
-        // only to the first entry in the consent UI. The current API requires the
-        // per-type validator to return a single AuthorizationDetail or an error;
-        // there is no "skip this entry, keep the others" signal. To enable this
-        // scenario the validator contract would change to return
-        // Result<AuthorizationDetail?, error>, with null meaning "drop". The
-        // composite would build the validated list from non-null returns only.
-        await Task.CompletedTask;
-    }
-
     [Fact]
     public async Task Scenario4_canonicalisation_dedupes_and_lowercases_actions()
     {
@@ -340,20 +328,6 @@ public class AuthorizationDetailsPolicyTests
         // Single-element arrays collapse to a string per the OAuth single-or-array
         // convention (see AuthorizationDetail.SetArrayOrStringOrNull).
         Assert.Contains("\"actions\":\"initiate\"", wire);
-    }
-
-    [Fact(Skip = "Requires API extension: composite-level post-processor that sees the whole validated list and can apply cross-detail caps. Tracked as part of #140 follow-up.")]
-    public async Task Scenario5_cross_detail_total_amount_cap_narrows_last_entry()
-    {
-        // Client requests three payment_initiation entries of 500 EUR each (total
-        // 1500). AS policy: total across all payment_initiation entries in a
-        // single request cannot exceed 1000. The validator that sees each entry
-        // independently has no signal that the third entry tips over the cap.
-        // To enable this scenario the API would expose a composite-level
-        // IAuthorizationDetailsPostProcessor (or similar) that receives the
-        // already-validated list and applies cross-cutting policy. Today the only
-        // workaround is a stateful singleton validator — fragile across requests.
-        await Task.CompletedTask;
     }
 
     [Fact]

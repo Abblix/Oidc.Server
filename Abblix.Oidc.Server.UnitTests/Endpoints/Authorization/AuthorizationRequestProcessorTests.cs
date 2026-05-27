@@ -1188,6 +1188,52 @@ public class AuthorizationRequestProcessorTests
     // fallback for backward compatibility with PR #135 hosts.
     // ───────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Captures the <see cref="AuthorizedGrant"/> passed to
+    /// <see cref="IAuthorizationCodeService.GenerateAuthorizationCodeAsync"/>. Tests
+    /// inspect the captured grant's <see cref="AuthorizationContext"/> to assert what
+    /// the processor emitted into the token-issuance path.
+    /// </summary>
+    private sealed class GrantCapture
+    {
+        public AuthorizedGrant? Grant { get; set; }
+    }
+
+    /// <summary>
+    /// Wires up the strict Mocks for a successful authorization-code flow and returns a
+    /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
+    /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from
+    /// each consent-side test.
+    /// </summary>
+    private GrantCapture SetupSuccessfulAuthCodeFlow(
+        ValidAuthorizationRequest request,
+        AuthSession session,
+        UserConsents consents)
+    {
+        var capture = new GrantCapture();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capture.Grant = grant)
+            .ReturnsAsync("code");
+
+        return capture;
+    }
+
     [Fact]
     public async Task ProcessAsync_AuthorizationDetailsPendingForConsent_ReturnsConsentRequired()
     {
@@ -1248,31 +1294,66 @@ public class AuthorizationRequestProcessorTests
         var session = CreateAuthSession();
         var consents = CreateConsents(grantedAuthorizationDetails: narrowedAd);
 
-        AuthorizedGrant? capturedGrant = null;
-
-        _authSessionService
-            .Setup(s => s.GetAvailableAuthSessions())
-            .Returns(new[] { session }.ToAsyncEnumerable());
-
-        _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
-            .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
-        _authorizationCodeService
-            .Setup(s => s.GenerateAuthorizationCodeAsync(
-                It.IsAny<AuthorizedGrant>(),
-                request.ClientInfo.AuthorizationCodeExpiresIn))
-            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capturedGrant = grant)
-            .ReturnsAsync("code");
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         await _processor.ProcessAsync(request);
 
-        Assert.NotNull(capturedGrant);
-        Assert.Same(narrowedAd, capturedGrant.Context.AuthorizationDetails);
+        Assert.NotNull(capture.Grant);
+        Assert.Same(narrowedAd, capture.Grant.Context.AuthorizationDetails);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ConsentDropsOneEntryFromMultiSet_TokenReflectsRemaining()
+    {
+        // RFC 9396 §5 partial-consent drop-entry. Client requested two entries, user
+        // agreed to one. Consent layer is the right surface for this -- per-type
+        // validators only see a single entry and cannot reason cross-entry.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
+        var partialAd = new JsonArray(
+            new JsonObject { ["type"] = "account_information" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: partialAd);
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        Assert.Same(partialAd, capture.Grant.Context.AuthorizationDetails);
+        Assert.Single(capture.Grant.Context.AuthorizationDetails!);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ConsentAppliesCrossDetailCapAcrossEntries_TokenReflectsCappedSet()
+    {
+        // RFC 9396 §5 cross-detail policy. Client requested three payment_initiation
+        // entries of 500 each (total 1500); host policy caps total at 1000; consent
+        // provider sees the entire list and returns the cross-cut narrow with the
+        // last entry zeroed out. Per-type validators have no signal that the third
+        // entry tips over the cap; consent layer does.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" });
+        var cappedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "0" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: cappedAd);
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        var emitted = capture.Grant.Context.AuthorizationDetails!;
+        Assert.Equal(3, emitted.Count);
+        Assert.Equal("0", emitted[2]!["amount"]!.GetValue<string>());
     }
 
     [Fact]
@@ -1286,30 +1367,11 @@ public class AuthorizationRequestProcessorTests
         var session = CreateAuthSession();
         var consents = CreateConsents();
 
-        AuthorizedGrant? capturedGrant = null;
-
-        _authSessionService
-            .Setup(s => s.GetAvailableAuthSessions())
-            .Returns(new[] { session }.ToAsyncEnumerable());
-
-        _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
-            .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
-        _authorizationCodeService
-            .Setup(s => s.GenerateAuthorizationCodeAsync(
-                It.IsAny<AuthorizedGrant>(),
-                request.ClientInfo.AuthorizationCodeExpiresIn))
-            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capturedGrant = grant)
-            .ReturnsAsync("code");
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         await _processor.ProcessAsync(request);
 
-        Assert.NotNull(capturedGrant);
-        Assert.Same(requestedAd, capturedGrant.Context.AuthorizationDetails);
+        Assert.NotNull(capture.Grant);
+        Assert.Same(requestedAd, capture.Grant.Context.AuthorizationDetails);
     }
 }
