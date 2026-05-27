@@ -229,6 +229,60 @@ public class MappersTests
     }
 
     [Fact]
+    public void AuthorizationContextMapper_RoundTrips_AuthorizationDetails_ByteExact()
+    {
+        // The wire shape we want preserved through protobuf storage — member order, a
+        // type-specific extension payload (PSD2-style instructedAmount object), and
+        // mixed-type values. After ToProto -> FromProto the JsonArray must serialise
+        // back to the SAME wire JSON byte-for-byte (no key reordering, no whitespace
+        // drift from a typed deserialise / re-serialise cycle).
+        const string wireJson =
+            """[{"type":"payment_initiation","actions":["initiate","status"],"locations":["https://api.bank.example/payments"],"instructedAmount":{"currency":"EUR","amount":"500.00"},"creditorAccount":{"iban":"DE02100100109307118603"}},{"type":"account_information","identifier":"acct-001"}]""";
+
+        var rawArray = (System.Text.Json.Nodes.JsonArray)System.Text.Json.Nodes.JsonNode.Parse(wireJson)!;
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
+        {
+            AuthorizationDetails = rawArray,
+        };
+
+        // Act
+        var proto = context.ToProto();
+        var result = AuthorizationContextMapper.FromProto(proto);
+
+        // Assert — byte-exact preservation through the proto string field.
+        Assert.NotNull(result.AuthorizationDetails);
+        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_RoundTrips_NullAuthorizationDetails()
+    {
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+
+        var proto = context.ToProto();
+        var result = AuthorizationContextMapper.FromProto(proto);
+
+        Assert.False(proto.HasAuthorizationDetailsJson);
+        Assert.Null(result.AuthorizationDetails);
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_RoundTrips_EmptyAuthorizationDetails_OmittedFromProto()
+    {
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
+        {
+            AuthorizationDetails = new System.Text.Json.Nodes.JsonArray(),
+        };
+
+        var proto = context.ToProto();
+
+        // Empty array is treated identically to null in protobuf storage — no point
+        // persisting an empty marker that yields the same observable behaviour.
+        Assert.False(proto.HasAuthorizationDetailsJson);
+    }
+
+    [Fact]
     public void AuthorizationContextMapper_ToProto_HandlesPkce()
     {
         // Arrange
