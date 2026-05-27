@@ -89,6 +89,12 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
             AuthorizationDetails: authorizationDetailsRaw)
         {
             Act = act,
+            // Origin tracking for the confused-deputy guard: the JWT's client_id claim names
+            // the party the token was originally minted for. Null when the claim was absent
+            // (which itself surfaces at the handler's cross-client check).
+            OriginalClientId = jwt.Payload.ClientId,
+            // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
+            JwtTokenType = jwt.Header.Type,
         };
     }
 }

@@ -1299,7 +1299,9 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.NotNull(capture.Grant);
-        Assert.Same(narrowedAd, capture.Grant.Context.AuthorizationDetails);
+        // Defensive DeepClone at the boundary (C2): the AuthorizationContext receives a clone,
+        // not the same reference -- assert value-equality through the wire JSON instead.
+        Assert.Equal(narrowedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
     }
 
     [Fact]
@@ -1322,7 +1324,8 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.NotNull(capture.Grant);
-        Assert.Same(partialAd, capture.Grant.Context.AuthorizationDetails);
+        // Defensive DeepClone at the boundary (C2): value-equality, not reference.
+        Assert.Equal(partialAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
         Assert.Single(capture.Grant.Context.AuthorizationDetails!);
     }
 
@@ -1372,6 +1375,7 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.NotNull(capture.Grant);
-        Assert.Same(requestedAd, capture.Grant.Context.AuthorizationDetails);
+        // Defensive DeepClone at the boundary (C2): value-equality, not reference.
+        Assert.Equal(requestedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
     }
 }

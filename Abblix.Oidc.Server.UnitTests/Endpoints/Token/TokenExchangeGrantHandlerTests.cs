@@ -20,9 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -147,7 +149,7 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Contains("allowlist", error.ErrorDescription);
+        Assert.Contains("allow list", error.ErrorDescription);
     }
 
     [Fact]
@@ -334,6 +336,256 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(requestScope, grant.Context.Scope);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // PR #135 review findings -- TDD reproduction tests.
+    // S1: cross-client subject_token reuse (confused-deputy)
+    // S1-second: forwarded AD bypasses requesting client's allowlist
+    // S2: requested_token_type / audience / resource silently dropped
+    // S3: JWT typ-header cross-type confusion
+    // C2 / C3 verified incidentally where applicable.
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task S1_SubjectToken_issued_to_different_client_rejected_by_default()
+    {
+        // Subject token was issued to client-A; client-B presents it for exchange.
+        // Default policy MUST reject -- otherwise any leaked AS-signed token is exchangeable
+        // by any client (confused deputy).
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = "client-A",
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, requestingClient);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("issued to a different client", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task S1_SubjectToken_cross_client_allowed_when_client_opted_in()
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = "client-A",
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var brokerClient = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AllowCrossClientSubjectTokenExchange = true,  // explicit opt-in for broker scenarios
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, brokerClient);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("alice", grant.AuthSession.Subject);
+    }
+
+    [Fact]
+    public async Task S1_SubjectToken_same_client_accepted_without_opt_in()
+    {
+        // Baseline: when subject_token's original client == requesting client (the normal
+        // self-exchange case), default policy accepts without opt-in.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, requestingClient);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("alice", grant.AuthSession.Subject);
+    }
+
+    [Fact]
+    public async Task S1_second_ForwardedAD_not_in_requesting_client_allowlist_rejected()
+    {
+        // Subject_token carries authorization_details with type "payment_initiation".
+        // Requesting client's AuthorizationDetailsTypes allowlist excludes "payment_initiation".
+        // The handler MUST reject -- without this check, Client A's expensive grants would
+        // flow into Client B even if Client B was never authorised to use them.
+        var ad = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var subject = new SubjectTokenContext("alice", null, ["openid"], ad)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientWithDifferentAllowlist = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AuthorizationDetailsTypes = ["account_information"],  // does NOT include payment_initiation
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientWithDifferentAllowlist);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("payment_initiation", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task S2_Audience_parameter_propagates_to_AuthorizationContext()
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            Audiences = ["https://api1.example.com", "https://api2.example.com"],
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(request.Audiences, grant.Context.Audiences);
+    }
+
+    [Fact]
+    public async Task S2_Resource_parameter_propagates_to_AuthorizationContext()
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            Resources = [new Uri("https://api.example.com")],
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.NotNull(grant.Context.Resources);
+        Assert.Single(grant.Context.Resources!);
+        Assert.Equal(request.Resources[0], grant.Context.Resources![0]);
+    }
+
+    [Fact]
+    public async Task S2_RequestedTokenType_other_than_access_token_rejected_explicitly()
+    {
+        // Slice 1 issues only access_token. A client asking for id_token / refresh_token / jwt
+        // must be rejected loudly rather than silently downgraded -- otherwise the client
+        // assumes it got what it asked for and breaks downstream.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            RequestedTokenType = TokenExchangeTokenTypes.IdToken,
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("requested_token_type", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task S3_IdTokenTyp_rejected_when_subject_token_type_is_access_token()
+    {
+        // A JWT minted as id_token (typ=id+jwt) presented under subject_token_type=access_token
+        // is a cross-type confusion: id_tokens carry identity assertions, not authorisation,
+        // and may have different audience expectations. Reject even though signature validates.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.IdToken,  // typ mismatch
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("typ", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task C3_ActorTokenType_not_in_allowlist_rejected_same_as_subject()
+    {
+        // The TokenExchangeAllowedSubjectTokenTypes allowlist applies symmetrically to actor
+        // tokens -- if the client is not permitted to exchange access_token as a SUBJECT, they
+        // are not permitted to use access_token as an ACTOR either.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        const string actorWire = "actor.jwt";
+        var actor = new SubjectTokenContext("svc-worker", null, null, null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+
+        // Client allowlist only id_token (subject); actor_token_type=access_token NOT in allowlist.
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.IdToken],
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = TokenExchangeTokenTypes.AccessToken,  // not in allowlist
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("allow list", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     // ──── helpers ────

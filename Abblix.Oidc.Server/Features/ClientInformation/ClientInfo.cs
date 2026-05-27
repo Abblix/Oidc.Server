@@ -204,6 +204,16 @@ public record ClientInfo(string ClientId)
     public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
+    /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
+    /// <c>subject_token</c> was originally issued to a different client than the one presenting
+    /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
+    /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
+    /// to <c>true</c> to opt out of the default check. Has no effect when no subject_token
+    /// origin can be determined.
+    /// </summary>
+    public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).

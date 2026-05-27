@@ -56,9 +56,15 @@ public static class AuthorizationContextExtensions
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
 
-        payload.Audiences = context.Resources is { Length: > 0 }
-            ? Array.ConvertAll(context.Resources, res => res.OriginalString)
-            : [context.ClientId];
+        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names)
+        // both feed into the JWT aud claim. Resources take precedence in ordering for legacy
+        // compat; when neither is set we fall back to the client_id (OIDC convention).
+        var audienceParts = new List<string>();
+        if (context.Resources is { Length: > 0 })
+            audienceParts.AddRange(Array.ConvertAll(context.Resources, res => res.OriginalString));
+        if (context.Audiences is { Length: > 0 })
+            audienceParts.AddRange(context.Audiences);
+        payload.Audiences = audienceParts.Count > 0 ? audienceParts.ToArray() : [context.ClientId];
 
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
             context.RequestedClaims,

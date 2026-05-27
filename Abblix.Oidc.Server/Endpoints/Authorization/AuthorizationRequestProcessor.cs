@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -150,8 +151,16 @@ public class AuthorizationRequestProcessor(
 				model.RedirectUri);
 		}
 
-		var emittedAuthorizationDetails =
-			userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
+		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
+		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
+		// issued JWT. If a host's IUserConsentsProvider impl parents the borrowed array as a
+		// child of its own DTO, the second serialise will throw because the JsonNode is parented
+		// twice. DeepClone defensively on the boundary so the two consumers each see independent
+		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
+		var sourceAd = userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
+		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
+			? (JsonArray?)sourceAd.DeepClone()
+			: null;
 
 		var clientId = request.ClientInfo.ClientId;
 

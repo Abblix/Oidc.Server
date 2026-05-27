@@ -204,6 +204,14 @@ public record AuthorizationContext
     public JsonObject? Actor { get; init; }
 
     /// <summary>
+    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// names of the relying party for which the requested token is intended. Distinct from
+    /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
+    /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
+    /// </summary>
+    public string[]? Audiences { get; init; }
+
+    /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style
     /// destructuring at the call site.
     /// </summary>

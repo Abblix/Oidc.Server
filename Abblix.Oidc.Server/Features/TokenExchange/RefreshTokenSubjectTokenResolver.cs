@@ -98,6 +98,13 @@ public sealed class RefreshTokenSubjectTokenResolver(
             AuthorizationDetails: authorizationDetails)
         {
             Act = act,
+            // Origin tracking from the recovered grant -- the refresh_token's storage record
+            // names the client it was issued to. Mismatch with the requesting client triggers
+            // the handler's cross-client guard.
+            OriginalClientId = grant.Context.ClientId,
+            // Refresh tokens always have typ=rt+jwt (enforced above). Recording it here makes
+            // the typ-confusion check at the handler uniform across resolvers.
+            JwtTokenType = jwt.Header.Type,
         };
     }
 }

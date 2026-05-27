@@ -57,4 +57,22 @@ public sealed record SubjectTokenContext(
     /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
     /// subject_token was not itself a delegation token.</summary>
     public JsonObject? Act { get; init; }
+
+    /// <summary>
+    /// The <c>client_id</c> the subject_token was originally issued to. The grant handler uses this
+    /// to detect cross-client exchange attempts (Client B presenting a token issued to Client A),
+    /// which is rejected by default to prevent a confused-deputy escalation. <c>null</c> when the
+    /// resolver cannot determine the original client (e.g. opaque tokens without a client_id field
+    /// or pre-cross-client-check tokens).
+    /// </summary>
+    public string? OriginalClientId { get; init; }
+
+    /// <summary>
+    /// For JWT-formatted subject_tokens, the value of the JWS <c>typ</c> header (e.g. <c>at+jwt</c>,
+    /// <c>id+jwt</c>, <c>rt+jwt</c>). The grant handler uses this to detect cross-type confusion --
+    /// a JWT minted as an id_token presented under <c>subject_token_type=access_token</c> is
+    /// rejected even though both pass signature validation. <c>null</c> when the subject_token is
+    /// not a JWT or the typ header was absent.
+    /// </summary>
+    public string? JwtTokenType { get; init; }
 }
