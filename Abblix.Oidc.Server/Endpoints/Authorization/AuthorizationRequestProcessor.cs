@@ -147,7 +147,7 @@ public class AuthorizationRequestProcessor(
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
 			ProofKeyThumbprint = model.ProofKeyThumbprint,
-			AuthorizationDetailsRaw = model.AuthorizationDetailsRaw,
+			AuthorizationDetails = model.AuthorizationDetailsRaw,
 		};
 
 		// Mark the client as affected by this session and update the session's state.

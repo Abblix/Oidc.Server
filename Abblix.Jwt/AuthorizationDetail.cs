@@ -31,7 +31,7 @@ namespace Abblix.Jwt;
 /// accessors that read from and write to the underlying <see cref="Json"/> directly — the same
 /// shape <see cref="JsonWebTokenPayload"/> uses over its <see cref="JsonObject"/>.
 /// </summary>
-/// <param name="json">The underlying JSON node carrying the entry's wire shape. Member order,
+/// <param name="Json">The underlying JSON node carrying the entry's wire shape. Member order,
 /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
 /// not model survive the authorize → code → token round-trip byte-exact because no typed
 /// deserialise / re-serialise cycle ever runs over them.</param>
@@ -42,8 +42,14 @@ namespace Abblix.Jwt;
 /// the schema for a given <c>type</c> reads and writes them via the
 /// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
 /// </remarks>
-public record AuthorizationDetail(JsonObject json)
+public record AuthorizationDetail(JsonObject Json)
 {
+    /// <summary>The underlying JSON node carrying the entry's wire shape. Member order,
+    /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
+    /// not model survive the authorize → code → token round-trip byte-exact because no typed
+    /// deserialise / re-serialise cycle ever runs over them.</summary>
+    public JsonObject Json { get; } = Json;
+
     /// <summary>
     /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec;
     /// the per-type validator rejects entries where this member is missing with
@@ -100,12 +106,6 @@ public record AuthorizationDetail(JsonObject json)
         get => Json.GetArrayOfStringsOrNull(Parameters.Privileges);
         set => Json.SetArrayOrStringOrNull(Parameters.Privileges, value);
     }
-
-    /// <summary>The underlying JSON node carrying the entry's wire shape. Member order,
-    /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
-    /// not model survive the authorize → code → token round-trip byte-exact because no typed
-    /// deserialise / re-serialise cycle ever runs over them.</summary>
-    public JsonObject Json { get; } = json;
 
     /// <summary>
     /// RFC 9396 §2.2 member names. Type-specific members outside this set live alongside in

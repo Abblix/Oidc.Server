@@ -54,9 +54,9 @@ public interface IAuthorizationDetailValidator
     /// and any per-client policy the implementation chooses to enforce.
     /// </summary>
     /// <param name="detail">The entry to validate. Its <see cref="AuthorizationDetail.Type"/>
-    /// matches this validator's <see cref="Type"/>; the per-type schema lives in
-    /// <see cref="AuthorizationDetail.ExtensionData"/> plus the RFC 9396 §2.2 standardised
-    /// members where applicable.</param>
+    /// matches this validator's <see cref="Type"/>; the per-type schema lives in the raw
+    /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 §2.2
+    /// standardised members where applicable.</param>
     /// <param name="client">The client that submitted the request, for policy decisions that
     /// depend on per-client allowlists or registered metadata.</param>
     /// <param name="ct">Cancellation token.</param>

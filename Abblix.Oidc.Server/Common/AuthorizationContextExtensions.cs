@@ -81,9 +81,9 @@ public static class AuthorizationContextExtensions
         // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
         // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
         // the payload's JsonNode tree independent of the source AuthorizationContext.
-        if (context.AuthorizationDetailsRaw is { Count: > 0 })
+        if (context.AuthorizationDetails is { Count: > 0 })
         {
-            payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetailsRaw.DeepClone();
+            payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetails.DeepClone();
         }
     }
 
@@ -122,7 +122,7 @@ public static class AuthorizationContextExtensions
             Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
-            AuthorizationDetailsRaw = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
+            AuthorizationDetails = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
                 ? (JsonArray)raw.DeepClone()
                 : null,
         };

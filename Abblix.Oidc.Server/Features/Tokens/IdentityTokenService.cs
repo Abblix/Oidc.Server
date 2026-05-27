@@ -136,9 +136,9 @@ internal class IdentityTokenService(
 		// between identity assertion (id_token) and authorization payload (access token).
 		// When enabled, the raw JsonArray is copied byte-exact (DeepClone) so the id_token
 		// carries the same wire shape the access token does.
-		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetailsRaw is { Count: > 0 })
+		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetails is { Count: > 0 })
 		{
-			identityToken.Payload.Json[IanaClaimTypes.AuthorizationDetails] = authContext.AuthorizationDetailsRaw.DeepClone();
+			identityToken.Payload.Json[IanaClaimTypes.AuthorizationDetails] = authContext.AuthorizationDetails.DeepClone();
 		}
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);

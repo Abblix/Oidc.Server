@@ -191,22 +191,9 @@ public record AuthorizationContext
     /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
     /// This is the source of truth — preserved byte-exact (member order, type-specific payload)
     /// through the authorize → code → token round-trip and protobuf persistence, without lossy
-    /// typed deserialise / re-serialise cycles. Use <see cref="AuthorizationDetails"/> for a
-    /// strongly-typed read view; to write, set this property with a new
-    /// <see cref="JsonArray"/> (helper: <c>typedDetails.ToRawJsonArray()</c>).
+    /// typed deserialise / re-serialise cycles.
     /// </summary>
-    public JsonArray? AuthorizationDetailsRaw { get; init; }
-
-    /// <summary>
-    /// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/> per RFC 9396 §2. Each
-    /// entry is wrapped as an <see cref="AuthorizationDetail"/> over its underlying
-    /// <see cref="JsonNode"/> — the wrappers share references with the raw array's elements,
-    /// so reading <see cref="AuthorizationDetail.Type"/> / <c>Locations</c> / etc. is a
-    /// projection on the byte-exact wire shape, and per-type extension members live alongside
-    /// in <see cref="AuthorizationDetail.Json"/>.
-    /// </summary>
-    [JsonIgnore]
-    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+    public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style

@@ -66,8 +66,8 @@ internal static class AuthorizationContextMapper
 
         // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
         // byte-exact (member order, type-specific payload) survives storage round-trip.
-        if (source.AuthorizationDetailsRaw is { Count: > 0 })
-            proto.AuthorizationDetailsJson = source.AuthorizationDetailsRaw.ToJsonString();
+        if (source.AuthorizationDetails is { Count: > 0 })
+            proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
 
         return proto;
     }
@@ -89,7 +89,7 @@ internal static class AuthorizationContextMapper
             CodeChallenge = ProtoMapper.GetString(source.CodeChallenge, source.HasCodeChallenge),
             CodeChallengeMethod = ProtoMapper.GetString(source.CodeChallengeMethod, source.HasCodeChallengeMethod),
             Resources = source.Resources.GetArray(r => new Uri(r)),
-            AuthorizationDetailsRaw = source.HasAuthorizationDetailsJson
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
         };
