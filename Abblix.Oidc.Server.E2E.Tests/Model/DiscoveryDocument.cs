@@ -27,6 +27,9 @@ public sealed record DiscoveryDocument
     [JsonPropertyName("pushed_authorization_request_endpoint")]
     public string? PushedAuthorizationRequestEndpoint { get; init; }
 
+    [JsonPropertyName("introspection_endpoint")]
+    public string? IntrospectionEndpoint { get; init; }
+
     [JsonPropertyName("jwks_uri")]
     public string JwksUri { get; init; } = null!;
 

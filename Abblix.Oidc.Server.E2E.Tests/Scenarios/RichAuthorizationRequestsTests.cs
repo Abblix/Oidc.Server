@@ -152,6 +152,40 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
     }
 
     [Fact]
+    public async Task Introspection_response_echoes_authorization_details_from_access_token(/* RFC 9396 §9.2 */)
+    {
+        var tokenResponse = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+        var accessToken = tokenResponse["access_token"]!.GetValue<string>();
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+
+        using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
+                [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+                ["token"] = accessToken,
+                ["token_type_hint"] = "access_token",
+            }),
+        };
+        var response = await client.SendAsync(introspectRequest);
+        var raw = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"introspect failed: {(int)response.StatusCode} {raw}");
+
+        var body = JsonNode.Parse(raw)?.AsObject();
+        Assert.NotNull(body);
+        Assert.Equal("true", body!["active"]?.GetValue<string>());
+        var echoed = body[WireParameters.AuthorizationDetails] as JsonArray;
+        Assert.NotNull(echoed);
+        Assert.Equal(PaymentInitiationWireJson, echoed!.ToJsonString());
+    }
+
+    [Fact]
     public async Task Refresh_token_grant_preserves_authorization_details_byte_exact()
     {
         var initial = await PerformParFlowAsync(
