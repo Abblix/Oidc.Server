@@ -35,4 +35,7 @@ public sealed record DiscoveryDocument
 
     [JsonPropertyName("authorization_details_types_supported")]
     public string[]? AuthorizationDetailsTypesSupported { get; init; }
+
+    [JsonPropertyName("grant_types_supported")]
+    public string[]? GrantTypesSupported { get; init; }
 }

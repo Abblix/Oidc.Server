@@ -102,6 +102,20 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, PaymentInitiationMissingActionsJson);
 
     [Fact]
+    public async Task Discovery_exposes_token_exchange_grant_type()
+    {
+        // RFC 8693 §5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
+        // Automatic exposure via AddTokenExchangeGrant() -> AddAuthorizationGrant<TokenExchangeGrantHandler>;
+        // CompositeAuthorizationGrantHandler aggregates GrantTypesSupported across all registered
+        // handlers and the discovery pipeline reads from it.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        Assert.NotNull(discovery.GrantTypesSupported);
+        Assert.Contains("urn:ietf:params:oauth:grant-type:token-exchange", discovery.GrantTypesSupported!);
+    }
+
+    [Fact]
     public async Task Discovery_exposes_authorization_details_types_supported()
     {
         var client = CreateClient();
