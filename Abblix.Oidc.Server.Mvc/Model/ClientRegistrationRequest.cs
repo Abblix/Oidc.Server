@@ -299,6 +299,15 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1:
+    /// per-client allowlist of authorization-detail <c>type</c> values this client
+    /// may use in Rich Authorization Requests. <c>null</c> means no per-client
+    /// constraint; empty array forbids RAR entirely for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -398,6 +407,7 @@ public record ClientRegistrationRequest
             InitiateLoginUri = InitiateLoginUri,
             OfflineAccessAllowed = OfflineAccessAllowed,
             DpopBoundAccessTokens = DpopBoundAccessTokens,
+            AuthorizationDetailsTypes = AuthorizationDetailsTypes,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 
