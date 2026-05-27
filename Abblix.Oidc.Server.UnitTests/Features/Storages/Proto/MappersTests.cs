@@ -267,15 +267,15 @@ public class MappersTests
         var request = new Abblix.Oidc.Server.Model.AuthorizationRequest
         {
             ClientId = "client-123",
-            AuthorizationDetailsRaw = rawArray,
+            AuthorizationDetails = rawArray,
         };
 
         var proto = request.ToProto();
         var result = proto.FromProto();
 
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
-        Assert.NotNull(result.AuthorizationDetailsRaw);
-        Assert.Equal(wireJson, result.AuthorizationDetailsRaw!.ToJsonString());
+        Assert.NotNull(result.AuthorizationDetails);
+        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public class MappersTests
         var result = proto.FromProto();
 
         Assert.False(proto.HasAuthorizationDetailsJson);
-        Assert.Null(result.AuthorizationDetailsRaw);
+        Assert.Null(result.AuthorizationDetails);
     }
 
     [Fact]

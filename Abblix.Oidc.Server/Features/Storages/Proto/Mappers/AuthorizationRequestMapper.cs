@@ -69,8 +69,8 @@ internal static class AuthorizationRequestMapper
         // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
         // byte-exact preservation for PAR storage between /par submission and the
         // front-channel /authorize redemption.
-        if (source.AuthorizationDetailsRaw is { Count: > 0 })
-            proto.AuthorizationDetailsJson = source.AuthorizationDetailsRaw.ToJsonString();
+        if (source.AuthorizationDetails is { Count: > 0 } authorizationDetails)
+            proto.AuthorizationDetailsJson = authorizationDetails.ToJsonString();
 
         return proto;
     }
@@ -104,7 +104,7 @@ internal static class AuthorizationRequestMapper
             RequestUri = ProtoMapper.GetUri(source.RequestUri, source.HasRequestUri),
             Resources = source.Resources.GetArray(r => new Uri(r)),
             ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
-            AuthorizationDetailsRaw = source.HasAuthorizationDetailsJson
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
         };

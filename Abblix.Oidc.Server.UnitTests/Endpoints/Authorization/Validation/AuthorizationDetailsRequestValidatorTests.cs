@@ -173,7 +173,7 @@ public class AuthorizationDetailsRequestValidatorTests
         };
         return new AuthorizationValidationContext(new AuthorizationRequest
         {
-            AuthorizationDetailsRaw = authorizationDetails.ToRawJsonArray(),
+            AuthorizationDetails = authorizationDetails.ToRawJsonArray(),
         })
         {
             ClientInfo = clientInfo,

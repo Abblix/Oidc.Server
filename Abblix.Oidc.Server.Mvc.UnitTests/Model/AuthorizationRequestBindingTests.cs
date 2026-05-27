@@ -44,8 +44,8 @@ public class AuthorizationRequestBindingTests
 
         var core = mvcModel.Map();
 
-        Assert.NotNull(core.AuthorizationDetailsRaw);
-        Assert.Equal(wireJson, core.AuthorizationDetailsRaw!.ToJsonString());
+        Assert.NotNull(core.AuthorizationDetails);
+        Assert.Equal(wireJson, core.AuthorizationDetails!.ToJsonString());
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class AuthorizationRequestBindingTests
 
         var core = mvcModel.Map();
 
-        Assert.Null(core.AuthorizationDetailsRaw);
+        Assert.Null(core.AuthorizationDetails);
     }
 
     [Fact]

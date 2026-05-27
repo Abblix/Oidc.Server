@@ -23,7 +23,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Utils.Json;
@@ -54,27 +53,18 @@ public record AuthorizationRequest
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
-    /// RFC 9396 Rich Authorization Requests stored as the raw wire <see cref="JsonArray"/> so
-    /// member order and type-specific payload survive the request → grant → token round-trip
-    /// without re-serialisation. Use <see cref="AuthorizationDetails"/> for a strongly-typed
-    /// read view.
+    /// RFC 9396 Rich Authorization Requests stored as the raw wire <see cref="JsonArray"/> so member order and
+    /// type-specific payload survive the request → grant → token round-trip without re-serialisation.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
-    public JsonArray? AuthorizationDetailsRaw { get; init; }
-
-    /// <summary>
-    /// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/>. Each entry is wrapped as an
-    /// <see cref="AuthorizationDetail"/> over the underlying <see cref="JsonNode"/> sharing
-    /// references with the raw array, so reading typed properties projects the byte-exact wire
-    /// shape; per-type extension members are accessible via <see cref="AuthorizationDetail.Json"/>.
-    /// </summary>
-    [JsonIgnore]
-    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+    public JsonArray? AuthorizationDetails { get; init; }
 
 	/// <summary>
 	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:
-	/// <c>code</c> for authorization code, <c>token</c> for the implicit grant access token, <c>id_token</c> for the
-	/// hybrid/implicit ID token. Multiple values are space-separated and represented here as an array.
+	/// <c>code</c> for authorization code,
+	/// <c>token</c> for the implicit grant access token,
+	/// <c>id_token</c> for the hybrid/implicit ID token.
+	/// Multiple values are space-separated and represented here as an array.
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]

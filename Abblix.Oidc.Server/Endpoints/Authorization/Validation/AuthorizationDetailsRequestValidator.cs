@@ -46,7 +46,7 @@ public class AuthorizationDetailsRequestValidator(
     /// <inheritdoc/>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
-        var rawRequested = context.Request.AuthorizationDetailsRaw;
+        var rawRequested = context.Request.AuthorizationDetails;
         if (rawRequested is null || rawRequested.Count == 0)
             return null;
 

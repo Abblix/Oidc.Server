@@ -244,6 +244,6 @@ public record AuthorizationRequest
 		ClaimsLocales = ClaimsLocales,
 		Resources = Resources,
 		ProofKeyThumbprint = ProofKeyThumbprint,
-		AuthorizationDetailsRaw = AuthorizationDetails,
+		AuthorizationDetails = AuthorizationDetails,
 	};
 }
