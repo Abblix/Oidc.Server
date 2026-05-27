@@ -12,6 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources/test-license.jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
     <ProjectReference Include="..\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
   </ItemGroup>

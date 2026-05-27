@@ -10,10 +10,17 @@ using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+
+// Load the embedded test license JWT before any OIDC service touches LicenseChecker.
+// The license is scoped to valid_issuers=["https://auth.example.com"] (TestConstants.Issuer)
+// with issuer_limit=1, so it physically cannot be lifted into a production host —
+// LicenseChecker.CheckIssuer throws on a non-matching issuer at startup.
+await LoadEmbeddedTestLicenseAsync();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,6 +76,19 @@ app.UseAuthorization();
 app.MapControllers();
 
 await app.RunAsync();
+
+static async Task LoadEmbeddedTestLicenseAsync()
+{
+    var assembly = typeof(Program).Assembly;
+    const string resourceName = "Abblix.Oidc.Server.E2E.TestHost.Resources.test-license.jwt";
+    await using var stream = assembly.GetManifestResourceStream(resourceName)
+        ?? throw new InvalidOperationException(
+            $"Embedded resource not found: {resourceName}. " +
+            $"Available: {string.Join(", ", assembly.GetManifestResourceNames())}");
+    using var reader = new StreamReader(stream, Encoding.UTF8);
+    var jwt = await reader.ReadToEndAsync();
+    await LicenseLoader.LoadAsync(jwt);
+}
 
 // Marker for WebApplicationFactory<Program>. Must stay public so the factory
 // can bind cross-assembly; private ctor satisfies S1118 (no instance state).

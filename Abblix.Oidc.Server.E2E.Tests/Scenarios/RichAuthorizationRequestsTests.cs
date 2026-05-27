@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Features.Licensing;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -129,6 +130,25 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         Assert.NotNull(echoed);
         Assert.Single(echoed!);
         Assert.Equal(TestConstants.PaymentInitiationType, echoed![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Embedded_test_license_rejects_any_issuer_other_than_TestConstants_Issuer()
+    {
+        // The embedded test license declares valid_issuers = [TestConstants.Issuer] only.
+        // Loading it at TestHost startup registers a permissive license, but
+        // LicenseChecker.CheckIssuer throws on any issuer that is not on that whitelist —
+        // physically preventing the license from being lifted into a production host with
+        // a different issuer URL. Touch a client first so the WebApplicationFactory bootstraps
+        // the host (which is what triggers LicenseLoader.LoadAsync on the embedded JWT).
+        var client = CreateClient();
+        _ = await FetchDiscoveryAsync(client);
+
+        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer));
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://attacker.example.com"));
+        Assert.Contains("license", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
