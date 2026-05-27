@@ -177,7 +177,8 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, PkceValidator>(),
-            ServiceDescriptor.Singleton<IAuthorizationContextValidator, ProofKeyThumbprintValidator>()
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, ProofKeyThumbprintValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, AuthorizationDetailsRequestValidator>()
         ]);
         return services.Compose<IAuthorizationContextValidator, AuthorizationContextValidatorComposite>();
     }

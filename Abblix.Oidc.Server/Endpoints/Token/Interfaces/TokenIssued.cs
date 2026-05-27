@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -48,4 +49,10 @@ public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, Tim
 	/// The scopes associated with the access token issued. Scopes indicate the permissions granted to the access token.
 	/// </summary>
 	public IEnumerable<string> Scope => AccessToken.Token.Payload.Scope;
+
+	/// <summary>
+	/// The RFC 9396 <c>authorization_details</c> array assigned to the access token, surfaced in
+	/// the JSON token response per RFC 9396 §7 (MUST). <c>null</c> when no RAR was used.
+	/// </summary>
+	public AuthorizationDetail[]? AuthorizationDetails { get; init; }
 }

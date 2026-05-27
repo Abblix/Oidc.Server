@@ -130,6 +130,15 @@ internal class IdentityTokenService(
 			},
 		};
 
+		// RFC 9396 is silent on id_token; per-client opt-in via
+		// ClientInfo.ForceAuthorizationDetailsInIdentityToken mirrors the existing
+		// ForceUserClaimsInIdentityToken precedent. Default-off preserves role separation
+		// between identity assertion (id_token) and authorization payload (access token).
+		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetails is { Length: > 0 })
+		{
+			identityToken.Payload.AuthorizationDetails = authContext.AuthorizationDetails;
+		}
+
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
 
 		return new EncodedJsonWebToken(identityToken, await jwtFormatter.FormatAsync(identityToken, clientInfo));

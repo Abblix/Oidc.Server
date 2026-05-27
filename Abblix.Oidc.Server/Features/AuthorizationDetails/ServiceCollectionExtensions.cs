@@ -61,8 +61,10 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the composite <see cref="IAuthorizationDetailsValidator"/> unconditionally.
-    /// Called from <c>AddFeatures</c> so the server boots cleanly with zero
+    /// Registers the OAuth 2.0 Rich Authorization Requests (RFC 9396) infrastructure: the
+    /// composite <see cref="IAuthorizationDetailsValidator"/> and the
+    /// <see cref="IAuthorizationDetailsMetadataProvider"/> discovery contributor. Called
+    /// unconditionally from <c>AddFeatures</c> so the server boots cleanly with zero
     /// <see cref="IAuthorizationDetailValidator"/> implementations registered; RAR-bearing
     /// requests are rejected with <c>invalid_authorization_details</c> per RFC 9396 §5
     /// until at least one validator is registered via
@@ -70,7 +72,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
     /// <returns>The service collection for method chaining.</returns>
-    public static IServiceCollection AddAuthorizationDetails(this IServiceCollection services)
+    public static IServiceCollection AddRichAuthorizationRequests(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthorizationDetailsValidator, AuthorizationDetailsValidator>();
         services.TryAddSingleton<IAuthorizationDetailsMetadataProvider, AuthorizationDetailsMetadataProvider>();

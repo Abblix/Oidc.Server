@@ -22,6 +22,7 @@
 
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Utils.Json;
@@ -50,6 +51,15 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Claims)]
     public RequestedClaims? Claims { get; init; }
+
+    /// <summary>
+    /// RFC 9396 Rich Authorization Requests: the JSON array of structured authorization
+    /// requirements the client wants the AS to authorize. Each element carries a required
+    /// <c>type</c> discriminator plus optional standardised members (RFC 9396 §2.2) and
+    /// type-specific payload preserved in <see cref="AuthorizationDetail.ExtensionData"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetails)]
+    public AuthorizationDetail[]? AuthorizationDetails { get; init; }
 
 	/// <summary>
 	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:
@@ -226,6 +236,11 @@ public record AuthorizationRequest
         /// <summary>The <c>claims</c> authorization request parameter carrying a structured request for
         /// specific claims to appear in the ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
+
+        /// <summary>The <c>authorization_details</c> authorization request parameter (RFC 9396 §2)
+        /// carrying a JSON array of structured authorization requirements per the RFC 9396 Rich
+        /// Authorization Requests profile.</summary>
+        public const string AuthorizationDetails = "authorization_details";
 
         /// <summary>The <c>response_type</c> authorization request parameter selecting the grant flow
         /// (e.g. <c>code</c>, <c>token</c>, <c>id_token</c> or combinations).</summary>

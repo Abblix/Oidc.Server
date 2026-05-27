@@ -83,7 +83,11 @@ public class TokenRequestProcessor(
 			accessToken,
 			tokenType,
 			clientInfo.AccessTokenExpiresIn,
-			TokenTypeIdentifiers.AccessToken);
+			TokenTypeIdentifiers.AccessToken)
+		{
+			// RFC 9396 §7: the AS MUST return authorization_details in the token response.
+			AuthorizationDetails = authContext.AuthorizationDetails,
+		};
 
 		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{

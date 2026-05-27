@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 /// failure. Called from the authorize/PAR endpoint validators in slice #133.
 /// </summary>
 /// <remarks>
-/// Registered unconditionally by <see cref="ServiceCollectionExtensions.AddAuthorizationDetails"/>
+/// Registered unconditionally by <see cref="ServiceCollectionExtensions.AddRichAuthorizationRequests"/>
 /// so the server boots cleanly with zero <see cref="IAuthorizationDetailValidator"/>
 /// implementations registered. Per RFC 9396 §5 (the AS MUST refuse unknown types), an empty
 /// registry rejects every RAR-bearing request — this is conformance-mandatory, not a

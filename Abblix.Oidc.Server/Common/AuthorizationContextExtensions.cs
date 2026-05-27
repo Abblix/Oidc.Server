@@ -75,6 +75,14 @@ public static class AuthorizationContextExtensions
                 JwkThumbprint = context.ProofKeyThumbprint,
             };
         }
+
+        // RFC 9396 §7: the AS MAY include the authorized authorization_details in the access
+        // token. We do, so resource servers can inspect the structured authorization data they
+        // were issued for without round-tripping through introspection.
+        if (context.AuthorizationDetails is { Length: > 0 })
+        {
+            payload.AuthorizationDetails = context.AuthorizationDetails;
+        }
     }
 
     /// <summary>
@@ -112,6 +120,7 @@ public static class AuthorizationContextExtensions
             Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
+            AuthorizationDetails = payload.AuthorizationDetails?.ToArray(),
         };
     }
 }

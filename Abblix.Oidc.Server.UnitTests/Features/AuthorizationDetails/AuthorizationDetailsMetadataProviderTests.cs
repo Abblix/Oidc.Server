@@ -76,7 +76,7 @@ public class AuthorizationDetailsMetadataProviderTests
     private static ServiceProvider BuildProvider(System.Action<IServiceCollection>? register = null)
     {
         var services = new ServiceCollection();
-        services.AddAuthorizationDetails();
+        services.AddRichAuthorizationRequests();
         register?.Invoke(services);
         return services.BuildServiceProvider();
     }

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
+using Abblix.Jwt;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
@@ -40,6 +41,7 @@ public record TokenResponse
 		public const string RefreshToken = "refresh_token";
 		public const string Scope = "scope";
 		public const string IdToken = "id_token";
+		public const string AuthorizationDetails = "authorization_details";
 	}
 
 	/// <summary>
@@ -93,4 +95,14 @@ public record TokenResponse
 	[JsonPropertyName(Parameters.IdToken)]
 	[JsonPropertyOrder(7)]
 	public string? IdToken { get; init; }
+
+	/// <summary>
+	/// RFC 9396 §7 <c>authorization_details</c>: the structured authorization data the token
+	/// was granted for, echoed back to the client so it knows exactly what the AS authorized.
+	/// MUST be returned per the RFC when <c>authorization_details</c> was carried on the
+	/// originating authorization request; omitted when no RAR was used.
+	/// </summary>
+	[JsonPropertyName(Parameters.AuthorizationDetails)]
+	[JsonPropertyOrder(8)]
+	public AuthorizationDetail[]? AuthorizationDetails { get; init; }
 }

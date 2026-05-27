@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
 
@@ -184,6 +185,15 @@ public record AuthorizationContext
     /// to access.
     /// </summary>
     public Uri[]? Resources { get; init; }
+
+    /// <summary>
+    /// The RFC 9396 Rich Authorization Requests array — structured authorization data persisted
+    /// with the grant so the token endpoint and resource servers see exactly what the user
+    /// consented to. Threaded through the grant the same way mTLS / DPoP confirmation thumbprints
+    /// are, so RAR survives the authorize → code → token round-trip and lands on the issued access
+    /// token (RFC 9396 §7) and introspection response (§10).
+    /// </summary>
+    public AuthorizationDetail[]? AuthorizationDetails { get; init; }
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style

@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
+using Abblix.Jwt;
+
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
 /// <summary>
@@ -62,6 +65,11 @@ internal static class AuthorizationContextMapper
 
         proto.Resources.AddIfNotNull(source.Resources, r => r.OriginalString);
 
+        // RFC 9396 authorization_details serialised as JSON for protobuf storage; round-trip
+        // preserves type-specific extension data the per-type validator did not consume.
+        if (source.AuthorizationDetails is { Length: > 0 })
+            proto.AuthorizationDetailsJson = JsonSerializer.Serialize(source.AuthorizationDetails);
+
         return proto;
     }
 
@@ -82,6 +90,9 @@ internal static class AuthorizationContextMapper
             CodeChallenge = ProtoMapper.GetString(source.CodeChallenge, source.HasCodeChallenge),
             CodeChallengeMethod = ProtoMapper.GetString(source.CodeChallengeMethod, source.HasCodeChallengeMethod),
             Resources = source.Resources.GetArray(r => new Uri(r)),
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
+                ? JsonSerializer.Deserialize<AuthorizationDetail[]>(source.AuthorizationDetailsJson)
+                : null,
         };
     }
 }

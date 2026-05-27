@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
 /// Unit tests for the composite <see cref="IAuthorizationDetailsValidator"/> registered via
-/// <c>AddAuthorizationDetails()</c>. Covers dispatch by <c>type</c>, RFC 9396 §5 unknown-type
+/// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 §5 unknown-type
 /// rejection, per-type-validator failure propagation, and the graceful-degradation contract
 /// (server boots cleanly with zero per-type validators registered).
 /// </summary>
@@ -205,7 +205,7 @@ public class AuthorizationDetailsValidatorTests
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
     {
         var services = new ServiceCollection();
-        services.AddAuthorizationDetails();
+        services.AddRichAuthorizationRequests();
         registerValidators?.Invoke(services);
         return services.BuildServiceProvider();
     }

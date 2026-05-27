@@ -39,4 +39,10 @@ message AuthorizationContext {
   // bound to this authorization (RFC 9449 §6.1). Carried into cnf.jkt on the issued
   // access token so the binding survives auth-code / refresh-token persistence.
   optional string proof_key_thumbprint = 10;
+
+  // RFC 9396 Rich Authorization Requests array, serialised as a JSON string. Stored
+  // as opaque JSON because each entry's type-specific payload (RFC 9396 §2.2 extension
+  // data) is structurally unbounded; round-trip preserves exact wire shape including
+  // unknown members the per-type validator did not strip.
+  optional string authorization_details_json = 11;
 }
