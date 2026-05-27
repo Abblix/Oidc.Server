@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -46,6 +47,42 @@ namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 internal sealed class AuthorizationDetailsValidator(
     IServiceProvider serviceProvider) : IAuthorizationDetailsValidator
 {
+    /// <inheritdoc/>
+    public async Task<Result<JsonArray?, string>> ApplyAsync(
+        JsonArray? raw,
+        ClientInfo client,
+        CancellationToken ct = default)
+    {
+        if (raw is not { Count: > 0 } jsonArray)
+            return (JsonArray?)null;
+
+        var authorizationDetails = jsonArray.ToTypedArray();
+        if (authorizationDetails is not { Length: > 0 })
+            return (JsonArray?)null;
+
+        var allowlist = client.AuthorizationDetailsTypes;
+        if (allowlist is not null)
+        {
+            if (allowlist.Length == 0)
+                return "Client is not permitted to use authorization_details.";
+
+            var allowedSet = new HashSet<string>(allowlist, StringComparer.Ordinal);
+            var disallowed = authorizationDetails
+                .Where(d => d.Type is not null && !allowedSet.Contains(d.Type))
+                .Select(d => d.Type!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (disallowed.Length != 0)
+                return $"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}";
+        }
+
+        var result = await ValidateAsync(authorizationDetails, client, ct);
+        if (!result.TryGetSuccess(out _))
+            return result.GetFailure().Description;
+
+        return jsonArray;
+    }
+
     /// <inheritdoc/>
     public async Task<Result<IReadOnlyList<AuthorizationDetail>, AuthorizationDetailValidationError>> ValidateAsync(
         IEnumerable<AuthorizationDetail> details,

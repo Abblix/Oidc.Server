@@ -203,6 +203,84 @@ public class AuthorizationDetailsValidatorTests
             validated.Select(d => d.Type).ToArray());
     }
 
+    [Fact]
+    public async Task ApplyAsync_returns_null_when_raw_is_null_or_empty()
+    {
+        var sp = BuildProvider();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+
+        var resultNull = await composite.ApplyAsync(null, TestClient);
+        Assert.True(resultNull.TryGetSuccess(out var validatedNull));
+        Assert.Null(validatedNull);
+
+        var resultEmpty = await composite.ApplyAsync(new JsonArray(), TestClient);
+        Assert.True(resultEmpty.TryGetSuccess(out var validatedEmpty));
+        Assert.Null(validatedEmpty);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_rejects_when_client_allowlist_is_empty()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var client = new ClientInfo("c") { AuthorizationDetailsTypes = [] };
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await composite.ApplyAsync(raw, client);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("not permitted", error);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_rejects_type_not_in_client_allowlist()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation")
+            .AddAuthorizationDetailValidator<AccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var client = new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] };
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await composite.ApplyAsync(raw, client);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("payment_initiation", error);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_null_allowlist_skips_per_client_check_and_dispatches()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var client = new ClientInfo("c") { AuthorizationDetailsTypes = null };
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await composite.ApplyAsync(raw, client);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        Assert.NotNull(validated);
+        Assert.Equal(raw.ToJsonString(), validated!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task ApplyAsync_forwards_byte_exact_when_dispatch_succeeds()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        const string wire = """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
+        var raw = (JsonArray)JsonNode.Parse(wire)!;
+
+        var result = await composite.ApplyAsync(raw, TestClient);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        Assert.NotNull(validated);
+        Assert.Equal(wire, validated!.ToJsonString());
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
     {
         var services = new ServiceCollection();
