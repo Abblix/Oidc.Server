@@ -119,6 +119,26 @@ public abstract class TestBase(TestFactory factory)
         return code;
     }
 
+    /// <summary>
+    /// Drives /authorize and asserts the AS redirected back to <c>redirect_uri</c> with an
+    /// <c>error</c> query parameter (the OAuth 2.0 error-response shape). Returns that error
+    /// code -- callers assert on its value (e.g. <c>access_denied</c>).
+    /// </summary>
+    protected static async Task<string> AuthorizeAndExtractErrorAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Dictionary<string, string> queryParams)
+    {
+        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
+        var response = await client.GetAsync(uri);
+        Assert.True(
+            response.StatusCode is System.Net.HttpStatusCode.Redirect or System.Net.HttpStatusCode.Found,
+            $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
+        var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
+        var query = System.Web.HttpUtility.ParseQueryString(location.Query);
+        return query[WireParameters.Error] ?? throw new InvalidOperationException($"No error in callback URI: {location}");
+    }
+
     protected static async Task<JsonObject> ExchangeCodeForTokensAsync(
         HttpClient client,
         DiscoveryDocument discovery,

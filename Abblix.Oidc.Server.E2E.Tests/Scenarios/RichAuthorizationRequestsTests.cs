@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 using Abblix.Oidc.Server.Features.Licensing;
 using Xunit;
 
@@ -183,6 +184,83 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         var echoed = body[WireParameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Equal(PaymentInitiationWireJson, echoed!.ToJsonString());
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // RFC 9396 consent capture (#142). The configurable AutoConsentsProvider
+    // models the three canonical Granted.AuthorizationDetails values:
+    //   - non-empty array  -> user consented to a (possibly narrowed) set
+    //   - empty JsonArray  -> user denied every entry
+    //   - null (no override) -> legacy provider, pipeline passes the request
+    //                           through unchanged (PR #135 baseline)
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Consent_narrowing_authorization_details_propagates_to_access_token()
+    {
+        const string narrowedWireJson =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"200.00"}}]""";
+        var narrowedNode = (JsonArray)JsonNode.Parse(narrowedWireJson)!;
+
+        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(narrowedNode);
+
+        var tokenResponse = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+
+        // Access token reflects the consent-narrowed set, not the 500.00 originally requested.
+        var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
+        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        Assert.Equal(narrowedWireJson, claim.ToJsonString());
+        Assert.DoesNotContain("500.00", claim.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Consent_denying_all_authorization_details_fails_with_access_denied()
+    {
+        // Provider explicitly returns empty Granted.AuthorizationDetails -> deny-all signal.
+        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(new JsonArray());
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (_, challenge) = GeneratePkcePair();
+
+        var parResponse = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>
+        {
+            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
+            [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [WireParameters.ResponseType] = "code",
+            [WireParameters.RedirectUri] = TestConstants.RedirectUri,
+            [WireParameters.Scope] = "openid",
+            [WireParameters.CodeChallenge] = challenge,
+            [WireParameters.CodeChallengeMethod] = "S256",
+            [WireParameters.AuthorizationDetails] = PaymentInitiationWireJson,
+        });
+        var requestUri = parResponse[WireParameters.RequestUri]!.GetValue<string>();
+
+        var error = await AuthorizeAndExtractErrorAsync(client, discovery, new Dictionary<string, string>
+        {
+            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
+            [WireParameters.RequestUri] = requestUri,
+        });
+
+        Assert.Equal("access_denied", error);
+    }
+
+    [Fact]
+    public async Task Consent_passthrough_when_provider_grants_null_preserves_request_value()
+    {
+        // No Override -> provider leaves Granted.AuthorizationDetails as null -> processor
+        // falls back to the post-validator request value (PR #135 baseline behaviour).
+        // Explicit anchor for the contract; functionally same path as the byte-exact tests
+        // above, but stated as a #142 acceptance criterion in its own right.
+        var tokenResponse = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+
+        var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
+        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
     [Fact]

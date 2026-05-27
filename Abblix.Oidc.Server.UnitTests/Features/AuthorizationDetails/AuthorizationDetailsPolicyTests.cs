@@ -491,4 +491,57 @@ public class AuthorizationDetailsPolicyTests
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
     }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // BuildConsentDescriptorAsync — default interface method on the validator
+    // returns null (#142 acceptance: hosts that opt out fall back to JSON
+    // dump). Validators that opt in override and supply a structured shape.
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task BuildConsentDescriptorAsync_default_implementation_returns_null()
+    {
+        IAuthorizationDetailValidator validator = new StubValidator();
+        var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
+
+        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, default);
+
+        Assert.Null(descriptor);
+    }
+
+    [Fact]
+    public async Task BuildConsentDescriptorAsync_override_returns_descriptor_with_title_and_summary()
+    {
+        IAuthorizationDetailValidator validator = new DescribingValidator();
+        var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
+
+        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, default);
+
+        Assert.NotNull(descriptor);
+        Assert.Equal("Payment transfer", descriptor!.Title);
+        Assert.Equal("Transfer 500 EUR to IBAN DE02 ...", descriptor.Summary);
+        Assert.NotNull(descriptor.Details);
+        Assert.Contains(descriptor.Details!,
+            kv => kv.Key == "Amount" && kv.Value == "500.00 EUR");
+    }
+
+    private sealed class DescribingValidator : IAuthorizationDetailValidator
+    {
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<AuthorizationDetailDescriptor?> BuildConsentDescriptorAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken cancellationToken)
+            => Task.FromResult<AuthorizationDetailDescriptor?>(new AuthorizationDetailDescriptor(
+                Title: "Payment transfer",
+                Summary: "Transfer 500 EUR to IBAN DE02 ...",
+                Details:
+                [
+                    new KeyValuePair<string, string>("Amount", "500.00 EUR"),
+                    new KeyValuePair<string, string>("Beneficiary IBAN", "DE02 ..."),
+                ]));
+    }
 }

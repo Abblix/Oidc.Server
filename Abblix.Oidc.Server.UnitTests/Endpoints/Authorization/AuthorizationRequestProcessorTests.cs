@@ -23,6 +23,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -84,7 +85,8 @@ public class AuthorizationRequestProcessorTests
         string? prompt = null,
         TimeSpan? maxAge = null,
         string[]? acrValues = null,
-        string[]? scope = null)
+        string[]? scope = null,
+        JsonArray? authorizationDetails = null)
     {
         var authRequest = new AuthorizationRequest
         {
@@ -95,6 +97,7 @@ public class AuthorizationRequestProcessorTests
             Prompt = prompt,
             MaxAge = maxAge,
             AcrValues = acrValues,
+            AuthorizationDetails = authorizationDetails,
         };
 
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
@@ -108,6 +111,7 @@ public class AuthorizationRequestProcessorTests
             ResponseMode = ResponseModes.Query,
             Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
             Resources = [],
+            AuthorizationDetailsRaw = authorizationDetails,
         };
 
         return new ValidAuthorizationRequest(context);
@@ -133,16 +137,24 @@ public class AuthorizationRequestProcessorTests
         ScopeDefinition[]? grantedScopes = null,
         ResourceDefinition[]? grantedResources = null,
         ScopeDefinition[]? pendingScopes = null,
-        ResourceDefinition[]? pendingResources = null)
+        ResourceDefinition[]? pendingResources = null,
+        JsonArray? grantedAuthorizationDetails = null,
+        JsonArray? pendingAuthorizationDetails = null)
     {
         return new UserConsents
         {
             Granted = new ConsentDefinition(
                 Scopes: grantedScopes ?? [new ScopeDefinition(Scopes.OpenId)],
-                Resources: grantedResources ?? []),
+                Resources: grantedResources ?? [])
+            {
+                AuthorizationDetails = grantedAuthorizationDetails,
+            },
             Pending = new ConsentDefinition(
                 Scopes: pendingScopes ?? [],
-                Resources: pendingResources ?? []),
+                Resources: pendingResources ?? [])
+            {
+                AuthorizationDetails = pendingAuthorizationDetails,
+            },
         };
     }
 
@@ -1166,5 +1178,138 @@ public class AuthorizationRequestProcessorTests
                 null,
                 null),
             Times.Once);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // RFC 9396 — consent capture for authorization_details (#142).
+    // The Pending bucket surfaces AD entries to the consent UI; the Granted
+    // bucket carries the user's decision (which may narrow or deny the
+    // request); token emission reads from Granted, with null → request
+    // fallback for backward compatibility with PR #135 hosts.
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsPendingForConsent_ReturnsConsentRequired()
+    {
+        var pendingAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: pendingAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(pendingAuthorizationDetails: pendingAd);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var consentRequired = Assert.IsType<ConsentRequired>(result);
+        Assert.Same(pendingAd, consentRequired.RequiredUserConsents.AuthorizationDetails);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsAllDenied_ReturnsAccessDenied()
+    {
+        // Provider returned Granted.AuthorizationDetails = [] (empty, not null) while the
+        // request carried AD entries -- the canonical "user denied every entry" signal.
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: new JsonArray());
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+        Assert.Contains("authorization_details", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsNarrowedByProvider_PropagatesNarrowToContext()
+    {
+        // Provider returns a narrower Granted.AuthorizationDetails than the request carried
+        // -- the AuthorizationContext (and downstream token emission) reflects the narrow set.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500.00" });
+        var narrowedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200.00" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: narrowedAd);
+
+        AuthorizedGrant? capturedGrant = null;
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capturedGrant = grant)
+            .ReturnsAsync("code");
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capturedGrant);
+        Assert.Same(narrowedAd, capturedGrant.Context.AuthorizationDetails);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LegacyProviderReturnsNullGrantedAd_FallsBackToRequestValue()
+    {
+        // Backward compat: a provider that has not been updated for #142 leaves
+        // Granted.AuthorizationDetails as null. Emission falls back to the request's
+        // (post-validator) AuthorizationDetails so PR #135 behaviour is preserved.
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+
+        AuthorizedGrant? capturedGrant = null;
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capturedGrant = grant)
+            .ReturnsAsync("code");
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capturedGrant);
+        Assert.Same(requestedAd, capturedGrant.Context.AuthorizationDetails);
     }
 }

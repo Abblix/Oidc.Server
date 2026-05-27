@@ -69,4 +69,25 @@ public interface IAuthorizationDetailValidator
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken token);
+
+    /// <summary>
+    /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing
+    /// what consenting to this entry authorises, so the consent UI can render a meaningful screen
+    /// instead of a raw JSON dump. Default returns <c>null</c>; hosts that opt out simply fall back
+    /// to displaying <see cref="AuthorizationDetail.Json"/>. Validators that override this should
+    /// extract the structured payload from <see cref="AuthorizationDetail.Json"/> and project it to
+    /// the descriptor's Title / Summary / Details shape.
+    /// </summary>
+    /// <param name="detail">The entry to describe. Already passed
+    /// <see cref="ValidateAsync"/>, so the per-type schema is satisfied.</param>
+    /// <param name="client">The requesting client, for descriptions that vary by client metadata
+    /// (e.g. branding, locale).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The descriptor on success; <c>null</c> when no structured description is
+    /// available and the host should fall back to a JSON-dump rendering.</returns>
+    Task<AuthorizationDetailDescriptor?> BuildConsentDescriptorAsync(
+        AuthorizationDetail detail,
+        ClientInfo client,
+        CancellationToken cancellationToken)
+        => Task.FromResult<AuthorizationDetailDescriptor?>(null);
 }

@@ -109,12 +109,14 @@ public class AuthorizationRequestProcessor(
 					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {model.Prompt}");
 		}
 
-		// Retrieve user consents (i.e., permissions granted for requested scopes/resources).
+		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
-		// If consent for required scopes or resources is still pending, handle consent requirements.
-		if (userConsents.Pending is { Scopes.Length: > 0 } or { Resources.Length: > 0 })
+		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
+		if (userConsents.Pending is { Scopes.Length: > 0 }
+			or { Resources.Length: > 0 }
+			or { AuthorizationDetails.Count: > 0 })
 		{
 			// If user interaction is disallowed but consent is necessary, return an error.
 			if (model.Prompt == Prompts.None)
@@ -130,6 +132,26 @@ public class AuthorizationRequestProcessor(
 			// Prompt for consent if necessary permissions are not yet granted.
 			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
+
+		// RFC 9396 §5: a consent provider may narrow or deny authorization_details entries.
+		//   Granted.AuthorizationDetails == null    -> legacy provider, no AD opinion; pass through what the
+		//                                              validator pipeline produced (backward compat with PR #135).
+		//   Granted.AuthorizationDetails is { Count: 0 } AND the request carried AD entries
+		//                                           -> user denied every entry; fail with access_denied.
+		//   Granted.AuthorizationDetails is non-empty -> explicit consent (possibly narrowed); emit as-is.
+		if (userConsents.Granted.AuthorizationDetails is { Count: 0 }
+			&& request.AuthorizationDetails is { Count: > 0 })
+		{
+			return new AuthorizationError(
+				model,
+				ErrorCodes.AccessDenied,
+				"The end-user denied consent for all requested authorization_details entries.",
+				request.ResponseMode,
+				model.RedirectUri);
+		}
+
+		var emittedAuthorizationDetails =
+			userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
 
 		var clientId = request.ClientInfo.ClientId;
 
@@ -147,7 +169,7 @@ public class AuthorizationRequestProcessor(
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
 			ProofKeyThumbprint = model.ProofKeyThumbprint,
-			AuthorizationDetails = model.AuthorizationDetails,
+			AuthorizationDetails = emittedAuthorizationDetails,
 		};
 
 		// Mark the client as affected by this session and update the session's state.

@@ -41,7 +41,13 @@ public class NullConsentService : IUserConsentsProvider
 	/// <param name="authSession">The authentication session associated with the request.</param>
 	public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
 	{
-		var userConsents = new UserConsents { Granted = new(request.Scope, request.Resources) };
+		var userConsents = new UserConsents
+		{
+			Granted = new(request.Scope, request.Resources)
+			{
+				AuthorizationDetails = request.AuthorizationDetails,
+			},
+		};
 		return Task.FromResult(userConsents);
 	}
 
