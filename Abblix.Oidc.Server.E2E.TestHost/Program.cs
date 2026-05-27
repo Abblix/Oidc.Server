@@ -70,4 +70,9 @@ app.MapControllers();
 
 await app.RunAsync();
 
-public partial class Program;
+// Marker for WebApplicationFactory<Program>. Must stay public so the factory
+// can bind cross-assembly; private ctor satisfies S1118 (no instance state).
+public partial class Program
+{
+    private Program() { }
+}

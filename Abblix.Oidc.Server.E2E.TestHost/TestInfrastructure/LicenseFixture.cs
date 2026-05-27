@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Abblix.Oidc.Server.Features.Licensing;
 
@@ -17,6 +18,9 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 /// </summary>
 public class LicenseFixture
 {
+    [SuppressMessage("Major Code Smell", "S3011",
+        Justification = "Reflection bypass is the documented purpose of the fixture — it clears " +
+                        "the FreeLicense numeric ceiling exposed only as a private static field.")]
     public LicenseFixture()
     {
         var licenseField = typeof(LicenseChecker).GetField(
