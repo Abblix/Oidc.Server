@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -44,6 +45,9 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 /// indicating the permissions requested by the client.</param>
 /// <param name="Resources">The set of resources requested as part of the authorization process,
 /// specifying the accessible resources for the client.</param>
+/// <param name="AuthorizationDetails">RFC 9396 §3 Rich Authorization Requests array
+/// (already passed the per-client allowlist and per-type validator dispatch) which the
+/// downstream processor threads onto the issued grant's AuthorizationContext byte-exact.</param>
 public record ValidBackChannelAuthenticationRequest(
 	BackChannelAuthenticationRequest Model,
 	ClientInfo ClientInfo,
@@ -51,7 +55,8 @@ public record ValidBackChannelAuthenticationRequest(
 	JsonWebToken? LoginHintToken,
 	JsonWebToken? IdToken,
 	ScopeDefinition[] Scope,
-	ResourceDefinition[] Resources)
+	ResourceDefinition[] Resources,
+	JsonArray? AuthorizationDetails)
 {
 	/// <summary>
 	/// Initializes a new instance of the <see cref="ValidBackChannelAuthenticationRequest"/> class using
@@ -66,7 +71,8 @@ public record ValidBackChannelAuthenticationRequest(
 			context.LoginHintToken,
 			context.IdToken,
 			context.Scope,
-			context.Resources)
+			context.Resources,
+			context.AuthorizationDetails)
 	{
 	}
 }

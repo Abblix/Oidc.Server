@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -89,4 +90,12 @@ public record BackChannelAuthenticationValidationContext(
     /// This value indicates how long the request is valid before it expires.
     /// </summary>
     public TimeSpan ExpiresIn { get; set; }
+
+    /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array, populated after per-client allowlist
+    /// and per-type validator dispatch by <see cref="BackChannelAuthorizationDetailsValidator"/>.
+    /// The raw <see cref="JsonArray"/> survives forward to the grant unchanged.
+    /// <c>null</c> when the request did not include <c>authorization_details</c>.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; set; }
 }
