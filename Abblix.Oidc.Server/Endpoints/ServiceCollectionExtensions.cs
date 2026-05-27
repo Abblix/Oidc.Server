@@ -22,8 +22,10 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -330,18 +332,40 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the RFC 8693 Token Exchange grant handler.
+    /// Registers the RFC 8693 Token Exchange grant handler together with the per-type
+    /// <see cref="Features.TokenExchange.ISubjectTokenResolver"/> implementations the library
+    /// ships natively (JWT-formatted subject tokens via <see cref="Features.TokenExchange.JwtSubjectTokenResolver"/>
+    /// for the <c>access_token</c>/<c>id_token</c>/<c>jwt</c> type URIs, and
+    /// <see cref="Features.TokenExchange.RefreshTokenSubjectTokenResolver"/> for refresh tokens).
     /// </summary>
     /// <remarks>
-    /// Current slice supports JWT-based subject tokens
-    /// (<c>urn:ietf:params:oauth:token-type:access_token</c>, <c>:id_token</c>, <c>:jwt</c>) in
-    /// impersonation mode. Opaque-token (refresh-token) subjects, <c>actor_token</c>-based
-    /// delegation, and discovery / DCR metadata land in subsequent slices (see #143).
+    /// Subject-token resolvers are dispatched by keyed DI under the
+    /// <c>urn:ietf:params:oauth:token-type:*</c> URI. Hosts may register additional resolvers
+    /// after this call (e.g. SAML 2.0 assertions in federation scenarios) -- the handler picks
+    /// them up automatically. The <c>actor_token</c>/delegation path and discovery / DCR
+    /// metadata land in subsequent slices (see #143).
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddTokenExchangeGrant(this IServiceCollection services)
     {
+        // JwtSubjectTokenResolver is stateless and serves three token-type URIs from one
+        // instance -- registered once as a singleton and re-exposed under three keyed entries
+        // via factory delegates. RefreshTokenSubjectTokenResolver has its own dependencies
+        // (IRefreshTokenService) so it is registered directly as a keyed singleton.
+        services.TryAddSingleton<JwtSubjectTokenResolver>();
+        services.TryAddKeyedSingleton<ISubjectTokenResolver>(
+            TokenExchangeTokenTypes.AccessToken,
+            (sp, _) => sp.GetRequiredService<JwtSubjectTokenResolver>());
+        services.TryAddKeyedSingleton<ISubjectTokenResolver>(
+            TokenExchangeTokenTypes.IdToken,
+            (sp, _) => sp.GetRequiredService<JwtSubjectTokenResolver>());
+        services.TryAddKeyedSingleton<ISubjectTokenResolver>(
+            TokenExchangeTokenTypes.Jwt,
+            (sp, _) => sp.GetRequiredService<JwtSubjectTokenResolver>());
+        services.TryAddKeyedSingleton<ISubjectTokenResolver, RefreshTokenSubjectTokenResolver>(
+            TokenExchangeTokenTypes.RefreshToken);
+
         return services.AddAuthorizationGrant<TokenExchangeGrantHandler>();
     }
 

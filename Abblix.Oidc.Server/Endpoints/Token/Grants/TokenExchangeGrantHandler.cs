@@ -20,18 +20,17 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json.Nodes;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
-using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -40,53 +39,40 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// (<c>grant_type=urn:ietf:params:oauth:grant-type:token-exchange</c>).
 /// </summary>
 /// <remarks>
-/// Slice 1 scope: JWT-based subject tokens (<c>urn:ietf:params:oauth:token-type:access_token</c>,
-/// <c>:id_token</c>, <c>:jwt</c>) -- the AS treats them as own-issued JWTs and validates signature,
-/// lifetime, and structure via <see cref="IAuthServiceJwtValidator"/>. Impersonation mode only:
-/// the issued token carries the subject_token's <c>sub</c>, <c>scope</c>, and <c>authorization_details</c>
-/// claims forward without an <c>act</c> chain. Per-client allowlist of accepted subject token types
-/// is enforced via <see cref="ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/> with the documented
-/// tri-state semantics (null = no constraint, empty = forbid, non-empty = allowlist).
+/// Per-format subject-token validation is delegated to keyed <see cref="ISubjectTokenResolver"/>
+/// implementations: <see cref="JwtSubjectTokenResolver"/> for the three JWT-based type URIs
+/// (<c>access_token</c>, <c>id_token</c>, <c>jwt</c>) and
+/// <see cref="RefreshTokenSubjectTokenResolver"/> for refresh tokens. Lookup that returns no
+/// resolver for the requested key yields <c>invalid_request</c> -- the library never silently
+/// accepts an unknown <c>subject_token_type</c>. Hosts may register additional resolvers for
+/// formats this library does not handle natively.
 /// <para>
-/// Subsequent slices add opaque (refresh-token) subject tokens (#143 slice 2), <c>actor_token</c> +
-/// delegation <c>act</c> chain (#143 slice 3), and discovery / DCR metadata (#143 slice 4).
+/// Currently impersonation mode only -- <c>actor_token</c> is rejected loudly to avoid silently
+/// downgrading a requested delegation to impersonation. Delegation + <c>act</c> claim chain
+/// lands in #143 slice 3.
 /// </para>
 /// </remarks>
 public class TokenExchangeGrantHandler(
     IParameterValidator parameterValidator,
-    IAuthServiceJwtValidator jwtValidator,
+    IServiceProvider serviceProvider,
     ISessionIdGenerator sessionIdGenerator,
     TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
-    /// <summary>The grant type this handler implements.</summary>
+    /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
     {
         get { yield return GrantTypes.TokenExchange; }
     }
 
-    /// <summary>
-    /// Subject token types this slice can validate. Opaque-token formats land in slice 2 via
-    /// <c>ISubjectTokenResolver</c> keyed dispatch.
-    /// </summary>
-    private static readonly string[] SupportedSubjectTokenTypes =
-    [
-        TokenExchangeTokenTypes.AccessToken,
-        TokenExchangeTokenTypes.IdToken,
-        TokenExchangeTokenTypes.Jwt,
-    ];
-
     /// <inheritdoc/>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
         return ValidateRequiredParameters(request)
-            .Bind(req => ValidateSubjectTokenType(req, clientInfo))
+            .Bind(req => ValidateSubjectTokenTypeAllowlist(req, clientInfo))
             .Bind(RejectActorTokenForNow)
-            .BindAsync(req => ValidateSubjectJwtAsync(req.SubjectToken!))
-            .Bind(RequireSubjectClaim)
+            .BindAsync(req => ResolveSubjectAsync(req))
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx, request, clientInfo)));
     }
-
-    private sealed record SubjectContext(JsonWebToken Jwt, string Subject);
 
     private Result<TokenRequest, OidcError> ValidateRequiredParameters(TokenRequest request)
     {
@@ -95,17 +81,13 @@ public class TokenExchangeGrantHandler(
         return request;
     }
 
-    private static Result<TokenRequest, OidcError> ValidateSubjectTokenType(TokenRequest request, ClientInfo clientInfo)
+    private static Result<TokenRequest, OidcError> ValidateSubjectTokenTypeAllowlist(
+        TokenRequest request, ClientInfo clientInfo)
     {
-        var requested = request.SubjectTokenType!;
-
-        if (!SupportedSubjectTokenTypes.Contains(requested, StringComparer.Ordinal))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"subject_token_type '{requested}' is not supported (this slice accepts JWT-based subject tokens only).");
-        }
-
+        // Tri-state semantics (mirrors ClientInfo.AuthorizationDetailsTypes):
+        //  null         -> no per-client constraint (library-wide resolver registry decides)
+        //  empty array  -> deny-all (this client cannot use Token Exchange at all)
+        //  non-empty    -> allowlist of accepted subject_token_type URIs
         var allowlist = clientInfo.TokenExchangeAllowedSubjectTokenTypes;
         if (allowlist is { Length: 0 })
         {
@@ -114,22 +96,17 @@ public class TokenExchangeGrantHandler(
                 "Client is not permitted to use the Token Exchange grant.");
         }
 
-        if (allowlist is { Length: > 0 } && !allowlist.Contains(requested, StringComparer.Ordinal))
+        if (allowlist is { Length: > 0 }
+            && !allowlist.Contains(request.SubjectTokenType!, StringComparer.Ordinal))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                $"subject_token_type '{requested}' is not in the client's allowlist.");
+                $"subject_token_type '{request.SubjectTokenType}' is not in the client's allowlist.");
         }
 
         return request;
     }
 
-    /// <summary>
-    /// Delegation via <c>actor_token</c> lands in #143 slice 3. In slice 1 the AS only supports
-    /// impersonation; a request that carries <c>actor_token</c> is rejected loudly rather than
-    /// silently downgraded to impersonation -- silent downgrade would emit a token that does not
-    /// reflect the requested delegation, a serious authorization surprise.
-    /// </summary>
     private static Result<TokenRequest, OidcError> RejectActorTokenForNow(TokenRequest request)
     {
         if (request.ActorToken is { Length: > 0 } || request.ActorTokenType is { Length: > 0 })
@@ -141,57 +118,40 @@ public class TokenExchangeGrantHandler(
         return request;
     }
 
-    private async Task<Result<JsonWebToken, OidcError>> ValidateSubjectJwtAsync(string subjectToken)
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveSubjectAsync(TokenRequest request)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken);
-        return validation.MapFailure(error =>
-            new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired."));
-    }
-
-    private static Result<SubjectContext, OidcError> RequireSubjectClaim(JsonWebToken jwt)
-    {
-        var subject = jwt.Payload.Subject;
-        if (string.IsNullOrWhiteSpace(subject))
+        var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(request.SubjectTokenType!);
+        if (resolver is null)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "subject_token is missing the required 'sub' claim.");
+                $"subject_token_type '{request.SubjectTokenType}' is not supported.");
         }
-        return new SubjectContext(jwt, subject);
+
+        return await resolver.ResolveAsync(request.SubjectToken!, default);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(
-        SubjectContext ctx,
+        SubjectTokenContext subject,
         TokenRequest request,
         ClientInfo clientInfo)
     {
-        // RFC 8693 §4.1 impersonation: the issued token's subject equals the subject_token's
-        // subject and no `act` chain is added. Scope and authorization_details flow from the
-        // subject_token (or, when present in the request, the narrowed values intersected
-        // with what the subject_token already carried -- enforcement deferred to slice 5).
-        var scope = request.Scope is { Length: > 0 }
-            ? request.Scope
-            : ctx.Jwt.Payload.Scope.ToArray();
-
-        // Deep-clone the raw JsonArray to detach it from the subject_token's payload before
-        // it is forwarded into the new AuthorizationContext (and onward into a fresh JWT).
-        // Without the clone the issued token would share JsonNode parent ownership with the
-        // subject_token's payload, which System.Text.Json rejects on the next serialisation.
-        var authorizationDetailsRaw =
-            ctx.Jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray ad
-                ? (JsonArray?)ad.DeepClone()
-                : null;
+        // RFC 8693 §4.1 impersonation: issued token's subject equals the subject_token's
+        // subject; no act chain. Scope: when the client supplies scope in the request use that,
+        // otherwise fall back to the subject_token's scope. Resource servers downstream of
+        // narrow-at-exchange will see only the scopes the client asked for.
+        var scope = request.Scope is { Length: > 0 } ? request.Scope : subject.Scope ?? [];
 
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null)
         {
-            AuthorizationDetails = authorizationDetailsRaw,
+            AuthorizationDetails = subject.AuthorizationDetailsRaw,
         };
 
         var authSession = new AuthSession(
-            Subject: ctx.Subject,
+            Subject: subject.Subject,
             SessionId: sessionIdGenerator.GenerateSessionId(),
             AuthenticationTime: timeProvider.GetUtcNow(),
-            IdentityProvider: ctx.Jwt.Payload.Issuer ?? "self")
+            IdentityProvider: subject.Issuer ?? "self")
         {
             AffectedClientIds = { clientInfo.ClientId },
         };
