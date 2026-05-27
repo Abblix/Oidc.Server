@@ -86,7 +86,7 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
             Subject: subject,
             Issuer: jwt.Payload.Issuer,
             Scope: jwt.Payload.Scope?.ToArray(),
-            AuthorizationDetailsRaw: authorizationDetailsRaw,
+            AuthorizationDetails: authorizationDetailsRaw,
             Act: act);
     }
 }

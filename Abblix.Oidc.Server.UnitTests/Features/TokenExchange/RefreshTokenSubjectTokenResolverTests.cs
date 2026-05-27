@@ -108,8 +108,8 @@ public class RefreshTokenSubjectTokenResolverTests
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
-        Assert.Equal(adWire, ctx.AuthorizationDetailsRaw!.ToJsonString());
-        Assert.NotSame(adNode, ctx.AuthorizationDetailsRaw);
+        Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
+        Assert.NotSame(adNode, ctx.AuthorizationDetails);
     }
 
     [Fact]

@@ -184,7 +184,7 @@ public class TokenExchangeGrantHandler(
 
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null)
         {
-            AuthorizationDetails = subject.AuthorizationDetailsRaw,
+            AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
         };
 

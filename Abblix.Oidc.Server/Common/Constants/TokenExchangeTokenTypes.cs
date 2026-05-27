@@ -41,9 +41,11 @@ public static class TokenExchangeTokenTypes
     /// <summary>JSON Web Token of unspecified profile. RFC 8693 §3.</summary>
     public const string Jwt = "urn:ietf:params:oauth:token-type:jwt";
 
-    /// <summary>SAML 1.1 assertion. RFC 8693 §3 -- listed for completeness; not currently issued or accepted by this library.</summary>
+    /// <summary>SAML 1.1 assertion. RFC 8693 §3 -- listed for completeness;
+    /// not currently issued or accepted by this library.</summary>
     public const string Saml1 = "urn:ietf:params:oauth:token-type:saml1";
 
-    /// <summary>SAML 2.0 assertion. RFC 8693 §3 -- listed for completeness; not currently issued or accepted by this library.</summary>
+    /// <summary>SAML 2.0 assertion. RFC 8693 §3 -- listed for completeness;
+    /// not currently issued or accepted by this library.</summary>
     public const string Saml2 = "urn:ietf:params:oauth:token-type:saml2";
 }

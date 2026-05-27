@@ -72,7 +72,7 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal("user-1", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
         Assert.Equal(["openid", "profile"], ctx.Scope);
-        Assert.Null(ctx.AuthorizationDetailsRaw);
+        Assert.Null(ctx.AuthorizationDetails);
     }
 
     [Fact]
@@ -88,10 +88,10 @@ public class JwtSubjectTokenResolverTests
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
-        Assert.NotNull(ctx.AuthorizationDetailsRaw);
-        Assert.Equal(adWire, ctx.AuthorizationDetailsRaw!.ToJsonString());
+        Assert.NotNull(ctx.AuthorizationDetails);
+        Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
         // The clone must be detached from the JWT payload -- mutating one must not affect the other.
-        Assert.NotSame(jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails], ctx.AuthorizationDetailsRaw);
+        Assert.NotSame(jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails], ctx.AuthorizationDetails);
     }
 
     [Fact]

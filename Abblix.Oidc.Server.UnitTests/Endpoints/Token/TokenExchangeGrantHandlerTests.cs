@@ -67,7 +67,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ValidSubjectToken_DispatchedToTypedResolver_ReturnsAuthorizedGrant()
     {
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: "https://issuer", Scope: ["openid"], AuthorizationDetailsRaw: null);
+            Subject: TestSubject, Issuer: "https://issuer", Scope: ["openid"], AuthorizationDetails: null);
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -87,7 +87,7 @@ public class TokenExchangeGrantHandlerTests
         const string adWire = """[{"type":"payment_initiation","actions":["initiate"]}]""";
         var adNode = (JsonArray)JsonNode.Parse(adWire)!;
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetailsRaw: adNode);
+            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: adNode);
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -306,7 +306,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ClientWithNullAllowlist_AcceptsAnyResolvedTokenType()
     {
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetailsRaw: null);
+            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null);
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, ctx);
         var clientInfo = ClientWithAllowlist(null);  // tri-state: no constraint
         var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken);
@@ -325,7 +325,7 @@ public class TokenExchangeGrantHandlerTests
         var subjectScope = new[] { "openid", "profile", "email" };
         var requestScope = new[] { "openid" };  // narrow to one
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: null, Scope: subjectScope, AuthorizationDetailsRaw: null);
+            Subject: TestSubject, Issuer: null, Scope: subjectScope, AuthorizationDetails: null);
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = requestScope };

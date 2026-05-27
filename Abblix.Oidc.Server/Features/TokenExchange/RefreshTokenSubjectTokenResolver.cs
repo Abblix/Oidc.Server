@@ -95,7 +95,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             Subject: grant.AuthSession.Subject,
             Issuer: grant.AuthSession.IdentityProvider,
             Scope: grant.Context.Scope,
-            AuthorizationDetailsRaw: authorizationDetailsRaw,
+            AuthorizationDetails: authorizationDetailsRaw,
             Act: act);
     }
 }

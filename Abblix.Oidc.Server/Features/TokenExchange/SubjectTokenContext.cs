@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 namespace Abblix.Oidc.Server.Features.TokenExchange;
 
@@ -28,8 +30,8 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// The portable state extracted by an <see cref="ISubjectTokenResolver"/> from a wire-level
 /// <c>subject_token</c>. Independent of the token's on-wire format -- JWT-based resolvers parse
 /// the payload, opaque-token resolvers recover the equivalent fields from a previously stored
-/// grant. The <see cref="TokenExchange.TokenExchangeGrantHandler"/> consumes this record to
-/// synthesise the new <see cref="Endpoints.Authorization.AuthorizationContext"/> and
+/// grant. The <see cref="TokenExchangeGrantHandler"/> consumes this record to
+/// synthesise the new <see cref="AuthorizationContext"/> and
 /// <see cref="UserAuthentication.AuthSession"/>.
 /// </summary>
 /// <param name="Subject">The end-user identifier the subject_token represents (RFC 7519 <c>sub</c>
@@ -40,7 +42,7 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
 /// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 §2.1 narrow
 /// only -- never widen). <c>null</c> when the subject_token did not carry a scope claim.</param>
-/// <param name="AuthorizationDetailsRaw">RFC 9396 <c>authorization_details</c> attached to the
+/// <param name="AuthorizationDetails">RFC 9396 <c>authorization_details</c> attached to the
 /// subject_token, raw <see cref="JsonArray"/> so the byte-exact payload survives the exchange
 /// into the issued token. <c>null</c> when the subject_token did not carry AD.</param>
 /// <param name="Act">RFC 8693 §4.1 <c>act</c> claim attached to the subject_token, captured as
@@ -52,5 +54,5 @@ public sealed record SubjectTokenContext(
     string Subject,
     string? Issuer,
     string[]? Scope,
-    JsonArray? AuthorizationDetailsRaw,
+    JsonArray? AuthorizationDetails,
     JsonObject? Act = null);
