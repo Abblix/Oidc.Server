@@ -93,5 +93,5 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// <summary>
 	/// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
 	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
 }

@@ -328,5 +328,6 @@ public class JsonWebTokenPayload(JsonObject json)
 	/// <see cref="AuthorizationDetail.ExtensionData"/>. To replace the claim, set
 	/// <see cref="AuthorizationDetailsRaw"/> directly with a new <see cref="JsonArray"/>.
 	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+	public AuthorizationDetail[]? AuthorizationDetails
+		=> AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
 }

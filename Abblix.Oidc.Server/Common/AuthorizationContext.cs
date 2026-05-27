@@ -203,7 +203,7 @@ public record AuthorizationContext
     /// common-data set is preserved in <see cref="AuthorizationDetail.ExtensionData"/>.
     /// </summary>
     [JsonIgnore]
-    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style
