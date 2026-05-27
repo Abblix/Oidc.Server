@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -65,6 +66,12 @@ internal static class AuthorizationRequestMapper
         proto.ClaimsLocales.AddIfNotNull(source.ClaimsLocales, c => c.Name);
         proto.Resources.AddIfNotNull(source.Resources, u => u.OriginalString);
 
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // byte-exact preservation for PAR storage between /par submission and the
+        // front-channel /authorize redemption.
+        if (source.AuthorizationDetailsRaw is { Count: > 0 })
+            proto.AuthorizationDetailsJson = source.AuthorizationDetailsRaw.ToJsonString();
+
         return proto;
     }
 
@@ -97,6 +104,9 @@ internal static class AuthorizationRequestMapper
             RequestUri = ProtoMapper.GetUri(source.RequestUri, source.HasRequestUri),
             Resources = source.Resources.GetArray(r => new Uri(r)),
             ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
+            AuthorizationDetailsRaw = source.HasAuthorizationDetailsJson
+                ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
+                : null,
         };
     }
 }

@@ -256,6 +256,41 @@ public class MappersTests
     }
 
     [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_AuthorizationDetails_ByteExact()
+    {
+        // PAR storage path: the request body submitted at /par persists into protobuf
+        // and is re-materialised when the client redirects to /authorize with the
+        // request_uri. Byte-exact preservation is required all the way through.
+        const string wireJson =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
+        var rawArray = (System.Text.Json.Nodes.JsonArray)System.Text.Json.Nodes.JsonNode.Parse(wireJson)!;
+        var request = new Abblix.Oidc.Server.Model.AuthorizationRequest
+        {
+            ClientId = "client-123",
+            AuthorizationDetailsRaw = rawArray,
+        };
+
+        var proto = request.ToProto();
+        var result = proto.FromProto();
+
+        Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
+        Assert.NotNull(result.AuthorizationDetailsRaw);
+        Assert.Equal(wireJson, result.AuthorizationDetailsRaw!.ToJsonString());
+    }
+
+    [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_NullAuthorizationDetails()
+    {
+        var request = new Abblix.Oidc.Server.Model.AuthorizationRequest { ClientId = "client-123" };
+
+        var proto = request.ToProto();
+        var result = proto.FromProto();
+
+        Assert.False(proto.HasAuthorizationDetailsJson);
+        Assert.Null(result.AuthorizationDetailsRaw);
+    }
+
+    [Fact]
     public void AuthorizationContextMapper_RoundTrips_NullAuthorizationDetails()
     {
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
