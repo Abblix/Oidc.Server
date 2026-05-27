@@ -24,10 +24,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -151,8 +152,8 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         public string Type => key ?? "stub";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 }

@@ -2,8 +2,10 @@
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
@@ -18,23 +20,23 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 {
     public string Type => "payment_initiation";
 
-    public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
+    public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
         AuthorizationDetail detail,
         ClientInfo client,
-        CancellationToken ct)
+        CancellationToken token)
     {
         if (detail.Actions is null || !detail.Actions.Any())
         {
-            return Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(
-                new AuthorizationDetailValidationError("payment_initiation requires non-empty actions."));
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, "payment_initiation requires non-empty actions."));
         }
 
         if (detail.Json["instructedAmount"] is null)
         {
-            return Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(
-                new AuthorizationDetailValidationError("payment_initiation requires instructedAmount."));
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, "payment_initiation requires instructedAmount."));
         }
 
-        return Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 }

@@ -23,7 +23,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Service-collection extensions for the RFC 9396 Rich Authorization Requests feature.

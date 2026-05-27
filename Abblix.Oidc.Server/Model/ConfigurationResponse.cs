@@ -22,6 +22,7 @@
 
 using Abblix.Utils.Json;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -513,7 +514,7 @@ public record ConfigurationResponse
     /// <summary>
     /// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
     /// registered validators for. The list is projected from the keyed-DI registry of
-    /// <see cref="Features.AuthorizationDetails.IAuthorizationDetailValidator"/> so it always
+    /// <see cref="IAuthorizationDetailValidator"/> so it always
     /// matches what request-time dispatch will accept. Omitted from the emitted discovery
     /// JSON when the list is empty (no per-type validators registered) so the document
     /// follows the OIDC discovery convention: absent = unsupported, not the empty array.

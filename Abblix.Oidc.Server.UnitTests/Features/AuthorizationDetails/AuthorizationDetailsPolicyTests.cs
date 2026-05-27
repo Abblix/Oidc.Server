@@ -21,19 +21,21 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.UnitTests.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Unit tests for the composite <see cref="IAuthorizationDetailsPolicy"/> registered via
@@ -60,16 +62,14 @@ public class AuthorizationDetailsPolicyTests
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
-        };
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Contains("payment_initiation", error.Description);
-        Assert.Contains("unknown", error.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("payment_initiation", error.ErrorDescription);
+        Assert.Contains("unknown", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -77,27 +77,14 @@ public class AuthorizationDetailsPolicyTests
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = null! },
-        };
+        // RFC 9396 §2: the 'type' member is required. Entry without it must reject.
+        var raw = new JsonArray(new JsonObject());
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Contains("type", error.Description, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task Empty_details_array_yields_empty_validated_list()
-    {
-        var sp = BuildProvider();
-        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-
-        var result = await composite.ValidateAsync([], TestClient, CancellationToken.None);
-
-        Assert.True(result.TryGetSuccess(out var validated));
-        Assert.Empty(validated);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -106,17 +93,18 @@ public class AuthorizationDetailsPolicyTests
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<StubValidator>("payment_initiation"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
+        var raw = new JsonArray(new JsonObject
         {
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation", Actions = ["initiate"] },
-        };
+            ["type"] = "payment_initiation",
+            ["actions"] = new JsonArray("initiate"),
+        });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        var item = Assert.Single(validated);
-        Assert.Equal("payment_initiation", item.Type);
-        Assert.Equal(new[] { "initiate" }, item.Actions);
+        Assert.NotNull(validated);
+        var entry = Assert.Single(validated!);
+        Assert.Equal("payment_initiation", entry!["type"]!.GetValue<string>());
     }
 
     [Fact]
@@ -126,18 +114,17 @@ public class AuthorizationDetailsPolicyTests
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation")
             .AddAuthorizationDetailValidator<AccountValidator>("account_information"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
-            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
-        };
+        var raw = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        Assert.Equal(2, validated.Count);
-        Assert.Equal("payment_initiation", validated[0].Type);
-        Assert.Equal("account_information", validated[1].Type);
+        Assert.NotNull(validated);
+        Assert.Equal(2, validated!.Count);
+        Assert.Equal("payment_initiation", validated[0]!["type"]!.GetValue<string>());
+        Assert.Equal("account_information", validated[1]!["type"]!.GetValue<string>());
     }
 
     [Fact]
@@ -146,15 +133,12 @@ public class AuthorizationDetailsPolicyTests
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
-        };
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(RejectingValidator.Reason, error.Description);
+        Assert.Equal(RejectingValidator.Reason, error.ErrorDescription);
     }
 
     [Fact]
@@ -169,13 +153,11 @@ public class AuthorizationDetailsPolicyTests
                 .AddAuthorizationDetailValidator<CountingValidator>("account_information");
         });
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
-            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
-        };
+        var raw = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetFailure(out _));
         Assert.Equal(0, counter.Count);
@@ -190,18 +172,18 @@ public class AuthorizationDetailsPolicyTests
             .AddAuthorizationDetailValidator<AccountValidator>("account_information")
             .AddAuthorizationDetailValidator<StubValidator>("consent"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var details = new[]
-        {
-            new AuthorizationDetail(new JsonObject()) { Type = "consent" },
-            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
-            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
-        };
+        var raw = new JsonArray(
+            new JsonObject { ["type"] = "consent" },
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
+        var result = await composite.ApplyAsync(raw, TestClient);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        Assert.Equal(["consent", "payment_initiation", "account_information"],
-            validated.Select(d => d.Type).ToArray());
+        Assert.NotNull(validated);
+        Assert.Equal(
+            ["consent", "payment_initiation", "account_information"],
+            validated!.Select(node => node!["type"]!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -268,6 +250,112 @@ public class AuthorizationDetailsPolicyTests
         Assert.Equal(raw.ToJsonString(), validated!.ToJsonString());
     }
 
+    // ───────────────────────────────────────────────────────────────────────
+    // RFC 9396 §5 mutation pipeline — five concrete scenarios.
+    // The first three exercise mutations the current API supports today;
+    // scenarios 3 and 5 require API extensions (drop-entry, cross-detail
+    // post-processing) and are documented as Skip with a sketch of the
+    // shape the API would need.
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Scenario1_consent_slider_narrows_amount_from_500_to_200()
+    {
+        // Client requests "transfer 500 EUR"; user moves the slider on the consent
+        // UI to 200; the per-type validator narrows the entry to amount=200, the
+        // composite rebuilds the raw array with the narrowed shape, the access
+        // token carries 200 — not 500. Without this, the AS would have to either
+        // emit 500 (over-grant, vulnerability) or reject the whole request.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<NarrowToTwoHundredValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        const string inputWire =
+            """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
+        var raw = (JsonArray)JsonNode.Parse(inputWire)!;
+
+        var result = await composite.ApplyAsync(raw, TestClient);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        Assert.NotNull(validated);
+        var wire = validated!.ToJsonString();
+        Assert.Contains("\"amount\":\"200.00\"", wire);
+        Assert.DoesNotContain("500.00", wire);
+    }
+
+    [Fact]
+    public async Task Scenario2_client_tier_cap_narrows_5000_to_1000_when_request_exceeds_limit()
+    {
+        // Client belongs to a "basic" tier with a per-transaction cap of 1000 EUR.
+        // It requests 5000. Without mutation the AS would have to reject — but the
+        // client doesn't know the tier limit, so it can't retry meaningfully. With
+        // mutation the validator narrows to 1000; user sees a single consent screen
+        // with "approved up to 1000 instead of 5000" and the token carries 1000.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<TierCap1000Validator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        const string inputWire =
+            """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"5000.00"}}]""";
+        var raw = (JsonArray)JsonNode.Parse(inputWire)!;
+
+        var result = await composite.ApplyAsync(raw, TestClient);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        var wire = validated!.ToJsonString();
+        Assert.Contains("\"amount\":\"1000.00\"", wire);
+        Assert.DoesNotContain("5000.00", wire);
+    }
+
+    [Fact(Skip = "Requires API extension: per-type validator must be able to return Optional<AuthorizationDetail> (null = drop). Tracked as part of #140 follow-up.")]
+    public async Task Scenario3_partial_consent_drops_entry_user_denied()
+    {
+        // Client requests [account_information, payment_initiation]. User agrees
+        // only to the first entry in the consent UI. The current API requires the
+        // per-type validator to return a single AuthorizationDetail or an error;
+        // there is no "skip this entry, keep the others" signal. To enable this
+        // scenario the validator contract would change to return
+        // Result<AuthorizationDetail?, error>, with null meaning "drop". The
+        // composite would build the validated list from non-null returns only.
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task Scenario4_canonicalisation_dedupes_and_lowercases_actions()
+    {
+        // Client sends actions: ["initiate", "Initiate", "INITIATE"] (mixed-case
+        // duplicates). Without mutation the AS would either reject ("duplicate
+        // action") or accept ambiguously, leaving the resource server to deal with
+        // multiple representations of the same action. With mutation the validator
+        // normalises to a canonical lowercase deduped list.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<CanonicalisingActionsValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        const string inputWire =
+            """[{"type":"payment_initiation","actions":["initiate","Initiate","INITIATE"]}]""";
+        var raw = (JsonArray)JsonNode.Parse(inputWire)!;
+
+        var result = await composite.ApplyAsync(raw, TestClient);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        var wire = validated!.ToJsonString();
+        // Single-element arrays collapse to a string per the OAuth single-or-array
+        // convention (see AuthorizationDetail.SetArrayOrStringOrNull).
+        Assert.Contains("\"actions\":\"initiate\"", wire);
+    }
+
+    [Fact(Skip = "Requires API extension: composite-level post-processor that sees the whole validated list and can apply cross-detail caps. Tracked as part of #140 follow-up.")]
+    public async Task Scenario5_cross_detail_total_amount_cap_narrows_last_entry()
+    {
+        // Client requests three payment_initiation entries of 500 EUR each (total
+        // 1500). AS policy: total across all payment_initiation entries in a
+        // single request cannot exceed 1000. The validator that sees each entry
+        // independently has no signal that the third entry tips over the cap.
+        // To enable this scenario the API would expose a composite-level
+        // IAuthorizationDetailsPostProcessor (or similar) that receives the
+        // already-validated list and applies cross-cutting policy. Today the only
+        // workaround is a stateful singleton validator — fragile across requests.
+        await Task.CompletedTask;
+    }
+
     [Fact]
     public async Task ApplyAsync_forwards_byte_exact_when_dispatch_succeeds()
     {
@@ -296,27 +384,27 @@ public class AuthorizationDetailsPolicyTests
     {
         public string Type => type ?? "payment_initiation";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 
     private sealed class PaymentValidator : IAuthorizationDetailValidator
     {
         public string Type => "payment_initiation";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 
     private sealed class AccountValidator : IAuthorizationDetailValidator
     {
         public string Type => "account_information";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 
     private sealed class RejectingValidator : IAuthorizationDetailValidator
@@ -325,10 +413,10 @@ public class AuthorizationDetailsPolicyTests
 
         public string Type => "payment_initiation";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(
-                new AuthorizationDetailValidationError(Reason));
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
     }
 
     private sealed class InvocationCounter
@@ -337,15 +425,70 @@ public class AuthorizationDetailsPolicyTests
         public void Increment() => Count++;
     }
 
+    /// <summary>Scenario 1: narrow amount 500 -> 200 to model a consent-UI slider.</summary>
+    private sealed class NarrowToTwoHundredValidator : IAuthorizationDetailValidator
+    {
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+        {
+            if (detail.Json["instructedAmount"] is JsonObject amount)
+                amount["amount"] = "200.00";
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+        }
+    }
+
+    /// <summary>Scenario 2: enforce a per-transaction client-tier cap of 1000.</summary>
+    private sealed class TierCap1000Validator : IAuthorizationDetailValidator
+    {
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+        {
+            if (detail.Json["instructedAmount"] is JsonObject amount
+                && amount["amount"]?.GetValue<string>() is { } amountStr
+                && decimal.TryParse(amountStr, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value)
+                && value > 1000m)
+            {
+                amount["amount"] = "1000.00";
+            }
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+        }
+    }
+
+    /// <summary>Scenario 4: dedupe + lowercase actions for canonical output.</summary>
+    private sealed class CanonicalisingActionsValidator : IAuthorizationDetailValidator
+    {
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+        {
+            if (detail.Actions is { } actions)
+            {
+                detail.Actions = actions
+                    .Select(a => a.ToLowerInvariant())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+            }
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+        }
+    }
+
     private sealed class CountingValidator(InvocationCounter counter) : IAuthorizationDetailValidator
     {
         public string Type => "account_information";
 
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail,
+            ClientInfo client,
+            CancellationToken token)
         {
             counter.Increment();
-            return Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+            return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
     }
 }

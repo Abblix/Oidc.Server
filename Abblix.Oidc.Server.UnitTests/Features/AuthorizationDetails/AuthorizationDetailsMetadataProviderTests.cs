@@ -24,13 +24,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.UnitTests.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Verifies the discovery surface of RAR — the
@@ -84,16 +85,16 @@ public class AuthorizationDetailsMetadataProviderTests
     private sealed class PaymentValidator : IAuthorizationDetailValidator
     {
         public string Type => "payment_initiation";
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 
     private sealed class AccountValidator : IAuthorizationDetailValidator
     {
         public string Type => "account_information";
-        public Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken ct)
-            => Task.FromResult<Result<AuthorizationDetail, AuthorizationDetailValidationError>>(detail);
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 }

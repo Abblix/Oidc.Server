@@ -24,6 +24,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -84,7 +85,7 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 
 	/// <summary>
 	/// The RFC 9396 Rich Authorization Requests array after per-type and per-client validation by
-	/// <see cref="Features.AuthorizationDetails.IAuthorizationDetailsPolicy"/>, stored as the
+	/// <see cref="IAuthorizationDetailsPolicy"/>, stored as the
 	/// raw <see cref="JsonArray"/> so byte-exact content survives forward to the grant.
 	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>

@@ -22,7 +22,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Default implementation of <see cref="IAuthorizationDetailsMetadataProvider"/>. Enumerates
@@ -45,7 +45,7 @@ internal sealed class AuthorizationDetailsMetadataProvider(
                 .Select(v => v.Type)
                 .ToArray();
 
-            return types.Length == 0 ? null : types;
+            return types.Length != 0 ? types : null;
         }
     }
 }

@@ -28,7 +28,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Composite implementation of <see cref="IAuthorizationDetailsPolicy"/>. Dispatches each
@@ -55,10 +55,10 @@ internal sealed class AuthorizationDetailsPolicy(
         ClientInfo client,
         CancellationToken token = default)
     {
-        if (raw is not { Count: > 0 } jsonArray)
+        if (raw is not { Count: > 0 })
             return (JsonArray?)null;
 
-        var authorizationDetails = jsonArray.ToTypedArray();
+        var authorizationDetails = raw.ToTypedArray();
         if (authorizationDetails is not { Length: > 0 })
             return (JsonArray?)null;
 
@@ -69,30 +69,35 @@ internal sealed class AuthorizationDetailsPolicy(
                 return Reject("Client is not permitted to use authorization_details.");
 
             var allowedSet = new HashSet<string>(allowlist, StringComparer.Ordinal);
+
             var disallowed = authorizationDetails
                 .Where(d => d.Type is not null && !allowedSet.Contains(d.Type))
                 .Select(d => d.Type!)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
+
             if (disallowed.Length != 0)
                 return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
         var result = await ValidateAsync(authorizationDetails, client, token);
-        if (!result.TryGetSuccess(out _))
-            return Reject(result.GetFailure().Description);
+        if (!result.TryGetSuccess(out var validated))
+            return result.GetFailure();
 
-        return jsonArray;
+        // Rebuild the raw array from the validated typed list (RFC 9396 §5 narrow / extend).
+        // When per-type validators left their input untouched the result is byte-equivalent
+        // to the original — DeepClone in ToRawJsonArray preserves member order and any
+        // type-specific payload. When a validator returned a modified AuthorizationDetail,
+        // that mutation surfaces here and the pipeline forwards the post-validation shape
+        // (not the original request) into AuthorizationContext, so token emission reflects
+        // what was actually granted.
+        return validated.ToRawJsonArray();
     }
 
-    private static OidcError Reject(string description) =>
-        new(ErrorCodes.InvalidAuthorizationDetails, description);
-
-    /// <inheritdoc/>
-    public async Task<Result<IReadOnlyList<AuthorizationDetail>, AuthorizationDetailValidationError>> ValidateAsync(
+    private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
         IEnumerable<AuthorizationDetail> details,
         ClientInfo client,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var validated = new List<AuthorizationDetail>();
 
@@ -100,18 +105,18 @@ internal sealed class AuthorizationDetailsPolicy(
         {
             if (string.IsNullOrEmpty(detail.Type))
             {
-                return new AuthorizationDetailValidationError(
+                return new OidcError(ErrorCodes.InvalidAuthorizationDetails, 
                     "authorization_details entry is missing the required 'type' member (RFC 9396 §2)");
             }
 
             var validator = serviceProvider.GetKeyedService<IAuthorizationDetailValidator>(detail.Type);
             if (validator is null)
             {
-                return new AuthorizationDetailValidationError(
+                return new OidcError(ErrorCodes.InvalidAuthorizationDetails, 
                     $"unknown authorization_details type: '{detail.Type}'");
             }
 
-            var result = await validator.ValidateAsync(detail, client, ct);
+            var result = await validator.ValidateAsync(detail, client, cancellationToken);
             if (!result.TryGetSuccess(out var validDetail))
             {
                 return result.GetFailure();
@@ -122,4 +127,7 @@ internal sealed class AuthorizationDetailsPolicy(
 
         return validated;
     }
+
+    private static OidcError Reject(string description) =>
+        new(ErrorCodes.InvalidAuthorizationDetails, description);
 }

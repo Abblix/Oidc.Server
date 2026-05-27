@@ -23,7 +23,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -51,7 +50,7 @@ public sealed class ConfigurationHandler(
 	IJwtAlgorithmsProvider jwtAlgorithms,
 	IAuthenticationCompletionHandler cibaCompletionHandler,
 	IAcrMetadataProvider acrMetadata,
-	IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
+	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.

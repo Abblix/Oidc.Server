@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Discovery metadata contributor for the RFC 9396 Rich Authorization Requests feature.

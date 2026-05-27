@@ -1,8 +1,8 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 

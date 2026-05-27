@@ -20,11 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
+namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Validates a single RFC 9396 authorization_details entry whose <c>type</c> value matches the
@@ -59,13 +60,13 @@ public interface IAuthorizationDetailValidator
     /// standardised members where applicable.</param>
     /// <param name="client">The client that submitted the request, for policy decisions that
     /// depend on per-client allowlists or registered metadata.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or a
-    /// <see cref="AuthorizationDetailValidationError"/> describing the rejection reason on
+    /// <see cref="OidcError"/> describing the rejection reason on
     /// failure. RFC 9396 §5 makes the protocol-level error code at the wire
     /// <c>invalid_authorization_details</c> regardless of the underlying reason.</returns>
-    Task<Result<AuthorizationDetail, AuthorizationDetailValidationError>> ValidateAsync(
+    Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
         AuthorizationDetail detail,
         ClientInfo client,
-        CancellationToken ct);
+        CancellationToken token);
 }

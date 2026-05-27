@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
-using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
