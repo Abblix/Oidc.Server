@@ -196,6 +196,14 @@ public record AuthorizationContext
     public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>
+    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
+    /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
+    /// non-Token-Exchange grants.
+    /// </summary>
+    public JsonObject? Actor { get; init; }
+
+    /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style
     /// destructuring at the call site.
     /// </summary>

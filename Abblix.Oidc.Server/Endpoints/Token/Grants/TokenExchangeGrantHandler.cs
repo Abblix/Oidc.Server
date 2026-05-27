@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -47,9 +49,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// accepts an unknown <c>subject_token_type</c>. Hosts may register additional resolvers for
 /// formats this library does not handle natively.
 /// <para>
-/// Currently impersonation mode only -- <c>actor_token</c> is rejected loudly to avoid silently
-/// downgrading a requested delegation to impersonation. Delegation + <c>act</c> claim chain
-/// lands in #143 slice 3.
+/// Supports both RFC 8693 §4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
+/// <c>sub</c> equals the subject_token's subject, no <c>act</c> claim) and delegation
+/// (<c>actor_token</c> provided; the issued token's <c>sub</c> still equals the subject's
+/// subject, and the <c>act</c> claim names the actor. When the subject_token itself already
+/// carries an <c>act</c> chain, the new actor is layered on top -- the previous chain becomes
+/// the new actor's nested <c>act.act</c>).
 /// </para>
 /// </remarks>
 public class TokenExchangeGrantHandler(
@@ -65,13 +70,27 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <inheritdoc/>
-    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
-        return ValidateRequiredParameters(request)
+        var pre = ValidateRequiredParameters(request)
             .Bind(req => ValidateSubjectTokenTypeAllowlist(req, clientInfo))
-            .Bind(RejectActorTokenForNow)
-            .BindAsync(req => ResolveSubjectAsync(req))
-            .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx, request, clientInfo)));
+            .Bind(ValidateActorTokenPair);
+        if (!pre.TryGetSuccess(out _))
+            return pre.GetFailure();
+
+        var subjectResult = await ResolveTokenAsync(request.SubjectTokenType!, request.SubjectToken!);
+        if (!subjectResult.TryGetSuccess(out var subject))
+            return subjectResult.GetFailure();
+
+        SubjectTokenContext? actor = null;
+        if (request.ActorToken is { Length: > 0 } actorToken)
+        {
+            var actorResult = await ResolveTokenAsync(request.ActorTokenType!, actorToken);
+            if (!actorResult.TryGetSuccess(out actor))
+                return new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {actorResult.GetFailure().ErrorDescription}");
+        }
+
+        return BuildAuthorizedGrant(subject, actor, request, clientInfo);
     }
 
     private Result<TokenRequest, OidcError> ValidateRequiredParameters(TokenRequest request)
@@ -107,44 +126,66 @@ public class TokenExchangeGrantHandler(
         return request;
     }
 
-    private static Result<TokenRequest, OidcError> RejectActorTokenForNow(TokenRequest request)
+    /// <summary>
+    /// RFC 8693 §2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
+    /// either is present -- a request that supplies one without the other is malformed.
+    /// </summary>
+    private static Result<TokenRequest, OidcError> ValidateActorTokenPair(TokenRequest request)
     {
-        if (request.ActorToken is { Length: > 0 } || request.ActorTokenType is { Length: > 0 })
+        var hasToken = !string.IsNullOrEmpty(request.ActorToken);
+        var hasType = !string.IsNullOrEmpty(request.ActorTokenType);
+        if (hasToken != hasType)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "Delegation via actor_token is not yet supported (impersonation only).");
+                "actor_token and actor_token_type must be supplied together.");
         }
         return request;
     }
 
-    private async Task<Result<SubjectTokenContext, OidcError>> ResolveSubjectAsync(TokenRequest request)
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(string tokenType, string tokenValue)
     {
-        var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(request.SubjectTokenType!);
+        var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType);
         if (resolver is null)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                $"subject_token_type '{request.SubjectTokenType}' is not supported.");
+                $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(request.SubjectToken!, default);
+        return await resolver.ResolveAsync(tokenValue, default);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(
         SubjectTokenContext subject,
+        SubjectTokenContext? actor,
         TokenRequest request,
         ClientInfo clientInfo)
     {
-        // RFC 8693 §4.1 impersonation: issued token's subject equals the subject_token's
-        // subject; no act chain. Scope: when the client supplies scope in the request use that,
+        // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
+        // and delegation alike). Scope: when the client supplies scope in the request use that,
         // otherwise fall back to the subject_token's scope. Resource servers downstream of
-        // narrow-at-exchange will see only the scopes the client asked for.
+        // narrow-at-exchange see only the scopes the client asked for.
         var scope = request.Scope is { Length: > 0 } ? request.Scope : subject.Scope ?? [];
+
+        // Delegation act chain (RFC 8693 §4.1): when an actor_token was supplied, the new actor's
+        // act object names the actor's subject; any prior act chain inherited from the
+        // subject_token becomes the new actor's nested act.act, preserving the full delegation
+        // path. Impersonation = no actor_token = no act emission.
+        JsonObject? actorClaim = null;
+        if (actor is not null)
+        {
+            actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
+            if (subject.Act is not null)
+            {
+                actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
+            }
+        }
 
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null)
         {
             AuthorizationDetails = subject.AuthorizationDetailsRaw,
+            Actor = actorClaim,
         };
 
         var authSession = new AuthSession(

@@ -43,8 +43,14 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="AuthorizationDetailsRaw">RFC 9396 <c>authorization_details</c> attached to the
 /// subject_token, raw <see cref="JsonArray"/> so the byte-exact payload survives the exchange
 /// into the issued token. <c>null</c> when the subject_token did not carry AD.</param>
+/// <param name="Act">RFC 8693 §4.1 <c>act</c> claim attached to the subject_token, captured as
+/// a raw <see cref="JsonObject"/>. When the exchange adds a new actor on top of a subject_token
+/// that already had its own act chain, the grant handler nests this value under the new actor's
+/// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
+/// subject_token was not itself a delegation token.</param>
 public sealed record SubjectTokenContext(
     string Subject,
     string? Issuer,
     string[]? Scope,
-    JsonArray? AuthorizationDetailsRaw);
+    JsonArray? AuthorizationDetailsRaw,
+    JsonObject? Act = null);

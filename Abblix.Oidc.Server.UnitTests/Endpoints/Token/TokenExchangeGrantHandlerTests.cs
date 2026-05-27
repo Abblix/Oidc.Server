@@ -153,13 +153,119 @@ public class TokenExchangeGrantHandlerTests
     }
 
     [Fact]
-    public async Task ActorTokenPresent_RejectedAsNotYetSupported()
+    public async Task DelegationFlow_BuildsActClaimWithActorSubject()
+    {
+        // Single-hop delegation: subject_token has no prior act chain. Result: act = { sub: <actor> }.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null);
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null);
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = TokenExchangeTokenTypes.AccessToken,
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("alice", grant.AuthSession.Subject);
+        Assert.NotNull(grant.Context.Actor);
+        Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
+        Assert.Null(grant.Context.Actor["act"]);
+    }
+
+    [Fact]
+    public async Task ChainedDelegation_PrependsExistingActChain()
+    {
+        // Subject_token already carries an act chain: { sub: prev-actor }. New actor wraps it:
+        // result act = { sub: new-actor, act: { sub: prev-actor } }.
+        var existingChain = new JsonObject { ["sub"] = "prev-actor" };
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null, Act: existingChain);
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null);
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = TokenExchangeTokenTypes.AccessToken,
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
+        var nested = grant.Context.Actor["act"] as JsonObject;
+        Assert.NotNull(nested);
+        Assert.Equal("prev-actor", nested!["sub"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ActorTokenWithoutType_Rejected()
     {
         var handler = CreateHandlerWithoutResolvers();
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
         {
-            ActorToken = "actor.jwt.signature",
+            ActorToken = "actor.jwt",  // type missing
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("together", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ActorTokenTypeWithoutToken_Rejected()
+    {
+        var handler = CreateHandlerWithoutResolvers();
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorTokenType = TokenExchangeTokenTypes.AccessToken,  // value missing
+        };
+
+        SetupRequiredOnly(request);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Contains("together", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ActorResolverFailure_PropagatedWithPrefix()
+    {
+        // actor_token resolution failure is wrapped so the wire client can distinguish actor
+        // problems from subject problems even though both map to invalid_request.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null);
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
+
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,
         };
 
@@ -169,7 +275,8 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Contains("Delegation", error.ErrorDescription);
+        Assert.Contains("actor_token", error.ErrorDescription);
+        Assert.Contains("actor expired", error.ErrorDescription);
     }
 
     [Fact]

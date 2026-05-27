@@ -74,10 +74,19 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
                 ? (JsonArray?)ad.DeepClone()
                 : null;
 
+        // RFC 8693 §4.1 act chain: preserve the subject_token's act so a delegation chain can
+        // be extended when this resolver feeds a Token Exchange request that also supplies an
+        // actor_token. DeepClone for the same parenting reason as AD.
+        var act =
+            jwt.Payload.Json[IanaClaimTypes.Act] is JsonObject existingAct
+                ? (JsonObject?)existingAct.DeepClone()
+                : null;
+
         return new SubjectTokenContext(
             Subject: subject,
             Issuer: jwt.Payload.Issuer,
             Scope: jwt.Payload.Scope?.ToArray(),
-            AuthorizationDetailsRaw: authorizationDetailsRaw);
+            AuthorizationDetailsRaw: authorizationDetailsRaw,
+            Act: act);
     }
 }

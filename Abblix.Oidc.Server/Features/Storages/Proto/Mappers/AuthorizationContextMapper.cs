@@ -69,6 +69,11 @@ internal static class AuthorizationContextMapper
         if (source.AuthorizationDetails is { Count: > 0 })
             proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
 
+        // RFC 8693 act claim chain persisted as opaque JSON for the same byte-exact reason --
+        // nested act.act delegation paths and per-actor metadata round-trip without loss.
+        if (source.Actor is not null)
+            proto.ActorJson = source.Actor.ToJsonString();
+
         return proto;
     }
 
@@ -91,6 +96,9 @@ internal static class AuthorizationContextMapper
             Resources = source.Resources.GetArray(r => new Uri(r)),
             AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
+                : null,
+            Actor = source.HasActorJson
+                ? JsonNode.Parse(source.ActorJson) as JsonObject
                 : null,
         };
     }

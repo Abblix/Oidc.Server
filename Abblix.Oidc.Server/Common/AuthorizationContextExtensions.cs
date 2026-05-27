@@ -85,6 +85,13 @@ public static class AuthorizationContextExtensions
         {
             payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetails.DeepClone();
         }
+
+        // RFC 8693 §4.1: emit the act claim for delegation tokens. Nested act chains live in
+        // the JsonObject's act member -- preserved byte-exact via DeepClone.
+        if (context.Actor is not null)
+        {
+            payload.Json[IanaClaimTypes.Act] = context.Actor.DeepClone();
+        }
     }
 
     /// <summary>
@@ -124,6 +131,9 @@ public static class AuthorizationContextExtensions
             ProofKeyThumbprint = cnf?.JwkThumbprint,
             AuthorizationDetails = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
                 ? (JsonArray)raw.DeepClone()
+                : null,
+            Actor = payload.Json[IanaClaimTypes.Act] is JsonObject act
+                ? (JsonObject)act.DeepClone()
                 : null,
         };
     }

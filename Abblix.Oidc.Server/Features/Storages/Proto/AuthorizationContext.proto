@@ -45,4 +45,9 @@ message AuthorizationContext {
   // data) is structurally unbounded; round-trip preserves exact wire shape including
   // unknown members the per-type validator did not strip.
   optional string authorization_details_json = 11;
+
+  // RFC 8693 Section 4.1 act claim chain, serialised as a JSON string. Stored as
+  // opaque JSON because the act object may carry arbitrary actor metadata and nested
+  // act.act delegation chains; round-trip preserves byte-exact shape.
+  optional string actor_json = 12;
 }

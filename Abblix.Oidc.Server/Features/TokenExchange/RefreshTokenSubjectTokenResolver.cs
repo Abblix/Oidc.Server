@@ -79,17 +79,23 @@ public sealed class RefreshTokenSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token does not refer to a known grant.");
         }
 
-        // DeepClone detaches AuthorizationDetails from the recovered grant's storage instance so
-        // mutations downstream do not leak back into stored state.
+        // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
+        // instance so mutations downstream do not leak back into stored state.
         var authorizationDetailsRaw =
             grant.Context.AuthorizationDetails is { } ad
                 ? (JsonArray?)ad.DeepClone()
+                : null;
+
+        var act =
+            grant.Context.Actor is { } existingAct
+                ? (JsonObject?)existingAct.DeepClone()
                 : null;
 
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
             Issuer: grant.AuthSession.IdentityProvider,
             Scope: grant.Context.Scope,
-            AuthorizationDetailsRaw: authorizationDetailsRaw);
+            AuthorizationDetailsRaw: authorizationDetailsRaw,
+            Act: act);
     }
 }
