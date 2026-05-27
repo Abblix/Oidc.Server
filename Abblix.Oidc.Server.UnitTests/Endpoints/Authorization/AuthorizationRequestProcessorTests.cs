@@ -111,7 +111,7 @@ public class AuthorizationRequestProcessorTests
             ResponseMode = ResponseModes.Query,
             Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
             Resources = [],
-            AuthorizationDetailsRaw = authorizationDetails,
+            AuthorizationDetails = authorizationDetails,
         };
 
         return new ValidAuthorizationRequest(context);

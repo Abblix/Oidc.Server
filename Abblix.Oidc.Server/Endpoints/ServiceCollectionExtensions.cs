@@ -213,6 +213,7 @@ public static class ServiceCollectionExtensions
             .AddAuthorizationCodeGrant()
             .AddRefreshTokenGrant()
             .AddClientCredentialsGrant()
+            .AddTokenExchangeGrant()
             // BackChannelAuthenticationGrantHandler and DeviceCodeGrantHandler are registered
             // in AddBackChannelAuthentication() and AddDeviceAuthorization() respectively
             // AddAuthorizationGrants() is called in AddOidcCore() after all handlers are registered
@@ -326,6 +327,22 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddClientCredentialsGrant(this IServiceCollection services)
     {
         return services.AddAuthorizationGrant<ClientCredentialsGrantHandler>();
+    }
+
+    /// <summary>
+    /// Registers the RFC 8693 Token Exchange grant handler.
+    /// </summary>
+    /// <remarks>
+    /// Current slice supports JWT-based subject tokens
+    /// (<c>urn:ietf:params:oauth:token-type:access_token</c>, <c>:id_token</c>, <c>:jwt</c>) in
+    /// impersonation mode. Opaque-token (refresh-token) subjects, <c>actor_token</c>-based
+    /// delegation, and discovery / DCR metadata land in subsequent slices (see #143).
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddTokenExchangeGrant(this IServiceCollection services)
+    {
+        return services.AddAuthorizationGrant<TokenExchangeGrantHandler>();
     }
 
     /// <summary>

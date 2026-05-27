@@ -28,7 +28,7 @@ public class AuthorizationDetailsRequestValidator(
             return context.InvalidAuthorizationDetails(result.GetFailure().ErrorDescription);
 
         if (validated is not null)
-            context.AuthorizationDetailsRaw = validated;
+            context.AuthorizationDetails = validated;
         return null;
     }
 }

@@ -48,7 +48,7 @@ public record ValidAuthorizationRequest
 		ClientInfo = context.ClientInfo;
 		Scope = context.Scope;
 		Resources = context.Resources;
-		AuthorizationDetails = context.AuthorizationDetailsRaw;
+		AuthorizationDetails = context.AuthorizationDetails;
 	}
 
 	/// <summary>
@@ -79,11 +79,11 @@ public record ValidAuthorizationRequest
 
 	/// <summary>
 	/// RFC 9396 Rich Authorization Requests array, snapshot from
-	/// <see cref="AuthorizationValidationContext.AuthorizationDetailsRaw"/> at the end of the
-	/// validator pipeline -- i.e. post per-client allowlist filtering and post per-type
-	/// validator narrow/extend mutations. <see cref="Features.Consents.IUserConsentsProvider"/>
-	/// reads this slot to render the consent UI; downstream consent emits its (possibly
-	/// further-narrowed) decision via <see cref="Features.Consents.ConsentDefinition.AuthorizationDetails"/>.
+	/// <see cref="AuthorizationValidationContext.AuthorizationDetails"/> at the end of the validator pipeline --
+	/// i.e. post per-client allowlist filtering and post per-type validator narrow/extend mutations.
+	/// <see cref="Features.Consents.IUserConsentsProvider"/> reads this slot to render the consent UI;
+	/// downstream consent emits its (possibly further-narrowed) decision via
+	/// <see cref="Features.Consents.ConsentDefinition.AuthorizationDetails"/>.
 	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>
 	public JsonArray? AuthorizationDetails { get; init; }

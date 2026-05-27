@@ -186,6 +186,24 @@ public record ClientInfo(string ClientId)
     public bool ForceAuthorizationDetailsInIdentityToken { get; set; } = false;
 
     /// <summary>
+    /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
+    /// to the Token Exchange grant. Independent of <see cref="AllowedGrantTypes"/> -- a client must
+    /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
+    /// <see cref="AllowedGrantTypes"/> to invoke the grant, and the requested
+    /// <c>subject_token_type</c> must additionally satisfy this allowlist.
+    /// <list type="bullet">
+    /// <item><description><c>null</c>: no constraint (any of <see cref="TokenExchangeTokenTypes"/> the
+    /// AS can validate is accepted).</description></item>
+    /// <item><description>Empty array: forbidden -- every Token Exchange request from this client is
+    /// rejected with <c>invalid_request</c> regardless of <c>subject_token_type</c>.</description></item>
+    /// <item><description>Non-empty array: allowlist -- only the listed type URIs are accepted; any other
+    /// is rejected.</description></item>
+    /// </list>
+    /// Mirrors the <see cref="AuthorizationDetailsTypes"/> tri-state pattern.
+    /// </summary>
+    public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).

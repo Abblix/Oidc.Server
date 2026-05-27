@@ -89,12 +89,5 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// raw <see cref="JsonArray"/> so byte-exact content survives forward to the grant.
 	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>
-	public JsonArray? AuthorizationDetailsRaw { get; set; }
-
-	/// <summary>
-	/// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/>. Each entry is wrapped as an
-	/// <see cref="AuthorizationDetail"/> over the underlying <see cref="JsonNode"/>; per-type
-	/// extension members are accessible via <see cref="AuthorizationDetail.Json"/>.
-	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
+	public JsonArray? AuthorizationDetails { get; set; }
 }
