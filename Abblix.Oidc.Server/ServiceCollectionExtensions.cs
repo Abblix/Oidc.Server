@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
