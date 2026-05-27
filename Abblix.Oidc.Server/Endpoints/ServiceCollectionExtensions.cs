@@ -640,7 +640,9 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
-            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>()
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>(),
+            // RFC 9396 §3 authorization_details on device authorization requests.
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.DeviceAuthorizationDetailsValidator>(),
         ]);
         return services.Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();
     }

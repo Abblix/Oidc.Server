@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -51,6 +52,15 @@ public record DeviceAuthorizationRequest
     public Uri[]? Resources { get; init; }
 
     /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array stored as the raw wire
+    /// <see cref="JsonArray"/>. Device flows accept <c>authorization_details</c> by spec
+    /// reference (RFC 9396 §3 cites RFC 8628); the array carries through to the eventual
+    /// access token issued via the device-code grant byte-exact.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetails)]
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
     /// Contains constants representing the parameter names used in the device authorization request.
     /// </summary>
     public static class Parameters
@@ -62,5 +72,9 @@ public record DeviceAuthorizationRequest
         /// <summary>The <c>resource</c> device authorization request parameter (RFC 8707) targeting a
         /// specific protected resource for the resulting tokens.</summary>
         public const string Resource = "resource";
+
+        /// <summary>The <c>authorization_details</c> device authorization request parameter
+        /// (RFC 9396 §3) carrying a JSON array of Rich Authorization Requests.</summary>
+        public const string AuthorizationDetails = "authorization_details";
     }
 }

@@ -71,7 +71,7 @@ public class UserCodeVerificationService(
 
         // Valid user code found and pending - record success to reset counters
         await rateLimiter.RecordSuccessAsync(userCode, clientIp);
-        return new ValidUserCode(request.ClientId, request.Scope, request.Resources);
+        return new ValidUserCode(request.ClientId, request.Scope, request.Resources, request.AuthorizationDetails);
     }
 
     /// <inheritdoc />

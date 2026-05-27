@@ -16,12 +16,12 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// of truth.
 /// </summary>
 public class BackChannelAuthorizationDetailsValidator(
-    IAuthorizationDetailsPolicy detailsValidator) : IBackChannelAuthenticationContextValidator
+    IAuthorizationDetailsPolicy policy) : IBackChannelAuthenticationContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
     {
-        var result = await detailsValidator.ApplyAsync(
+        var result = await policy.ApplyAsync(
             context.Request.AuthorizationDetails,
             context.ClientInfo);
 

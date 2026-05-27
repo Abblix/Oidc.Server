@@ -15,12 +15,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// one source of truth.
 /// </summary>
 public class AuthorizationDetailsRequestValidator(
-    IAuthorizationDetailsPolicy detailsValidator) : IAuthorizationContextValidator
+    IAuthorizationDetailsPolicy policy) : IAuthorizationContextValidator
 {
     /// <inheritdoc/>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
-        var result = await detailsValidator.ApplyAsync(
+        var result = await policy.ApplyAsync(
             context.Request.AuthorizationDetails,
             context.ClientInfo);
 
