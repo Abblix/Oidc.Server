@@ -22,6 +22,7 @@
 
 using System;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -60,7 +61,7 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "payment_initiation" },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -77,7 +78,7 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = null! },
+            new AuthorizationDetail(new JsonObject()) { Type = null! },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -106,7 +107,7 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "payment_initiation", Actions = ["initiate"] },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation", Actions = ["initiate"] },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -126,8 +127,8 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "payment_initiation" },
-            new AuthorizationDetail { Type = "account_information" },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
+            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -146,7 +147,7 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "payment_initiation" },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -169,8 +170,8 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "payment_initiation" },
-            new AuthorizationDetail { Type = "account_information" },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
+            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);
@@ -190,9 +191,9 @@ public class AuthorizationDetailsValidatorTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
         var details = new[]
         {
-            new AuthorizationDetail { Type = "consent" },
-            new AuthorizationDetail { Type = "payment_initiation" },
-            new AuthorizationDetail { Type = "account_information" },
+            new AuthorizationDetail(new JsonObject()) { Type = "consent" },
+            new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
+            new AuthorizationDetail(new JsonObject()) { Type = "account_information" },
         };
 
         var result = await composite.ValidateAsync(details, TestClient, CancellationToken.None);

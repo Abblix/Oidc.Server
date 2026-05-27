@@ -83,7 +83,7 @@ public static class AuthorizationContextExtensions
         // the payload's JsonNode tree independent of the source AuthorizationContext.
         if (context.AuthorizationDetailsRaw is { Count: > 0 })
         {
-            payload.AuthorizationDetailsRaw = (JsonArray)context.AuthorizationDetailsRaw.DeepClone();
+            payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetailsRaw.DeepClone();
         }
     }
 
@@ -122,7 +122,7 @@ public static class AuthorizationContextExtensions
             Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
-            AuthorizationDetailsRaw = payload.AuthorizationDetailsRaw is { } raw
+            AuthorizationDetailsRaw = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
                 ? (JsonArray)raw.DeepClone()
                 : null,
         };

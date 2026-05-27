@@ -307,27 +307,19 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The raw <see cref="JsonArray"/> backing the RFC 9396 <c>authorization_details</c>
-	/// claim. This is the source of truth for the claim: it preserves member order and
-	/// type-specific payload byte-exact across the authorize → code → token round-trip
-	/// (no typed deserialise/re-serialise cycle). Returns <c>null</c> when the claim is
-	/// absent or its value is not a JSON array; assigning <c>null</c> removes the claim.
-	/// For strongly-typed access use <see cref="AuthorizationDetails"/>; for construction
-	/// from a typed sequence see <c>AuthorizationDetailsExtensions.ToRawJsonArray</c>.
+	/// The RFC 9396 <c>authorization_details</c> claim as a sequence of typed wrappers over
+	/// the underlying <see cref="JsonArray"/> stored at <see cref="Json"/>[<c>authorization_details</c>].
+	/// Each wrapper shares its <see cref="JsonNode"/> reference with the corresponding array
+	/// element — read-through is byte-exact, and property setters on a wrapper mutate the
+	/// underlying claim in place. Assigning a new sequence rebuilds the raw array via
+	/// <see cref="JsonArrayExtensions.ToRawJsonArray"/>, deep-cloning each entry's
+	/// <see cref="AuthorizationDetail.Json"/> to detach parent ownership; assigning <c>null</c>
+	/// removes the claim. For direct raw access bypass this accessor and use the
+	/// <see cref="Json"/> indexer at <c>IanaClaimTypes.AuthorizationDetails</c>.
 	/// </summary>
-	public JsonArray? AuthorizationDetailsRaw
+	public IEnumerable<AuthorizationDetail>? AuthorizationDetails
 	{
-		get => Json[IanaClaimTypes.AuthorizationDetails] as JsonArray;
-		set => Json.SetProperty(IanaClaimTypes.AuthorizationDetails, value);
+		get => Json[IanaClaimTypes.AuthorizationDetails] is JsonArray arr ? arr.ToTypedArray() : null;
+		set => Json.SetProperty(IanaClaimTypes.AuthorizationDetails, value.ToRawJsonArray());
 	}
-
-	/// <summary>
-	/// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> per RFC 9396 §2.
-	/// Each entry is deserialised on demand into <see cref="AuthorizationDetail"/>;
-	/// type-specific fields outside the §2.2 common-data set live in
-	/// <see cref="AuthorizationDetail.ExtensionData"/>. To replace the claim, set
-	/// <see cref="AuthorizationDetailsRaw"/> directly with a new <see cref="JsonArray"/>.
-	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails
-		=> AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
 }

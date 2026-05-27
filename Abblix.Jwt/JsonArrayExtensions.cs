@@ -20,59 +20,60 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Conversion helpers between a raw <see cref="JsonArray"/> wire form and a typed-array
-/// projection. Parallels <see cref="JsonObjectExtensions"/> for object-shaped claims;
-/// here the shape is a JSON array.
+/// Conversion helpers between a raw <see cref="JsonArray"/> wire form and a sequence of
+/// <see cref="AuthorizationDetail"/> wrappers. Parallels <see cref="JsonObjectExtensions"/>
+/// for object-shaped claims; here the shape is a JSON array and each element is a wrapper
+/// over its underlying <see cref="JsonNode"/>.
 /// </summary>
 /// <remarks>
-/// Used by the structured-claim accessors (<c>JsonWebTokenPayload.AuthorizationDetailsRaw</c>
-/// for RFC 9396, and any future array-shaped claim) so the raw <see cref="JsonArray"/> remains
-/// the source of truth — preserving member order and type-specific payload byte-exact across
-/// the authorize → code → token round-trip — while typed projections are produced on demand
-/// for code consumption.
+/// The raw <see cref="JsonArray"/> remains the source of truth — member order and type-specific
+/// payload survive the authorize → code → token round-trip byte-exact because no typed
+/// deserialise / re-serialise cycle ever runs over the wrapped nodes.
 /// </remarks>
 public static class JsonArrayExtensions
 {
     /// <summary>
-    /// Serialises a typed sequence into a fresh <see cref="JsonArray"/> via the default
-    /// <see cref="JsonSerializer"/>. The result is a new tree owned by the caller — no
-    /// references shared with the input.
+    /// Builds a fresh <see cref="JsonArray"/> from a sequence of <see cref="AuthorizationDetail"/>
+    /// wrappers, deep-cloning each entry's underlying <see cref="AuthorizationDetail.Json"/> so
+    /// the resulting array is independent of the sources and can attach to a different parent
+    /// (JSON nodes may have only one parent at a time).
     /// </summary>
-    /// <typeparam name="T">The element type to serialise.</typeparam>
-    /// <param name="values">The sequence, or <c>null</c>.</param>
+    /// <param name="details">The wrapper sequence, or <c>null</c>.</param>
     /// <returns>A fresh <see cref="JsonArray"/>, or <c>null</c> when the input is <c>null</c>.</returns>
-    public static JsonArray? ToRawJsonArray<T>(this IEnumerable<T>? values)
+    public static JsonArray? ToRawJsonArray(this IEnumerable<AuthorizationDetail>? details)
     {
-        if (values is null) return null;
+        if (details is null) return null;
 
         var array = new JsonArray();
-        foreach (var value in values)
+        foreach (var detail in details)
         {
-            array.Add(JsonSerializer.SerializeToNode(value));
+            array.Add(detail.Json.DeepClone());
         }
         return array;
     }
 
     /// <summary>
-    /// Projects a raw <see cref="JsonArray"/> into a typed <typeparamref name="T"/>[] for code
-    /// consumption. Each element is deserialised independently via the default
-    /// <see cref="JsonSerializer"/>; entries that fail to materialise (null nodes, or nodes
-    /// that do not match the target type) are skipped.
+    /// Wraps each non-null element of a raw <see cref="JsonArray"/> as an
+    /// <see cref="AuthorizationDetail"/>. The wrappers share references with the source array's
+    /// nodes — read-through is byte-exact, and any property-setter calls mutate the underlying
+    /// array in place.
     /// </summary>
-    /// <typeparam name="T">The element type to deserialise into.</typeparam>
     /// <param name="jsonArray">The raw array, or <c>null</c>.</param>
-    /// <returns>A typed array, or <c>null</c> when the input is <c>null</c>.</returns>
-    public static T[]? ToTypedArray<T>(this JsonArray? jsonArray)
+    /// <returns>A wrapper array, or <c>null</c> when the input is <c>null</c>.</returns>
+    public static AuthorizationDetail[]? ToTypedArray(this JsonArray? jsonArray)
     {
         return jsonArray?
-            .Select(node => node is null ? default : node.Deserialize<T>())
-            .OfType<T>()
+            .Select(node => node switch
+            {
+                not null => new AuthorizationDetail(node),
+                null => default,
+            })
+            .OfType<AuthorizationDetail>()
             .ToArray();
     }
 }

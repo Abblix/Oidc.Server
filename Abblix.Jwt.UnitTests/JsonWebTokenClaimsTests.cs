@@ -748,26 +748,22 @@ public class JsonWebTokenClaimsTests
     public async Task AuthorizationDetailsClaim_RoundTrip_PreservesStandardisedAndExtensionMembers()
     {
         var token = CreateToken();
-        token.Payload.AuthorizationDetailsRaw = new[]
+        var paymentDetail = new AuthorizationDetail((JsonObject)JsonNode.Parse(
+            """
+            {
+              "type": "payment_initiation",
+              "actions": ["initiate", "status"],
+              "locations": ["https://api.bank.example/payments"],
+              "instructedAmount": { "currency": "EUR", "amount": "500.00" },
+              "creditorName": "Merchant A"
+            }
+            """)!);
+        var accountDetail = new AuthorizationDetail(new JsonObject())
         {
-            new AuthorizationDetail
-            {
-                Type = "payment_initiation",
-                Actions = new[] { "initiate", "status" },
-                Locations = new[] { "https://api.bank.example/payments" },
-                ExtensionData = new Dictionary<string, JsonElement>
-                {
-                    ["instructedAmount"] = JsonSerializer.Deserialize<JsonElement>(
-                        """{"currency":"EUR","amount":"500.00"}"""),
-                    ["creditorName"] = JsonSerializer.Deserialize<JsonElement>("\"Merchant A\""),
-                },
-            },
-            new AuthorizationDetail
-            {
-                Type = "account_information",
-                Identifier = "acct-001",
-            },
-        }.ToRawJsonArray();
+            Type = "account_information",
+            Identifier = "acct-001",
+        };
+        token.Payload.AuthorizationDetails = new[] { paymentDetail, accountDetail };
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
@@ -778,13 +774,9 @@ public class JsonWebTokenClaimsTests
         Assert.Equal("payment_initiation", actual[0].Type);
         Assert.Equal(new[] { "initiate", "status" }, actual[0].Actions);
         Assert.Equal(new[] { "https://api.bank.example/payments" }, actual[0].Locations);
-        Assert.Equal(
-            "EUR",
-            actual[0].ExtensionData?["instructedAmount"].GetProperty("currency").GetString());
-        Assert.Equal(
-            "500.00",
-            actual[0].ExtensionData?["instructedAmount"].GetProperty("amount").GetString());
-        Assert.Equal("Merchant A", actual[0].ExtensionData?["creditorName"].GetString());
+        Assert.Equal("EUR", actual[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
+        Assert.Equal("500.00", actual[0].Json["instructedAmount"]?["amount"]?.GetValue<string>());
+        Assert.Equal("Merchant A", actual[0].Json["creditorName"]?.GetValue<string>());
 
         Assert.Equal("account_information", actual[1].Type);
         Assert.Equal("acct-001", actual[1].Identifier);

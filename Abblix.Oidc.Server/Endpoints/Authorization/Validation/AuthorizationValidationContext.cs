@@ -91,7 +91,9 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	public JsonArray? AuthorizationDetailsRaw { get; set; }
 
 	/// <summary>
-	/// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
+	/// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/>. Each entry is wrapped as an
+	/// <see cref="AuthorizationDetail"/> over the underlying <see cref="JsonNode"/>; per-type
+	/// extension members are accessible via <see cref="AuthorizationDetail.Json"/>.
 	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
+	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 }

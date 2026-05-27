@@ -63,10 +63,13 @@ public record AuthorizationRequest
     public JsonArray? AuthorizationDetailsRaw { get; init; }
 
     /// <summary>
-    /// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
+    /// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/>. Each entry is wrapped as an
+    /// <see cref="AuthorizationDetail"/> over the underlying <see cref="JsonNode"/> sharing
+    /// references with the raw array, so reading typed properties projects the byte-exact wire
+    /// shape; per-type extension members are accessible via <see cref="AuthorizationDetail.Json"/>.
     /// </summary>
     [JsonIgnore]
-    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
+    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 
 	/// <summary>
 	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:

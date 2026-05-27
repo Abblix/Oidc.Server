@@ -20,16 +20,18 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json;
+using System.Linq;
 using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Unit tests for <see cref="AuthorizationDetail"/> and the <see cref="JsonWebTokenPayload.AuthorizationDetails"/>
-/// accessor. Covers JSON round-trip of standardised RFC 9396 §2.2 members, extension-data preservation for
-/// type-specific payload, and the typed accessor mechanics on the payload.
+/// Unit tests for <see cref="AuthorizationDetail"/> as a thin wrapper over a
+/// <see cref="JsonNode"/> claim element and the <see cref="JsonWebTokenPayload.AuthorizationDetails"/>
+/// accessor. Verifies that the wrapper's typed property accessors read from and write to the
+/// underlying JSON in place — so member order and type-specific extension members survive the
+/// authorize → code → token round-trip byte-exact.
 /// </summary>
 public class AuthorizationDetailTests
 {
@@ -39,96 +41,92 @@ public class AuthorizationDetailTests
         Assert.Equal("authorization_details", IanaClaimTypes.AuthorizationDetails);
     }
 
-    /// <summary>
-    /// Standardised RFC 9396 §2.2 members survive JSON serialise → deserialise round-trip with
-    /// member-by-member equality. No extension data in this case.
-    /// </summary>
     [Fact]
-    public void Serialize_StandardisedMembers_RoundTripPreservesAll()
+    public void TypedAccessors_ReadFromUnderlyingJson()
     {
-        var original = new AuthorizationDetail
-        {
-            Type = "payment_initiation",
-            Locations = new[] { "https://api.bank.example/payments" },
-            Actions = new[] { "initiate", "status" },
-            Datatypes = new[] { "iban" },
-            Identifier = "txn-4521",
-            Privileges = new[] { "read", "write" },
-        };
+        var json = (JsonObject)JsonNode.Parse(
+            """
+            {
+              "type": "payment_initiation",
+              "locations": ["https://api.bank.example/payments"],
+              "actions": ["initiate", "status"],
+              "datatypes": ["iban"],
+              "identifier": "txn-4521",
+              "privileges": ["read", "write"]
+            }
+            """)!;
+        var detail = new AuthorizationDetail(json);
 
-        var json = JsonSerializer.Serialize(original);
-        var round = JsonSerializer.Deserialize<AuthorizationDetail>(json);
-
-        Assert.NotNull(round);
-        Assert.Equal(original.Type, round.Type);
-        Assert.Equal(original.Locations, round.Locations);
-        Assert.Equal(original.Actions, round.Actions);
-        Assert.Equal(original.Datatypes, round.Datatypes);
-        Assert.Equal(original.Identifier, round.Identifier);
-        Assert.Equal(original.Privileges, round.Privileges);
-        Assert.Null(round.ExtensionData);
+        Assert.Equal("payment_initiation", detail.Type);
+        Assert.Equal(new[] { "https://api.bank.example/payments" }, detail.Locations);
+        Assert.Equal(new[] { "initiate", "status" }, detail.Actions);
+        Assert.Equal(new[] { "iban" }, detail.Datatypes);
+        Assert.Equal("txn-4521", detail.Identifier);
+        Assert.Equal(new[] { "read", "write" }, detail.Privileges);
     }
 
-    /// <summary>
-    /// Type-specific members outside the RFC 9396 §2.2 common-data set land in
-    /// <see cref="AuthorizationDetail.ExtensionData"/> and survive round-trip with their original
-    /// JSON shape — strings, numbers, nested objects, nested arrays.
-    /// </summary>
     [Fact]
-    public void Serialize_TypeSpecificMembers_PreservedInExtensionData()
+    public void TypedSetters_MutateUnderlyingJsonInPlace()
     {
-        const string wire =
+        var json = new JsonObject();
+        var detail = new AuthorizationDetail(json)
+        {
+            Type = "payment_initiation",
+            Actions = new[] { "initiate", "status" },
+        };
+
+        Assert.Equal("payment_initiation", json["type"]?.GetValue<string>());
+        // Multi-element arrays land as a JsonArray; single-element collapses to a string per
+        // the OAuth single-or-array convention shared with audience / amr.
+        Assert.IsType<JsonArray>(json["actions"]);
+        Assert.Equal(2, json["actions"]!.AsArray().Count);
+
+        // Setter on wrapper writes through to the same underlying JsonObject reference.
+        Assert.Same(json, detail.Json);
+    }
+
+    [Fact]
+    public void TypeSpecificMembers_AccessedDirectlyViaJson()
+    {
+        // RFC 9396 §2.2 extension members (per-type payload like PSD2 instructedAmount /
+        // creditorAccount) live in the wrapper's Json as ordinary JSON members; per-type
+        // validators read and write them directly through the System.Text.Json.Nodes API.
+        var json = (JsonObject)JsonNode.Parse(
             """
             {
               "type": "payment_initiation",
               "actions": ["initiate"],
               "instructedAmount": { "currency": "EUR", "amount": "500.00" },
               "creditorAccount": { "iban": "DE02100100109307118603" },
-              "creditorName": "Merchant A",
-              "remittanceInformationUnstructured": "Order #4521",
-              "lineItems": [
-                { "id": "li-1", "qty": 2 },
-                { "id": "li-2", "qty": 1 }
-              ]
+              "lineItems": [{ "id": "li-1", "qty": 2 }, { "id": "li-2", "qty": 1 }]
             }
-            """;
+            """)!;
+        var detail = new AuthorizationDetail(json);
 
-        var detail = JsonSerializer.Deserialize<AuthorizationDetail>(wire);
-
-        Assert.NotNull(detail);
         Assert.Equal("payment_initiation", detail.Type);
         Assert.Equal(new[] { "initiate" }, detail.Actions);
-        Assert.NotNull(detail.ExtensionData);
-        Assert.True(detail.ExtensionData.ContainsKey("instructedAmount"));
-        Assert.True(detail.ExtensionData.ContainsKey("creditorAccount"));
-        Assert.True(detail.ExtensionData.ContainsKey("creditorName"));
-        Assert.True(detail.ExtensionData.ContainsKey("remittanceInformationUnstructured"));
-        Assert.True(detail.ExtensionData.ContainsKey("lineItems"));
-
-        // Re-serialise and re-deserialise to confirm extension members survive a second pass.
-        var roundJson = JsonSerializer.Serialize(detail);
-        var round = JsonSerializer.Deserialize<AuthorizationDetail>(roundJson);
-
-        Assert.NotNull(round);
-        Assert.Equal(detail.ExtensionData.Count, round.ExtensionData?.Count);
-        Assert.Equal(
-            "Merchant A",
-            round.ExtensionData!["creditorName"].GetString());
-        Assert.Equal(
-            "EUR",
-            round.ExtensionData["instructedAmount"].GetProperty("currency").GetString());
-        Assert.Equal(
-            2,
-            round.ExtensionData["lineItems"].GetArrayLength());
+        Assert.Equal("EUR", detail.Json["instructedAmount"]?["currency"]?.GetValue<string>());
+        Assert.Equal("500.00", detail.Json["instructedAmount"]?["amount"]?.GetValue<string>());
+        Assert.Equal("DE02100100109307118603", detail.Json["creditorAccount"]?["iban"]?.GetValue<string>());
+        Assert.IsType<JsonArray>(detail.Json["lineItems"]);
+        Assert.Equal(2, detail.Json["lineItems"]?.AsArray().Count);
     }
 
-    /// <summary>
-    /// Verifies the <see cref="JsonWebTokenPayload.AuthorizationDetails"/> accessor reads an
-    /// existing JSON array from the underlying claim and projects each element into the typed
-    /// model, including type-specific extension data.
-    /// </summary>
     [Fact]
-    public void Payload_AuthorizationDetails_ReadsArrayFromUnderlyingJson()
+    public void NonObjectJson_TypedAccessorsReturnNullGracefully()
+    {
+        // The wrapper is tolerant of malformed wire input — if Json is not a JsonObject the
+        // typed accessors return null instead of throwing, so validators surface
+        // invalid_authorization_details without exception noise.
+        var detail = new AuthorizationDetail(JsonValue.Create("not-an-object")!);
+
+        Assert.Null(detail.Type);
+        Assert.Null(detail.Locations);
+        Assert.Null(detail.Actions);
+    }
+
+    [Fact]
+    public void Payload_AuthorizationDetails_ReadsArrayFromUnderlyingClaim()
     {
         var json = new JsonObject
         {
@@ -149,33 +147,23 @@ public class AuthorizationDetailTests
 
         Assert.Equal("payment_initiation", details[0].Type);
         Assert.Equal(new[] { "initiate" }, details[0].Actions);
-        Assert.Equal("500.00", details[0].ExtensionData?["amount"].GetString());
+        Assert.Equal("500.00", details[0].Json["amount"]?.GetValue<string>());
 
         Assert.Equal("account_information", details[1].Type);
         Assert.Equal(new[] { "https://api.bank.example/accounts" }, details[1].Locations);
-        Assert.Null(details[1].ExtensionData);
     }
 
-    /// <summary>
-    /// Verifies the setter projects each typed detail back into a JSON array under the canonical
-    /// claim name, including extension-data members. Re-reading via the getter yields equality
-    /// on the standardised + type-specific members.
-    /// </summary>
     [Fact]
-    public void Payload_AuthorizationDetails_WritesArrayAndRoundTrips()
+    public void Payload_AuthorizationDetails_SetterBuildsArrayFromWrappers()
     {
         var details = new[]
         {
-            new AuthorizationDetail
-            {
-                Type = "payment_initiation",
-                Actions = new[] { "initiate" },
-                ExtensionData = new Dictionary<string, JsonElement>
-                {
-                    ["instructedAmount"] = JsonDocument.Parse("""{"currency":"EUR","amount":"500.00"}""").RootElement,
-                },
-            },
-            new AuthorizationDetail
+            new AuthorizationDetail((JsonObject)JsonNode.Parse(
+                """
+                { "type": "payment_initiation", "actions": ["initiate"],
+                  "instructedAmount": { "currency": "EUR", "amount": "500.00" } }
+                """)!),
+            new AuthorizationDetail(new JsonObject())
             {
                 Type = "account_information",
                 Locations = new[] { "https://api.bank.example/accounts" },
@@ -184,7 +172,7 @@ public class AuthorizationDetailTests
 
         var payload = new JsonWebTokenPayload(new JsonObject())
         {
-            AuthorizationDetailsRaw = details.ToRawJsonArray(),
+            AuthorizationDetails = details,
         };
 
         Assert.IsType<JsonArray>(payload.Json[IanaClaimTypes.AuthorizationDetails]);
@@ -195,38 +183,29 @@ public class AuthorizationDetailTests
         Assert.Equal(2, round.Length);
         Assert.Equal("payment_initiation", round[0].Type);
         Assert.Equal(new[] { "initiate" }, round[0].Actions);
-        Assert.Equal(
-            "EUR",
-            round[0].ExtensionData?["instructedAmount"].GetProperty("currency").GetString());
+        Assert.Equal("EUR", round[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("account_information", round[1].Type);
         Assert.Equal(new[] { "https://api.bank.example/accounts" }, round[1].Locations);
     }
 
-    /// <summary>
-    /// Assigning <c>null</c> removes the claim from the underlying JSON object so the payload
-    /// does not carry an empty marker.
-    /// </summary>
     [Fact]
     public void Payload_AuthorizationDetails_SetNullRemovesClaim()
     {
         var payload = new JsonWebTokenPayload(new JsonObject())
         {
-            AuthorizationDetailsRaw = new[] { new AuthorizationDetail { Type = "x" } }.ToRawJsonArray(),
+            AuthorizationDetails = new[]
+            {
+                new AuthorizationDetail(new JsonObject()) { Type = "x" },
+            },
         };
         Assert.True(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
 
-        payload.AuthorizationDetailsRaw = null;
+        payload.AuthorizationDetails = null;
 
         Assert.False(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
         Assert.Null(payload.AuthorizationDetails);
-        Assert.Null(payload.AuthorizationDetailsRaw);
     }
 
-    /// <summary>
-    /// When the claim is absent (or not a JSON array, e.g. malformed external input) the getter
-    /// returns <c>null</c> rather than throwing, so callers downstream of the validator are not
-    /// surprised by exceptions when reading a not-present claim.
-    /// </summary>
     [Theory]
     [InlineData("""{}""")]
     [InlineData("""{ "authorization_details": null }""")]

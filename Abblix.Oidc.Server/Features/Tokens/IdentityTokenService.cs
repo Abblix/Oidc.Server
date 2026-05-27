@@ -138,7 +138,7 @@ internal class IdentityTokenService(
 		// carries the same wire shape the access token does.
 		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetailsRaw is { Count: > 0 })
 		{
-			identityToken.Payload.AuthorizationDetailsRaw = (System.Text.Json.Nodes.JsonArray)authContext.AuthorizationDetailsRaw.DeepClone();
+			identityToken.Payload.Json[IanaClaimTypes.AuthorizationDetails] = authContext.AuthorizationDetailsRaw.DeepClone();
 		}
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);

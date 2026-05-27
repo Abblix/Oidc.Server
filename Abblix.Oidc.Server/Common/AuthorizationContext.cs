@@ -198,12 +198,15 @@ public record AuthorizationContext
     public JsonArray? AuthorizationDetailsRaw { get; init; }
 
     /// <summary>
-    /// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
-    /// Each entry is deserialised on demand; type-specific payload outside the RFC 9396 §2.2
-    /// common-data set is preserved in <see cref="AuthorizationDetail.ExtensionData"/>.
+    /// Typed wrapper view of <see cref="AuthorizationDetailsRaw"/> per RFC 9396 §2. Each
+    /// entry is wrapped as an <see cref="AuthorizationDetail"/> over its underlying
+    /// <see cref="JsonNode"/> — the wrappers share references with the raw array's elements,
+    /// so reading <see cref="AuthorizationDetail.Type"/> / <c>Locations</c> / etc. is a
+    /// projection on the byte-exact wire shape, and per-type extension members live alongside
+    /// in <see cref="AuthorizationDetail.Json"/>.
     /// </summary>
     [JsonIgnore]
-    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray<AuthorizationDetail>();
+    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style

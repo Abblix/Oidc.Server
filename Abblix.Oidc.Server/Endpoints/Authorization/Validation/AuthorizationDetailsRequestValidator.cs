@@ -52,7 +52,7 @@ public class AuthorizationDetailsRequestValidator(
 
         // Project to typed for per-type schema validation; raw is the source of truth that
         // survives forward to the grant unchanged (preserving byte-exact wire shape).
-        var typedRequested = rawRequested.ToTypedArray<AuthorizationDetail>();
+        var typedRequested = rawRequested.ToTypedArray();
         if (typedRequested is null || typedRequested.Length == 0)
             return null;
 

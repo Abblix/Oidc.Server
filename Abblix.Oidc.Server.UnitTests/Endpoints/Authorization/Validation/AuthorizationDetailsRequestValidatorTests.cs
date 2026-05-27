@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -58,7 +59,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var validator = NewValidator();
         var context = NewContext(
             clientAllowlist: [],
-            authorizationDetails: [new AuthorizationDetail { Type = "payment_initiation" }]);
+            authorizationDetails: [new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" }]);
 
         var result = await validator.ValidateAsync(context);
 
@@ -72,7 +73,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var validator = NewValidator();
         var context = NewContext(
             clientAllowlist: ["account_information"],
-            authorizationDetails: [new AuthorizationDetail { Type = "payment_initiation" }]);
+            authorizationDetails: [new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" }]);
 
         var result = await validator.ValidateAsync(context);
 
@@ -85,7 +86,7 @@ public class AuthorizationDetailsRequestValidatorTests
     public async Task ValidateAsync_TypeInAllowlist_DelegatesToComposite()
     {
         var compositeMock = new Mock<IAuthorizationDetailsValidator>();
-        var validated = new[] { new AuthorizationDetail { Type = "payment_initiation" } };
+        var validated = new[] { new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" } };
         compositeMock
             .Setup(c => c.ValidateAsync(It.IsAny<System.Collections.Generic.IEnumerable<AuthorizationDetail>>(),
                 It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
@@ -117,7 +118,7 @@ public class AuthorizationDetailsRequestValidatorTests
 
         var validator = new AuthorizationDetailsRequestValidator(compositeMock.Object);
         var context = NewContext(
-            authorizationDetails: [new AuthorizationDetail { Type = "x" }]);
+            authorizationDetails: [new AuthorizationDetail(new JsonObject()) { Type = "x" }]);
 
         var result = await validator.ValidateAsync(context);
 
@@ -133,7 +134,7 @@ public class AuthorizationDetailsRequestValidatorTests
         // — the composite is the sole gate. Verify the validator delegates without rejecting on
         // per-client check.
         var compositeMock = new Mock<IAuthorizationDetailsValidator>();
-        var validated = new[] { new AuthorizationDetail { Type = "x" } };
+        var validated = new[] { new AuthorizationDetail(new JsonObject()) { Type = "x" } };
         compositeMock
             .Setup(c => c.ValidateAsync(It.IsAny<System.Collections.Generic.IEnumerable<AuthorizationDetail>>(),
                 It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))

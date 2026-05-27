@@ -20,71 +20,99 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
 
 /// <summary>
 /// One entry in the OAuth 2.0 Rich Authorization Requests <c>authorization_details</c> array
-/// (RFC 9396 §2). Carries the required <see cref="Type"/> discriminator plus the optional
-/// common data fields from RFC 9396 §2.2; any additional type-specific members land in
-/// <see cref="ExtensionData"/> and round-trip losslessly.
+/// (RFC 9396 §2), wrapped over a <see cref="JsonNode"/> which is the source of truth for the
+/// entry's content. The wrapper exposes the RFC 9396 §2.2 common-data members as strongly-typed
+/// accessors that read from and write to the underlying <see cref="Json"/> directly — the same
+/// shape <see cref="JsonWebTokenPayload"/> uses over its <see cref="JsonObject"/>.
 /// </summary>
+/// <param name="Json">The underlying JSON node carrying the entry's wire shape. Member order,
+/// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
+/// not model survive the authorize → code → token round-trip byte-exact because no typed
+/// deserialise / re-serialise cycle ever runs over them.</param>
 /// <remarks>
-/// The <see cref="Type"/> member is the dispatch key the per-type validator registry uses to
-/// route each entry to the matching handler (slice #131). The common data fields
-/// (<see cref="Locations"/>, <see cref="Actions"/>, <see cref="Datatypes"/>,
-/// <see cref="Identifier"/>, <see cref="Privileges"/>) carry the semantics defined in
-/// RFC 9396 §2.2 when the host's per-type schema chooses to use them; alternative or
-/// additional fields are preserved in <see cref="ExtensionData"/>.
+/// Type-specific members outside the §2.2 common-data set (for example the
+/// <c>instructedAmount</c> / <c>creditorAccount</c> fields of a PSD2 <c>payment_initiation</c>
+/// entry) are accessed directly through <see cref="Json"/>; the per-type validator that owns
+/// the schema for a given <c>type</c> reads and writes them via the
+/// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
 /// </remarks>
-public record AuthorizationDetail
+public record AuthorizationDetail(JsonNode Json)
 {
     /// <summary>
-    /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec; the
-    /// per-type validator (slice #131) rejects entries where this member is missing with
+    /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec;
+    /// the per-type validator rejects entries where this member is missing with
     /// <c>invalid_authorization_details</c>.
     /// </summary>
-    [JsonPropertyName("type")]
-    public required string Type { get; init; }
+    public string? Type
+    {
+        get => Json is JsonObject obj ? obj.GetProperty<string>(Parameters.Type) : null;
+        set { if (Json is JsonObject obj) obj.SetProperty(Parameters.Type, value); }
+    }
 
     /// <summary>
     /// Locations of the resource server(s) the client wants to access, per RFC 9396 §2.2.
     /// Typically URIs identifying resource servers.
     /// </summary>
-    [JsonPropertyName("locations")]
-    public string[]? Locations { get; init; }
+    public IEnumerable<string>? Locations
+    {
+        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Locations) : null;
+        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Locations, value); }
+    }
 
     /// <summary>
     /// Kinds of actions to be taken at the resource, per RFC 9396 §2.2.
     /// </summary>
-    [JsonPropertyName("actions")]
-    public string[]? Actions { get; init; }
+    public IEnumerable<string>? Actions
+    {
+        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Actions) : null;
+        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Actions, value); }
+    }
 
     /// <summary>
     /// Kinds of data being requested from the resource, per RFC 9396 §2.2.
     /// </summary>
-    [JsonPropertyName("datatypes")]
-    public string[]? Datatypes { get; init; }
+    public IEnumerable<string>? Datatypes
+    {
+        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Datatypes) : null;
+        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Datatypes, value); }
+    }
 
     /// <summary>
     /// A specific resource identifier at the API, per RFC 9396 §2.2.
     /// </summary>
-    [JsonPropertyName("identifier")]
-    public string? Identifier { get; init; }
+    public string? Identifier
+    {
+        get => Json is JsonObject obj ? obj.GetProperty<string>(Parameters.Identifier) : null;
+        set { if (Json is JsonObject obj) obj.SetProperty(Parameters.Identifier, value); }
+    }
 
     /// <summary>
     /// Types or levels of privilege being requested at the resource, per RFC 9396 §2.2.
     /// </summary>
-    [JsonPropertyName("privileges")]
-    public string[]? Privileges { get; init; }
+    public IEnumerable<string>? Privileges
+    {
+        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Privileges) : null;
+        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Privileges, value); }
+    }
 
     /// <summary>
-    /// Type-specific members outside the RFC 9396 §2.2 common-data set. Preserved across
-    /// JSON round-trip so the per-type validator registered for <see cref="Type"/> sees the
-    /// original payload verbatim.
+    /// RFC 9396 §2.2 member names. Type-specific members outside this set live alongside in
+    /// <see cref="Json"/> and are accessed by per-type validators directly through the
+    /// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
     /// </summary>
-    [JsonExtensionData]
-    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+    private static class Parameters
+    {
+        public const string Type = "type";
+        public const string Locations = "locations";
+        public const string Actions = "actions";
+        public const string Datatypes = "datatypes";
+        public const string Identifier = "identifier";
+        public const string Privileges = "privileges";
+    }
 }
