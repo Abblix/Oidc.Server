@@ -2,7 +2,6 @@
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.AuthorizationDetails;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -10,13 +9,14 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// <summary>
 /// Thin endpoint-side adapter that delegates the RFC 9396 §3 CIBA
 /// <c>authorization_details</c> validation to
-/// <see cref="IAuthorizationDetailsValidator.ApplyAsync"/> and converts the returned error
-/// description to an <see cref="OidcError"/>. All actual policy lives on the composite
+/// <see cref="IAuthorizationDetailsPolicy.ApplyAsync"/>. The composite already returns
+/// an <see cref="OidcError"/> with <c>error = invalid_authorization_details</c>, so this
+/// adapter just propagates it directly. All actual policy lives on the composite
 /// validator so /authorize, /par, CIBA and (future) device-flow endpoints share one source
 /// of truth.
 /// </summary>
 public class BackChannelAuthorizationDetailsValidator(
-    IAuthorizationDetailsValidator detailsValidator) : IBackChannelAuthenticationContextValidator
+    IAuthorizationDetailsPolicy detailsValidator) : IBackChannelAuthenticationContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
@@ -26,7 +26,7 @@ public class BackChannelAuthorizationDetailsValidator(
             context.ClientInfo);
 
         if (!result.TryGetSuccess(out var validated))
-            return new OidcError(ErrorCodes.InvalidAuthorizationDetails, result.GetFailure());
+            return result.GetFailure();
 
         if (validated is not null)
             context.AuthorizationDetails = validated;

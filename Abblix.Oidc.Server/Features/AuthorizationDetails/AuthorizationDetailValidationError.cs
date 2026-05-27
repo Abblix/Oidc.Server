@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 /// Failure result for RFC 9396 authorization_details validation. Carried as the failure
 /// value of <see cref="Abblix.Utils.Result{TSuccess, TFailure}"/> returned by
 /// <see cref="IAuthorizationDetailValidator.ValidateAsync"/> and
-/// <see cref="IAuthorizationDetailsValidator.ValidateAsync"/>.
+/// <see cref="IAuthorizationDetailsPolicy.ValidateAsync"/>.
 /// </summary>
 /// <param name="Description">Human-readable description of the rejection cause. Surface
 /// into the <c>error_description</c> field of the protocol-level

@@ -26,6 +26,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -35,12 +36,12 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
-/// Unit tests for the composite <see cref="IAuthorizationDetailsValidator"/> registered via
+/// Unit tests for the composite <see cref="IAuthorizationDetailsPolicy"/> registered via
 /// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 §5 unknown-type
 /// rejection, per-type-validator failure propagation, and the graceful-degradation contract
 /// (server boots cleanly with zero per-type validators registered).
 /// </summary>
-public class AuthorizationDetailsValidatorTests
+public class AuthorizationDetailsPolicyTests
 {
     private static readonly ClientInfo TestClient = new("test-client");
 
@@ -49,7 +50,7 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider();
 
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
         Assert.NotNull(composite);
     }
@@ -58,7 +59,7 @@ public class AuthorizationDetailsValidatorTests
     public async Task Unknown_type_yields_invalid_authorization_details_failure()
     {
         var sp = BuildProvider();
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
@@ -75,7 +76,7 @@ public class AuthorizationDetailsValidatorTests
     public async Task Missing_type_member_yields_failure()
     {
         var sp = BuildProvider();
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = null! },
@@ -91,7 +92,7 @@ public class AuthorizationDetailsValidatorTests
     public async Task Empty_details_array_yields_empty_validated_list()
     {
         var sp = BuildProvider();
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
         var result = await composite.ValidateAsync([], TestClient, CancellationToken.None);
 
@@ -104,7 +105,7 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<StubValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation", Actions = ["initiate"] },
@@ -124,7 +125,7 @@ public class AuthorizationDetailsValidatorTests
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation")
             .AddAuthorizationDetailValidator<AccountValidator>("account_information"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
@@ -144,7 +145,7 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
@@ -167,7 +168,7 @@ public class AuthorizationDetailsValidatorTests
                 .AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation")
                 .AddAuthorizationDetailValidator<CountingValidator>("account_information");
         });
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" },
@@ -188,7 +189,7 @@ public class AuthorizationDetailsValidatorTests
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation")
             .AddAuthorizationDetailValidator<AccountValidator>("account_information")
             .AddAuthorizationDetailValidator<StubValidator>("consent"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var details = new[]
         {
             new AuthorizationDetail(new JsonObject()) { Type = "consent" },
@@ -207,7 +208,7 @@ public class AuthorizationDetailsValidatorTests
     public async Task ApplyAsync_returns_null_when_raw_is_null_or_empty()
     {
         var sp = BuildProvider();
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
         var resultNull = await composite.ApplyAsync(null, TestClient);
         Assert.True(resultNull.TryGetSuccess(out var validatedNull));
@@ -223,14 +224,15 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = [] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
         var result = await composite.ApplyAsync(raw, client);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Contains("not permitted", error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("not permitted", error.ErrorDescription);
     }
 
     [Fact]
@@ -239,14 +241,15 @@ public class AuthorizationDetailsValidatorTests
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation")
             .AddAuthorizationDetailValidator<AccountValidator>("account_information"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
         var result = await composite.ApplyAsync(raw, client);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Contains("payment_initiation", error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("payment_initiation", error.ErrorDescription);
     }
 
     [Fact]
@@ -254,7 +257,7 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = null };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
@@ -270,7 +273,7 @@ public class AuthorizationDetailsValidatorTests
     {
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsValidator>();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         const string wire = """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(wire)!;
 

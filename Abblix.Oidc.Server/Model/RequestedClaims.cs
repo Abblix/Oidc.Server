@@ -31,14 +31,16 @@ public record RequestedClaims
 {
     /// <summary>
     /// A collection of claims requested to be included in the UserInfo response.
-    /// Each entry in the dictionary represents a claim with its corresponding details, such as whether the claim is essential and specific value requirements.
+    /// Each entry in the dictionary represents a claim with its corresponding details,
+    /// such as whether the claim is essential and specific value requirements.
     /// </summary>
     [JsonPropertyName("userinfo")]
     public Dictionary<string, RequestedClaimDetails>? UserInfo { get; init; }
 
     /// <summary>
     /// A collection of claims requested to be included in the ID Token.
-    /// Similar to UserInfo, each entry in the dictionary specifies a claim and its associated details, including essentiality and value constraints.
+    /// Similar to UserInfo, each entry in the dictionary specifies a claim and its associated details,
+    /// including essentiality and value constraints.
     /// </summary>
     [JsonPropertyName("id_token")]
     public Dictionary<string, RequestedClaimDetails>? IdToken { get; init; }

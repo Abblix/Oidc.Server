@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 /// Validates a single RFC 9396 authorization_details entry whose <c>type</c> value matches the
 /// implementation. Hosts register one implementation per supported <c>type</c> via
 /// <see cref="ServiceCollectionExtensions.AddAuthorizationDetailValidator{TValidator}"/>; the
-/// composite <see cref="IAuthorizationDetailsValidator"/> dispatches each request entry to
+/// composite <see cref="IAuthorizationDetailsPolicy"/> dispatches each request entry to
 /// the implementation keyed by the entry's <c>type</c> value.
 /// </summary>
 /// <remarks>

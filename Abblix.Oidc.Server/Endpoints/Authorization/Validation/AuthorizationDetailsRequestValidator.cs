@@ -8,14 +8,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
 /// Thin endpoint-side adapter that delegates the RFC 9396 <c>authorization_details</c>
-/// validation to <see cref="IAuthorizationDetailsValidator.ApplyAsync"/> and converts the
+/// validation to <see cref="IAuthorizationDetailsPolicy.ApplyAsync"/> and converts the
 /// returned error description to an
 /// <see cref="AuthorizationRequestValidationError"/>. All actual policy lives on the
 /// composite validator so /authorize, /par, CIBA and (future) device-flow endpoints share
 /// one source of truth.
 /// </summary>
 public class AuthorizationDetailsRequestValidator(
-    IAuthorizationDetailsValidator detailsValidator) : IAuthorizationContextValidator
+    IAuthorizationDetailsPolicy detailsValidator) : IAuthorizationContextValidator
 {
     /// <inheritdoc/>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
@@ -25,7 +25,7 @@ public class AuthorizationDetailsRequestValidator(
             context.ClientInfo);
 
         if (!result.TryGetSuccess(out var validated))
-            return context.InvalidAuthorizationDetails(result.GetFailure());
+            return context.InvalidAuthorizationDetails(result.GetFailure().ErrorDescription);
 
         if (validated is not null)
             context.AuthorizationDetailsRaw = validated;

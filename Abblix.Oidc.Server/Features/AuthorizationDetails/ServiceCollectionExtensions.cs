@@ -33,7 +33,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers a per-type validator for RFC 9396 authorization_details entries whose
     /// <c>type</c> value matches <paramref name="type"/>. The composite
-    /// <see cref="IAuthorizationDetailsValidator"/> dispatches each entry in the
+    /// <see cref="IAuthorizationDetailsPolicy"/> dispatches each entry in the
     /// authorization_details array to the implementation keyed by the entry's <c>type</c>.
     /// </summary>
     /// <typeparam name="TValidator">The per-type validator implementation.</typeparam>
@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers the OAuth 2.0 Rich Authorization Requests (RFC 9396) infrastructure: the
-    /// composite <see cref="IAuthorizationDetailsValidator"/> and the
+    /// composite <see cref="IAuthorizationDetailsPolicy"/> and the
     /// <see cref="IAuthorizationDetailsMetadataProvider"/> discovery contributor. Called
     /// unconditionally from <c>AddFeatures</c> so the server boots cleanly with zero
     /// <see cref="IAuthorizationDetailValidator"/> implementations registered; RAR-bearing
@@ -74,7 +74,7 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddRichAuthorizationRequests(this IServiceCollection services)
     {
-        services.TryAddSingleton<IAuthorizationDetailsValidator, AuthorizationDetailsValidator>();
+        services.TryAddSingleton<IAuthorizationDetailsPolicy, AuthorizationDetailsPolicy>();
         services.TryAddSingleton<IAuthorizationDetailsMetadataProvider, AuthorizationDetailsMetadataProvider>();
         return services;
     }

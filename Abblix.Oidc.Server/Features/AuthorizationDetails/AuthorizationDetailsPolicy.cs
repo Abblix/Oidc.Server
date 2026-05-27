@@ -22,6 +22,8 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,7 +31,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 
 /// <summary>
-/// Composite implementation of <see cref="IAuthorizationDetailsValidator"/>. Dispatches each
+/// Composite implementation of <see cref="IAuthorizationDetailsPolicy"/>. Dispatches each
 /// authorization_details entry to the matching <see cref="IAuthorizationDetailValidator"/>
 /// resolved via <see cref="ServiceProviderKeyedServiceExtensions.GetKeyedService"/> using the
 /// entry's <c>type</c> value as the key.
@@ -44,14 +46,14 @@ namespace Abblix.Oidc.Server.Features.AuthorizationDetails;
 /// <c>invalid_authorization_details</c> per RFC 9396 §5, never throws — the server boots
 /// cleanly with zero per-type validators and rejects RAR requests with a structured error.
 /// </remarks>
-internal sealed class AuthorizationDetailsValidator(
-    IServiceProvider serviceProvider) : IAuthorizationDetailsValidator
+internal sealed class AuthorizationDetailsPolicy(
+    IServiceProvider serviceProvider) : IAuthorizationDetailsPolicy
 {
     /// <inheritdoc/>
-    public async Task<Result<JsonArray?, string>> ApplyAsync(
+    public async Task<Result<JsonArray?, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
-        CancellationToken ct = default)
+        CancellationToken token = default)
     {
         if (raw is not { Count: > 0 } jsonArray)
             return (JsonArray?)null;
@@ -64,7 +66,7 @@ internal sealed class AuthorizationDetailsValidator(
         if (allowlist is not null)
         {
             if (allowlist.Length == 0)
-                return "Client is not permitted to use authorization_details.";
+                return Reject("Client is not permitted to use authorization_details.");
 
             var allowedSet = new HashSet<string>(allowlist, StringComparer.Ordinal);
             var disallowed = authorizationDetails
@@ -73,15 +75,18 @@ internal sealed class AuthorizationDetailsValidator(
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
             if (disallowed.Length != 0)
-                return $"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}";
+                return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
-        var result = await ValidateAsync(authorizationDetails, client, ct);
+        var result = await ValidateAsync(authorizationDetails, client, token);
         if (!result.TryGetSuccess(out _))
-            return result.GetFailure().Description;
+            return Reject(result.GetFailure().Description);
 
         return jsonArray;
     }
+
+    private static OidcError Reject(string description) =>
+        new(ErrorCodes.InvalidAuthorizationDetails, description);
 
     /// <inheritdoc/>
     public async Task<Result<IReadOnlyList<AuthorizationDetail>, AuthorizationDetailValidationError>> ValidateAsync(
