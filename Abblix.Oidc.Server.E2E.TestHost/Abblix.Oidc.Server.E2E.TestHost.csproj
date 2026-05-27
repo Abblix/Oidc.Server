@@ -5,9 +5,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <!-- S1075: hardcoded URIs are intentional in this test host (canonical
-         issuer / redirect URIs match the test conventions). -->
-    <NoWarn>$(NoWarn);S1075</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

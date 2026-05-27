@@ -8,9 +8,6 @@
     <IsTestProject>true</IsTestProject>
     <OutputType>Exe</OutputType>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <!-- S1075: hardcoded URIs are intentional in this test project
-         (https://localhost base address for the in-memory TestServer). -->
-    <NoWarn>$(NoWarn);S1075</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

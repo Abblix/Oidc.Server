@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -31,6 +32,8 @@ public class TestFactory : WebApplicationFactory<Program>
         });
     }
 
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "TestServer in-memory base address; not a deployment URL.")]
     protected override void ConfigureClient(HttpClient client)
     {
         // OIDC MVC controllers carry [RequireHttps]; force the in-memory

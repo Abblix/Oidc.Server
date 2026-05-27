@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -47,6 +48,8 @@ public abstract class TestBase(TestFactory factory)
         public const string AuthorizationDetails = "authorization_details";
     }
 
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "TestServer in-memory base address; not a deployment URL.")]
     protected HttpClient CreateClient()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions

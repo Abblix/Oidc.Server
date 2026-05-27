@@ -1,6 +1,8 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 
 /// <summary>
@@ -41,6 +43,8 @@ public static class TestConstants
     public const string ConfidentialClientSecret = "e2e-secret";
 
     /// <summary>The single canonical redirect_uri.</summary>
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test redirect_uri shared by every pre-seeded client; not a deployment URL.")]
     public const string RedirectUri = "https://client.example.com/cb";
 
     /// <summary>RFC 9396 §2.2 type for PSD2-style payment initiation.</summary>
