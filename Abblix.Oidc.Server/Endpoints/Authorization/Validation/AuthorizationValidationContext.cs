@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -83,9 +84,14 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 
 	/// <summary>
 	/// The RFC 9396 Rich Authorization Requests array after per-type and per-client validation by
-	/// <see cref="Features.AuthorizationDetails.IAuthorizationDetailsValidator"/>. <c>null</c> when
-	/// the request did not include <c>authorization_details</c>; otherwise the validated (and
-	/// possibly normalised) array carried forward to the grant.
+	/// <see cref="Features.AuthorizationDetails.IAuthorizationDetailsValidator"/>, stored as the
+	/// raw <see cref="JsonArray"/> so byte-exact content survives forward to the grant.
+	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails { get; set; }
+	public JsonArray? AuthorizationDetailsRaw { get; set; }
+
+	/// <summary>
+	/// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
+	/// </summary>
+	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 }

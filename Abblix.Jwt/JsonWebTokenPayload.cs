@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
@@ -308,43 +307,26 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The Rich Authorization Requests <c>authorization_details</c> claim per RFC 9396 §7.
-	/// Each entry is deserialized into a strongly-typed <see cref="AuthorizationDetail"/>;
-	/// type-specific fields outside the RFC 9396 §2.2 common-data set live in
-	/// <see cref="AuthorizationDetail.ExtensionData"/> and round-trip losslessly. Returns
-	/// <c>null</c> when the claim is absent or is not a JSON array; assigning <c>null</c>
-	/// removes the claim.
+	/// The raw <see cref="JsonArray"/> backing the RFC 9396 <c>authorization_details</c>
+	/// claim. This is the source of truth for the claim: it preserves member order and
+	/// type-specific payload byte-exact across the authorize → code → token round-trip
+	/// (no typed deserialise/re-serialise cycle). Returns <c>null</c> when the claim is
+	/// absent or its value is not a JSON array; assigning <c>null</c> removes the claim.
+	/// For strongly-typed access use <see cref="AuthorizationDetails"/>; for construction
+	/// from a typed sequence see <c>AuthorizationDetailsExtensions.ToRawJsonArray</c>.
 	/// </summary>
-	public IEnumerable<AuthorizationDetail>? AuthorizationDetails
+	public JsonArray? AuthorizationDetailsRaw
 	{
-		get
-		{
-			if (Json[IanaClaimTypes.AuthorizationDetails] is not JsonArray array)
-				return null;
-
-			var result = new List<AuthorizationDetail>(array.Count);
-			foreach (var node in array)
-			{
-				if (node is null) continue;
-				var detail = node.Deserialize<AuthorizationDetail>();
-				if (detail is not null) result.Add(detail);
-			}
-			return result;
-		}
-		set
-		{
-			if (value is null)
-			{
-				Json.SetProperty(IanaClaimTypes.AuthorizationDetails, (JsonNode?)null);
-				return;
-			}
-
-			var array = new JsonArray();
-			foreach (var detail in value)
-			{
-				array.Add(JsonSerializer.SerializeToNode(detail));
-			}
-			Json.SetProperty(IanaClaimTypes.AuthorizationDetails, array);
-		}
+		get => Json[IanaClaimTypes.AuthorizationDetails] as JsonArray;
+		set => Json.SetProperty(IanaClaimTypes.AuthorizationDetails, value);
 	}
+
+	/// <summary>
+	/// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> per RFC 9396 §2.
+	/// Each entry is deserialised on demand into <see cref="AuthorizationDetail"/>;
+	/// type-specific fields outside the §2.2 common-data set live in
+	/// <see cref="AuthorizationDetail.ExtensionData"/>. To replace the claim, set
+	/// <see cref="AuthorizationDetailsRaw"/> directly with a new <see cref="JsonArray"/>.
+	/// </summary>
+	public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 }

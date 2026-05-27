@@ -86,7 +86,9 @@ public class TokenRequestProcessor(
 			TokenTypeIdentifiers.AccessToken)
 		{
 			// RFC 9396 §7: the AS MUST return authorization_details in the token response.
-			AuthorizationDetails = authContext.AuthorizationDetails,
+			// Pass the raw JsonArray byte-exact so the client sees the exact wire shape that
+			// was authorised.
+			AuthorizationDetailsRaw = authContext.AuthorizationDetailsRaw,
 		};
 
 		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))

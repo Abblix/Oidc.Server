@@ -184,7 +184,7 @@ public class AuthorizationDetailTests
 
         var payload = new JsonWebTokenPayload(new JsonObject())
         {
-            AuthorizationDetails = details,
+            AuthorizationDetailsRaw = details.ToRawJsonArray(),
         };
 
         Assert.IsType<JsonArray>(payload.Json[IanaClaimTypes.AuthorizationDetails]);
@@ -211,14 +211,15 @@ public class AuthorizationDetailTests
     {
         var payload = new JsonWebTokenPayload(new JsonObject())
         {
-            AuthorizationDetails = new[] { new AuthorizationDetail { Type = "x" } },
+            AuthorizationDetailsRaw = new[] { new AuthorizationDetail { Type = "x" } }.ToRawJsonArray(),
         };
         Assert.True(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
 
-        payload.AuthorizationDetails = null;
+        payload.AuthorizationDetailsRaw = null;
 
         Assert.False(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
         Assert.Null(payload.AuthorizationDetails);
+        Assert.Null(payload.AuthorizationDetailsRaw);
     }
 
     /// <summary>

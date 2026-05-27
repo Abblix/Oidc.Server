@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.AuthorizationDetails;
 
@@ -45,8 +46,14 @@ public class AuthorizationDetailsRequestValidator(
     /// <inheritdoc/>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
-        var requested = context.Request.AuthorizationDetails;
-        if (requested is null || requested.Length == 0)
+        var rawRequested = context.Request.AuthorizationDetailsRaw;
+        if (rawRequested is null || rawRequested.Count == 0)
+            return null;
+
+        // Project to typed for per-type schema validation; raw is the source of truth that
+        // survives forward to the grant unchanged (preserving byte-exact wire shape).
+        var typedRequested = rawRequested.ToTypedArray();
+        if (typedRequested is null || typedRequested.Length == 0)
             return null;
 
         var allowlist = context.ClientInfo.AuthorizationDetailsTypes;
@@ -61,7 +68,7 @@ public class AuthorizationDetailsRequestValidator(
             }
 
             var allowedSet = new HashSet<string>(allowlist, StringComparer.Ordinal);
-            var disallowed = requested
+            var disallowed = typedRequested
                 .Where(d => d.Type is not null && !allowedSet.Contains(d.Type))
                 .Select(d => d.Type!)
                 .Distinct(StringComparer.Ordinal)
@@ -73,13 +80,16 @@ public class AuthorizationDetailsRequestValidator(
             }
         }
 
-        var result = await detailsValidator.ValidateAsync(requested, context.ClientInfo, CancellationToken.None);
-        if (!result.TryGetSuccess(out var validated))
+        var result = await detailsValidator.ValidateAsync(typedRequested, context.ClientInfo, CancellationToken.None);
+        if (!result.TryGetSuccess(out _))
         {
             return context.InvalidAuthorizationDetails(result.GetFailure().Description);
         }
 
-        context.AuthorizationDetails = validated.ToArray();
+        // Composite signalled success — pass the original raw forward byte-exact. If a future
+        // per-type validator wants to narrow/extend, that mutation lives on a re-issued raw
+        // JsonArray and a slot here would write it back.
+        context.AuthorizationDetailsRaw = rawRequested;
         return null;
     }
 }

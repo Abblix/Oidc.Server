@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -53,13 +54,19 @@ public record AuthorizationRequest
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
-    /// RFC 9396 Rich Authorization Requests: the JSON array of structured authorization
-    /// requirements the client wants the AS to authorize. Each element carries a required
-    /// <c>type</c> discriminator plus optional standardised members (RFC 9396 §2.2) and
-    /// type-specific payload preserved in <see cref="AuthorizationDetail.ExtensionData"/>.
+    /// RFC 9396 Rich Authorization Requests stored as the raw wire <see cref="JsonArray"/> so
+    /// member order and type-specific payload survive the request → grant → token round-trip
+    /// without re-serialisation. Use <see cref="AuthorizationDetails"/> for a strongly-typed
+    /// read view.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
-    public AuthorizationDetail[]? AuthorizationDetails { get; init; }
+    public JsonArray? AuthorizationDetailsRaw { get; init; }
+
+    /// <summary>
+    /// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
+    /// </summary>
+    [JsonIgnore]
+    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 
 	/// <summary>
 	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:

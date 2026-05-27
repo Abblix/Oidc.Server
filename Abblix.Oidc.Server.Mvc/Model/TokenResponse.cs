@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Abblix.Jwt;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
@@ -98,11 +98,12 @@ public record TokenResponse
 
 	/// <summary>
 	/// RFC 9396 §7 <c>authorization_details</c>: the structured authorization data the token
-	/// was granted for, echoed back to the client so it knows exactly what the AS authorized.
-	/// MUST be returned per the RFC when <c>authorization_details</c> was carried on the
-	/// originating authorization request; omitted when no RAR was used.
+	/// was granted for, echoed back to the client byte-exact (member order and type-specific
+	/// payload preserved) so it knows exactly what the AS authorized. MUST be returned per the
+	/// RFC when <c>authorization_details</c> was carried on the originating authorization
+	/// request; omitted when no RAR was used.
 	/// </summary>
 	[JsonPropertyName(Parameters.AuthorizationDetails)]
 	[JsonPropertyOrder(8)]
-	public AuthorizationDetail[]? AuthorizationDetails { get; init; }
+	public JsonArray? AuthorizationDetails { get; init; }
 }

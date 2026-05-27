@@ -748,7 +748,7 @@ public class JsonWebTokenClaimsTests
     public async Task AuthorizationDetailsClaim_RoundTrip_PreservesStandardisedAndExtensionMembers()
     {
         var token = CreateToken();
-        token.Payload.AuthorizationDetails = new[]
+        token.Payload.AuthorizationDetailsRaw = new[]
         {
             new AuthorizationDetail
             {
@@ -767,7 +767,7 @@ public class JsonWebTokenClaimsTests
                 Type = "account_information",
                 Identifier = "acct-001",
             },
-        };
+        }.ToRawJsonArray();
 
         var roundTripToken = await SignEncryptAndValidate(token);
 

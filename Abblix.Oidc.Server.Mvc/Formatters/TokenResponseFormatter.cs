@@ -62,7 +62,7 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     RefreshToken = success.RefreshToken?.EncodedJwt,
                     Scope = success.Scope.ToArray(),
                     IdToken = success.IdToken?.EncodedJwt,
-                    AuthorizationDetails = success.AuthorizationDetails,
+                    AuthorizationDetails = success.AuthorizationDetailsRaw,
                 };
 
                 return new ActionResult<TokenResponse>(

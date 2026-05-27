@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -187,13 +188,22 @@ public record AuthorizationContext
     public Uri[]? Resources { get; init; }
 
     /// <summary>
-    /// The RFC 9396 Rich Authorization Requests array — structured authorization data persisted
-    /// with the grant so the token endpoint and resource servers see exactly what the user
-    /// consented to. Threaded through the grant the same way mTLS / DPoP confirmation thumbprints
-    /// are, so RAR survives the authorize → code → token round-trip and lands on the issued access
-    /// token (RFC 9396 §7) and introspection response (§10).
+    /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
+    /// This is the source of truth — preserved byte-exact (member order, type-specific payload)
+    /// through the authorize → code → token round-trip and protobuf persistence, without lossy
+    /// typed deserialise / re-serialise cycles. Use <see cref="AuthorizationDetails"/> for a
+    /// strongly-typed read view; to write, set this property with a new
+    /// <see cref="JsonArray"/> (helper: <c>typedDetails.ToRawJsonArray()</c>).
     /// </summary>
-    public AuthorizationDetail[]? AuthorizationDetails { get; init; }
+    public JsonArray? AuthorizationDetailsRaw { get; init; }
+
+    /// <summary>
+    /// Typed read-only projection of <see cref="AuthorizationDetailsRaw"/> for code consumption.
+    /// Each entry is deserialised on demand; type-specific payload outside the RFC 9396 §2.2
+    /// common-data set is preserved in <see cref="AuthorizationDetail.ExtensionData"/>.
+    /// </summary>
+    [JsonIgnore]
+    public AuthorizationDetail[]? AuthorizationDetails => AuthorizationDetailsRaw.ToTypedArray();
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style

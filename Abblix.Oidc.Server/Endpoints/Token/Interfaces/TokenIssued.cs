@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Tokens;
 
@@ -51,8 +52,9 @@ public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, Tim
 	public IEnumerable<string> Scope => AccessToken.Token.Payload.Scope;
 
 	/// <summary>
-	/// The RFC 9396 <c>authorization_details</c> array assigned to the access token, surfaced in
-	/// the JSON token response per RFC 9396 §7 (MUST). <c>null</c> when no RAR was used.
+	/// The RFC 9396 <c>authorization_details</c> assigned to the access token as the raw
+	/// <see cref="JsonArray"/>, surfaced byte-exact in the JSON token response per RFC 9396 §7
+	/// (MUST). <c>null</c> when no RAR was used.
 	/// </summary>
-	public AuthorizationDetail[]? AuthorizationDetails { get; init; }
+	public JsonArray? AuthorizationDetailsRaw { get; init; }
 }

@@ -20,8 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json;
-using Abblix.Jwt;
+using System.Text.Json.Nodes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
@@ -65,10 +64,10 @@ internal static class AuthorizationContextMapper
 
         proto.Resources.AddIfNotNull(source.Resources, r => r.OriginalString);
 
-        // RFC 9396 authorization_details serialised as JSON for protobuf storage; round-trip
-        // preserves type-specific extension data the per-type validator did not consume.
-        if (source.AuthorizationDetails is { Length: > 0 })
-            proto.AuthorizationDetailsJson = JsonSerializer.Serialize(source.AuthorizationDetails);
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // byte-exact (member order, type-specific payload) survives storage round-trip.
+        if (source.AuthorizationDetailsRaw is { Count: > 0 })
+            proto.AuthorizationDetailsJson = source.AuthorizationDetailsRaw.ToJsonString();
 
         return proto;
     }
@@ -90,8 +89,8 @@ internal static class AuthorizationContextMapper
             CodeChallenge = ProtoMapper.GetString(source.CodeChallenge, source.HasCodeChallenge),
             CodeChallengeMethod = ProtoMapper.GetString(source.CodeChallengeMethod, source.HasCodeChallengeMethod),
             Resources = source.Resources.GetArray(r => new Uri(r)),
-            AuthorizationDetails = source.HasAuthorizationDetailsJson
-                ? JsonSerializer.Deserialize<AuthorizationDetail[]>(source.AuthorizationDetailsJson)
+            AuthorizationDetailsRaw = source.HasAuthorizationDetailsJson
+                ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
         };
     }

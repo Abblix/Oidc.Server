@@ -134,9 +134,11 @@ internal class IdentityTokenService(
 		// ClientInfo.ForceAuthorizationDetailsInIdentityToken mirrors the existing
 		// ForceUserClaimsInIdentityToken precedent. Default-off preserves role separation
 		// between identity assertion (id_token) and authorization payload (access token).
-		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetails is { Length: > 0 })
+		// When enabled, the raw JsonArray is copied byte-exact (DeepClone) so the id_token
+		// carries the same wire shape the access token does.
+		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetailsRaw is { Count: > 0 })
 		{
-			identityToken.Payload.AuthorizationDetails = authContext.AuthorizationDetails;
+			identityToken.Payload.AuthorizationDetailsRaw = (System.Text.Json.Nodes.JsonArray)authContext.AuthorizationDetailsRaw.DeepClone();
 		}
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);

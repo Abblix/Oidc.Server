@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
@@ -77,11 +78,12 @@ public static class AuthorizationContextExtensions
         }
 
         // RFC 9396 §7: the AS MAY include the authorized authorization_details in the access
-        // token. We do, so resource servers can inspect the structured authorization data they
-        // were issued for without round-tripping through introspection.
-        if (context.AuthorizationDetails is { Length: > 0 })
+        // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
+        // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
+        // the payload's JsonNode tree independent of the source AuthorizationContext.
+        if (context.AuthorizationDetailsRaw is { Count: > 0 })
         {
-            payload.AuthorizationDetails = context.AuthorizationDetails;
+            payload.AuthorizationDetailsRaw = (JsonArray)context.AuthorizationDetailsRaw.DeepClone();
         }
     }
 
@@ -120,7 +122,9 @@ public static class AuthorizationContextExtensions
             Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
-            AuthorizationDetails = payload.AuthorizationDetails?.ToArray(),
+            AuthorizationDetailsRaw = payload.AuthorizationDetailsRaw is { } raw
+                ? (JsonArray)raw.DeepClone()
+                : null,
         };
     }
 }
