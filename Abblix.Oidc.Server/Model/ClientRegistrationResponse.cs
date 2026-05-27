@@ -228,6 +228,15 @@ public record ClientRegistrationResponse
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
     public bool? DpopBoundAccessTokens { get; init; }
 
+    /// <summary>
+    /// The per-client allowlist of authorization-detail <c>type</c> values this client may
+    /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
+    /// RFC 9396 §5.1). Echoes the registered value of
+    /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
     private static class Parameters
     {
         public const string ClientId = "client_id";
@@ -258,5 +267,6 @@ public record ClientRegistrationResponse
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+        public const string AuthorizationDetailsTypes = "authorization_details_types";
     }
 }

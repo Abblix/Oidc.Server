@@ -528,7 +528,8 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>()
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, AuthorizationDetailsTypesValidator>()
         ]);
         return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }

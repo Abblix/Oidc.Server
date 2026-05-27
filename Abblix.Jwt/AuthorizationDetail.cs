@@ -47,7 +47,7 @@ public record AuthorizationDetail
     /// <c>invalid_authorization_details</c>.
     /// </summary>
     [JsonPropertyName("type")]
-    public string Type { get; init; } = default!;
+    public required string Type { get; init; }
 
     /// <summary>
     /// Locations of the resource server(s) the client wants to access, per RFC 9396 §2.2.

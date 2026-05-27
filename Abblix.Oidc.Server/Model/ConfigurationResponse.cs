@@ -215,6 +215,11 @@ public record ConfigurationResponse
         /// metadata, signed by the provider so clients can verify its origin (RFC 8414 §2.1).
         /// </summary>
         public const string SignedMetadata = "signed_metadata";
+
+        /// <summary>The <c>authorization_details_types_supported</c> metadata field listing the
+        /// authorization-detail <c>type</c> values this server understands (RFC 9396 §13).
+        /// Absent when no per-type validators are registered.</summary>
+        public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
     }
 
     /// <summary>
@@ -504,4 +509,15 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.SignedMetadata)]
     public string? SignedMetadata { get; init; }
+
+    /// <summary>
+    /// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+    /// registered validators for. The list is projected from the keyed-DI registry of
+    /// <see cref="Features.AuthorizationDetails.IAuthorizationDetailValidator"/> so it always
+    /// matches what request-time dispatch will accept. Omitted from the emitted discovery
+    /// JSON when the list is empty (no per-type validators registered) so the document
+    /// follows the OIDC discovery convention: absent = unsupported, not the empty array.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
+    public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
 }

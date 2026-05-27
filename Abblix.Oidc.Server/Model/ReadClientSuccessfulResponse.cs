@@ -226,6 +226,16 @@ public record ReadClientSuccessfulResponse
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The per-client allowlist of authorization-detail <c>type</c> values this client may
+    /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
+    /// RFC 9396 §5.1). Echoes the registered value of
+    /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
+    /// </summary>
+    [JsonPropertyOrder(25)]
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
     /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
     /// </summary>
     private static class Parameters
@@ -255,5 +265,6 @@ public record ReadClientSuccessfulResponse
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+        public const string AuthorizationDetailsTypes = "authorization_details_types";
     }
 }

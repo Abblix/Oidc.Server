@@ -158,6 +158,34 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
+    /// RFC 9396 §5.1: the client's per-client allowlist of authorization-detail <c>type</c>
+    /// values it may use in <c>authorization_details</c> requests. DCR-exposed
+    /// (<c>authorization_details_types</c>). Semantics:
+    /// <list type="bullet">
+    /// <item><description><c>null</c> — no per-client constraint; the client may use any
+    /// <c>type</c> the server understands.</description></item>
+    /// <item><description>Empty array — the client cannot use RAR; every
+    /// <c>authorization_details</c> entry is rejected at request time regardless of
+    /// <c>type</c>.</description></item>
+    /// <item><description>Non-empty array — only the listed <c>type</c> values are accepted
+    /// for this client; entries with other types are rejected with
+    /// <c>invalid_authorization_details</c>.</description></item>
+    /// </list>
+    /// </summary>
+    public string[]? AuthorizationDetailsTypes { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the <c>authorization_details</c> claim is emitted on the ID token
+    /// for this client in addition to the access token and introspection response. Default
+    /// <c>false</c>. RFC 9396 is silent on id_token; default-off preserves role separation
+    /// between identity assertion (id_token) and authorization payload (access token +
+    /// introspection). Host-controlled behavioural extension — NOT exposed via DCR (no
+    /// OIDC wire metadata for this), mirroring the
+    /// <see cref="ForceUserClaimsInIdentityToken"/> precedent.
+    /// </summary>
+    public bool ForceAuthorizationDetailsInIdentityToken { get; set; } = false;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).

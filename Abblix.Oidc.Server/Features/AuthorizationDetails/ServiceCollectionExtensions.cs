@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthorizationDetails(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthorizationDetailsValidator, AuthorizationDetailsValidator>();
+        services.TryAddSingleton<IAuthorizationDetailsMetadataProvider, AuthorizationDetailsMetadataProvider>();
         return services;
     }
 }

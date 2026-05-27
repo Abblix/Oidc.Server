@@ -23,6 +23,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.AuthorizationDetails;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -49,7 +50,8 @@ public sealed class ConfigurationHandler(
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
 	IAuthenticationCompletionHandler cibaCompletionHandler,
-	IAcrMetadataProvider acrMetadata) : IConfigurationHandler
+	IAcrMetadataProvider acrMetadata,
+	IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
@@ -96,5 +98,7 @@ public sealed class ConfigurationHandler(
 		AcrValuesSupported = acrMetadata.AcrValuesSupported,
 
 		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
+
+		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
 	});
 }
