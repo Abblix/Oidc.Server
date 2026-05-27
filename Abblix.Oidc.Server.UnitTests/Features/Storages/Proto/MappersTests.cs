@@ -318,6 +318,134 @@ public class MappersTests
     }
 
     [Fact]
+    public void AuthorizationContextMapper_RoundTrips_Actor_ByteExact()
+    {
+        // RFC 8693 §4.1 act claim. The simplest delegation shape: { sub: actor-id } with no
+        // nested act member. After ToProto -> FromProto the JsonObject must serialise back
+        // to the same wire JSON byte-for-byte.
+        const string actorJson = """{"sub":"svc-worker-7","client_id":"svc-fleet"}""";
+        var actor = (JsonObject)System.Text.Json.Nodes.JsonNode.Parse(actorJson)!;
+
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
+        {
+            Actor = actor,
+        };
+
+        var proto = context.ToProto();
+        var result = AuthorizationContextMapper.FromProto(proto);
+
+        Assert.Equal(actorJson, proto.ActorJson);
+        Assert.NotNull(result.Actor);
+        Assert.Equal(actorJson, result.Actor!.ToJsonString());
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_RoundTrips_ChainedActor_PreservesNestedAct()
+    {
+        // Two-hop delegation: outer actor is svc-frontline, inner actor (act.act) is the
+        // earlier svc-backend. Verifies the nested chain survives the storage round-trip
+        // unchanged -- byte-for-byte, including member order at every depth.
+        const string chainedActorJson =
+            """{"sub":"svc-frontline","act":{"sub":"svc-backend"}}""";
+        var actor = (JsonObject)System.Text.Json.Nodes.JsonNode.Parse(chainedActorJson)!;
+
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
+        {
+            Actor = actor,
+        };
+
+        var proto = context.ToProto();
+        var result = AuthorizationContextMapper.FromProto(proto);
+
+        Assert.NotNull(result.Actor);
+        Assert.Equal(chainedActorJson, result.Actor!.ToJsonString());
+        // The nested act member must remain a JsonObject (not coerced into a string).
+        Assert.IsType<JsonObject>(result.Actor["act"]);
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_RoundTrips_NullActor()
+    {
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+
+        var proto = context.ToProto();
+        var result = AuthorizationContextMapper.FromProto(proto);
+
+        Assert.False(proto.HasActorJson);
+        Assert.Null(result.Actor);
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_PreUpgradeWireBytes_DeserializeWithNullNewFields()
+    {
+        // BACKWARD COMPAT: simulates storage records written before tags 11 (authorization_details_json)
+        // and 12 (actor_json) existed. We construct a proto with only the original first-10 fields set
+        // and serialise to the wire bytes that pre-upgrade code would have produced. A current reader
+        // must deserialise those bytes cleanly, with the new fields surfacing as null on the C# record.
+        // Proto3 optional fields are designed to behave this way, but a regression test pins the
+        // observable behaviour so future schema additions can't accidentally break old storage.
+        var preUpgradeProto = new Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationContext
+        {
+            ClientId = "client-123",
+            CertificateSha256Thumbprint = "x5tValue",
+            ProofKeyThumbprint = "jktValue",
+            RedirectUri = "https://example.com/cb",
+            Nonce = "n-0S6_WzA2Mj",
+            CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            CodeChallengeMethod = "S256",
+        };
+        preUpgradeProto.Scope.Add("openid");
+        preUpgradeProto.Resources.Add("https://api.example.com");
+
+        // Round-trip through actual wire bytes so we're testing the protobuf parser, not a
+        // shortcut through in-memory object identity.
+        var wireBytes = Google.Protobuf.MessageExtensions.ToByteArray(preUpgradeProto);
+        var rehydratedProto = Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationContext.Parser
+            .ParseFrom(wireBytes);
+
+        var result = AuthorizationContextMapper.FromProto(rehydratedProto);
+
+        // Original fields preserved byte-for-byte through the wire round-trip.
+        Assert.Equal("client-123", result.ClientId);
+        Assert.Equal("x5tValue", result.CertificateSha256Thumbprint);
+        Assert.Equal("jktValue", result.ProofKeyThumbprint);
+        Assert.Equal(new Uri("https://example.com/cb"), result.RedirectUri);
+        Assert.Equal("n-0S6_WzA2Mj", result.Nonce);
+
+        // New fields tolerate the absence of their tags -- this is the backward-compat invariant.
+        Assert.False(rehydratedProto.HasAuthorizationDetailsJson);
+        Assert.False(rehydratedProto.HasActorJson);
+        Assert.Null(result.AuthorizationDetails);
+        Assert.Null(result.Actor);
+    }
+
+    [Fact]
+    public void AuthorizationContextMapper_NewWireBytes_PreserveBothAuthorizationDetailsAndActor()
+    {
+        // FORWARD COMPAT proof: a context populated with both new fields serialises and
+        // re-parses byte-exactly. Together with the previous test, this pins the wire shape
+        // both with the new fields present and absent.
+        const string adWire = """[{"type":"payment_initiation","actions":["initiate"]}]""";
+        const string actorWire = """{"sub":"svc-actor"}""";
+
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
+        {
+            AuthorizationDetails = (System.Text.Json.Nodes.JsonArray)System.Text.Json.Nodes.JsonNode.Parse(adWire)!,
+            Actor = (JsonObject)System.Text.Json.Nodes.JsonNode.Parse(actorWire)!,
+        };
+
+        var wireBytes = Google.Protobuf.MessageExtensions.ToByteArray(context.ToProto());
+        var rehydratedProto = Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationContext.Parser
+            .ParseFrom(wireBytes);
+        var result = AuthorizationContextMapper.FromProto(rehydratedProto);
+
+        Assert.True(rehydratedProto.HasAuthorizationDetailsJson);
+        Assert.True(rehydratedProto.HasActorJson);
+        Assert.Equal(adWire, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(actorWire, result.Actor!.ToJsonString());
+    }
+
+    [Fact]
     public void AuthorizationContextMapper_ToProto_HandlesPkce()
     {
         // Arrange
