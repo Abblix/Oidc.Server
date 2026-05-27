@@ -105,7 +105,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
     public async Task Discovery_exposes_token_exchange_grant_type()
     {
         // RFC 8693 §5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
-        // Automatic exposure via AddTokenExchangeGrant() -> AddAuthorizationGrant<TokenExchangeGrantHandler>;
+        // Automatic exposure via AddTokenExchangeGrant() -> AddAuthorizationGrant<TokenExchangeGrantHandler>,
         // CompositeAuthorizationGrantHandler aggregates GrantTypesSupported across all registered
         // handlers and the discovery pipeline reads from it.
         var client = CreateClient();
@@ -178,18 +178,16 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         var discovery = await FetchDiscoveryAsync(client);
         Assert.NotNull(discovery.IntrospectionEndpoint);
 
-        using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint)
+        using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
+        introspectRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
-                [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-                ["token"] = accessToken,
-                ["token_type_hint"] = "access_token",
-            }),
-        };
-        var response = await client.SendAsync(introspectRequest);
-        var raw = await response.Content.ReadAsStringAsync();
+            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
+            [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            ["token"] = accessToken,
+            ["token_type_hint"] = "access_token",
+        });
+        var response = await client.SendAsync(introspectRequest, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.IsSuccessStatusCode, $"introspect failed: {(int)response.StatusCode} {raw}");
 
         var body = JsonNode.Parse(raw)?.AsObject();
@@ -278,7 +276,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
     [Fact]
     public async Task Consent_drop_entry_from_multi_set_token_carries_only_remaining_entries()
     {
-        // RFC 9396 §5 partial-consent drop-entry, E2E. Client requested two entries;
+        // RFC 9396 §5 partial-consent drop-entry, E2E. Client requested two entries,
         // consent provider returns Granted.AuthorizationDetails with one entry only.
         const string requestedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";

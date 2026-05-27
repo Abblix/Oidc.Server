@@ -21,13 +21,15 @@ public class DeviceAuthorizationDetailsValidator(
     {
         var result = await policy.ApplyAsync(
             context.Request.AuthorizationDetails,
-            context.ClientInfo);
+            context.ClientInfo,
+            CancellationToken.None);
 
         if (!result.TryGetSuccess(out var validated))
             return result.GetFailure();
 
         if (validated is not null)
             context.AuthorizationDetails = validated;
+
         return null;
     }
 }

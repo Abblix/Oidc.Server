@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -56,5 +55,5 @@ public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, Tim
 	/// <see cref="JsonArray"/>, surfaced byte-exact in the JSON token response per RFC 9396 §7
 	/// (MUST). <c>null</c> when no RAR was used.
 	/// </summary>
-	public JsonArray? AuthorizationDetailsRaw { get; init; }
+	public JsonArray? AuthorizationDetails { get; init; }
 }

@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,7 +31,6 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -187,7 +185,7 @@ public class TokenExchangeGrantHandlerTests
         // Subject_token already carries an act chain: { sub: prev-actor }. New actor wraps it:
         // result act = { sub: new-actor, act: { sub: prev-actor } }.
         var existingChain = new JsonObject { ["sub"] = "prev-actor" };
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null, Act: existingChain);
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null) { Act = existingChain };
         var actor = new SubjectTokenContext("svc-worker-7", null, null, null);
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);

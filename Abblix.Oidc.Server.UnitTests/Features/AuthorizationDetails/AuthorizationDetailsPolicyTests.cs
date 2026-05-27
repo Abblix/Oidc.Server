@@ -64,7 +64,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -80,7 +80,7 @@ public class AuthorizationDetailsPolicyTests
         // RFC 9396 §2: the 'type' member is required. Entry without it must reject.
         var raw = new JsonArray(new JsonObject());
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -99,7 +99,7 @@ public class AuthorizationDetailsPolicyTests
             ["actions"] = new JsonArray("initiate"),
         });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -118,7 +118,7 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -135,7 +135,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(RejectingValidator.Reason, error.ErrorDescription);
@@ -157,7 +157,7 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out _));
         Assert.Equal(0, counter.Count);
@@ -177,7 +177,7 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -192,11 +192,11 @@ public class AuthorizationDetailsPolicyTests
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
-        var resultNull = await composite.ApplyAsync(null, TestClient);
+        var resultNull = await composite.ApplyAsync(null, TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultNull.TryGetSuccess(out var validatedNull));
         Assert.Null(validatedNull);
 
-        var resultEmpty = await composite.ApplyAsync(new JsonArray(), TestClient);
+        var resultEmpty = await composite.ApplyAsync(new JsonArray(), TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultEmpty.TryGetSuccess(out var validatedEmpty));
         Assert.Null(validatedEmpty);
     }
@@ -210,7 +210,7 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = [] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client);
+        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -227,7 +227,7 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client);
+        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -243,7 +243,7 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = null };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client);
+        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -274,7 +274,7 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -298,7 +298,7 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"5000.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         var wire = validated!.ToJsonString();
@@ -321,7 +321,7 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","actions":["initiate","Initiate","INITIATE"]}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         var wire = validated!.ToJsonString();
@@ -339,7 +339,7 @@ public class AuthorizationDetailsPolicyTests
         const string wire = """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(wire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient);
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
@@ -478,7 +478,7 @@ public class AuthorizationDetailsPolicyTests
         IAuthorizationDetailValidator validator = new StubValidator();
         var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
 
-        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, default);
+        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, TestContext.Current.CancellationToken);
 
         Assert.Null(descriptor);
     }
@@ -489,7 +489,7 @@ public class AuthorizationDetailsPolicyTests
         IAuthorizationDetailValidator validator = new DescribingValidator();
         var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
 
-        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, default);
+        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, TestContext.Current.CancellationToken);
 
         Assert.NotNull(descriptor);
         Assert.Equal("Payment transfer", descriptor!.Title);

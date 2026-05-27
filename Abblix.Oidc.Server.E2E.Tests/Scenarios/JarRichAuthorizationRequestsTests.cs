@@ -47,7 +47,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var clientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
         // 2. Register a client via DCR with the public key inline as jwks. The client uses
-        // client_secret_post for token-endpoint authentication (DCR returns a generated secret);
+        // client_secret_post for token-endpoint authentication (DCR returns a generated secret),
         // the registered jwks is used only by IClientJwtValidator to verify the signed request
         // object at /authorize.
         var dcrBody = new JsonObject
@@ -56,7 +56,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
             ["grant_types"] = new JsonArray { "authorization_code" },
             ["response_types"] = new JsonArray { "code" },
             ["token_endpoint_auth_method"] = "client_secret_post",
-            ["jwks"] = JsonNode.Parse(JsonSerializer.Serialize(PublicJwksFor(clientKey))),
+            ["jwks"] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
             ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);

@@ -81,7 +81,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
         // instance so mutations downstream do not leak back into stored state.
-        var authorizationDetailsRaw =
+        var authorizationDetails =
             grant.Context.AuthorizationDetails is { } ad
                 ? (JsonArray?)ad.DeepClone()
                 : null;
@@ -95,7 +95,9 @@ public sealed class RefreshTokenSubjectTokenResolver(
             Subject: grant.AuthSession.Subject,
             Issuer: grant.AuthSession.IdentityProvider,
             Scope: grant.Context.Scope,
-            AuthorizationDetails: authorizationDetailsRaw,
-            Act: act);
+            AuthorizationDetails: authorizationDetails)
+        {
+            Act = act,
+        };
     }
 }

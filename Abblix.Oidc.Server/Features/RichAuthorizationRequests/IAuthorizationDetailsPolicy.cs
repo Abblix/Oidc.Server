@@ -53,5 +53,5 @@ public interface IAuthorizationDetailsPolicy
     Task<Result<JsonArray?, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
-        CancellationToken token = default);
+        CancellationToken token);
 }

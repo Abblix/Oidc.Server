@@ -53,7 +53,7 @@ internal sealed class AuthorizationDetailsPolicy(
     public async Task<Result<JsonArray?, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
-        CancellationToken token = default)
+        CancellationToken token)
     {
         if (raw is not { Count: > 0 })
             return (JsonArray?)null;

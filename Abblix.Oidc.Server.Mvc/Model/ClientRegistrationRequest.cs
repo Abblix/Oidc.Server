@@ -25,6 +25,7 @@ using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -310,7 +311,7 @@ public record ClientRegistrationRequest
     /// <summary>
     /// Abblix extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this client
     /// may submit to the Token Exchange grant. Maps to
-    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// <see cref="ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }

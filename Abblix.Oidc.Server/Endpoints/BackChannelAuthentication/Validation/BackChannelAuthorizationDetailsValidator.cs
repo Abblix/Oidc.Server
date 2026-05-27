@@ -23,7 +23,8 @@ public class BackChannelAuthorizationDetailsValidator(
     {
         var result = await policy.ApplyAsync(
             context.Request.AuthorizationDetails,
-            context.ClientInfo);
+            context.ClientInfo,
+            CancellationToken.None);
 
         if (!result.TryGetSuccess(out var validated))
             return result.GetFailure();
