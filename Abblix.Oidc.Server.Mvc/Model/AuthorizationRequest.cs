@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Oidc.Server.Model;
@@ -205,6 +206,16 @@ public record AuthorizationRequest
 	public string? ProofKeyThumbprint { get; init; }
 
 	/// <summary>
+	/// RFC 9396 <c>authorization_details</c>: a JSON array of structured authorization
+	/// requirements. Bound as the raw <see cref="JsonArray"/> so member order and any
+	/// type-specific extension payload survive into the core pipeline byte-exact —
+	/// downstream validation, storage and the /token response echo the same wire shape.
+	/// </summary>
+	[BindProperty(SupportsGet = true, Name = Parameters.AuthorizationDetails)]
+	[ModelBinder(typeof(JsonSerializerModelBinder))]
+	public JsonArray? AuthorizationDetails { get; init; }
+
+	/// <summary>
 	/// Projects this MVC-binding model onto its core <see cref="Core.AuthorizationRequest"/>
 	/// counterpart, copying every bound parameter so the core pipeline operates on a
 	/// transport-agnostic shape.
@@ -233,5 +244,6 @@ public record AuthorizationRequest
 		ClaimsLocales = ClaimsLocales,
 		Resources = Resources,
 		ProofKeyThumbprint = ProofKeyThumbprint,
+		AuthorizationDetailsRaw = AuthorizationDetails,
 	};
 }
