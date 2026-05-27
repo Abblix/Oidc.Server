@@ -113,19 +113,6 @@ public class AuthorizationDetailTests
     }
 
     [Fact]
-    public void NonObjectJson_TypedAccessorsReturnNullGracefully()
-    {
-        // The wrapper is tolerant of malformed wire input — if Json is not a JsonObject the
-        // typed accessors return null instead of throwing, so validators surface
-        // invalid_authorization_details without exception noise.
-        var detail = new AuthorizationDetail(JsonValue.Create("not-an-object")!);
-
-        Assert.Null(detail.Type);
-        Assert.Null(detail.Locations);
-        Assert.Null(detail.Actions);
-    }
-
-    [Fact]
     public void Payload_AuthorizationDetails_ReadsArrayFromUnderlyingClaim()
     {
         var json = new JsonObject

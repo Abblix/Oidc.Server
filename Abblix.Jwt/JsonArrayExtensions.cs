@@ -68,11 +68,7 @@ public static class JsonArrayExtensions
     public static AuthorizationDetail[]? ToTypedArray(this JsonArray? jsonArray)
     {
         return jsonArray?
-            .Select(node => node switch
-            {
-                not null => new AuthorizationDetail(node),
-                null => default,
-            })
+            .Select(node => node is JsonObject obj ? new AuthorizationDetail(obj) : null)
             .OfType<AuthorizationDetail>()
             .ToArray();
     }

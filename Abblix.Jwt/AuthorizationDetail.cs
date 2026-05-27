@@ -31,7 +31,7 @@ namespace Abblix.Jwt;
 /// accessors that read from and write to the underlying <see cref="Json"/> directly — the same
 /// shape <see cref="JsonWebTokenPayload"/> uses over its <see cref="JsonObject"/>.
 /// </summary>
-/// <param name="Json">The underlying JSON node carrying the entry's wire shape. Member order,
+/// <param name="json">The underlying JSON node carrying the entry's wire shape. Member order,
 /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
 /// not model survive the authorize → code → token round-trip byte-exact because no typed
 /// deserialise / re-serialise cycle ever runs over them.</param>
@@ -42,7 +42,7 @@ namespace Abblix.Jwt;
 /// the schema for a given <c>type</c> reads and writes them via the
 /// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
 /// </remarks>
-public record AuthorizationDetail(JsonNode Json)
+public record AuthorizationDetail(JsonObject json)
 {
     /// <summary>
     /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec;
@@ -51,8 +51,8 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public string? Type
     {
-        get => Json is JsonObject obj ? obj.GetProperty<string>(Parameters.Type) : null;
-        set { if (Json is JsonObject obj) obj.SetProperty(Parameters.Type, value); }
+        get => Json.GetProperty<string>(Parameters.Type);
+        set => Json.SetProperty(Parameters.Type, value);
     }
 
     /// <summary>
@@ -61,8 +61,8 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public IEnumerable<string>? Locations
     {
-        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Locations) : null;
-        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Locations, value); }
+        get => Json.GetArrayOfStringsOrNull(Parameters.Locations);
+        set => Json.SetArrayOrStringOrNull(Parameters.Locations, value);
     }
 
     /// <summary>
@@ -70,8 +70,8 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public IEnumerable<string>? Actions
     {
-        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Actions) : null;
-        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Actions, value); }
+        get => Json.GetArrayOfStringsOrNull(Parameters.Actions);
+        set => Json.SetArrayOrStringOrNull(Parameters.Actions, value);
     }
 
     /// <summary>
@@ -79,8 +79,8 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public IEnumerable<string>? Datatypes
     {
-        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Datatypes) : null;
-        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Datatypes, value); }
+        get => Json.GetArrayOfStringsOrNull(Parameters.Datatypes);
+        set => Json.SetArrayOrStringOrNull(Parameters.Datatypes, value);
     }
 
     /// <summary>
@@ -88,8 +88,8 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public string? Identifier
     {
-        get => Json is JsonObject obj ? obj.GetProperty<string>(Parameters.Identifier) : null;
-        set { if (Json is JsonObject obj) obj.SetProperty(Parameters.Identifier, value); }
+        get => Json.GetProperty<string>(Parameters.Identifier);
+        set => Json.SetProperty(Parameters.Identifier, value);
     }
 
     /// <summary>
@@ -97,9 +97,15 @@ public record AuthorizationDetail(JsonNode Json)
     /// </summary>
     public IEnumerable<string>? Privileges
     {
-        get => Json is JsonObject obj ? obj.GetArrayOfStringsOrNull(Parameters.Privileges) : null;
-        set { if (Json is JsonObject obj) obj.SetArrayOrStringOrNull(Parameters.Privileges, value); }
+        get => Json.GetArrayOfStringsOrNull(Parameters.Privileges);
+        set => Json.SetArrayOrStringOrNull(Parameters.Privileges, value);
     }
+
+    /// <summary>The underlying JSON node carrying the entry's wire shape. Member order,
+    /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
+    /// not model survive the authorize → code → token round-trip byte-exact because no typed
+    /// deserialise / re-serialise cycle ever runs over them.</summary>
+    public JsonObject Json { get; } = json;
 
     /// <summary>
     /// RFC 9396 §2.2 member names. Type-specific members outside this set live alongside in
