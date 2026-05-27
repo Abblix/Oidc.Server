@@ -16,6 +16,8 @@
   <Project Path="Abblix.Jwt/Abblix.Jwt.csproj" />
   <Project Path="Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />
   <Project Path="Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
+  <Project Path="Abblix.Oidc.Server.E2E.TestHost/Abblix.Oidc.Server.E2E.TestHost.csproj" />
+  <Project Path="Abblix.Oidc.Server.E2E.Tests/Abblix.Oidc.Server.E2E.Tests.csproj" />
   <Project Path="Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
   <Project Path="Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
   <Project Path="Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
