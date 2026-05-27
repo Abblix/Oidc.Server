@@ -35,12 +35,12 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
         // RFC 9396 §7: authorization_details echoed byte-exact in the token response
-        var echoed = (tokenResponse["authorization_details"] as JsonArray)!;
+        var echoed = (tokenResponse[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
 
         // Access token carries the claim byte-exact
         var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
-        var claim = (payload["authorization_details"] as JsonArray)!;
+        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -51,7 +51,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, MultiEntryWireJson);
 
-        var echoed = (tokenResponse["authorization_details"] as JsonArray)!;
+        var echoed = (tokenResponse[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(MultiEntryWireJson, echoed.ToJsonString());
         Assert.Equal(2, echoed.Count);
     }
@@ -64,7 +64,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
         var idTokenPayload = DecodeJwtPayload(tokenResponse["id_token"]!.GetValue<string>());
-        var claim = (idTokenPayload["authorization_details"] as JsonArray)!;
+        var claim = (idTokenPayload[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -76,7 +76,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
         var idTokenPayload = DecodeJwtPayload(tokenResponse["id_token"]!.GetValue<string>());
-        Assert.Null(idTokenPayload["authorization_details"]);
+        Assert.Null(idTokenPayload[WireParameters.AuthorizationDetails]);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         });
 
         var payload = DecodeJwtPayload(refreshed["access_token"]!.GetValue<string>());
-        var claim = (payload["authorization_details"] as JsonArray)!;
+        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 }

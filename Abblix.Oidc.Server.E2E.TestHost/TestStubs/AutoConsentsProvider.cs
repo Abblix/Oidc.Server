@@ -24,7 +24,7 @@ public sealed class AutoConsentsProvider : IUserConsentsProvider
             .Select(s => new ScopeDefinition(s))
             .ToArray();
         var grantedResources = (request.Model.Resources ?? [])
-            .Select(uri => new ResourceDefinition(uri, []))
+            .Select(uri => new ResourceDefinition(uri))
             .ToArray();
 
         var consents = new UserConsents

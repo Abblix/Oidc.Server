@@ -35,6 +35,11 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class AuthorizationDetailTests
 {
+    // RFC 9396 §2.2 example types / actions reused across fixtures.
+    private const string PaymentInitiationType = "payment_initiation";
+    private const string InitiateAction = "initiate";
+
+
     [Fact]
     public void IanaClaimTypes_AuthorizationDetails_Constant_HasExpectedWireValue()
     {
@@ -57,9 +62,9 @@ public class AuthorizationDetailTests
             """)!;
         var detail = new AuthorizationDetail(json);
 
-        Assert.Equal("payment_initiation", detail.Type);
+        Assert.Equal(PaymentInitiationType, detail.Type);
         Assert.Equal(new[] { "https://api.bank.example/payments" }, detail.Locations);
-        Assert.Equal(new[] { "initiate", "status" }, detail.Actions);
+        Assert.Equal(new[] { InitiateAction, "status" }, detail.Actions);
         Assert.Equal(new[] { "iban" }, detail.Datatypes);
         Assert.Equal("txn-4521", detail.Identifier);
         Assert.Equal(new[] { "read", "write" }, detail.Privileges);
@@ -71,11 +76,11 @@ public class AuthorizationDetailTests
         var json = new JsonObject();
         var detail = new AuthorizationDetail(json)
         {
-            Type = "payment_initiation",
-            Actions = new[] { "initiate", "status" },
+            Type = PaymentInitiationType,
+            Actions = new[] { InitiateAction, "status" },
         };
 
-        Assert.Equal("payment_initiation", json["type"]?.GetValue<string>());
+        Assert.Equal(PaymentInitiationType, json["type"]?.GetValue<string>());
         // Multi-element arrays land as a JsonArray; single-element collapses to a string per
         // the OAuth single-or-array convention shared with audience / amr.
         Assert.IsType<JsonArray>(json["actions"]);
@@ -103,8 +108,8 @@ public class AuthorizationDetailTests
             """)!;
         var detail = new AuthorizationDetail(json);
 
-        Assert.Equal("payment_initiation", detail.Type);
-        Assert.Equal(new[] { "initiate" }, detail.Actions);
+        Assert.Equal(PaymentInitiationType, detail.Type);
+        Assert.Equal(new[] { InitiateAction }, detail.Actions);
         Assert.Equal("EUR", detail.Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("500.00", detail.Json["instructedAmount"]?["amount"]?.GetValue<string>());
         Assert.Equal("DE02100100109307118603", detail.Json["creditorAccount"]?["iban"]?.GetValue<string>());
@@ -132,8 +137,8 @@ public class AuthorizationDetailTests
         Assert.NotNull(details);
         Assert.Equal(2, details.Length);
 
-        Assert.Equal("payment_initiation", details[0].Type);
-        Assert.Equal(new[] { "initiate" }, details[0].Actions);
+        Assert.Equal(PaymentInitiationType, details[0].Type);
+        Assert.Equal(new[] { InitiateAction }, details[0].Actions);
         Assert.Equal("500.00", details[0].Json["amount"]?.GetValue<string>());
 
         Assert.Equal("account_information", details[1].Type);
@@ -168,8 +173,8 @@ public class AuthorizationDetailTests
 
         Assert.NotNull(round);
         Assert.Equal(2, round.Length);
-        Assert.Equal("payment_initiation", round[0].Type);
-        Assert.Equal(new[] { "initiate" }, round[0].Actions);
+        Assert.Equal(PaymentInitiationType, round[0].Type);
+        Assert.Equal(new[] { InitiateAction }, round[0].Actions);
         Assert.Equal("EUR", round[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("account_information", round[1].Type);
         Assert.Equal(new[] { "https://api.bank.example/accounts" }, round[1].Locations);

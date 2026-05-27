@@ -44,20 +44,7 @@ internal static class AuthorizationRequestMapper
 
         proto.Claims = source.Claims?.ToProto();
 
-        if (source.ClientId != null) proto.ClientId = source.ClientId;
-        if (source.RedirectUri != null) proto.RedirectUri = source.RedirectUri.ToString();
-        if (source.State != null) proto.State = source.State;
-        if (source.ResponseMode != null) proto.ResponseMode = source.ResponseMode;
-        if (source.Nonce != null) proto.Nonce = source.Nonce;
-        if (source.Display != null) proto.Display = source.Display;
-        if (source.Prompt != null) proto.Prompt = source.Prompt;
-        if (source.IdTokenHint != null) proto.IdTokenHint = source.IdTokenHint;
-        if (source.LoginHint != null) proto.LoginHint = source.LoginHint;
-        if (source.CodeChallenge != null) proto.CodeChallenge = source.CodeChallenge;
-        if (source.CodeChallengeMethod != null) proto.CodeChallengeMethod = source.CodeChallengeMethod;
-        if (source.Request != null) proto.Request = source.Request;
-        if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
-        if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
+        CopyOptionalScalars(source, proto);
 
         if (source.MaxAge.HasValue)
             proto.MaxAge = Duration.FromTimeSpan(source.MaxAge.Value);
@@ -73,6 +60,27 @@ internal static class AuthorizationRequestMapper
             proto.AuthorizationDetailsJson = authorizationDetails.ToJsonString();
 
         return proto;
+    }
+
+    // Lifted out of ToProto so its cognitive complexity stays in budget — each
+    // if-not-null scalar copy adds 1 by Sonar's counting; with fourteen of them
+    // in the parent method the rule's threshold tripped (S3776).
+    private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)
+    {
+        if (source.ClientId != null) proto.ClientId = source.ClientId;
+        if (source.RedirectUri != null) proto.RedirectUri = source.RedirectUri.ToString();
+        if (source.State != null) proto.State = source.State;
+        if (source.ResponseMode != null) proto.ResponseMode = source.ResponseMode;
+        if (source.Nonce != null) proto.Nonce = source.Nonce;
+        if (source.Display != null) proto.Display = source.Display;
+        if (source.Prompt != null) proto.Prompt = source.Prompt;
+        if (source.IdTokenHint != null) proto.IdTokenHint = source.IdTokenHint;
+        if (source.LoginHint != null) proto.LoginHint = source.LoginHint;
+        if (source.CodeChallenge != null) proto.CodeChallenge = source.CodeChallenge;
+        if (source.CodeChallengeMethod != null) proto.CodeChallengeMethod = source.CodeChallengeMethod;
+        if (source.Request != null) proto.Request = source.Request;
+        if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
+        if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
     }
 
     /// <summary>
