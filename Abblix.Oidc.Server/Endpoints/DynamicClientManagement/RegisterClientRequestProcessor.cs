@@ -97,6 +97,7 @@ public class RegisterClientRequestProcessor(
             TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
             DpopBoundAccessTokens = clientInfo.RequireDPoP,
             AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
         };
 
         return response;
@@ -124,6 +125,8 @@ public class RegisterClientRequestProcessor(
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
+            // Abblix extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
+            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,

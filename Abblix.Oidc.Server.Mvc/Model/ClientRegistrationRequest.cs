@@ -308,6 +308,14 @@ public record ClientRegistrationRequest
     public string[]? AuthorizationDetailsTypes { get; init; }
 
     /// <summary>
+    /// Abblix extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this client
+    /// may submit to the Token Exchange grant. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -408,6 +416,7 @@ public record ClientRegistrationRequest
             OfflineAccessAllowed = OfflineAccessAllowed,
             DpopBoundAccessTokens = DpopBoundAccessTokens,
             AuthorizationDetailsTypes = AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = TokenExchangeSubjectTokenTypes,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 

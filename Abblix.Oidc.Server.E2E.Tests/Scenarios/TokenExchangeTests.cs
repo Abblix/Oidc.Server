@@ -88,6 +88,37 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(actorSub, act!["sub"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task Dynamic_client_registration_round_trips_token_exchange_subject_token_types_metadata()
+    {
+        // Abblix-extension DCR metadata: token_exchange_subject_token_types lets a host pin the
+        // per-client allowlist of RFC 8693 subject_token_type URIs at registration time. The
+        // registered value flows ClientInfo -> response echo, and at runtime the grant handler
+        // enforces it via TokenExchangeAllowedSubjectTokenTypes tri-state semantics.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var requested = new JsonObject
+        {
+            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
+            ["grant_types"] = new JsonArray { "authorization_code" },
+            ["response_types"] = new JsonArray { "code" },
+            ["token_endpoint_auth_method"] = "client_secret_post",
+            ["token_exchange_subject_token_types"] = new JsonArray
+            {
+                "urn:ietf:params:oauth:token-type:access_token",
+                "urn:ietf:params:oauth:token-type:id_token",
+            },
+        };
+        var registered = await RegisterClientAsync(client, discovery, requested);
+
+        var echoed = registered["token_exchange_subject_token_types"] as JsonArray;
+        Assert.NotNull(echoed);
+        Assert.Equal(2, echoed!.Count);
+        Assert.Equal("urn:ietf:params:oauth:token-type:access_token", echoed[0]!.GetValue<string>());
+        Assert.Equal("urn:ietf:params:oauth:token-type:id_token", echoed[1]!.GetValue<string>());
+    }
+
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)
     {
         var client = CreateClient();

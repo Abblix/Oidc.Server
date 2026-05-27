@@ -111,6 +111,8 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             DpopBoundAccessTokens = success.DpopBoundAccessTokens,
             // RFC 9396 §5.1: authorization_details_types echo.
             AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
+            // Abblix extension: token_exchange_subject_token_types echo.
+            TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

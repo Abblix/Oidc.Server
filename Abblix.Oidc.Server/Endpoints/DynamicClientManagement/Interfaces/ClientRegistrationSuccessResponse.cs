@@ -215,6 +215,14 @@ public record ClientRegistrationSuccessResponse(
     public string[]? AuthorizationDetailsTypes { get; init; }
 
     /// <summary>
+    /// Abblix extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// client may submit to the Token Exchange grant. Echoes
+    /// <c>ClientInfo.TokenExchangeAllowedSubjectTokenTypes</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// JSON property names per RFC 7591/7592, OpenID Connect Core, RFC 8705, and RFC 9449.
     /// </summary>
     private static class ResponseParameters
@@ -240,5 +248,6 @@ public record ClientRegistrationSuccessResponse(
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
+        public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
     }
 }
