@@ -38,7 +38,11 @@ builder.Services.AddOidcServices(options =>
         {
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
+            // RFC 8693 Token Exchange is admitted on the confidential client so the E2E suite can
+            // exercise the impersonation + delegation flows against a real access token issued by
+            // the auth-code path. TokenExchangeAllowedSubjectTokenTypes is null = no per-client
+            // constraint (tri-state default; library-wide resolver registry decides).
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.TokenExchange],
             PkceRequired = true,
             RedirectUris = [redirect],
             AuthorizationDetailsTypes = allowlist,
