@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -79,4 +81,12 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// providing additional control over the accessible resources.
 	/// </summary>
 	public ResourceDefinition[] Resources { get; set; } = [];
+
+	/// <summary>
+	/// The RFC 9396 Rich Authorization Requests array after per-type and per-client validation by
+	/// <see cref="IAuthorizationDetailsPolicy"/>, stored as the
+	/// raw <see cref="JsonArray"/> so byte-exact content survives forward to the grant.
+	/// <c>null</c> when the request did not include <c>authorization_details</c>.
+	/// </summary>
+	public JsonArray? AuthorizationDetails { get; set; }
 }

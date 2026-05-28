@@ -171,4 +171,12 @@ public record ConfigurationResponse
 	/// Indicates whether the server includes the <c>iss</c> parameter in authorization responses per RFC 9207.
 	/// </summary>
 	public bool? AuthorizationResponseIssParameterSupported { get; init; }
+
+	/// <summary>
+	/// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+	/// registered validators for. Sourced from the same keyed-DI registry that request-time
+	/// dispatch uses; emitted as <c>authorization_details_types_supported</c> on the wire,
+	/// or omitted when null (no per-type validators registered).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
 }

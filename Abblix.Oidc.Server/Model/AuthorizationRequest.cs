@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
@@ -51,10 +52,19 @@ public record AuthorizationRequest
 	[JsonPropertyName(Parameters.Claims)]
     public RequestedClaims? Claims { get; init; }
 
+    /// <summary>
+    /// RFC 9396 Rich Authorization Requests stored as the raw wire <see cref="JsonArray"/> so member order and
+    /// type-specific payload survive the request → grant → token round-trip without re-serialisation.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetails)]
+    public JsonArray? AuthorizationDetails { get; init; }
+
 	/// <summary>
 	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:
-	/// <c>code</c> for authorization code, <c>token</c> for the implicit grant access token, <c>id_token</c> for the
-	/// hybrid/implicit ID token. Multiple values are space-separated and represented here as an array.
+	/// <c>code</c> for authorization code,
+	/// <c>token</c> for the implicit grant access token,
+	/// <c>id_token</c> for the hybrid/implicit ID token.
+	/// Multiple values are space-separated and represented here as an array.
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
@@ -226,6 +236,11 @@ public record AuthorizationRequest
         /// <summary>The <c>claims</c> authorization request parameter carrying a structured request for
         /// specific claims to appear in the ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
+
+        /// <summary>The <c>authorization_details</c> authorization request parameter (RFC 9396 §2)
+        /// carrying a JSON array of structured authorization requirements per the RFC 9396 Rich
+        /// Authorization Requests profile.</summary>
+        public const string AuthorizationDetails = "authorization_details";
 
         /// <summary>The <c>response_type</c> authorization request parameter selecting the grant flow
         /// (e.g. <c>code</c>, <c>token</c>, <c>id_token</c> or combinations).</summary>

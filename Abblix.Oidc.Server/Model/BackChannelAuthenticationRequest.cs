@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -131,6 +132,15 @@ public record BackChannelAuthenticationRequest
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array stored as the raw wire
+    /// <see cref="JsonArray"/>. CIBA flows accept <c>authorization_details</c> by spec
+    /// reference; the array carries through to the eventual access token issued via the
+    /// CIBA grant byte-exact (member order and type-specific payload preserved).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetails)]
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
     /// Wire-level parameter names accepted at the CIBA backchannel authentication endpoint
     /// (OpenID Connect CIBA Core 1.0 §7).
     /// </summary>
@@ -183,5 +193,9 @@ public record BackChannelAuthenticationRequest
         /// <summary>The <c>claims</c> CIBA request parameter carrying a structured request for specific
         /// claims in the issued ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
+
+        /// <summary>The <c>authorization_details</c> CIBA request parameter (RFC 9396 §3) carrying
+        /// a JSON array of Rich Authorization Requests.</summary>
+        public const string AuthorizationDetails = "authorization_details";
     }
 }

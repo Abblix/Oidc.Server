@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -43,15 +44,6 @@ public class TokenContextValidatorComposite(ITokenContextValidator[] validators)
     /// A <see cref="OidcError"/> containing error details if any validation step fails;
     /// otherwise, returns null indicating that all validation steps were successful.
     /// </returns>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
-    {
-        foreach (var validator in validators)
-        {
-            var error = await validator.ValidateAsync(context);
-            if (error != null)
-                return error;
-        }
-
-        return null;
-    }
+    public Task<OidcError?> ValidateAsync(TokenValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
 }

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -37,15 +38,6 @@ public class ClientRegistrationContextValidatorComposite(IClientRegistrationCont
     /// </summary>
     /// <param name="context">The shared validation context.</param>
     /// <returns>The first error produced, or <c>null</c> when every step passes.</returns>
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
-    {
-        foreach (var validationStep in validationSteps)
-        {
-            var error = await validationStep.ValidateAsync(context);
-            if (error != null)
-                return error;
-        }
-
-        return null;
-    }
+    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+        => validationSteps.FirstOrDefaultAsync(v => v.ValidateAsync(context));
 }

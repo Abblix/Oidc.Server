@@ -76,4 +76,13 @@ public static class GrantTypes
     /// and smart devices that require user interaction for authorization.
     /// </summary>
     public const string DeviceAuthorization = "urn:ietf:params:oauth:grant-type:device_code";
+
+    /// <summary>
+    /// Represents the Token Exchange grant type per RFC 8693. Allows a client holding a token issued by this AS
+    /// (or, in federated scenarios, by a trusted external IdP) to exchange it for a new token with possibly
+    /// narrower scope, different audience, or a different token type. Supports both impersonation (the issued
+    /// token represents the original subject directly) and delegation (an <c>act</c> claim chain records the
+    /// intermediate actor).
+    /// </summary>
+    public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";
 }

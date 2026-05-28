@@ -206,6 +206,23 @@ public record ClientRegistrationSuccessResponse(
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The per-client allowlist of authorization-detail <c>type</c> values this client may
+    /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
+    /// RFC 9396 §5.1). Echoes the registered value of
+    /// <c>ClientInfo.AuthorizationDetailsTypes</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// client may submit to the Token Exchange grant. Echoes
+    /// <c>ClientInfo.TokenExchangeAllowedSubjectTokenTypes</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// JSON property names per RFC 7591/7592, OpenID Connect Core, RFC 8705, and RFC 9449.
     /// </summary>
     private static class ResponseParameters
@@ -230,5 +247,7 @@ public record ClientRegistrationSuccessResponse(
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+        public const string AuthorizationDetailsTypes = "authorization_details_types";
+        public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
     }
 }

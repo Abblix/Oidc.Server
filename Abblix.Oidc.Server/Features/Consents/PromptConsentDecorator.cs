@@ -46,7 +46,13 @@ public class PromptConsentDecorator(IUserConsentsProvider inner) : IUserConsents
     public async Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
         => request.Model.Prompt switch
         {
-            Prompts.Consent => new UserConsents { Pending = new(request.Scope, request.Resources) },
+            Prompts.Consent => new UserConsents
+            {
+                Pending = new(request.Scope, request.Resources)
+                {
+                    AuthorizationDetails = request.AuthorizationDetails,
+                },
+            },
             _ => await inner.GetUserConsentsAsync(request, authSession),
         };
 }

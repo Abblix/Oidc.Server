@@ -109,6 +109,10 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
             // RFC 9449 §5.2: dpop_bound_access_tokens echo.
             DpopBoundAccessTokens = success.DpopBoundAccessTokens,
+            // RFC 9396 §5.1: authorization_details_types echo.
+            AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
+            // Non-standard extension: token_exchange_subject_token_types echo.
+            TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

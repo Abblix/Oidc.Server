@@ -305,4 +305,21 @@ public class JsonWebTokenPayload(JsonObject json)
 		get => Json[IanaClaimTypes.Cnf] is JsonObject obj ? new JsonWebTokenConfirmation(obj) : null;
 		set => Json.SetProperty(IanaClaimTypes.Cnf, value?.Json);
 	}
+
+	/// <summary>
+	/// The RFC 9396 <c>authorization_details</c> claim as a sequence of typed wrappers over
+	/// the underlying <see cref="JsonArray"/> stored at <see cref="Json"/>[<c>authorization_details</c>].
+	/// Each wrapper shares its <see cref="JsonNode"/> reference with the corresponding array
+	/// element — read-through is byte-exact, and property setters on a wrapper mutate the
+	/// underlying claim in place. Assigning a new sequence rebuilds the raw array via
+	/// <see cref="JsonArrayExtensions.ToRawJsonArray"/>, deep-cloning each entry's
+	/// <see cref="AuthorizationDetail.Json"/> to detach parent ownership; assigning <c>null</c>
+	/// removes the claim. For direct raw access bypass this accessor and use the
+	/// <see cref="Json"/> indexer at <c>IanaClaimTypes.AuthorizationDetails</c>.
+	/// </summary>
+	public IEnumerable<AuthorizationDetail>? AuthorizationDetails
+	{
+		get => Json[IanaClaimTypes.AuthorizationDetails] is JsonArray arr ? arr.ToTypedArray() : null;
+		set => Json.SetProperty(IanaClaimTypes.AuthorizationDetails, value.ToRawJsonArray());
+	}
 }

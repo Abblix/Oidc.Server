@@ -130,6 +130,17 @@ internal class IdentityTokenService(
 			},
 		};
 
+		// RFC 9396 is silent on id_token; per-client opt-in via
+		// ClientInfo.ForceAuthorizationDetailsInIdentityToken mirrors the existing
+		// ForceUserClaimsInIdentityToken precedent. Default-off preserves role separation
+		// between identity assertion (id_token) and authorization payload (access token).
+		// When enabled, the raw JsonArray is copied byte-exact (DeepClone) so the id_token
+		// carries the same wire shape the access token does.
+		if (clientInfo.ForceAuthorizationDetailsInIdentityToken && authContext.AuthorizationDetails is { Count: > 0 })
+		{
+			identityToken.Payload.Json[IanaClaimTypes.AuthorizationDetails] = authContext.AuthorizationDetails.DeepClone();
+		}
+
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
 
 		return new EncodedJsonWebToken(identityToken, await jwtFormatter.FormatAsync(identityToken, clientInfo));
