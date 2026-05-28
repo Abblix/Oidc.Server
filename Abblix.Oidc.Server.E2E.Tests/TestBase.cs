@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -40,7 +41,7 @@ public abstract class TestBase(TestFactory factory)
         response.EnsureSuccessStatusCode();
         var doc = await response.Content.ReadFromJsonAsync<DiscoveryDocument>();
         Assert.NotNull(doc);
-        return doc!;
+        return doc;
     }
 
     protected static async Task<JsonObject> RegisterClientAsync(
@@ -54,7 +55,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.True(response.IsSuccessStatusCode, $"DCR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
         Assert.NotNull(parsed);
-        return parsed!;
+        return parsed;
     }
 
     protected static async Task<JsonObject> PushAuthorizationRequestAsync(
@@ -68,7 +69,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.True(response.IsSuccessStatusCode, $"PAR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
         Assert.NotNull(parsed);
-        return parsed!;
+        return parsed;
     }
 
     protected static async Task<string> AuthorizeAndExtractCodeAsync(
@@ -103,7 +104,7 @@ public abstract class TestBase(TestFactory factory)
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
         var response = await client.GetAsync(uri);
         Assert.True(
-            response.StatusCode is System.Net.HttpStatusCode.Redirect or System.Net.HttpStatusCode.Found,
+            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
             $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
         var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
         var query = System.Web.HttpUtility.ParseQueryString(location.Query);
@@ -120,7 +121,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.True(response.IsSuccessStatusCode, $"/token failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
         Assert.NotNull(parsed);
-        return parsed!;
+        return parsed;
     }
 
     protected static JsonObject DecodeJwtPayload(string jwt)
@@ -130,7 +131,7 @@ public abstract class TestBase(TestFactory factory)
         var payload = Base64UrlDecode(parts[1]);
         var parsed = JsonNode.Parse(payload)?.AsObject();
         Assert.NotNull(parsed);
-        return parsed!;
+        return parsed;
     }
 
     /// <summary>
@@ -189,7 +190,7 @@ public abstract class TestBase(TestFactory factory)
     /// asserting success). Use when a negative test expects PAR itself
     /// to fail (e.g. allowlist enforcement).
     /// </summary>
-    protected async Task<HttpResponseMessage> PushAuthorizationRequestRawAsync(
+    private async Task<HttpResponseMessage> PushAuthorizationRequestRawAsync(
         IEnumerable<KeyValuePair<string, string>> form)
     {
         var client = CreateClient();
@@ -250,45 +251,5 @@ public abstract class TestBase(TestFactory factory)
             case 3: padded += "="; break;
         }
         return Convert.FromBase64String(padded);
-    }
-}
-
-internal static class QueryHelpers
-{
-    public static Uri BuildUri(Uri baseUri, IEnumerable<KeyValuePair<string, string>> queryParams)
-    {
-        var builder = new UriBuilder(baseUri);
-        var query = string.Join('&', queryParams
-            .Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
-        builder.Query = string.IsNullOrEmpty(builder.Query)
-            ? query
-            : builder.Query.TrimStart('?') + "&" + query;
-        return builder.Uri;
-    }
-}
-
-internal static class FormPostHelpers
-{
-    /// <summary>
-    /// Posts <paramref name="form"/> as <c>application/x-www-form-urlencoded</c> to
-    /// <paramref name="endpoint"/>, optionally attaching a DPoP proof header. Returns
-    /// the raw response so callers can inspect status, body, and headers. Used by every
-    /// E2E helper that hits /par, /token, /refresh, or other form-based OAuth endpoints
-    /// — keeps the HttpRequestMessage + FormUrlEncodedContent + WithDPoPHeader plumbing
-    /// in one place.
-    /// </summary>
-    public static async Task<HttpResponseMessage> PostFormAsync(
-        HttpClient client,
-        Uri endpoint,
-        IEnumerable<KeyValuePair<string, string>> form,
-        string? dpopProof = null)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        if (dpopProof is not null)
-            request.WithDPoPHeader(dpopProof);
-        return await client.SendAsync(request);
     }
 }
