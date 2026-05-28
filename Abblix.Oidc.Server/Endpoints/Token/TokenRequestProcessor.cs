@@ -93,21 +93,36 @@ public class TokenRequestProcessor(
 
 		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{
-			// RFC 9449 §5: confidential clients' refresh tokens are not separately
-			// DPoP-bound — client authentication already sender-constrains them. Stripping
-			// the committed jkt from the persisted refresh-token context lets the next
-			// refresh call skip the committed-vs-presented compare in
-			// DPoPTokenEndpointValidator. The new access token's cnf.jkt is independently
-			// re-derived from the live proof in TokenAuthorizationContextEvaluator.
-			var refreshContext = clientInfo.ClientType == ClientType.Confidential
-				? request.AuthorizedGrant.Context with { ProofKeyThumbprint = null }
-				: request.AuthorizedGrant.Context;
+			var refreshContext = request.AuthorizedGrant.Context with
+			{
+				// RFC 9449 §5 confidential-vs-public split:
+				ProofKeyThumbprint = clientInfo.ClientType switch
+				{
+					//   * Confidential clients: refresh tokens are not separately DPoP-bound,
+					//     client authentication already sender-constrains them. Stripping the
+					//     committed jkt from the persisted refresh-token context lets a follow-up
+					//     refresh call skip the committed-vs-presented compare in
+					//     DPoPTokenEndpointValidator, allowing key rotation per §5's carve-out.
+					ClientType.Confidential => null,
+
+					//   * Public clients: DPoP is the SOLE sender-constraint, so §5 mandates
+					//     same-key MUST on every refresh. Source the binding from authContext
+					//     (the evaluator stamps the live proof's thumbprint) rather than from
+					//     the original grant context, otherwise a non-PAR initial flow loses
+					//     the binding and the next refresh would accept any key — a §5 violation.
+					//     authContext.ProofKeyThumbprint is null when the request carried no proof,
+					//     which keeps Bearer-only public flows unchanged.
+					_ => authContext.ProofKeyThumbprint,
+				},
+			};
 
 			response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				refreshContext,
 				clientInfo,
-				request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken } ? refreshToken : null);
+				request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
+					? refreshToken
+					: null);
 		}
 
 		if (authContext.Scope.HasFlag(Scopes.OpenId))

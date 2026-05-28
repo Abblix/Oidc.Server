@@ -109,7 +109,7 @@ public static class ClientJwksConfigurationExtensions
             // polymorphic JsonWebKey entries), so a plain "Jwks is not null" guard
             // skips clients whose JWKs the host actually does want bound from config,
             // leaving signature verification at runtime with zero keys for the issuer.
-            if (client.Jwks is { Keys: { Length: > 0 } })
+            if (client.Jwks is { Keys.Length: > 0 })
                 continue;
 
             if (jwksSection.Get<JsonWebKeySetSettings>() is {} jwks)
