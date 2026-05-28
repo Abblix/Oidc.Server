@@ -201,15 +201,6 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 consent capture (#142). The configurable AutoConsentsProvider
-    // models the three canonical Granted.AuthorizationDetails values:
-    //   - non-empty array  -> user consented to a (possibly narrowed) set
-    //   - empty JsonArray  -> user denied every entry
-    //   - null (no override) -> legacy provider, pipeline passes the request
-    //                           through unchanged (PR #135 baseline)
-    // ───────────────────────────────────────────────────────────────────────
-
     /// <summary>
     /// Drives PAR / authorize / token with a consent-side override and asserts the issued
     /// access token's <c>authorization_details</c> claim equals the override byte-exact.

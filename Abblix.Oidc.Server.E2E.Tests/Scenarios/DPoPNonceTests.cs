@@ -72,10 +72,6 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             tokenBody[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>());
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // Resource-server-side nonce challenge (RFC 9449 §9)
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task UserInfo_with_dpop_proof_lacking_nonce_returns_use_dpop_nonce_challenge()
     {
@@ -124,11 +120,6 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         Assert.True(success.IsSuccessStatusCode,
             $"/userinfo retry failed: {(int)success.StatusCode} {raw}");
     }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Helpers — DPoP-aware flow primitives. Non-DPoP boilerplate (discovery,
-    // /authorize redirect parsing) is inherited from TestBase.
-    // ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Bootstraps PAR + /authorize, then makes the first /token call with a proof that

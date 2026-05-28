@@ -54,10 +54,6 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </remarks>
 public class DPoPTests(TestFactory factory) : TestBase(factory)
 {
-    // ───────────────────────────────────────────────────────────────────────
-    // Opportunistic binding (RFC 9449 §5.2)
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Opportunistic_client_with_proof_at_token_endpoint_gets_dpop_bound_access_token()
     {
@@ -91,10 +87,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         AssertBearer(tokenResponse);
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // Mandatory binding (RFC 9449 §5.2 + ClientInfo.RequireDPoP)
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Required_client_with_valid_proof_gets_dpop_bound_access_token()
     {
@@ -127,10 +119,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(ErrorCodes.InvalidDPoPProof, tokenError);
     }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // PAR carry-over (RFC 9449 §10): dpop_jkt commits at PAR, must match at /token
-    // ───────────────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Proof_at_par_commits_dpop_jkt_and_matching_proof_at_token_succeeds()
@@ -197,10 +185,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidDPoPProof, tokenError);
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // Replay protection (RFC 9449 §11.1)
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Same_proof_jwt_presented_twice_is_rejected_on_the_second_attempt()
     {
@@ -229,14 +213,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             tokenProof: sharedProof);
         Assert.Equal(ErrorCodes.InvalidDPoPProof, secondError);
     }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Wire-level error contract — proof validator failures surface as
-    // 400 invalid_dpop_proof end-to-end. The validator's failure taxonomy is
-    // exhaustively covered by ProofValidatorTests at the unit level; the two
-    // tests here pin the contract that those failures actually reach the wire
-    // unchanged through DPoPTokenEndpointValidator and the response formatter.
-    // ───────────────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Token_endpoint_rejects_proof_whose_htm_does_not_match_the_request_method()
@@ -297,10 +273,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         parts[2] = (firstChar == 'A' ? 'B' : 'A') + sig[1..];
         return string.Join('.', parts);
     }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Refresh token rebinding (RFC 9449 §5)
-    // ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Drives an initial PAR -> /authorize -> /token round with <c>offline_access</c>
@@ -499,10 +471,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidDPoPProof, body["error"]!.GetValue<string>());
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // UserInfo endpoint (RFC 9449 §7) — resource-server-side proof validation
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task UserInfo_with_dpop_bound_token_and_matching_proof_succeeds()
     {
@@ -596,10 +564,6 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.DPoP);
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // Discovery metadata (RFC 9449 §5.1)
-    // ───────────────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Discovery_exposes_dpop_signing_alg_values_supported()
     {
@@ -608,16 +572,12 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(discovery.DPoPSigningAlgValuesSupported);
         // RFC 9449 §4.2 alg whitelist (no HMAC, no none); the AS advertises an asymmetric
         // subset. We pin a few canonical values; full enumeration is a unit-test concern.
-        Assert.Contains(SigningAlgorithms.ES256, discovery.DPoPSigningAlgValuesSupported!);
-        Assert.Contains(SigningAlgorithms.RS256, discovery.DPoPSigningAlgValuesSupported!);
-        Assert.Contains(SigningAlgorithms.PS256, discovery.DPoPSigningAlgValuesSupported!);
-        Assert.DoesNotContain("HS256", discovery.DPoPSigningAlgValuesSupported!);
-        Assert.DoesNotContain("none", discovery.DPoPSigningAlgValuesSupported!);
+        Assert.Contains(SigningAlgorithms.ES256, discovery.DPoPSigningAlgValuesSupported);
+        Assert.Contains(SigningAlgorithms.RS256, discovery.DPoPSigningAlgValuesSupported);
+        Assert.Contains(SigningAlgorithms.PS256, discovery.DPoPSigningAlgValuesSupported);
+        Assert.DoesNotContain(SigningAlgorithms.HS256, discovery.DPoPSigningAlgValuesSupported);
+        Assert.DoesNotContain(SigningAlgorithms.None, discovery.DPoPSigningAlgValuesSupported);
     }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Flow drivers
-    // ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Drives PAR -> /authorize -> /token with optional DPoP proofs on PAR and token.
@@ -780,7 +740,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
             [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
         };
         if (clientSecret is not null)
             form[ClientRequest.Parameters.ClientSecret] = clientSecret;
@@ -800,28 +760,27 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
         };
         if (clientSecret is not null)
             form[ClientRequest.Parameters.ClientSecret] = clientSecret;
         return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);
     }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // Assertions
-    // ───────────────────────────────────────────────────────────────────────
-
     private static void AssertDPoPBound(JsonObject tokenResponse, string expectedThumbprint)
     {
-        Assert.Equal(TokenTypes.DPoP, tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>());
+        var tokenType = tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>();
+        Assert.Equal(TokenTypes.DPoP, tokenType);
 
         // RFC 9449 §6: the issued access token carries cnf.jkt = the proof key's JWK thumbprint.
         var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
+
         var cnf = payload["cnf"]?.AsObject();
         Assert.NotNull(cnf);
+        
         var jkt = cnf["jkt"]?.GetValue<string>();
         Assert.Equal(expectedThumbprint, jkt);
     }
@@ -833,7 +792,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
 
         var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
-        
+
         Assert.Null(payload["cnf"]);
     }
 }

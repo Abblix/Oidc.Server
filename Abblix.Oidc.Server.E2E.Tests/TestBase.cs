@@ -128,9 +128,11 @@ public abstract class TestBase(TestFactory factory)
     {
         var parts = jwt.Split('.');
         Assert.True(parts.Length == 3, "JWT must have 3 segments");
+
         var payload = Base64UrlDecode(parts[1]);
         var parsed = JsonNode.Parse(payload)?.AsObject();
         Assert.NotNull(parsed);
+
         return parsed;
     }
 
