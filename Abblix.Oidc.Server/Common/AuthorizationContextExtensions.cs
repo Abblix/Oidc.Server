@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
@@ -55,9 +56,15 @@ public static class AuthorizationContextExtensions
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
 
-        payload.Audiences = context.Resources is { Length: > 0 }
-            ? Array.ConvertAll(context.Resources, res => res.OriginalString)
-            : [context.ClientId];
+        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names)
+        // both feed into the JWT aud claim. Resources take precedence in ordering for legacy
+        // compat; when neither is set we fall back to the client_id (OIDC convention).
+        var audienceParts = new List<string>();
+        if (context.Resources is { Length: > 0 })
+            audienceParts.AddRange(Array.ConvertAll(context.Resources, res => res.OriginalString));
+        if (context.Audiences is { Length: > 0 })
+            audienceParts.AddRange(context.Audiences);
+        payload.Audiences = audienceParts.Count > 0 ? audienceParts.ToArray() : [context.ClientId];
 
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
             context.RequestedClaims,
@@ -74,6 +81,22 @@ public static class AuthorizationContextExtensions
                 CertificateSha256Thumbprint = context.CertificateSha256Thumbprint,
                 JwkThumbprint = context.ProofKeyThumbprint,
             };
+        }
+
+        // RFC 9396 §7: the AS MAY include the authorized authorization_details in the access
+        // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
+        // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
+        // the payload's JsonNode tree independent of the source AuthorizationContext.
+        if (context.AuthorizationDetails is { Count: > 0 })
+        {
+            payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetails.DeepClone();
+        }
+
+        // RFC 8693 §4.1: emit the act claim for delegation tokens. Nested act chains live in
+        // the JsonObject's act member -- preserved byte-exact via DeepClone.
+        if (context.Actor is not null)
+        {
+            payload.Json[IanaClaimTypes.Act] = context.Actor.DeepClone();
         }
     }
 
@@ -112,6 +135,12 @@ public static class AuthorizationContextExtensions
             Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
+            AuthorizationDetails = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
+                ? (JsonArray)raw.DeepClone()
+                : null,
+            Actor = payload.Json[IanaClaimTypes.Act] is JsonObject act
+                ? (JsonObject)act.DeepClone()
+                : null,
         };
     }
 }

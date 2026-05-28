@@ -20,12 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
-
-
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
@@ -49,6 +48,7 @@ public record ValidAuthorizationRequest
 		ClientInfo = context.ClientInfo;
 		Scope = context.Scope;
 		Resources = context.Resources;
+		AuthorizationDetails = context.AuthorizationDetails;
 	}
 
 	/// <summary>
@@ -76,4 +76,15 @@ public record ValidAuthorizationRequest
 	/// is requesting access to.
 	/// </summary>
 	public ResourceDefinition[] Resources { get; set; }
+
+	/// <summary>
+	/// RFC 9396 Rich Authorization Requests array, snapshot from
+	/// <see cref="AuthorizationValidationContext.AuthorizationDetails"/> at the end of the validator pipeline --
+	/// i.e. post per-client allowlist filtering and post per-type validator narrow/extend mutations.
+	/// <see cref="Features.Consents.IUserConsentsProvider"/> reads this slot to render the consent UI;
+	/// downstream consent emits its (possibly further-narrowed) decision via
+	/// <see cref="Features.Consents.ConsentDefinition.AuthorizationDetails"/>.
+	/// <c>null</c> when the request did not include <c>authorization_details</c>.
+	/// </summary>
+	public JsonArray? AuthorizationDetails { get; init; }
 }

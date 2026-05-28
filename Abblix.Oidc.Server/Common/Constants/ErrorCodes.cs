@@ -269,4 +269,12 @@ public static class ErrorCodes
 	/// listing the required scopes.
 	/// </summary>
 	public const string InsufficientScope = "insufficient_scope";
+
+	/// <summary>
+	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 §5:
+	/// an entry's <c>type</c> is unknown to the AS, fields do not match the registered per-type
+	/// schema, field values are out of the wrong JSON type, or the request otherwise fails to
+	/// satisfy the per-type validator. The AS MUST refuse to process the request.
+	/// </summary>
+	public const string InvalidAuthorizationDetails = "invalid_authorization_details";
 }

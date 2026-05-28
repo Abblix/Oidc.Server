@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -56,4 +57,13 @@ public record DeviceAuthorizationRequest(
     /// This is set when the user successfully authorizes the device.
     /// </summary>
     public AuthorizedGrant? AuthorizedGrant { get; set; }
+
+    /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array carried from the original
+    /// <c>/device_authorization</c> request. The host's user-verification step reads this
+    /// (via <see cref="ValidUserCode"/>) to render structured consent, then threads it into
+    /// the <see cref="AuthorizedGrant"/>'s <c>AuthorizationContext</c> when approving;
+    /// the eventual access token issued via the device-code grant emits the claim byte-exact.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; set; }
 }

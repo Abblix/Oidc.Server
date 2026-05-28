@@ -96,6 +96,8 @@ public class RegisterClientRequestProcessor(
             TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
             DpopBoundAccessTokens = clientInfo.RequireDPoP,
+            AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
         };
 
         return response;
@@ -121,6 +123,10 @@ public class RegisterClientRequestProcessor(
             OfflineAccessAllowed = model.OfflineAccessAllowed,
             // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9396 §5.1: authorization_details_types per-client allowlist.
+            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
+            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,

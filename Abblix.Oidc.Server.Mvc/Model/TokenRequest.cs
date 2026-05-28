@@ -46,8 +46,11 @@ public record TokenRequest
         GrantTypes.RefreshToken,
         GrantTypes.Password,
         GrantTypes.Ciba,
-        GrantTypes.ClientCredentials)]
-    public string GrantType { get; set; } = null!;
+        GrantTypes.ClientCredentials,
+        GrantTypes.JwtBearer,
+        GrantTypes.DeviceAuthorization,
+        GrantTypes.TokenExchange)]
+    public required string GrantType { get; set; }
 
     /// <summary>
     /// The authorization code received from the authorization server.
@@ -113,6 +116,30 @@ public record TokenRequest
     [BindProperty(SupportsGet = true, Name = Parameters.AuthenticationRequestId)]
     public string? AuthenticationRequestId { get; set; }
 
+    /// <summary>RFC 8693 §2.1 <c>subject_token</c> -- the security token being exchanged.</summary>
+    [BindProperty(Name = Parameters.SubjectToken)]
+    public string? SubjectToken { get; set; }
+
+    /// <summary>RFC 8693 §2.1 <c>subject_token_type</c> -- the type URI of the subject token.</summary>
+    [BindProperty(Name = Parameters.SubjectTokenType)]
+    public string? SubjectTokenType { get; set; }
+
+    /// <summary>RFC 8693 §2.1 <c>actor_token</c> -- optional security token representing the acting party.</summary>
+    [BindProperty(Name = Parameters.ActorToken)]
+    public string? ActorToken { get; set; }
+
+    /// <summary>RFC 8693 §2.1 <c>actor_token_type</c> -- the type URI of the actor token, required when <c>actor_token</c> is present.</summary>
+    [BindProperty(Name = Parameters.ActorTokenType)]
+    public string? ActorTokenType { get; set; }
+
+    /// <summary>RFC 8693 §2.1 <c>requested_token_type</c> -- optional indicator of the token type the client would like to receive.</summary>
+    [BindProperty(Name = Parameters.RequestedTokenType)]
+    public string? RequestedTokenType { get; set; }
+
+    /// <summary>RFC 8693 §2.1 <c>audience</c> -- optional logical name(s) of the relying party. Repeated wire parameter binds to an array.</summary>
+    [BindProperty(Name = Parameters.Audience)]
+    public string[]? Audiences { get; set; }
+
     /// <summary>
     /// Maps the properties of this token request to a <see cref="Core.TokenRequest"/> object.
     /// This method is used to translate the request data into a format that can be processed by the core logic of the server.
@@ -131,6 +158,12 @@ public record TokenRequest
             RedirectUri = RedirectUri,
             CodeVerifier = CodeVerifier,
             AuthenticationRequestId = AuthenticationRequestId,
+            SubjectToken = SubjectToken,
+            SubjectTokenType = SubjectTokenType,
+            ActorToken = ActorToken,
+            ActorTokenType = ActorTokenType,
+            RequestedTokenType = RequestedTokenType,
+            Audiences = Audiences,
         };
     }
 }

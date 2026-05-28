@@ -133,4 +133,17 @@ public static class ErrorFactory
 		this AuthorizationValidationContext context,
 		string description)
 		=> context.Error(ErrorCodes.InvalidScope, description);
+
+	/// <summary>
+	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid
+	/// <c>authorization_details</c> array per RFC 9396 §4 / §5. Used when an entry references an
+	/// unknown <c>type</c>, fails per-type schema validation, or is not in the per-client allowlist.
+	/// </summary>
+	/// <param name="context">The validation context associated with the request.</param>
+	/// <param name="description">A human-readable description of the rejection cause.</param>
+	/// <returns>An <see cref="AuthorizationRequestValidationError"/> with the RAR-specific error code.</returns>
+	public static AuthorizationRequestValidationError InvalidAuthorizationDetails(
+		this AuthorizationValidationContext context,
+		string description)
+		=> context.Error(ErrorCodes.InvalidAuthorizationDetails, description);
 }

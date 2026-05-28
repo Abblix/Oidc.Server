@@ -25,6 +25,7 @@ using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -299,6 +300,23 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1:
+    /// per-client allowlist of authorization-detail <c>type</c> values this client
+    /// may use in Rich Authorization Requests. <c>null</c> means no per-client
+    /// constraint; empty array forbids RAR entirely for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this client
+    /// may submit to the Token Exchange grant. Maps to
+    /// <see cref="ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -398,6 +416,8 @@ public record ClientRegistrationRequest
             InitiateLoginUri = InitiateLoginUri,
             OfflineAccessAllowed = OfflineAccessAllowed,
             DpopBoundAccessTokens = DpopBoundAccessTokens,
+            AuthorizationDetailsTypes = AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = TokenExchangeSubjectTokenTypes,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 

@@ -89,7 +89,13 @@ public class BackChannelAuthenticationRequestProcessor(
 			request.ClientInfo.ClientId,
 			request.Scope,
 			request.Resources,
-			request.Model.Claims);
+			request.Model.Claims)
+		{
+			// RFC 9396 §3: authorization_details from the CIBA request carries onto the
+			// grant byte-exact, so the access token issued via the CIBA grant emits the
+			// claim through the same pipeline as the authorization-code flow.
+			AuthorizationDetails = request.AuthorizationDetails,
+		};
 
 		var authorizedGrant = new AuthorizedGrant(authResult.GetSuccess(), authContext);
 

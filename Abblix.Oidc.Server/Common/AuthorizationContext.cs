@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -184,6 +185,30 @@ public record AuthorizationContext
     /// to access.
     /// </summary>
     public Uri[]? Resources { get; init; }
+
+    /// <summary>
+    /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
+    /// This is the source of truth — preserved byte-exact (member order, type-specific payload)
+    /// through the authorize → code → token round-trip and protobuf persistence, without lossy
+    /// typed deserialise / re-serialise cycles.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
+    /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
+    /// non-Token-Exchange grants.
+    /// </summary>
+    public JsonObject? Actor { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// names of the relying party for which the requested token is intended. Distinct from
+    /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
+    /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
+    /// </summary>
+    public string[]? Audiences { get; init; }
 
     /// <summary>
     /// Splits the authorization context into its constructor triple, enabling pattern-style

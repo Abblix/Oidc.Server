@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -33,15 +34,6 @@ public class DeviceAuthorizationValidatorComposite(
     IEnumerable<IDeviceAuthorizationContextValidator> validators) : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-    {
-        foreach (var validator in validators)
-        {
-            var error = await validator.ValidateAsync(context);
-            if (error != null)
-                return error;
-        }
-
-        return null;
-    }
+    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
 }

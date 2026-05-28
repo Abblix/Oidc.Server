@@ -339,6 +339,27 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1: the per-client
+    /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
+    /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
+    /// <c>null</c> means no per-client constraint; empty array means this client cannot use RAR.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: the per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// client may submit to the Token Exchange grant. RFC 8693 does not standardise a registration
+    /// parameter for this, so the property is exposed under the non-standard
+    /// <c>token_exchange_subject_token_types</c> name. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// <c>null</c> means no per-client constraint; empty array means the client cannot use
+    /// Token Exchange at all.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
     /// that the OP calls server-to-server with a logout token to terminate the user's session at the client.
     /// </summary>
@@ -598,6 +619,16 @@ public record ClientRegistrationRequest
         /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 §5.2) requiring
         /// DPoP-bound access tokens for this client.</summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §5.1):
+        /// per-client allowlist of authorization-detail <c>type</c> values this client may use in
+        /// Rich Authorization Requests.</summary>
+        public const string AuthorizationDetailsTypes = "authorization_details_types";
+
+        /// <summary>The <c>token_exchange_subject_token_types</c> registration parameter
+        /// (non-standard extension; RFC 8693 does not standardise it): per-client allowlist of
+        /// <c>subject_token_type</c> URIs this client may submit to the Token Exchange grant.</summary>
+        public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
 
         /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
         /// back-channel logout endpoint.</summary>

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -114,6 +115,14 @@ public record BackChannelAuthenticationRequest
     public Uri[]? Resources { get; set; }
 
     /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array. Bound as the raw <see cref="JsonArray"/>
+    /// so member order and type-specific payload survive into the CIBA pipeline byte-exact.
+    /// </summary>
+    [BindProperty(Name = Parameters.AuthorizationDetails)]
+    [ModelBinder(typeof(JsonSerializerModelBinder))]
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
     /// Maps the properties of this back-channel authentication request to a corresponding
     /// <see cref="Server.Model.BackChannelAuthenticationRequest"/> object. This mapping facilitates
     /// the processing of the request in the core layers of the authentication framework.
@@ -136,6 +145,7 @@ public record BackChannelAuthenticationRequest
             UserCode = UserCode,
             RequestedExpiry = RequestedExpiry,
             Resources = Resources,
+            AuthorizationDetails = AuthorizationDetails,
         };
     }
 
@@ -183,5 +193,9 @@ public record BackChannelAuthenticationRequest
         /// <summary>The <c>resource</c> parameter naming the resource indicators the client
         /// wants the issued token to be valid for (RFC 8707).</summary>
         public const string Resource = "resource";
+
+        /// <summary>The <c>authorization_details</c> parameter (RFC 9396 §3) carrying a JSON
+        /// array of Rich Authorization Requests.</summary>
+        public const string AuthorizationDetails = "authorization_details";
     }
 }

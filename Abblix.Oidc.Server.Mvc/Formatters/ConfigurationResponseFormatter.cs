@@ -130,6 +130,8 @@ public class ConfigurationResponseFormatter(
 			AcrValuesSupported = response.AcrValuesSupported,
 
 			AuthorizationResponseIssParameterSupported = response.AuthorizationResponseIssParameterSupported,
+
+			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
 		};
 
 		// Add mTLS endpoint aliases if configured

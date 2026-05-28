@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -43,6 +44,29 @@ internal static class AuthorizationRequestMapper
 
         proto.Claims = source.Claims?.ToProto();
 
+        CopyOptionalScalars(source, proto);
+
+        if (source.MaxAge.HasValue)
+            proto.MaxAge = Duration.FromTimeSpan(source.MaxAge.Value);
+
+        proto.UiLocales.AddIfNotNull(source.UiLocales, c => c.Name);
+        proto.ClaimsLocales.AddIfNotNull(source.ClaimsLocales, c => c.Name);
+        proto.Resources.AddIfNotNull(source.Resources, u => u.OriginalString);
+
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // byte-exact preservation for PAR storage between /par submission and the
+        // front-channel /authorize redemption.
+        if (source.AuthorizationDetails is { Count: > 0 } authorizationDetails)
+            proto.AuthorizationDetailsJson = authorizationDetails.ToJsonString();
+
+        return proto;
+    }
+
+    // Lifted out of ToProto so its cognitive complexity stays in budget — each
+    // if-not-null scalar copy adds 1 by Sonar's counting; with fourteen of them
+    // in the parent method the rule's threshold tripped (S3776).
+    private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)
+    {
         if (source.ClientId != null) proto.ClientId = source.ClientId;
         if (source.RedirectUri != null) proto.RedirectUri = source.RedirectUri.ToString();
         if (source.State != null) proto.State = source.State;
@@ -57,15 +81,6 @@ internal static class AuthorizationRequestMapper
         if (source.Request != null) proto.Request = source.Request;
         if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
         if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
-
-        if (source.MaxAge.HasValue)
-            proto.MaxAge = Duration.FromTimeSpan(source.MaxAge.Value);
-
-        proto.UiLocales.AddIfNotNull(source.UiLocales, c => c.Name);
-        proto.ClaimsLocales.AddIfNotNull(source.ClaimsLocales, c => c.Name);
-        proto.Resources.AddIfNotNull(source.Resources, u => u.OriginalString);
-
-        return proto;
     }
 
     /// <summary>
@@ -97,6 +112,9 @@ internal static class AuthorizationRequestMapper
             RequestUri = ProtoMapper.GetUri(source.RequestUri, source.HasRequestUri),
             Resources = source.Resources.GetArray(r => new Uri(r)),
             ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
+                ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
+                : null,
         };
     }
 }
