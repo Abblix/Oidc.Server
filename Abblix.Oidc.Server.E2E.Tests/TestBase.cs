@@ -63,11 +63,7 @@ public abstract class TestBase(TestFactory factory)
         IEnumerable<KeyValuePair<string, string>> form)
     {
         Assert.NotNull(discovery.PushedAuthorizationRequestEndpoint);
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        var response = await client.SendAsync(request);
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"PAR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
@@ -119,11 +115,7 @@ public abstract class TestBase(TestFactory factory)
         DiscoveryDocument discovery,
         IEnumerable<KeyValuePair<string, string>> form)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        var response = await client.SendAsync(request);
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"/token failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
@@ -202,11 +194,7 @@ public abstract class TestBase(TestFactory factory)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        return await client.SendAsync(request);
+        return await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form);
     }
 
     /// <summary>
@@ -276,5 +264,31 @@ internal static class QueryHelpers
             ? query
             : builder.Query.TrimStart('?') + "&" + query;
         return builder.Uri;
+    }
+}
+
+internal static class FormPostHelpers
+{
+    /// <summary>
+    /// Posts <paramref name="form"/> as <c>application/x-www-form-urlencoded</c> to
+    /// <paramref name="endpoint"/>, optionally attaching a DPoP proof header. Returns
+    /// the raw response so callers can inspect status, body, and headers. Used by every
+    /// E2E helper that hits /par, /token, /refresh, or other form-based OAuth endpoints
+    /// — keeps the HttpRequestMessage + FormUrlEncodedContent + WithDPoPHeader plumbing
+    /// in one place.
+    /// </summary>
+    public static async Task<HttpResponseMessage> PostFormAsync(
+        HttpClient client,
+        Uri endpoint,
+        IEnumerable<KeyValuePair<string, string>> form,
+        string? dpopProof = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
+        if (dpopProof is not null)
+            request.WithDPoPHeader(dpopProof);
+        return await client.SendAsync(request);
     }
 }

@@ -735,14 +735,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         // Public clients (TokenEndpointAuthMethod = none) supply no client_secret.
         if (clientSecret is not null)
             form[ClientRequest.Parameters.ClientSecret] = clientSecret;
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        if (proofJwt is not null)
-            request.WithDPoPHeader(proofJwt);
-        return await client.SendAsync(request);
+        return await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form, proofJwt);
     }
 
     /// <summary>
@@ -805,12 +798,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         };
         if (clientSecret is not null)
             form[ClientRequest.Parameters.ClientSecret] = clientSecret;
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        request.WithDPoPHeader(proofJwt);
-        return await client.SendAsync(request);
+        return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);
     }
 
     private static async Task<HttpResponseMessage> SendTokenAsync(
@@ -832,14 +820,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         };
         if (clientSecret is not null)
             form[ClientRequest.Parameters.ClientSecret] = clientSecret;
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
-        if (proofJwt is not null)
-            request.WithDPoPHeader(proofJwt);
-        return await client.SendAsync(request);
+        return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);
     }
 
     // ───────────────────────────────────────────────────────────────────────

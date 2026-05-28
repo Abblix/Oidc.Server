@@ -207,10 +207,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint);
-        request.Content = new FormUrlEncodedContent(form);
-        request.WithDPoPHeader(proofJwt);
-        return await client.SendAsync(request);
+        return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);
     }
 
     /// <summary>
