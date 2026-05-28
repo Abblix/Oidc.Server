@@ -1,7 +1,6 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -22,49 +21,18 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// passthrough" and emits the post-validator <c>authorization_details</c> from the request
 /// (preserving PR #135 byte-exact behaviour the existing E2E tests exercise).
 /// <para>
-/// Per-test, scenarios opt in to consent-side narrow / deny via
-/// <see cref="OverrideAuthorizationDetails"/>. The override is held in a flat static slot
-/// (not <see cref="AsyncLocal{T}"/>): WebApplicationFactory's in-process TestServer was
-/// observed to drop ExecutionContext between the test thread and the request-handler thread,
-/// leaving AsyncLocal values invisible at the read site. E2E tests run sequentially per
-/// <c>[Collection(TestCollection.Name)]</c>, so the static is race-free, and
-/// <see cref="OverrideAuthorizationDetails"/> returns <see cref="IDisposable"/> to enforce the
-/// reset on scope exit (even on test failure).
+/// Per-test, scenarios opt in to consent-side narrow / deny by sending the
+/// <see cref="TestConsentOverrideMiddleware.HeaderName"/> header on their HTTP requests; the
+/// middleware stuffs the parsed override into <see cref="HttpContext.Items"/>, and this
+/// provider reads it back via <see cref="IHttpContextAccessor"/>. The override travels with
+/// each individual request, so there is no static state, no <see cref="AsyncLocal{T}"/> in
+/// the test thread (which WebApplicationFactory's TestServer was observed to drop between
+/// the test thread and the request handler thread), and no clean-up burden on the test:
+/// the override exists exactly for the requests that carry the header.
 /// </para>
 /// </remarks>
-public sealed class AutoConsentsProvider : IUserConsentsProvider
+public sealed class AutoConsentsProvider(IHttpContextAccessor httpContextAccessor) : IUserConsentsProvider
 {
-    // Per-test override slot. The state is flat (not AsyncLocal) because
-    // WebApplicationFactory's in-process TestServer does not always propagate
-    // ExecutionContext into request handlers reliably -- AsyncLocal values set in the
-    // test method were observed to be invisible to the singleton's read site. E2E tests
-    // run sequentially per [Collection(TestCollection.Name)], so flat static state is
-    // race-free here; OverrideAuthorizationDetails returns IDisposable to enforce the
-    // reset on scope exit even on test failure.
-    private static JsonArray? _grantedAuthorizationDetailsOverride;
-    private static bool _hasOverride;
-
-    /// <summary>
-    /// Establishes a consent-side <c>authorization_details</c> decision for the duration of
-    /// the returned scope. Until disposed, this provider will populate
-    /// <see cref="ConsentDefinition.AuthorizationDetails"/> on <see cref="UserConsents.Granted"/>
-    /// with <paramref name="grantedAuthorizationDetails"/> instead of leaving it null.
-    /// <list type="bullet">
-    /// <item><description><c>null</c>: provider explicitly says "no AD opinion" -- pipeline
-    /// falls back to the request's value (equivalent to the default unoverridden behaviour).</description></item>
-    /// <item><description>Empty <see cref="JsonArray"/>: provider says "user denied every entry"
-    /// -- pipeline fails with <c>access_denied</c> when the request carried entries.</description></item>
-    /// <item><description>Non-empty: provider says "consented to this narrowed set" -- pipeline
-    /// emits this exact value, byte-exact, into the access token.</description></item>
-    /// </list>
-    /// </summary>
-    public static IDisposable OverrideAuthorizationDetails(JsonArray? grantedAuthorizationDetails)
-    {
-        _grantedAuthorizationDetailsOverride = grantedAuthorizationDetails;
-        _hasOverride = true;
-        return new Resetter();
-    }
-
     public Task<UserConsents> GetUserConsentsAsync(
         ValidAuthorizationRequest request,
         AuthSession authSession)
@@ -77,8 +45,15 @@ public sealed class AutoConsentsProvider : IUserConsentsProvider
             .ToArray();
 
         var granted = new ConsentDefinition(grantedScopes, grantedResources);
-        if (_hasOverride)
-            granted = granted with { AuthorizationDetails = _grantedAuthorizationDetailsOverride };
+
+        var items = httpContextAccessor.HttpContext?.Items;
+        if (items?[TestConsentOverrideMiddleware.PresenceItemKey] is true)
+        {
+            granted = granted with
+            {
+                AuthorizationDetails = items[TestConsentOverrideMiddleware.ValueItemKey] as JsonArray,
+            };
+        }
 
         var consents = new UserConsents
         {
@@ -86,16 +61,5 @@ public sealed class AutoConsentsProvider : IUserConsentsProvider
             Pending = new ConsentDefinition([], []),
         };
         return Task.FromResult(consents);
-    }
-
-    private sealed class Resetter : IDisposable
-    {
-        [SuppressMessage("Major Code Smell", "S2696:Instance members should not write to \"static\" fields",
-            Justification = "Intentional: per-test override is held in flat static state because WebApplicationFactory's TestServer does not reliably propagate AsyncLocal across its handler chain. See class-level comment on _grantedAuthorizationDetailsOverride; Resetter's Dispose is the scope-exit half of the IDisposable pattern that releases that state.")]
-        public void Dispose()
-        {
-            _grantedAuthorizationDetailsOverride = null;
-            _hasOverride = false;
-        }
     }
 }

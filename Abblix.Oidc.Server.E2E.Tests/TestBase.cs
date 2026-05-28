@@ -177,9 +177,10 @@ public abstract class TestBase(TestFactory factory)
         string clientSecret,
         string redirectUri,
         string authorizationDetailsWireJson,
-        string scope = "openid")
+        string scope = "openid",
+        HttpClient? client = null)
     {
-        var client = CreateClient();
+        client ??= CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var (verifier, challenge) = GeneratePkcePair();
 

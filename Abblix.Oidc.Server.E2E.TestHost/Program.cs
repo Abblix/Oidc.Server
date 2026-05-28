@@ -73,8 +73,16 @@ builder.Services.Replace(ServiceDescriptor.Singleton<IUserClaimsProvider, Static
 builder.Services.AddAuthentication().AddCookie();
 builder.Services.AddDistributedMemoryCache();
 
+// AutoConsentsProvider reads the per-test override out of HttpContext.Items via this accessor.
+builder.Services.AddHttpContextAccessor();
+
 var app = builder.Build();
 app.UseRouting();
+
+// Lift the X-Test-Consent-Override-AuthorizationDetails header into HttpContext.Items before
+// the OIDC pipeline reaches AutoConsentsProvider.
+app.UseMiddleware<TestConsentOverrideMiddleware>();
+
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();

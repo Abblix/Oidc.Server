@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
-using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.Licensing;
 using Xunit;
 
@@ -216,12 +216,12 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         string requestedWireJson,
         string grantedWireJson)
     {
-        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(
-            (JsonArray)JsonNode.Parse(grantedWireJson)!);
+        var client = CreateClient();
+        using var _ = client.UseConsentOverride((JsonArray)JsonNode.Parse(grantedWireJson)!);
 
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
-            TestConstants.RedirectUri, requestedWireJson);
+            TestConstants.RedirectUri, requestedWireJson, client: client);
 
         var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
         var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
@@ -245,9 +245,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
     public async Task Consent_denying_all_authorization_details_fails_with_access_denied()
     {
         // Provider explicitly returns empty Granted.AuthorizationDetails -> deny-all signal.
-        using var _ = AutoConsentsProvider.OverrideAuthorizationDetails(new JsonArray());
-
         var client = CreateClient();
+        using var _ = client.UseConsentOverride(new JsonArray());
         var discovery = await FetchDiscoveryAsync(client);
         var (_, challenge) = GeneratePkcePair();
 
