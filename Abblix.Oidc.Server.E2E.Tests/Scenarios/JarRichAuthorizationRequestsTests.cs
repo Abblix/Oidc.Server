@@ -6,6 +6,8 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -53,15 +55,15 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var dcrBody = new JsonObject
         {
             ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { "authorization_code" },
+            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { "code" },
             ["token_endpoint_auth_method"] = "client_secret_post",
             ["jwks"] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
             ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered["client_id"]!.GetValue<string>();
-        var clientSecret = registered["client_secret"]!.GetValue<string>();
+        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
 
         // 3. Build the request JWT containing every authorize parameter -- including the wire-shape
         // authorization_details JSON array attached as a custom claim. RFC 9101 §6: iss = client_id,
@@ -78,15 +80,15 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
                 ExpiresAt = now.AddMinutes(5),
             },
         };
-        requestJwt.Payload.Json["response_type"] = "code";
-        requestJwt.Payload.Json["client_id"] = clientId;
-        requestJwt.Payload.Json["redirect_uri"] = TestConstants.RedirectUri;
-        requestJwt.Payload.Json["scope"] = "openid";
-        requestJwt.Payload.Json["state"] = Guid.NewGuid().ToString("N");
-        requestJwt.Payload.Json["nonce"] = Guid.NewGuid().ToString("N");
-        requestJwt.Payload.Json["code_challenge"] = challenge;
-        requestJwt.Payload.Json["code_challenge_method"] = "S256";
-        requestJwt.Payload.Json[WireParameters.AuthorizationDetails] = JsonNode.Parse(PaymentInitiationWireJson);
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ResponseType] = "code";
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ClientId] = clientId;
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri;
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N");
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N");
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.CodeChallenge] = challenge;
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.AuthorizationDetails] = JsonNode.Parse(PaymentInitiationWireJson);
 
         var creator = JwtServices.GetRequiredService<IJsonWebTokenCreator>();
         var signedRequest = await creator.IssueAsync(requestJwt, clientKey);
@@ -96,27 +98,27 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         // verifying the signature).
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
             ["request"] = signedRequest,
         });
 
         // 5. /token exchange.
         var tokenResponse = await ExchangeCodeForTokensAsync(httpClient, discovery, new Dictionary<string, string>
         {
-            [WireParameters.GrantType] = "authorization_code",
-            [WireParameters.Code] = code,
-            [WireParameters.RedirectUri] = TestConstants.RedirectUri,
-            [WireParameters.CodeVerifier] = verifier,
-            [WireParameters.ClientId] = clientId,
-            [WireParameters.ClientSecret] = clientSecret,
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
         // 6. The access token must carry the same authorization_details the request JWT carried,
         // byte-exact. This is the JAR + RAR invariant: signed request object preserves nested
         // claims through every layer (JWT validation -> request-object fetcher -> standard
         // authorize pipeline -> RAR per-type validator -> consent -> token emission).
-        var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.NotNull(claim);
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }

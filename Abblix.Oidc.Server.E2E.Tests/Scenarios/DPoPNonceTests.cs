@@ -26,7 +26,9 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Abblix.Oidc.Server.Model;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -58,13 +60,13 @@ public class DPoPNonceTests
         var discovery = await FetchDiscoveryAsync(client);
 
         var (parResponse, verifier, _) = await PushParAsync(client, discovery);
-        var requestUri = (await ReadBodyAsync(parResponse))["request_uri"]!.GetValue<string>();
+        var requestUri = (await ReadBodyAsync(parResponse))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
         var code = await AuthorizeAsync(client, discovery, requestUri);
 
         // Real verifier matters — PKCE validation runs before the DPoP nonce check,
         // so a fake verifier short-circuits on invalid_grant and we never observe the
         // RFC 9449 §8 challenge we're actually testing for.
-        var proofWithoutNonce = proofKey.BuildProof("POST", new Uri(discovery.TokenEndpoint));
+        var proofWithoutNonce = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
         var tokenResponse = await SendTokenAsync(client, discovery, code, verifier, proofWithoutNonce);
 
         Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
@@ -79,6 +81,60 @@ public class DPoPNonceTests
         Assert.False(string.IsNullOrEmpty(nonceValues!.First()));
     }
 
+    // ───────────────────────────────────────────────────────────────────────
+    // Resource-server-side nonce challenge (RFC 9449 §9)
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UserInfo_with_dpop_proof_lacking_nonce_returns_use_dpop_nonce_challenge()
+    {
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // Navigate the token-endpoint nonce challenge first so we have a DPoP-bound
+        // access token to present at /userinfo.
+        var accessToken = await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey);
+
+        // First UserInfo call: no nonce on the proof — RS issues a fresh nonce challenge
+        // (RFC 9449 §9 + §7.1 SHOULD WWW-Authenticate: DPoP).
+        var firstProof = proofKey.BuildProof(
+            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+        var response = await SendUserInfoAsync(client, discovery, accessToken, firstProof);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains(response.Headers.WwwAuthenticate,
+            h => h.Scheme == TokenTypes.DPoP && (h.Parameter ?? string.Empty).Contains(ErrorCodes.UseDPoPNonce));
+        Assert.True(response.Headers.TryGetValues(HttpRequestHeaders.DPoPNonce, out var nonceValues),
+            "UserInfo challenge response missing DPoP-Nonce header");
+        Assert.False(string.IsNullOrEmpty(nonceValues!.First()));
+    }
+
+    [Fact]
+    public async Task UserInfo_retry_with_nonce_from_challenge_succeeds()
+    {
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var accessToken = await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey);
+
+        // Step 1: no nonce -> challenge carries fresh nonce.
+        var firstProof = proofKey.BuildProof(
+            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+        var challenge = await SendUserInfoAsync(client, discovery, accessToken, firstProof);
+        Assert.Equal(HttpStatusCode.Unauthorized, challenge.StatusCode);
+        var nonce = challenge.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
+
+        // Step 2: retry with the supplied nonce embedded in the proof.
+        var secondProof = proofKey.BuildProof(
+            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken, nonce: nonce);
+        var success = await SendUserInfoAsync(client, discovery, accessToken, secondProof);
+
+        var raw = await success.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(success.IsSuccessStatusCode,
+            $"/userinfo retry failed: {(int)success.StatusCode} {raw}");
+    }
+
     [Fact]
     public async Task Token_endpoint_retry_with_nonce_from_challenge_succeeds()
     {
@@ -87,23 +143,23 @@ public class DPoPNonceTests
         var discovery = await FetchDiscoveryAsync(client);
 
         var (parResponse, verifier, _) = await PushParAsync(client, discovery);
-        var requestUri = (await ReadBodyAsync(parResponse))["request_uri"]!.GetValue<string>();
+        var requestUri = (await ReadBodyAsync(parResponse))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
         var code = await AuthorizeAsync(client, discovery, requestUri);
 
         // Step 1: proof without nonce -> challenge carries fresh nonce on DPoP-Nonce header.
-        var firstProof = proofKey.BuildProof("POST", new Uri(discovery.TokenEndpoint));
+        var firstProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
         var firstResponse = await SendTokenAsync(client, discovery, code, verifier, firstProof);
         Assert.Equal(HttpStatusCode.BadRequest, firstResponse.StatusCode);
         var nonce = firstResponse.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
 
         // Step 2: retry with the nonce embedded; same auth code (RFC 9449 §8 retry semantics).
-        var secondProof = proofKey.BuildProof("POST", new Uri(discovery.TokenEndpoint), nonce: nonce);
+        var secondProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint), nonce: nonce);
         var secondResponse = await SendTokenAsync(client, discovery, code, verifier, secondProof);
 
         var raw = await secondResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(secondResponse.IsSuccessStatusCode, $"/token retry failed: {(int)secondResponse.StatusCode} {raw}");
         var tokenBody = JsonNode.Parse(raw)!.AsObject();
-        Assert.Equal(TokenTypes.DPoP, tokenBody["token_type"]!.GetValue<string>());
+        Assert.Equal(TokenTypes.DPoP, tokenBody[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>());
     }
 
     // ───────────────────────────────────────────────────────────────────────
@@ -127,15 +183,15 @@ public class DPoPNonceTests
         var (verifier, challenge) = TestBase.GeneratePkcePair();
         var form = new Dictionary<string, string>
         {
-            ["client_id"] = TestConstants.DPoPRequiredClientId,
-            ["client_secret"] = TestConstants.ConfidentialClientSecret,
-            ["response_type"] = "code",
-            ["redirect_uri"] = TestConstants.RedirectUri,
-            ["scope"] = "openid",
-            ["state"] = Guid.NewGuid().ToString("N"),
-            ["nonce"] = Guid.NewGuid().ToString("N"),
-            ["code_challenge"] = challenge,
-            ["code_challenge_method"] = "S256",
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint)
         {
@@ -150,14 +206,14 @@ public class DPoPNonceTests
     {
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
         {
-            ["client_id"] = TestConstants.DPoPRequiredClientId,
-            ["request_uri"] = requestUri,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
+            [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
         var response = await client.GetAsync(uri);
         Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
             $"/authorize unexpected: {(int)response.StatusCode}");
         var location = response.Headers.Location!;
-        return System.Web.HttpUtility.ParseQueryString(location.Query)["code"]!;
+        return System.Web.HttpUtility.ParseQueryString(location.Query)[TokenRequest.Parameters.Code]!;
     }
 
     private static async Task<HttpResponseMessage> SendTokenAsync(
@@ -165,12 +221,12 @@ public class DPoPNonceTests
     {
         var form = new Dictionary<string, string>
         {
-            ["grant_type"] = "authorization_code",
-            ["code"] = code,
-            ["redirect_uri"] = TestConstants.RedirectUri,
-            ["code_verifier"] = verifier,
-            ["client_id"] = TestConstants.DPoPRequiredClientId,
-            ["client_secret"] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
         {
@@ -184,6 +240,54 @@ public class DPoPNonceTests
     {
         var raw = await response.Content.ReadAsStringAsync();
         return JsonNode.Parse(raw)!.AsObject();
+    }
+
+    /// <summary>
+    /// Drives the full token-endpoint nonce-challenge dance with <paramref name="proofKey"/>
+    /// and returns the resulting DPoP-bound access token. Used by /userinfo nonce tests
+    /// because <see cref="NonceEnabledTestFactory"/> also enables the token-endpoint
+    /// nonce, so a real access token cannot be obtained without first satisfying that
+    /// challenge.
+    /// </summary>
+    private static async Task<string> ObtainDPoPBoundTokenViaNonceFlowAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        DPoPProofGenerator proofKey)
+    {
+        var (parResponse, verifier, _) = await PushParAsync(client, discovery);
+        var requestUri = (await ReadBodyAsync(parResponse))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var code = await AuthorizeAsync(client, discovery, requestUri);
+
+        var firstProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
+        var firstResponse = await SendTokenAsync(client, discovery, code, verifier, firstProof);
+        Assert.Equal(HttpStatusCode.BadRequest, firstResponse.StatusCode);
+        var nonce = firstResponse.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
+
+        var secondProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint), nonce: nonce);
+        var secondResponse = await SendTokenAsync(client, discovery, code, verifier, secondProof);
+        var raw = await secondResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(secondResponse.IsSuccessStatusCode,
+            $"Token request after nonce retry failed: {(int)secondResponse.StatusCode} {raw}");
+        var body = JsonNode.Parse(raw)!.AsObject();
+        return body[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Sends a GET to /userinfo presenting <paramref name="accessToken"/> under the DPoP
+    /// scheme together with the supplied proof. Returns the raw response so callers can
+    /// inspect status, WWW-Authenticate challenges, and DPoP-Nonce headers.
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendUserInfoAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string accessToken,
+        string proofJwt)
+    {
+        Assert.NotNull(discovery.UserInfoEndpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.DPoP, accessToken);
+        request.WithDPoPHeader(proofJwt);
+        return await client.SendAsync(request);
     }
 }
 

@@ -5,6 +5,8 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -37,12 +39,12 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
         // RFC 9396 §7: authorization_details echoed byte-exact in the token response
-        var echoed = (tokenResponse[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var echoed = (tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
 
         // Access token carries the claim byte-exact
-        var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -53,7 +55,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, MultiEntryWireJson);
 
-        var echoed = (tokenResponse[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var echoed = (tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(MultiEntryWireJson, echoed.ToJsonString());
         Assert.Equal(2, echoed.Count);
     }
@@ -65,8 +67,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.IdTokenRarClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var idTokenPayload = DecodeJwtPayload(tokenResponse["id_token"]!.GetValue<string>());
-        var claim = (idTokenPayload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var idTokenPayload = DecodeJwtPayload(tokenResponse[BackChannelTokenPushRequest.Parameters.IdToken]!.GetValue<string>());
+        var claim = (idTokenPayload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -77,8 +79,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var idTokenPayload = DecodeJwtPayload(tokenResponse["id_token"]!.GetValue<string>());
-        Assert.Null(idTokenPayload[WireParameters.AuthorizationDetails]);
+        var idTokenPayload = DecodeJwtPayload(tokenResponse[BackChannelTokenPushRequest.Parameters.IdToken]!.GetValue<string>());
+        Assert.Null(idTokenPayload[AuthorizationRequest.Parameters.AuthorizationDetails]);
     }
 
     [Fact]
@@ -134,7 +136,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         var requested = new JsonObject
         {
             ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { "authorization_code" },
+            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { "code" },
             ["token_endpoint_auth_method"] = "client_secret_post",
             ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
@@ -172,7 +174,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var accessToken = tokenResponse[WireParameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -181,10 +183,10 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         introspectRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
-            [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             ["token"] = accessToken,
-            ["token_type_hint"] = WireParameters.AccessToken,
+            ["token_type_hint"] = UserInfoRequest.Parameters.AccessToken,
         });
         var response = await client.SendAsync(introspectRequest, TestContext.Current.CancellationToken);
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -194,7 +196,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         Assert.NotNull(body);
         Assert.Equal("true", body["active"]?.GetValue<string>());
 
-        var echoed = body[WireParameters.AuthorizationDetails] as JsonArray;
+        var echoed = body[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
     }
@@ -224,8 +226,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, requestedWireJson, client: client);
 
-        var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(grantedWireJson, claim.ToJsonString());
         return claim;
     }
@@ -253,21 +255,21 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
 
         var parResponse = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
-            [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [WireParameters.ResponseType] = "code",
-            [WireParameters.RedirectUri] = TestConstants.RedirectUri,
-            [WireParameters.Scope] = "openid",
-            [WireParameters.CodeChallenge] = challenge,
-            [WireParameters.CodeChallengeMethod] = "S256",
-            [WireParameters.AuthorizationDetails] = PaymentInitiationWireJson,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = "code",
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.AuthorizationDetails] = PaymentInitiationWireJson,
         });
-        var requestUri = parResponse[WireParameters.RequestUri]!.GetValue<string>();
+        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = TestConstants.ConfidentialClientId,
-            [WireParameters.RequestUri] = requestUri,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
         Assert.Equal("access_denied", error);
@@ -318,8 +320,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -329,22 +331,22 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
         var initial = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson,
-            scope: "openid offline_access");
-        var refreshToken = initial["refresh_token"]?.GetValue<string>()
+            scope: Scopes.OpenId + " " + Scopes.OfflineAccess);
+        var refreshToken = initial[GrantTypes.RefreshToken]?.GetValue<string>()
             ?? throw new InvalidOperationException("Initial token response missing refresh_token");
 
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var refreshed = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
-            ["grant_type"] = "refresh_token",
-            ["refresh_token"] = refreshToken,
-            ["client_id"] = TestConstants.ConfidentialClientId,
-            ["client_secret"] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [GrantTypes.RefreshToken] = refreshToken,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var payload = DecodeJwtPayload(refreshed[WireParameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 }

@@ -8,7 +8,9 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
@@ -22,32 +24,6 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 [Collection(TestCollection.Name)]
 public abstract class TestBase(TestFactory factory)
 {
-    /// <summary>
-    /// OAuth 2.0 / OIDC / RAR wire parameter names. Centralised so scenarios and
-    /// helpers don't sprinkle literal strings (Sonar S1192) and a rename surfaces
-    /// in one place.
-    /// </summary>
-    protected static class WireParameters
-    {
-        public const string ClientId = "client_id";
-        public const string ClientSecret = "client_secret";
-        public const string ResponseType = "response_type";
-        public const string RedirectUri = "redirect_uri";
-        public const string Scope = "scope";
-        public const string State = "state";
-        public const string Nonce = "nonce";
-        public const string CodeChallenge = "code_challenge";
-        public const string CodeChallengeMethod = "code_challenge_method";
-        public const string CodeVerifier = "code_verifier";
-        public const string GrantType = "grant_type";
-        public const string Code = "code";
-        public const string RequestUri = "request_uri";
-        public const string RefreshToken = "refresh_token";
-        public const string Error = "error";
-        public const string AuthorizationDetails = "authorization_details";
-        public const string AccessToken = "access_token";
-    }
-
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "TestServer in-memory base address; not a deployment URL.")]
     protected HttpClient CreateClient()
@@ -115,7 +91,7 @@ public abstract class TestBase(TestFactory factory)
             $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
         var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
         var query = System.Web.HttpUtility.ParseQueryString(location.Query);
-        var code = query[WireParameters.Code] ?? throw new InvalidOperationException($"No code in callback URI: {location}");
+        var code = query[TokenRequest.Parameters.Code] ?? throw new InvalidOperationException($"No code in callback URI: {location}");
         return code;
     }
 
@@ -136,7 +112,7 @@ public abstract class TestBase(TestFactory factory)
             $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
         var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
         var query = System.Web.HttpUtility.ParseQueryString(location.Query);
-        return query[WireParameters.Error] ?? throw new InvalidOperationException($"No error in callback URI: {location}");
+        return query["error"] ?? throw new InvalidOperationException($"No error in callback URI: {location}");
     }
 
     protected static async Task<JsonObject> ExchangeCodeForTokensAsync(
@@ -177,7 +153,7 @@ public abstract class TestBase(TestFactory factory)
         string clientSecret,
         string redirectUri,
         string authorizationDetailsWireJson,
-        string scope = "openid",
+        string scope = Scopes.OpenId,
         HttpClient? client = null)
     {
         client ??= CreateClient();
@@ -186,34 +162,34 @@ public abstract class TestBase(TestFactory factory)
 
         var parResponse = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = clientId,
-            [WireParameters.ClientSecret] = clientSecret,
-            [WireParameters.ResponseType] = "code",
-            [WireParameters.RedirectUri] = redirectUri,
-            [WireParameters.Scope] = scope,
-            [WireParameters.State] = Guid.NewGuid().ToString("N"),
-            [WireParameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [WireParameters.CodeChallenge] = challenge,
-            [WireParameters.CodeChallengeMethod] = "S256",
-            [WireParameters.AuthorizationDetails] = authorizationDetailsWireJson,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = redirectUri,
+            [AuthorizationRequest.Parameters.Scope] = scope,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.AuthorizationDetails] = authorizationDetailsWireJson,
         });
-        var requestUri = parResponse[WireParameters.RequestUri]?.GetValue<string>()
+        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]?.GetValue<string>()
             ?? throw new InvalidOperationException("PAR did not return request_uri");
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = clientId,
-            [WireParameters.RequestUri] = requestUri,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
         return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
-            [WireParameters.GrantType] = "authorization_code",
-            [WireParameters.Code] = code,
-            [WireParameters.RedirectUri] = redirectUri,
-            [WireParameters.CodeVerifier] = verifier,
-            [WireParameters.ClientId] = clientId,
-            [WireParameters.ClientSecret] = clientSecret,
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = redirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
     }
 
@@ -248,22 +224,22 @@ public abstract class TestBase(TestFactory factory)
         var (_, challenge) = GeneratePkcePair();
         var response = await PushAuthorizationRequestRawAsync(new Dictionary<string, string>
         {
-            [WireParameters.ClientId] = clientId,
-            [WireParameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [WireParameters.ResponseType] = "code",
-            [WireParameters.RedirectUri] = TestConstants.RedirectUri,
-            [WireParameters.Scope] = "openid",
-            [WireParameters.CodeChallenge] = challenge,
-            [WireParameters.CodeChallengeMethod] = "S256",
-            [WireParameters.AuthorizationDetails] = authorizationDetailsWireJson,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.AuthorizationDetails] = authorizationDetailsWireJson,
         });
 
         var raw = await response.Content.ReadAsStringAsync();
         Assert.False(response.IsSuccessStatusCode,
             $"Expected error response but got {(int)response.StatusCode}: {raw}");
         var body = JsonNode.Parse(raw)?.AsObject();
-        var errorCode = body?[WireParameters.Error]?.GetValue<string>();
-        Assert.Equal("invalid_authorization_details", errorCode);
+        var errorCode = body?["error"]?.GetValue<string>();
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, errorCode);
     }
 
     internal static (string Verifier, string Challenge) GeneratePkcePair()
