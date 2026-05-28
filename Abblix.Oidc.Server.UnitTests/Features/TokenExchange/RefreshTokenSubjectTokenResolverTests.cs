@@ -31,7 +31,6 @@ using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -54,13 +53,6 @@ public class RefreshTokenSubjectTokenResolverTests
     public RefreshTokenSubjectTokenResolverTests()
     {
         _resolver = new RefreshTokenSubjectTokenResolver(_jwtValidator.Object, _refreshTokenService.Object);
-    }
-
-    [Fact]
-    public async Task Type_Reports_RefreshTokenUri()
-    {
-        Assert.Equal(TokenExchangeTokenTypes.RefreshToken, _resolver.Type);
-        await Task.CompletedTask;
     }
 
     [Fact]

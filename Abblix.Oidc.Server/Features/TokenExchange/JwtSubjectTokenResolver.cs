@@ -46,17 +46,6 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidator) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
-    public string Type => TokenExchangeTokenTypes.Jwt;
-
-    /// <inheritdoc/>
-    public IEnumerable<string> SupportedTypes =>
-    [
-        TokenExchangeTokenTypes.AccessToken,
-        TokenExchangeTokenTypes.IdToken,
-        TokenExchangeTokenTypes.Jwt,
-    ];
-
-    /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
         CancellationToken cancellationToken)
@@ -77,32 +66,31 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
         // detaches it from the subject_token's payload before it flows into a fresh
         // AuthorizationContext (and onward into a new JWT) -- without the clone System.Text.Json
         // rejects the second serialisation because the JsonNode is parented twice.
-        var authorizationDetailsRaw =
-            jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray ad
-                ? (JsonArray?)ad.DeepClone()
-                : null;
+        var authorizationDetails = Extract<JsonArray>(jwt, IanaClaimTypes.AuthorizationDetails);
 
         // RFC 8693 §4.1 act chain: preserve the subject_token's act so a delegation chain can
         // be extended when this resolver feeds a Token Exchange request that also supplies an
         // actor_token. DeepClone for the same parenting reason as AD.
-        var act =
-            jwt.Payload.Json[IanaClaimTypes.Act] is JsonObject existingAct
-                ? (JsonObject?)existingAct.DeepClone()
-                : null;
+        var act = Extract<JsonObject>(jwt, IanaClaimTypes.Act);
 
         return new SubjectTokenContext(
             Subject: subject,
             Issuer: jwt.Payload.Issuer,
             Scope: jwt.Payload.Scope?.ToArray(),
-            AuthorizationDetails: authorizationDetailsRaw)
+            AuthorizationDetails: authorizationDetails)
         {
             Act = act,
+
             // Origin tracking for the confused-deputy guard: the JWT's client_id claim names
             // the party the token was originally minted for. Null when the claim was absent
             // (which itself surfaces at the handler's cross-client check).
             OriginalClientId = jwt.Payload.ClientId,
+
             // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
             JwtTokenType = jwt.Header.Type,
         };
     }
+
+    private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode
+        => jwt.Payload.Json[name] is T node ? (T?)node.DeepClone() : null;
 }

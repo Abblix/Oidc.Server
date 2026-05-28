@@ -366,11 +366,6 @@ public static class ServiceCollectionExtensions
         services.TryAddKeyedSingleton<ISubjectTokenResolver, RefreshTokenSubjectTokenResolver>(
             TokenExchangeTokenTypes.RefreshToken);
 
-        // Discovery metadata projector: enumerates the keyed-DI resolver registry so the
-        // subject_token_types_supported field always reflects host-registered resolvers
-        // (including custom ones for SAML / broker tokens / etc.).
-        services.TryAddSingleton<ISubjectTokenTypesMetadataProvider, SubjectTokenTypesMetadataProvider>();
-
         return services.AddAuthorizationGrant<TokenExchangeGrantHandler>();
     }
 

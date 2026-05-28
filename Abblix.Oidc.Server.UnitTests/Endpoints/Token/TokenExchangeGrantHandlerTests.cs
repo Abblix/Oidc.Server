@@ -24,7 +24,6 @@ using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -604,7 +603,6 @@ public class TokenExchangeGrantHandlerTests
         CreateHandlerWithResolverMock(string tokenType)
     {
         var resolverMock = new Mock<ISubjectTokenResolver>(MockBehavior.Strict);
-        resolverMock.SetupGet(r => r.Type).Returns(tokenType);
 
         var services = new ServiceCollection();
         services.AddKeyedSingleton(tokenType, resolverMock.Object);

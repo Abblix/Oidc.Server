@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -52,9 +51,6 @@ public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     IRefreshTokenService refreshTokenService) : ISubjectTokenResolver
 {
-    /// <inheritdoc/>
-    public string Type => TokenExchangeTokenTypes.RefreshToken;
-
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,

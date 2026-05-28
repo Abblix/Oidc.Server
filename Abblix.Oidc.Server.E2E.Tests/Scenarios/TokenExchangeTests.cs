@@ -89,22 +89,6 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
-    public async Task Discovery_advertises_subject_token_types_supported()
-    {
-        // The library ships JwtSubjectTokenResolver (registered under access_token/id_token/jwt)
-        // and RefreshTokenSubjectTokenResolver (refresh_token). Discovery surfaces the four URIs
-        // automatically via SubjectTokenTypesMetadataProvider -> ConfigurationHandler.
-        var client = CreateClient();
-        var discovery = await FetchDiscoveryAsync(client);
-
-        Assert.NotNull(discovery.SubjectTokenTypesSupported);
-        Assert.Contains(AccessTokenType, discovery.SubjectTokenTypesSupported!);
-        Assert.Contains("urn:ietf:params:oauth:token-type:id_token", discovery.SubjectTokenTypesSupported!);
-        Assert.Contains("urn:ietf:params:oauth:token-type:jwt", discovery.SubjectTokenTypesSupported!);
-        Assert.Contains("urn:ietf:params:oauth:token-type:refresh_token", discovery.SubjectTokenTypesSupported!);
-    }
-
-    [Fact]
     public async Task Dynamic_client_registration_round_trips_token_exchange_subject_token_types_metadata()
     {
         // Non-standard DCR metadata: token_exchange_subject_token_types lets a host pin the

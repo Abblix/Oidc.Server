@@ -51,13 +51,6 @@ public class JwtSubjectTokenResolverTests
     }
 
     [Fact]
-    public async Task Type_Reports_JwtUri()
-    {
-        Assert.Equal(TokenExchangeTokenTypes.Jwt, _resolver.Type);
-        await Task.CompletedTask;
-    }
-
-    [Fact]
     public async Task ValidJwt_ReturnsContextWithSubjectIssuerScope()
     {
         var jwt = NewJwt(subject: "user-1", issuer: "https://idp.example.com");
