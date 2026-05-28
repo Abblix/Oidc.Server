@@ -81,8 +81,6 @@ internal sealed class AuthorizationDetailsPolicy(
         }
 
         var result = await ValidateAsync(authorizationDetails, client, token);
-        if (!result.TryGetSuccess(out var validated))
-            return result.GetFailure();
 
         // Rebuild the raw array from the validated typed list (RFC 9396 §5 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
@@ -91,7 +89,7 @@ internal sealed class AuthorizationDetailsPolicy(
         // that mutation surfaces here and the pipeline forwards the post-validation shape
         // (not the original request) into AuthorizationContext, so token emission reflects
         // what was actually granted.
-        return validated.ToRawJsonArray();
+        return result.MapSuccess(success => success.ToRawJsonArray());
     }
 
     private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
@@ -112,17 +110,18 @@ internal sealed class AuthorizationDetailsPolicy(
             var validator = serviceProvider.GetKeyedService<IAuthorizationDetailValidator>(detail.Type);
             if (validator is null)
             {
-                return new OidcError(ErrorCodes.InvalidAuthorizationDetails, 
+                return new OidcError(
+                    ErrorCodes.InvalidAuthorizationDetails,
                     $"unknown authorization_details type: '{detail.Type}'");
             }
 
             var result = await validator.ValidateAsync(detail, client, cancellationToken);
-            if (!result.TryGetSuccess(out var validDetail))
+            if (result.TryGetFailure(out var failure))
             {
-                return result.GetFailure();
+                return failure;
             }
 
-            validated.Add(validDetail);
+            validated.Add(result.GetSuccess());
         }
 
         return validated;
