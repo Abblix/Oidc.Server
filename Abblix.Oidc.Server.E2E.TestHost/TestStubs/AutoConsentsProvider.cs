@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -22,9 +23,13 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// (preserving PR #135 byte-exact behaviour the existing E2E tests exercise).
 /// <para>
 /// Per-test, scenarios opt in to consent-side narrow / deny via
-/// <see cref="OverrideAuthorizationDetails"/> -- the override is held in an
-/// <see cref="AsyncLocal{T}"/> slot so it flows through the WebApplicationFactory's in-process
-/// handler chain and is automatically released when the scenario's <c>using</c> block exits.
+/// <see cref="OverrideAuthorizationDetails"/>. The override is held in a flat static slot
+/// (not <see cref="AsyncLocal{T}"/>): WebApplicationFactory's in-process TestServer was
+/// observed to drop ExecutionContext between the test thread and the request-handler thread,
+/// leaving AsyncLocal values invisible at the read site. E2E tests run sequentially per
+/// <c>[Collection(TestCollection.Name)]</c>, so the static is race-free, and
+/// <see cref="OverrideAuthorizationDetails"/> returns <see cref="IDisposable"/> to enforce the
+/// reset on scope exit (even on test failure).
 /// </para>
 /// </remarks>
 public sealed class AutoConsentsProvider : IUserConsentsProvider
@@ -85,6 +90,8 @@ public sealed class AutoConsentsProvider : IUserConsentsProvider
 
     private sealed class Resetter : IDisposable
     {
+        [SuppressMessage("Major Code Smell", "S2696:Instance members should not write to \"static\" fields",
+            Justification = "Intentional: per-test override is held in flat static state because WebApplicationFactory's TestServer does not reliably propagate AsyncLocal across its handler chain. See class-level comment on _grantedAuthorizationDetailsOverride; Resetter's Dispose is the scope-exit half of the IDisposable pattern that releases that state.")]
         public void Dispose()
         {
             _grantedAuthorizationDetailsOverride = null;
