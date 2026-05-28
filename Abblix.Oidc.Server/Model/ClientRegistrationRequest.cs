@@ -348,9 +348,9 @@ public record ClientRegistrationRequest
     public string[]? AuthorizationDetailsTypes { get; init; }
 
     /// <summary>
-    /// Abblix extension: the per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// Non-standard extension: the per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
     /// client may submit to the Token Exchange grant. RFC 8693 does not standardise a registration
-    /// parameter for this, so the property is exposed under the Abblix-specific
+    /// parameter for this, so the property is exposed under the non-standard
     /// <c>token_exchange_subject_token_types</c> name. Maps to
     /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
     /// <c>null</c> means no per-client constraint; empty array means the client cannot use
@@ -626,7 +626,7 @@ public record ClientRegistrationRequest
         public const string AuthorizationDetailsTypes = "authorization_details_types";
 
         /// <summary>The <c>token_exchange_subject_token_types</c> registration parameter
-        /// (Abblix extension; RFC 8693 does not standardise it): per-client allowlist of
+        /// (non-standard extension; RFC 8693 does not standardise it): per-client allowlist of
         /// <c>subject_token_type</c> URIs this client may submit to the Token Exchange grant.</summary>
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
 

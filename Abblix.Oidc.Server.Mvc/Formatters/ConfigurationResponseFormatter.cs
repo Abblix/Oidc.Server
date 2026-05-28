@@ -132,6 +132,7 @@ public class ConfigurationResponseFormatter(
 			AuthorizationResponseIssParameterSupported = response.AuthorizationResponseIssParameterSupported,
 
 			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
+			SubjectTokenTypesSupported = response.SubjectTokenTypesSupported,
 		};
 
 		// Add mTLS endpoint aliases if configured

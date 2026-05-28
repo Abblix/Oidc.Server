@@ -49,6 +49,14 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
     public string Type => TokenExchangeTokenTypes.Jwt;
 
     /// <inheritdoc/>
+    public IEnumerable<string> SupportedTypes =>
+    [
+        TokenExchangeTokenTypes.AccessToken,
+        TokenExchangeTokenTypes.IdToken,
+        TokenExchangeTokenTypes.Jwt,
+    ];
+
+    /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
         CancellationToken cancellationToken)

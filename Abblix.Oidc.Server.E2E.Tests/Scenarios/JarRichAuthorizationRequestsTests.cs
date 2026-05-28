@@ -115,7 +115,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         // byte-exact. This is the JAR + RAR invariant: signed request object preserves nested
         // claims through every layer (JWT validation -> request-object fetcher -> standard
         // authorize pipeline -> RAR per-type validator -> consent -> token emission).
-        var payload = DecodeJwtPayload(tokenResponse["access_token"]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokenResponse[WireParameters.AccessToken]!.GetValue<string>());
         var claim = (payload[WireParameters.AuthorizationDetails] as JsonArray)!;
         Assert.NotNull(claim);
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());

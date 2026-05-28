@@ -74,7 +74,7 @@ public class UpdateClientRequestProcessor(
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
-            // Abblix extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
+            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
@@ -173,7 +173,7 @@ public class UpdateClientRequestProcessor(
             DpopBoundAccessTokens = updatedClient.RequireDPoP,
             // RFC 9396 §5.1: echo authorization_details_types so the client confirms its allowlist.
             AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
-            // Abblix extension: echo token_exchange_subject_token_types.
+            // Non-standard extension: echo token_exchange_subject_token_types.
             TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
         };
     }

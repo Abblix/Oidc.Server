@@ -50,7 +50,8 @@ public sealed class ConfigurationHandler(
 	IJwtAlgorithmsProvider jwtAlgorithms,
 	IAuthenticationCompletionHandler cibaCompletionHandler,
 	IAcrMetadataProvider acrMetadata,
-	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
+	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata,
+	Features.TokenExchange.ISubjectTokenTypesMetadataProvider subjectTokenTypesMetadata) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
@@ -99,5 +100,6 @@ public sealed class ConfigurationHandler(
 		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 
 		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
+		SubjectTokenTypesSupported = subjectTokenTypesMetadata.SupportedTypes,
 	});
 }

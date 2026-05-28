@@ -236,7 +236,7 @@ public record ReadClientSuccessfulResponse
     public string[]? AuthorizationDetailsTypes { get; init; }
 
     /// <summary>
-    /// Abblix extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// Non-standard extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
     /// client may submit to the Token Exchange grant. Echoes
     /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
     /// </summary>

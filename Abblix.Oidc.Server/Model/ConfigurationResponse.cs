@@ -221,6 +221,13 @@ public record ConfigurationResponse
         /// authorization-detail <c>type</c> values this server understands (RFC 9396 §13).
         /// Absent when no per-type validators are registered.</summary>
         public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
+
+        /// <summary>The <c>subject_token_types_supported</c> metadata field listing the
+        /// RFC 8693 <c>subject_token_type</c> URIs this server has resolvers for. Non-standard
+        /// extension (RFC 8693 does not define a discovery field for this); wire name follows
+        /// the OAuth/OIDC <c>*_supported</c> convention. Absent when no resolvers are
+        /// registered.</summary>
+        public const string SubjectTokenTypesSupported = "subject_token_types_supported";
     }
 
     /// <summary>
@@ -521,4 +528,16 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
     public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
+
+    /// <summary>
+    /// The RFC 8693 <c>subject_token_type</c> URIs this server has resolvers for. Projected
+    /// from the keyed-DI registry of
+    /// <see cref="Features.TokenExchange.ISubjectTokenResolver"/> so it always matches what
+    /// the Token Exchange grant will accept at runtime, including custom host-registered
+    /// resolvers for non-native formats. RFC 8693 does not standardise a discovery field for
+    /// this; the wire name follows the established <c>*_supported</c> convention. Omitted
+    /// when null (no resolvers registered) per OIDC discovery convention.
+    /// </summary>
+    [JsonPropertyName(Parameters.SubjectTokenTypesSupported)]
+    public IEnumerable<string>? SubjectTokenTypesSupported { get; init; }
 }

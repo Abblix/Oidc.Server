@@ -46,6 +46,7 @@ public abstract class TestBase(TestFactory factory)
         public const string RefreshToken = "refresh_token";
         public const string Error = "error";
         public const string AuthorizationDetails = "authorization_details";
+        public const string AccessToken = "access_token";
     }
 
     [SuppressMessage("Minor Code Smell", "S1075",

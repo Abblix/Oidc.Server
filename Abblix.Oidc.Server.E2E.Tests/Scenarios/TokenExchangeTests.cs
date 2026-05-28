@@ -27,7 +27,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var initial = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var subjectToken = initial["access_token"]!.GetValue<string>();
+        var subjectToken = initial[WireParameters.AccessToken]!.GetValue<string>();
         var originalSubject = DecodeJwtPayload(subjectToken)["sub"]!.GetValue<string>();
 
         // 2. Exchange it via grant_type=token-exchange.
@@ -41,7 +41,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         });
 
         // 3. Issued access token: same sub, AD forwarded byte-exact, no act claim.
-        var newPayload = DecodeJwtPayload(exchanged["access_token"]!.GetValue<string>());
+        var newPayload = DecodeJwtPayload(exchanged[WireParameters.AccessToken]!.GetValue<string>());
         Assert.Equal(originalSubject, newPayload["sub"]!.GetValue<string>());
         var ad = newPayload[WireParameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(ad);
@@ -56,7 +56,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var subject = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var subjectToken = subject["access_token"]!.GetValue<string>();
+        var subjectToken = subject[WireParameters.AccessToken]!.GetValue<string>();
         var subjectSub = DecodeJwtPayload(subjectToken)["sub"]!.GetValue<string>();
 
         // 2. Mint the actor_token. Same client + flow stands in for a distinct service identity
@@ -65,7 +65,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var actor = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var actorToken = actor["access_token"]!.GetValue<string>();
+        var actorToken = actor[WireParameters.AccessToken]!.GetValue<string>();
         var actorSub = DecodeJwtPayload(actorToken)["sub"]!.GetValue<string>();
 
         // 3. Exchange with both subject_token and actor_token.
@@ -81,7 +81,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         });
 
         // 4. Issued token: sub = subject, act = { sub: actor }.
-        var newPayload = DecodeJwtPayload(exchanged["access_token"]!.GetValue<string>());
+        var newPayload = DecodeJwtPayload(exchanged[WireParameters.AccessToken]!.GetValue<string>());
         Assert.Equal(subjectSub, newPayload["sub"]!.GetValue<string>());
         var act = newPayload["act"] as JsonObject;
         Assert.NotNull(act);
@@ -89,9 +89,25 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
+    public async Task Discovery_advertises_subject_token_types_supported()
+    {
+        // The library ships JwtSubjectTokenResolver (registered under access_token/id_token/jwt)
+        // and RefreshTokenSubjectTokenResolver (refresh_token). Discovery surfaces the four URIs
+        // automatically via SubjectTokenTypesMetadataProvider -> ConfigurationHandler.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        Assert.NotNull(discovery.SubjectTokenTypesSupported);
+        Assert.Contains(AccessTokenType, discovery.SubjectTokenTypesSupported!);
+        Assert.Contains("urn:ietf:params:oauth:token-type:id_token", discovery.SubjectTokenTypesSupported!);
+        Assert.Contains("urn:ietf:params:oauth:token-type:jwt", discovery.SubjectTokenTypesSupported!);
+        Assert.Contains("urn:ietf:params:oauth:token-type:refresh_token", discovery.SubjectTokenTypesSupported!);
+    }
+
+    [Fact]
     public async Task Dynamic_client_registration_round_trips_token_exchange_subject_token_types_metadata()
     {
-        // Abblix-extension DCR metadata: token_exchange_subject_token_types lets a host pin the
+        // Non-standard DCR metadata: token_exchange_subject_token_types lets a host pin the
         // per-client allowlist of RFC 8693 subject_token_type URIs at registration time. The
         // registered value flows ClientInfo -> response echo, and at runtime the grant handler
         // enforces it via TokenExchangeAllowedSubjectTokenTypes tri-state semantics.

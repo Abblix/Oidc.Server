@@ -53,6 +53,15 @@ public interface ISubjectTokenResolver
     string Type { get; }
 
     /// <summary>
+    /// The full set of <c>subject_token_type</c> URIs this resolver handles. Default returns
+    /// just <see cref="Type"/> -- single-URI resolvers need not override. Resolvers like
+    /// <see cref="JwtSubjectTokenResolver"/> that serve multiple URIs from one instance
+    /// override this so discovery's <c>subject_token_types_supported</c> field surfaces every
+    /// URI the host can actually exchange under.
+    /// </summary>
+    IEnumerable<string> SupportedTypes => [Type];
+
+    /// <summary>
     /// Parses or looks up the wire-level <paramref name="subjectToken"/> and returns the
     /// portable subject context on success, or an <see cref="OidcError"/> on failure.
     /// </summary>

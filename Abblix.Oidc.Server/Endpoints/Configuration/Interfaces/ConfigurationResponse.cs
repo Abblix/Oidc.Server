@@ -179,4 +179,14 @@ public record ConfigurationResponse
 	/// or omitted when null (no per-type validators registered).
 	/// </summary>
 	public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
+
+	/// <summary>
+	/// The RFC 8693 §3 <c>subject_token_type</c> URIs this server's host has registered
+	/// resolvers for. Sourced from the keyed-DI registry that request-time dispatch uses;
+	/// emitted as <c>subject_token_types_supported</c> on the wire, or omitted when null
+	/// (no resolvers registered). RFC 8693 does not standardise a discovery field for this;
+	/// the field name follows the established OAuth/OIDC <c>*_supported</c> convention so
+	/// clients can discover acceptable formats before exchanging at runtime.
+	/// </summary>
+	public IEnumerable<string>? SubjectTokenTypesSupported { get; init; }
 }
