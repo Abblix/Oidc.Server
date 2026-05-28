@@ -342,6 +342,73 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
+    public async Task Public_client_non_par_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
+    {
+        // RFC 9449 §5 applies regardless of how the initial token was obtained — a
+        // proof at /token alone (no PAR commitment) is enough to bind the access
+        // token, and the binding MUST flow through to the refresh token. Pins the
+        // TokenRequestProcessor fix: public-flow refreshContext sources its thumbprint
+        // from authContext (live proof) rather than from the un-evaluated grant
+        // context (which is null without PAR).
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var initial = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPPublicClientId,
+            parProof: null,
+            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
+            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
+            clientSecret: null);
+        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
+        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var refreshHttp = await SendRefreshAsync(
+            client, discovery, refreshToken, TestConstants.DPoPPublicClientId, refreshProof, clientSecret: null);
+
+        var raw = await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(refreshHttp.IsSuccessStatusCode,
+            $"/token refresh failed: {(int)refreshHttp.StatusCode} {raw}");
+        AssertDPoPBound(JsonNode.Parse(raw)!.AsObject(), expectedThumbprint: proofKey.Thumbprint);
+    }
+
+    [Fact]
+    public async Task Public_client_non_par_refresh_with_different_dpop_key_is_rejected_per_rfc9449_section5()
+    {
+        // Regression pin for the TokenRequestProcessor fix. Before the fix the public
+        // refresh path sourced refreshContext from request.AuthorizedGrant.Context,
+        // which carried no ProofKeyThumbprint for non-PAR flows; the validator's
+        // committed-vs-presented compare then short-circuited (committed = null) and
+        // a rotated key was silently accepted — a §5 MUST violation. Post-fix the
+        // refresh JWT carries cnf.jkt from authContext (live proof's thumbprint), so
+        // the next refresh's mismatched proof is caught.
+        using var originalKey = new DPoPProofGenerator();
+        using var attackerKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var initial = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPPublicClientId,
+            parProof: null,
+            tokenProof: originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
+            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
+            clientSecret: null);
+        AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
+        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        var attackerProof = attackerKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var refreshHttp = await SendRefreshAsync(
+            client, discovery, refreshToken, TestConstants.DPoPPublicClientId, attackerProof, clientSecret: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
+        var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body["error"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Public_client_refresh_with_different_dpop_key_is_rejected_per_rfc9449_section5()
     {
         // RFC 9449 §5 MUST for public clients: «such a client MUST present a DPoP proof
