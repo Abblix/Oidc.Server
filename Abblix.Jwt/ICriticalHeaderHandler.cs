@@ -7,7 +7,7 @@
 //
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
-// https://github.com/Abblix/OIDC.Server. All development and modifications
+// https://github.com/Abblix/Oidc.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
 //
 // Unauthorized use, modification, or distribution of this software is strictly
@@ -23,19 +23,74 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Marker that declares the host implementation understands a specific JOSE header parameter
-/// listed in a JWS 'crit' header (RFC 7515 §4.1.11). Handlers are registered as keyed services
-/// where the DI key is the header parameter name (for example "b64", or "iat" for DPoP) — the
-/// key is the source of truth for the name, so this contract does not need to expose it.
+/// Recipient-side handler for one JWS 'crit' header extension spec (RFC 7515 §4.1.11).
+/// Covers «understood AND processed»: the implementation declares which JOSE header
+/// parameter name(s) the extension introduces via <see cref="UnderstoodNames"/>, and
+/// applies the extension's recipient-side semantics via <see cref="HandleAsync"/>.
 /// </summary>
 /// <remarks>
-/// RFC 7515 §4.1.11 requires verifiers to reject any JWS whose 'crit' header lists a parameter
-/// the verifier does not understand. Hosts implementing JOSE extensions register a handler
-/// keyed by each supported extension name via
-/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>; the validator
-/// rejects any JWS whose 'crit' lists a name that has no matching keyed registration. The
-/// contract is intentionally empty for now: when a concrete extension lands and needs
-/// value-level processing, methods will be added here and existing keyed registrations remain
-/// valid.
+/// <para>
+/// One method, <see cref="HandleAsync"/>, intentionally collapses «validate» and
+/// «handle». Every realistic crit extension reads the header, optionally performs
+/// side effects (consume a replay nonce, emit an audit event), and returns
+/// success or a typed error. Splitting into validate+handle methods would tear
+/// related code apart — nonce extraction, freshness check, and consumption are
+/// one logical step.
+/// </para>
+/// <para>
+/// Two realistic processing modes share this shape:
+/// <list type="bullet">
+///   <item>
+///     <description>
+///       <b>Validate-only</b> — read the header value, compare against local
+///       policy, accept or reject. Pure function over the JWT. Examples:
+///       RFC 8225 'ppt' (PASSporT Type), enterprise-policy headers.
+///     </description>
+///   </item>
+///   <item>
+///     <description>
+///       <b>Stateful handler</b> — read the header value, mutate external state
+///       (replay-cache, audit log, counters), accept or reject. Example:
+///       ACME-style 'nonce' (RFC 8555 §6.5.2) consumption with atomic
+///       single-use semantics.
+///     </description>
+///   </item>
+/// </list>
+/// </para>
+/// <para>
+/// Signature-affecting crit extensions (RFC 7797 'b64' — Unencoded Payload Option)
+/// need a pre-signature hook that transforms the JWS Signing Input bytes, which
+/// MUST run before signature verification. That hook is a separate sibling
+/// contract on the signing pipeline (out of scope for this interface). A b64
+/// implementation of THIS interface is a thin shim that declares understanding
+/// of "b64" and short-circuits to success — successful signature verification
+/// already proves the directive was honoured.
+/// </para>
+/// <para>
+/// Register with
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>.
+/// Two handlers claiming the same name fail loud at validator construction —
+/// each crit name MUST have exactly one handler.
+/// </para>
 /// </remarks>
-public interface ICriticalHeaderHandler;
+public interface ICriticalHeaderHandler
+{
+    /// <summary>
+    /// JOSE header parameter names this handler implements. Byte-exact match
+    /// per RFC 7515 §5.3. MUST be non-empty. Multi-name is allowed for specs
+    /// that introduce a family of related parameters (rare); most extensions
+    /// declare a single name.
+    /// </summary>
+    IReadOnlySet<string> UnderstoodNames { get; }
+
+    /// <summary>
+    /// Apply the extension's recipient-side semantics. May read the parsed
+    /// token (header and payload), consult external state via the context's
+    /// time provider or DI-injected dependencies, perform side effects, and
+    /// reject the JWS by returning a non-null <see cref="JwtValidationError"/>.
+    /// Return <see langword="null"/> on success.
+    /// </summary>
+    /// <param name="context">Per-call inputs (parsed token, validation
+    /// parameters, time provider, cancellation token).</param>
+    Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context);
+}
