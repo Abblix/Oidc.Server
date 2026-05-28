@@ -648,19 +648,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         string scope = Scopes.OpenId,
         string? clientSecret = TestConstants.ConfidentialClientSecret)
     {
-        var (verifier, challenge) = GeneratePkcePair();
-
-        var parResponse = await SendParAsync(client, discovery, clientId, challenge, parProof, scope, clientSecret);
-        Assert.True(parResponse.IsSuccessStatusCode,
-            $"PAR failed: {(int)parResponse.StatusCode} {await parResponse.Content.ReadAsStringAsync()}");
-        var parBody = JsonNode.Parse(await parResponse.Content.ReadAsStringAsync())!.AsObject();
-        var requestUri = parBody[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
-
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [AuthorizationRequest.Parameters.RequestUri] = requestUri,
-        });
+        var (verifier, code) = await PerformParAndAuthorizeAsync(
+            client, discovery, clientId, parProof, scope, clientSecret);
 
         var tokenResponse = await SendTokenAsync(client, discovery, clientId, code, verifier, tokenProof, clientSecret);
         Assert.True(tokenResponse.IsSuccessStatusCode,
@@ -681,11 +670,37 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         string? parProof,
         string? tokenProof)
     {
+        var (verifier, code) = await PerformParAndAuthorizeAsync(
+            client, discovery, clientId, parProof, Scopes.OpenId, TestConstants.ConfidentialClientSecret);
+
+        var tokenResponse = await SendTokenAsync(client, discovery, clientId, code, verifier, tokenProof);
+        Assert.False(tokenResponse.IsSuccessStatusCode,
+            $"/token unexpectedly succeeded: {await tokenResponse.Content.ReadAsStringAsync()}");
+        Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
+        var body = JsonNode.Parse(await tokenResponse.Content.ReadAsStringAsync())!.AsObject();
+        return body["error"]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Pushes a PAR request, retrieves the resulting <c>request_uri</c>, drives /authorize
+    /// to consume it, and returns the issued auth code paired with the PKCE verifier so a
+    /// caller can complete the flow at /token. Shared bootstrap for the success and
+    /// expecting-error driver variants — keeps the PAR + /authorize choreography in one
+    /// place even though the two callers diverge on /token-stage expectations.
+    /// </summary>
+    private static async Task<(string Verifier, string Code)> PerformParAndAuthorizeAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientId,
+        string? parProof,
+        string scope,
+        string? clientSecret)
+    {
         var (verifier, challenge) = GeneratePkcePair();
 
-        var parResponse = await SendParAsync(client, discovery, clientId, challenge, parProof);
+        var parResponse = await SendParAsync(client, discovery, clientId, challenge, parProof, scope, clientSecret);
         Assert.True(parResponse.IsSuccessStatusCode,
-            $"PAR unexpectedly failed: {(int)parResponse.StatusCode} {await parResponse.Content.ReadAsStringAsync()}");
+            $"PAR failed: {(int)parResponse.StatusCode} {await parResponse.Content.ReadAsStringAsync()}");
         var parBody = JsonNode.Parse(await parResponse.Content.ReadAsStringAsync())!.AsObject();
         var requestUri = parBody[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
 
@@ -694,13 +709,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.ClientId] = clientId,
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
-
-        var tokenResponse = await SendTokenAsync(client, discovery, clientId, code, verifier, tokenProof);
-        Assert.False(tokenResponse.IsSuccessStatusCode,
-            $"/token unexpectedly succeeded: {await tokenResponse.Content.ReadAsStringAsync()}");
-        Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
-        var body = JsonNode.Parse(await tokenResponse.Content.ReadAsStringAsync())!.AsObject();
-        return body["error"]!.GetValue<string>();
+        return (verifier, code);
     }
 
     private static async Task<HttpResponseMessage> SendParAsync(

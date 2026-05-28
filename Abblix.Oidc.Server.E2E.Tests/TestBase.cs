@@ -1,7 +1,6 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +10,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
@@ -24,14 +24,12 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 [Collection(TestCollection.Name)]
 public abstract class TestBase(TestFactory factory)
 {
-    [SuppressMessage("Minor Code Smell", "S1075",
-        Justification = "TestServer in-memory base address; not a deployment URL.")]
     protected HttpClient CreateClient()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("https://localhost"),
+            BaseAddress = TestServerAddress.BaseAddress,
         });
         return client;
     }
@@ -80,20 +78,9 @@ public abstract class TestBase(TestFactory factory)
     protected static async Task<string> AuthorizeAndExtractCodeAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        Dictionary<string, string> queryParams)
-    {
-        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
-        var response = await client.GetAsync(uri);
-        // Auto-redirect is disabled — the success terminal is a 302 back to redirect_uri
-        // with code in the query string.
-        Assert.True(
-            response.StatusCode is System.Net.HttpStatusCode.Redirect or System.Net.HttpStatusCode.Found,
-            $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
-        var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
-        var query = System.Web.HttpUtility.ParseQueryString(location.Query);
-        var code = query[TokenRequest.Parameters.Code] ?? throw new InvalidOperationException($"No code in callback URI: {location}");
-        return code;
-    }
+        Dictionary<string, string> queryParams) =>
+        await AuthorizeAndExtractFromCallbackAsync(
+            client, discovery, queryParams, TokenRequest.Parameters.Code);
 
     /// <summary>
     /// Drives /authorize and asserts the AS redirected back to <c>redirect_uri</c> with an
@@ -103,7 +90,19 @@ public abstract class TestBase(TestFactory factory)
     protected static async Task<string> AuthorizeAndExtractErrorAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        Dictionary<string, string> queryParams)
+        Dictionary<string, string> queryParams) =>
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "error");
+
+    /// <summary>
+    /// Drives /authorize, asserts the AS responded with a 302/303 back to <c>redirect_uri</c>,
+    /// and returns the value of the requested callback-URI query parameter. Shared body of
+    /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>.
+    /// </summary>
+    private static async Task<string> AuthorizeAndExtractFromCallbackAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Dictionary<string, string> queryParams,
+        string paramName)
     {
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
         var response = await client.GetAsync(uri);
@@ -112,7 +111,7 @@ public abstract class TestBase(TestFactory factory)
             $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
         var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
         var query = System.Web.HttpUtility.ParseQueryString(location.Query);
-        return query["error"] ?? throw new InvalidOperationException($"No error in callback URI: {location}");
+        return query[paramName] ?? throw new InvalidOperationException($"No '{paramName}' in callback URI: {location}");
     }
 
     protected static async Task<JsonObject> ExchangeCodeForTokensAsync(
