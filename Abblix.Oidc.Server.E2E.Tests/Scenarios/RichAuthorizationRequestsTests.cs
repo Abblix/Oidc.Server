@@ -143,8 +143,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
 
         var echoed = registered["authorization_details_types"] as JsonArray;
         Assert.NotNull(echoed);
-        Assert.Single(echoed!);
-        Assert.Equal(TestConstants.PaymentInitiationType, echoed![0]!.GetValue<string>());
+        Assert.Single(echoed);
+        Assert.Equal(TestConstants.PaymentInitiationType, echoed[0]!.GetValue<string>());
     }
 
     [Fact]
@@ -192,10 +192,11 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : TestBase(fact
 
         var body = JsonNode.Parse(raw)?.AsObject();
         Assert.NotNull(body);
-        Assert.Equal("true", body!["active"]?.GetValue<string>());
+        Assert.Equal("true", body["active"]?.GetValue<string>());
+
         var echoed = body[WireParameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);
-        Assert.Equal(PaymentInitiationWireJson, echoed!.ToJsonString());
+        Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
     }
 
     // ───────────────────────────────────────────────────────────────────────
