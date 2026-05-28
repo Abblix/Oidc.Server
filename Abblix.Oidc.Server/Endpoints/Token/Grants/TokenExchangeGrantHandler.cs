@@ -49,6 +49,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// accepts an unknown <c>subject_token_type</c>. Hosts may register additional resolvers for
 /// formats this library does not handle natively.
 /// <para>
+/// Authorization is structured as a monadic <c>Bind</c>-chain on
+/// <see cref="Result{TSuccess,TFailure}"/>, mirroring <see cref="JwtBearerGrantHandler"/>: each
+/// step returns either an enriched <see cref="ValidationContext"/> or an <see cref="OidcError"/>;
+/// the chain short-circuits at the first failure. Subject-token resolution sits in the middle
+/// of the chain, so post-resolve guards (cross-client origin, typ-confusion, forwarded AD
+/// allowlist) read the resolved <see cref="SubjectTokenContext"/> directly from the context.
+/// </para>
+/// <para>
 /// Supports both RFC 8693 §4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
 /// <c>sub</c> equals the subject_token's subject, no <c>act</c> claim) and delegation
 /// (<c>actor_token</c> provided; the issued token's <c>sub</c> still equals the subject's
@@ -70,51 +78,36 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <inheritdoc/>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+        TokenRequest request,
+        ClientInfo clientInfo)
     {
-        // Pre-flight: required params, per-client allowlist for BOTH subject and actor types
-        // (C3 symmetry), actor pair completeness, requested_token_type sanity.
         ValidateRequiredParameters(request);
 
-        if (ValidateTokenTypeAllowlist(request.SubjectTokenType!, clientInfo, "subject_token_type") is { } subjectTypeError)
-            return subjectTypeError;
-
-        if (ValidateActorTokenPair(request) is { } actorPairError)
-            return actorPairError;
-
-        if (request.ActorTokenType is { Length: > 0 } actorType
-            && ValidateTokenTypeAllowlist(actorType, clientInfo, "actor_token_type") is { } actorTypeError)
-            return actorTypeError;
-
-        if (ValidateRequestedTokenType(request) is { } requestedTokenTypeError)
-            return requestedTokenTypeError;
-
-        var subjectResult = await ResolveTokenAsync(request.SubjectTokenType!, request.SubjectToken!);
-        if (!subjectResult.TryGetSuccess(out var subject))
-            return subjectResult.GetFailure();
-
-        // S1 / S3: confused-deputy + typ-confusion guards on the resolved subject.
-        if (ValidateSubjectTokenOriginAndType(subject, request.SubjectTokenType!, clientInfo) is { } subjectGateError)
-            return subjectGateError;
-
-        // S1-second: forwarded authorization_details must be allowed for the REQUESTING client,
-        // not just for the subject_token's original client.
-        if (ValidateForwardedAuthorizationDetails(subject, clientInfo) is { } adError)
-            return adError;
-
-        SubjectTokenContext? actor = null;
-        if (request.ActorToken is { Length: > 0 } actorToken)
-        {
-            var actorResult = await ResolveTokenAsync(request.ActorTokenType!, actorToken);
-            if (!actorResult.TryGetSuccess(out actor))
-                return new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {actorResult.GetFailure().ErrorDescription}");
-
-            if (ValidateSubjectTokenOriginAndType(actor, request.ActorTokenType!, clientInfo) is { } actorGateError)
-                return new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {actorGateError.ErrorDescription}");
-        }
-
-        return BuildAuthorizedGrant(subject, actor, request, clientInfo);
+        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
+        return initial
+            .Bind(ValidateSubjectTokenType)
+            .Bind(ValidateActorTokenPair)
+            .Bind(ValidateActorTokenType)
+            .Bind(ValidateRequestedTokenType)
+            .BindAsync(ResolveSubjectTokenAsync)
+            .Bind(ValidateSubjectTokenOriginAndType)
+            .Bind(ValidateForwardedAuthorizationDetails)
+            .BindAsync(ResolveActorTokenAsync)
+            .Bind(ValidateActorTokenOriginAndType)
+            .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
     }
+
+    /// <summary>
+    /// Accumulator threaded through the <c>Bind</c>-chain. <see cref="Subject"/> is populated by
+    /// <see cref="ResolveSubjectTokenAsync"/>; <see cref="Actor"/> is populated by
+    /// <see cref="ResolveActorTokenAsync"/> only when the request supplied <c>actor_token</c>.
+    /// </summary>
+    private sealed record ValidationContext(
+        TokenRequest Request,
+        ClientInfo ClientInfo,
+        SubjectTokenContext? Subject = null,
+        SubjectTokenContext? Actor = null);
 
     private void ValidateRequiredParameters(TokenRequest request)
     {
@@ -123,18 +116,90 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
+    /// Checks the <c>subject_token_type</c> against the client's tri-state per-client allowlist.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenType(ValidationContext ctx)
+    {
+        if (CheckTokenTypeAllowlist(
+                ctx.Request.SubjectTokenType,
+                ctx.ClientInfo,
+                TokenRequest.Parameters.SubjectTokenType) is { } error)
+        {
+            return error;
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// RFC 8693 §2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
+    /// either is present -- a request that supplies one without the other is malformed.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateActorTokenPair(ValidationContext ctx)
+    {
+        var hasToken = !string.IsNullOrEmpty(ctx.Request.ActorToken);
+        var hasType = !string.IsNullOrEmpty(ctx.Request.ActorTokenType);
+        if (hasToken != hasType)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "actor_token and actor_token_type must be supplied together.");
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// Same allowlist check as <see cref="ValidateSubjectTokenType"/> applied to
+    /// <c>actor_token_type</c> (C3 symmetry: a client opted in to exchanging type X as subject
+    /// is implicitly trusted with type X as actor).
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateActorTokenType(ValidationContext ctx)
+    {
+        if (CheckTokenTypeAllowlist(
+                ctx.Request.ActorTokenType,
+                ctx.ClientInfo,
+                TokenRequest.Parameters.ActorTokenType) is { } error)
+        {
+            return error;
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// S2 (PR #135 review): this slice issues only access_token; clients asking for id_token /
+    /// refresh_token / jwt are rejected loudly rather than silently downgraded.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateRequestedTokenType(ValidationContext ctx)
+    {
+        var requested = ctx.Request.RequestedTokenType;
+        if (requested is { Length: > 0 } && requested != TokenExchangeTokenTypes.AccessToken)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                $"requested_token_type '{requested}' is not supported (only access_token issued).");
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
     /// Per-client allowlist gate, reusable for both <c>subject_token_type</c> and
-    /// <c>actor_token_type</c> (C3 symmetry decision: a client opted in to exchanging type X
-    /// as subject is implicitly trusted with type X as actor).
-    /// Returns the failure (when present) or <c>null</c> when the check passes.
-    /// Tri-state semantics (mirrors ClientInfo.AuthorizationDetailsTypes):
+    /// <c>actor_token_type</c>.
+    /// Tri-state semantics (mirrors <see cref="ClientInfo.AuthorizationDetailsTypes"/>):
     ///   null         -> no per-client constraint (library-wide resolver registry decides)
     ///   empty array  -> deny-all (this client cannot use Token Exchange at all)
     ///   non-empty    -> allowlist of accepted token-type URIs
     /// </summary>
-    private static OidcError? ValidateTokenTypeAllowlist(
-        string tokenTypeUri, ClientInfo clientInfo, string fieldName)
+    private static OidcError? CheckTokenTypeAllowlist(
+        string? tokenTypeUri,
+        ClientInfo clientInfo,
+        string fieldName)
     {
+        if (string.IsNullOrEmpty(tokenTypeUri))
+            return null;
+
         var allowlist = clientInfo.TokenExchangeAllowedSubjectTokenTypes;
         if (allowlist is { Length: 0 })
         {
@@ -143,10 +208,9 @@ public class TokenExchangeGrantHandler(
                 "Client is not permitted to use the Token Exchange grant.");
         }
 
-        // Tri-state: null = no per-client constraint -- skip the membership check entirely.
-        // Without this guard the null-allowlist passthrough case NREs at .Contains() below.
-        if (allowlist is { Length: > 0 }
-            && !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal))
+        // Tri-state: null = no per-client constraint -- skip membership check entirely so the
+        // null-allowlist passthrough case does not NRE at .Contains().
+        if (allowlist is { Length: > 0 } && !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -157,37 +221,14 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// RFC 8693 §2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
-    /// either is present -- a request that supplies one without the other is malformed.
+    /// Resolves the <c>subject_token</c> through the keyed-DI resolver matching its declared
+    /// type URI and stores the resolved <see cref="SubjectTokenContext"/> on the chain context.
     /// </summary>
-    private static OidcError? ValidateActorTokenPair(TokenRequest request)
+    private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(ValidationContext ctx)
     {
-        var hasToken = !string.IsNullOrEmpty(request.ActorToken);
-        var hasType = !string.IsNullOrEmpty(request.ActorTokenType);
-        if (hasToken != hasType)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "actor_token and actor_token_type must be supplied together.");
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// S2 (PR #135 review): currently this slice issues only an access_token. Clients asking for
-    /// id_token / refresh_token / jwt are rejected loudly rather than silently downgraded --
-    /// otherwise the client assumes it got what it asked for and breaks downstream.
-    /// </summary>
-    private static OidcError? ValidateRequestedTokenType(TokenRequest request)
-    {
-        if (request.RequestedTokenType is { Length: > 0 } requested
-            && requested != TokenExchangeTokenTypes.AccessToken)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"requested_token_type '{requested}' is not supported (only access_token issued).");
-        }
-        return null;
+        var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
+        var result = await ResolveTokenAsync(ctx.Request.SubjectTokenType, subjectToken, CancellationToken.None);
+        return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
     /// <summary>
@@ -196,8 +237,97 @@ public class TokenExchangeGrantHandler(
     /// for broker scenarios), and -- for JWT-based URIs -- the JWT typ header must match the URI
     /// it was presented under (cross-type confusion guard, e.g. id+jwt as access_token).
     /// </summary>
-    private static OidcError? ValidateSubjectTokenOriginAndType(
-        SubjectTokenContext token, string requestedTypeUri, ClientInfo clientInfo)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOriginAndType(ValidationContext ctx)
+    {
+        if (CheckTokenOriginAndType(
+                ctx.Subject.NotNull(nameof(ctx.Subject)),
+                ctx.Request.SubjectTokenType,
+                ctx.ClientInfo) is { } error)
+        {
+            return error;
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// S1-second (PR #135 review): AD entries forwarded from the subject_token must be allowed
+    /// for the REQUESTING client per its own <see cref="ClientInfo.AuthorizationDetailsTypes"/>
+    /// allowlist. Without this check, leaked tokens carrying expensive grants escalate silently
+    /// across clients.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateForwardedAuthorizationDetails(ValidationContext ctx)
+    {
+        var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
+        if (subject.AuthorizationDetails is not { Count: > 0 } forwarded)
+            return ctx;
+
+        var allowlist = ctx.ClientInfo.AuthorizationDetailsTypes;
+        // Null allowlist = no per-client constraint (consistent with RAR semantics).
+        if (allowlist is null)
+            return ctx;
+
+        if (allowlist.Length == 0)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "Requesting client is not permitted to receive forwarded authorization_details.");
+        }
+
+        var allowed = new HashSet<string>(allowlist, StringComparer.Ordinal);
+        foreach (var entry in forwarded)
+        {
+            if (entry is JsonObject obj &&
+                obj["type"]?.GetValue<string>() is { Length: > 0 } type &&
+                !allowed.Contains(type))
+            {
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    $"subject_token's authorization_details type '{type}' is not in the requesting client's allow list.");
+            }
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// Resolves the optional <c>actor_token</c>. Passthrough (no enrichment) when the request
+    /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
+    /// error pinpoints which token was rejected.
+    /// </summary>
+    private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(ValidationContext ctx)
+    {
+        if (ctx.Request.ActorToken is not { Length: > 0 } actorToken)
+            return ctx;
+
+        var result = await ResolveTokenAsync(ctx.Request.ActorTokenType, actorToken, CancellationToken.None);
+        return result.Match<Result<ValidationContext, OidcError>>(
+            actor => ctx with { Actor = actor },
+            failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
+    }
+
+    /// <summary>
+    /// Applies the same origin + typ-header guards to the actor_token (when present) that
+    /// <see cref="ValidateSubjectTokenOriginAndType"/> applies to the subject_token. No-op when
+    /// the request had no actor.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateActorTokenOriginAndType(ValidationContext ctx)
+    {
+        if (ctx.Actor is not { } actor)
+            return ctx;
+
+        return CheckTokenOriginAndType(actor, ctx.Request.ActorTokenType, ctx.ClientInfo) is { } error
+            ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
+            : ctx;
+    }
+
+    /// <summary>
+    /// Shared origin + typ-header guards applied identically to subject and actor tokens.
+    /// </summary>
+    private static OidcError? CheckTokenOriginAndType(
+        SubjectTokenContext token,
+        string? requestedTypeUri,
+        ClientInfo clientInfo)
     {
         if (token.OriginalClientId is { Length: > 0 } originalClient
             && !string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal)
@@ -211,6 +341,7 @@ public class TokenExchangeGrantHandler(
         // typ header expected per URI (JWT-based subject types only):
         //   access_token  -> at+jwt
         //   id_token      -> id+jwt
+        //   refresh_token -> rt+jwt
         //   jwt           -> any typ acceptable (generic JWT URI)
         // Resolvers for non-JWT formats leave JwtTokenType null; this check is a no-op for them.
         var expectedTyp = requestedTypeUri switch
@@ -218,11 +349,11 @@ public class TokenExchangeGrantHandler(
             TokenExchangeTokenTypes.AccessToken => JwtTypes.AccessToken,
             TokenExchangeTokenTypes.IdToken => JwtTypes.IdToken,
             TokenExchangeTokenTypes.RefreshToken => JwtTypes.RefreshToken,
-            _ => null,  // jwt (or non-JWT formats) -- no typ-header expectation
+            _ => null,
         };
-        if (expectedTyp is not null
-            && token.JwtTokenType is { Length: > 0 } actualTyp
-            && !string.Equals(actualTyp, expectedTyp, StringComparison.Ordinal))
+        if (expectedTyp is not null &&
+            token.JwtTokenType is { Length: > 0 } actualTyp &&
+            !string.Equals(actualTyp, expectedTyp, StringComparison.Ordinal))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -232,46 +363,10 @@ public class TokenExchangeGrantHandler(
         return null;
     }
 
-    /// <summary>
-    /// S1-second (PR #135 review): the AD entries forwarded from the subject_token must be
-    /// allowed for the REQUESTING client per its own <see cref="ClientInfo.AuthorizationDetailsTypes"/>
-    /// allowlist. Without this check, leaked tokens carrying expensive grants escalate
-    /// silently across clients.
-    /// </summary>
-    private static OidcError? ValidateForwardedAuthorizationDetails(
-        SubjectTokenContext subject, ClientInfo clientInfo)
-    {
-        if (subject.AuthorizationDetails is not { Count: > 0 } forwarded)
-            return null;
-
-        var allowlist = clientInfo.AuthorizationDetailsTypes;
-        // Null allowlist = no per-client constraint (consistent with RAR semantics).
-        if (allowlist is null)
-            return null;
-
-        if (allowlist.Length == 0)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "Requesting client is not permitted to receive forwarded authorization_details.");
-        }
-
-        var allowed = new HashSet<string>(allowlist, StringComparer.Ordinal);
-        foreach (var entry in forwarded)
-        {
-            if (entry is JsonObject obj
-                && obj["type"]?.GetValue<string>() is { Length: > 0 } type
-                && !allowed.Contains(type))
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    $"subject_token's authorization_details type '{type}' is not in the requesting client's allow list.");
-            }
-        }
-        return null;
-    }
-
-    private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(string tokenType, string tokenValue)
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
+        string? tokenType,
+        string tokenValue,
+        CancellationToken cancellationToken)
     {
         var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType);
         if (resolver is null)
@@ -281,15 +376,16 @@ public class TokenExchangeGrantHandler(
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tokenValue, default);
+        return await resolver.ResolveAsync(tokenValue, cancellationToken);
     }
 
-    private AuthorizedGrant BuildAuthorizedGrant(
-        SubjectTokenContext subject,
-        SubjectTokenContext? actor,
-        TokenRequest request,
-        ClientInfo clientInfo)
+    private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
     {
+        var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
+        var actor = ctx.Actor;
+        var request = ctx.Request;
+        var clientInfo = ctx.ClientInfo;
+
         // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
         // and delegation alike). Scope: when the client supplies scope in the request use that,
         // otherwise fall back to the subject_token's scope. Resource servers downstream of
@@ -314,8 +410,9 @@ public class TokenExchangeGrantHandler(
         {
             AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
-            // S2 (PR #135 review): propagate the requested resource(s) (RFC 8707) and audience(s)
-            // (RFC 8693 §2.1) into the issued token's claims rather than silently dropping them.
+
+            // propagate the requested resource(s) (RFC 8707) and audience(s) (RFC 8693 §2.1)
+            // into the issued token's claims rather than silently dropping them
             Resources = request.Resources is { Length: > 0 } ? request.Resources : null,
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
         };

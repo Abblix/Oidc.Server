@@ -134,4 +134,35 @@ public static class EnumerableExtensions
 			queue.Enqueue(item);
 		}
 	}
+
+	/// <summary>
+	/// Projects each element of <paramref name="source"/> through an async
+	/// <paramref name="selector"/> and returns the first non-null projection, or <c>null</c>
+	/// when every projection is null. Short-circuits at the first non-null result -- subsequent
+	/// elements are not awaited.
+	/// </summary>
+	/// <remarks>
+	/// Designed for short-circuiting pipelines where each step returns either a payload (e.g.
+	/// an error object) or <c>null</c> meaning "passed; keep going".
+	/// </remarks>
+	/// <typeparam name="TSource">The element type of the sequence.</typeparam>
+	/// <typeparam name="TResult">The projection result type; constrained to reference so
+	/// "no result" can be expressed as <c>null</c>.</typeparam>
+	/// <param name="source">The sequence of items to iterate.</param>
+	/// <param name="selector">Async projection invoked per element until one returns non-null.</param>
+	/// <returns>The first non-null projection, or <c>null</c> when none produced a value.</returns>
+	public static async Task<TResult?> FirstOrDefaultAsync<TSource, TResult>(
+		this IEnumerable<TSource> source,
+		Func<TSource, Task<TResult?>> selector)
+		where TResult : class
+	{
+		foreach (var item in source)
+		{
+			var result = await selector(item);
+			if (result != null)
+				return result;
+		}
+
+		return null;
+	}
 }
