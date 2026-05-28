@@ -231,6 +231,74 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
     }
 
     // ───────────────────────────────────────────────────────────────────────
+    // Wire-level error contract — proof validator failures surface as
+    // 400 invalid_dpop_proof end-to-end. The validator's failure taxonomy is
+    // exhaustively covered by ProofValidatorTests at the unit level; the two
+    // tests here pin the contract that those failures actually reach the wire
+    // unchanged through DPoPTokenEndpointValidator and the response formatter.
+    // ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Token_endpoint_rejects_proof_whose_htm_does_not_match_the_request_method()
+    {
+        // RFC 9449 §4.3 step 8: htm MUST match the HTTP method byte-exact. Mint a
+        // proof claiming GET, then POST it to /token — the validator should reject
+        // and the wire response should carry error=invalid_dpop_proof at HTTP 400.
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var proofForWrongMethod = proofKey.BuildProof(HttpMethods.Get, discovery.TokenEndpoint);
+
+        var error = await DriveParAuthorizeTokenExpectingErrorAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPOpportunisticClientId,
+            parProof: null,
+            tokenProof: proofForWrongMethod);
+
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, error);
+    }
+
+    [Fact]
+    public async Task Token_endpoint_rejects_proof_with_corrupted_signature()
+    {
+        // RFC 9449 §4.3 step 6: signature MUST verify. Mint a valid proof then
+        // flip a byte in the signature segment; downstream signature verification
+        // fails and the validator returns invalid_dpop_proof — pin the wire shape.
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var validProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var corrupted = CorruptSignatureSegment(validProof);
+
+        var error = await DriveParAuthorizeTokenExpectingErrorAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPOpportunisticClientId,
+            parProof: null,
+            tokenProof: corrupted);
+
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, error);
+    }
+
+    /// <summary>
+    /// Tampers with the first character of a JWS's signature segment. The proof
+    /// otherwise remains structurally valid (3 dot-separated base64url parts);
+    /// only the bytes that signature verification reads change, so the failure
+    /// must come from the crypto check rather than from a structural pre-screen.
+    /// </summary>
+    private static string CorruptSignatureSegment(string proofJws)
+    {
+        var parts = proofJws.Split('.');
+        Assert.Equal(3, parts.Length);
+        var sig = parts[2];
+        var firstChar = sig[0];
+        // Swap with a different valid base64url character to keep the JWS parseable.
+        parts[2] = (firstChar == 'A' ? 'B' : 'A') + sig[1..];
+        return string.Join('.', parts);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
     // Refresh token rebinding (RFC 9449 §5)
     // ───────────────────────────────────────────────────────────────────────
 
