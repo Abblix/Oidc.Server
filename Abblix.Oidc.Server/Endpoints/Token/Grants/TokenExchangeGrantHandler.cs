@@ -85,6 +85,7 @@ public class TokenExchangeGrantHandler(
         ValidateRequiredParameters(request);
 
         Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
+
         return initial
             .Bind(ValidateSubjectTokenType)
             .Bind(ValidateActorTokenPair)
@@ -200,21 +201,19 @@ public class TokenExchangeGrantHandler(
         if (string.IsNullOrEmpty(tokenTypeUri))
             return null;
 
-        var allowlist = clientInfo.TokenExchangeAllowedSubjectTokenTypes;
-        if (allowlist is { Length: 0 })
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "Client is not permitted to use the Token Exchange grant.");
-        }
-
         // Tri-state: null = no per-client constraint -- skip membership check entirely so the
         // null-allowlist passthrough case does not NRE at .Contains().
-        if (allowlist is { Length: > 0 } && !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal))
+        switch (clientInfo.TokenExchangeAllowedSubjectTokenTypes)
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
+            case { Length: 0 }:
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "Client is not permitted to use the Token Exchange grant.");
+
+            case { Length: > 0 } allowlist when !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal):
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
         }
 
         return null;

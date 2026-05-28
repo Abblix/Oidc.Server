@@ -59,7 +59,9 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var validation = await jwtValidator.ValidateAsync(subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The subject_token is invalid or has expired.");
         }
 
         if (jwt.Header.Type != JwtTypes.RefreshToken)
@@ -72,20 +74,15 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(jwt);
         if (!grantLookup.TryGetSuccess(out var grant))
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token does not refer to a known grant.");
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The subject_token does not refer to a known grant.");
         }
 
         // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
         // instance so mutations downstream do not leak back into stored state.
-        var authorizationDetails =
-            grant.Context.AuthorizationDetails is { } ad
-                ? (JsonArray?)ad.DeepClone()
-                : null;
-
-        var act =
-            grant.Context.Actor is { } existingAct
-                ? (JsonObject?)existingAct.DeepClone()
-                : null;
+        var authorizationDetails = (JsonArray?)grant.Context.AuthorizationDetails?.DeepClone();
+        var act = (JsonObject?)grant.Context.Actor?.DeepClone();
 
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
@@ -94,10 +91,12 @@ public sealed class RefreshTokenSubjectTokenResolver(
             AuthorizationDetails: authorizationDetails)
         {
             Act = act,
+
             // Origin tracking from the recovered grant -- the refresh_token's storage record
             // names the client it was issued to. Mismatch with the requesting client triggers
             // the handler's cross-client guard.
             OriginalClientId = grant.Context.ClientId,
+            
             // Refresh tokens always have typ=rt+jwt (enforced above). Recording it here makes
             // the typ-confusion check at the handler uniform across resolvers.
             JwtTokenType = jwt.Header.Type,

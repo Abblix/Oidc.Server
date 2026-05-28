@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;

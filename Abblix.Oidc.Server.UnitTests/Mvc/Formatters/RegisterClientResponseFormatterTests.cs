@@ -29,8 +29,6 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc;
 using Abblix.Oidc.Server.Mvc.Formatters;
-using Abblix.Utils;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
