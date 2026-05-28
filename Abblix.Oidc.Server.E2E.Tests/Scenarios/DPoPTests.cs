@@ -302,6 +302,32 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
     // Refresh token rebinding (RFC 9449 §5)
     // ───────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Drives an initial PAR -> /authorize -> /token round with <c>offline_access</c>
+    /// in scope, asserts the resulting access token is DPoP-bound to <paramref name="proofKey"/>,
+    /// and returns the issued refresh token. Common bootstrap for every refresh-rebinding
+    /// scenario — confidential vs public, PAR-anchored vs non-PAR.
+    /// </summary>
+    private static async Task<string> ObtainRefreshTokenBoundToAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientId,
+        DPoPProofGenerator proofKey,
+        string? parProof = null,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
+    {
+        var initial = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: clientId,
+            parProof: parProof,
+            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
+            scope: $"{Scopes.OpenId} {Scopes.OfflineAccess}",
+            clientSecret: clientSecret);
+
+        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
+        return initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+    }
+
     [Fact]
     public async Task Refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {
@@ -313,14 +339,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPOpportunisticClientId,
-            parProof: null,
-            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
-            scope: $"{Scopes.OpenId} {Scopes.OfflineAccess}");
-        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPOpportunisticClientId, proofKey);
 
         // Fresh proof (new jti, current iat) signed by the SAME keypair.
         var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
@@ -351,14 +371,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPOpportunisticClientId,
-            parProof: null,
-            tokenProof: originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
-            scope: Scopes.OpenId + " " + Scopes.OfflineAccess);
-        AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPOpportunisticClientId, originalKey);
 
         // Refresh with a freshly rotated key — must succeed and the new access token
         // must be bound to the rotated key (not the original one).
@@ -387,16 +401,9 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var parProof = proofKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
-        var tokenProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPPublicClientId,
-            parProof: parProof,
-            tokenProof: tokenProof,
-            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
-            clientSecret: null);
-        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPPublicClientId, proofKey,
+            parProof: parProof, clientSecret: null);
 
         var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
@@ -422,15 +429,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPPublicClientId,
-            parProof: null,
-            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
-            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
-            clientSecret: null);
-        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPPublicClientId, proofKey, clientSecret: null);
 
         var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
@@ -457,15 +457,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPPublicClientId,
-            parProof: null,
-            tokenProof: originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
-            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
-            clientSecret: null);
-        AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPPublicClientId, originalKey, clientSecret: null);
 
         var attackerProof = attackerKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
@@ -493,16 +486,9 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var parProof = originalKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
-        var tokenProof = originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
-        var initial = await DriveParAuthorizeTokenAsync(
-            client, discovery,
-            clientId: TestConstants.DPoPPublicClientId,
-            parProof: parProof,
-            tokenProof: tokenProof,
-            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
-            clientSecret: null);
-        AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
-        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPPublicClientId, originalKey,
+            parProof: parProof, clientSecret: null);
 
         var attackerProof = attackerKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
@@ -836,15 +822,18 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var payload = DecodeJwtPayload(accessToken);
         var cnf = payload["cnf"]?.AsObject();
         Assert.NotNull(cnf);
-        var jkt = cnf!["jkt"]?.GetValue<string>();
+        var jkt = cnf["jkt"]?.GetValue<string>();
         Assert.Equal(expectedThumbprint, jkt);
     }
 
     private static void AssertBearer(JsonObject tokenResponse)
     {
-        Assert.Equal(TokenTypes.Bearer, tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>());
+        var tokenType = tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>();
+        Assert.Equal(TokenTypes.Bearer, tokenType);
+
         var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
+        
         Assert.Null(payload["cnf"]);
     }
 }
