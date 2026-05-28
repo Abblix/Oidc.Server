@@ -33,7 +33,7 @@ builder.Services.AddOidcServices(options =>
     options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
-    static ClientInfo Mint(string id, ClientSecret secret, Uri redirect, string[]? allowlist, bool idTokenRar) =>
+    static ClientInfo Mint(string id, ClientSecret secret, Uri redirect, string[]? allowlist, bool idTokenRar, bool requireDPoP = false) =>
         new(id)
         {
             ClientSecrets = [secret],
@@ -48,6 +48,7 @@ builder.Services.AddOidcServices(options =>
             AuthorizationDetailsTypes = allowlist,
             ForceAuthorizationDetailsInIdentityToken = idTokenRar,
             OfflineAccessAllowed = true,
+            RequireDPoP = requireDPoP,
         };
 
     options.Clients =
@@ -56,6 +57,10 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
         Mint(TestConstants.EmptyAllowlistClientId, secret, redirect, [], idTokenRar: false),
         Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false),
+        // RFC 9449 mandatory-binding client: token endpoint rejects any request without a valid proof.
+        Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
+        // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.
+        Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
     ];
 });
 
