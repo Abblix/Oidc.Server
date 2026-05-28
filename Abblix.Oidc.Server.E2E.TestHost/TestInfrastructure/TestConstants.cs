@@ -49,6 +49,11 @@ public static class TestConstants
     /// issued). RFC 9449 §5.2 opportunistic-binding posture.</summary>
     public const string DPoPOpportunisticClientId = "e2e-dpop-opportunistic";
 
+    /// <summary>Public DPoP client (no client secret, <c>token_endpoint_auth_method = none</c>).
+    /// RFC 9449 §5 mandates same-key binding on refresh for public clients — sender
+    /// constraint comes from DPoP alone, not from client authentication.</summary>
+    public const string DPoPPublicClientId = "e2e-dpop-public";
+
     /// <summary>Shared secret across every pre-seeded client.</summary>
     public const string ConfidentialClientSecret = "e2e-secret";
 

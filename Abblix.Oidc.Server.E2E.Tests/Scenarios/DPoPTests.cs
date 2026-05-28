@@ -305,6 +305,79 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         AssertDPoPBound(refreshBody, expectedThumbprint: rotatedKey.Thumbprint);
     }
 
+    [Fact]
+    public async Task Public_client_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
+    {
+        // RFC 9449 §5: public clients (token_endpoint_auth_method = none) lack a shared
+        // secret, so DPoP is the sole sender-constraint. Same-key MUST therefore be
+        // enforced on refresh. Abblix carries the thumbprint forward via the §10
+        // PAR-time commitment path; a proof on the PAR request commits dpop_jkt into
+        // the stored authorization request, the auth code restores it, and refresh
+        // tokens for public clients keep it (vs. confidential clients which strip).
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var parProof = proofKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
+        var tokenProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var initial = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPPublicClientId,
+            parProof: parProof,
+            tokenProof: tokenProof,
+            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
+            clientSecret: null);
+        AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
+        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var refreshHttp = await SendRefreshAsync(
+            client, discovery, refreshToken, TestConstants.DPoPPublicClientId, refreshProof, clientSecret: null);
+
+        var raw = await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(refreshHttp.IsSuccessStatusCode,
+            $"/token refresh failed: {(int)refreshHttp.StatusCode} {raw}");
+        var refreshBody = JsonNode.Parse(raw)!.AsObject();
+        AssertDPoPBound(refreshBody, expectedThumbprint: proofKey.Thumbprint);
+    }
+
+    [Fact]
+    public async Task Public_client_refresh_with_different_dpop_key_is_rejected_per_rfc9449_section5()
+    {
+        // RFC 9449 §5 MUST for public clients: «such a client MUST present a DPoP proof
+        // for the same key that was used to obtain the refresh token each time that
+        // refresh token is used». A rotated key on refresh is the canonical theft
+        // scenario the constraint exists to close — without a shared secret, the proof
+        // key is the only thing tying the holder to the original grant. Commitment is
+        // anchored at PAR (Abblix §10 carry-over path); a proof on PAR makes the AS
+        // pin dpop_jkt onto the stored authorization request, and the public-client
+        // refresh path preserves the binding through to subsequent token requests.
+        using var originalKey = new DPoPProofGenerator();
+        using var attackerKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var parProof = originalKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
+        var tokenProof = originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var initial = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPPublicClientId,
+            parProof: parProof,
+            tokenProof: tokenProof,
+            scope: Scopes.OpenId + " " + Scopes.OfflineAccess,
+            clientSecret: null);
+        AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
+        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        var attackerProof = attackerKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var refreshHttp = await SendRefreshAsync(
+            client, discovery, refreshToken, TestConstants.DPoPPublicClientId, attackerProof, clientSecret: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
+        var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body["error"]!.GetValue<string>());
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // UserInfo endpoint (RFC 9449 §7) — resource-server-side proof validation
     // ───────────────────────────────────────────────────────────────────────
@@ -437,11 +510,12 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         string clientId,
         string? parProof,
         string? tokenProof,
-        string scope = Scopes.OpenId)
+        string scope = Scopes.OpenId,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
     {
         var (verifier, challenge) = GeneratePkcePair();
 
-        var parResponse = await SendParAsync(client, discovery, clientId, challenge, parProof, scope);
+        var parResponse = await SendParAsync(client, discovery, clientId, challenge, parProof, scope, clientSecret);
         Assert.True(parResponse.IsSuccessStatusCode,
             $"PAR failed: {(int)parResponse.StatusCode} {await parResponse.Content.ReadAsStringAsync()}");
         var parBody = JsonNode.Parse(await parResponse.Content.ReadAsStringAsync())!.AsObject();
@@ -453,7 +527,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
-        var tokenResponse = await SendTokenAsync(client, discovery, clientId, code, verifier, tokenProof);
+        var tokenResponse = await SendTokenAsync(client, discovery, clientId, code, verifier, tokenProof, clientSecret);
         Assert.True(tokenResponse.IsSuccessStatusCode,
             $"/token failed: {(int)tokenResponse.StatusCode} {await tokenResponse.Content.ReadAsStringAsync()}");
         return JsonNode.Parse(await tokenResponse.Content.ReadAsStringAsync())!.AsObject();
@@ -500,12 +574,12 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         string clientId,
         string challenge,
         string? proofJwt,
-        string scope = Scopes.OpenId)
+        string scope = Scopes.OpenId,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
     {
         var form = new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = scope,
@@ -514,6 +588,9 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         };
+        // Public clients (TokenEndpointAuthMethod = none) supply no client_secret.
+        if (clientSecret is not null)
+            form[ClientRequest.Parameters.ClientSecret] = clientSecret;
 
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint)
         {
@@ -573,15 +650,17 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         DiscoveryDocument discovery,
         string refreshToken,
         string clientId,
-        string proofJwt)
+        string proofJwt,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
     {
         var form = new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
             [TokenRequest.Parameters.RefreshToken] = refreshToken,
             [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
+        if (clientSecret is not null)
+            form[ClientRequest.Parameters.ClientSecret] = clientSecret;
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
         {
             Content = new FormUrlEncodedContent(form),
@@ -596,7 +675,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         string clientId,
         string code,
         string verifier,
-        string? proofJwt)
+        string? proofJwt,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
     {
         var form = new Dictionary<string, string>
         {
@@ -605,8 +685,9 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
             [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
+        if (clientSecret is not null)
+            form[ClientRequest.Parameters.ClientSecret] = clientSecret;
 
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
         {
