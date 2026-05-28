@@ -30,6 +30,9 @@ public sealed record DiscoveryDocument
     [JsonPropertyName("introspection_endpoint")]
     public string? IntrospectionEndpoint { get; init; }
 
+    [JsonPropertyName("userinfo_endpoint")]
+    public string? UserInfoEndpoint { get; init; }
+
     [JsonPropertyName("jwks_uri")]
     public string JwksUri { get; init; } = null!;
 
@@ -38,4 +41,8 @@ public sealed record DiscoveryDocument
 
     [JsonPropertyName("grant_types_supported")]
     public string[]? GrantTypesSupported { get; init; }
+
+    /// <summary>RFC 9449 §5.1: JWS algorithms the AS accepts for DPoP proofs.</summary>
+    [JsonPropertyName("dpop_signing_alg_values_supported")]
+    public string[]? DPoPSigningAlgValuesSupported { get; init; }
 }

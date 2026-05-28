@@ -266,7 +266,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.Equal("invalid_authorization_details", errorCode);
     }
 
-    protected static (string Verifier, string Challenge) GeneratePkcePair()
+    internal static (string Verifier, string Challenge) GeneratePkcePair()
     {
         var verifierBytes = RandomNumberGenerator.GetBytes(32);
         var verifier = Base64UrlEncode(verifierBytes);
