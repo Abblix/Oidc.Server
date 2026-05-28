@@ -66,7 +66,7 @@ public class DPoPNonceTests
         // Real verifier matters — PKCE validation runs before the DPoP nonce check,
         // so a fake verifier short-circuits on invalid_grant and we never observe the
         // RFC 9449 §8 challenge we're actually testing for.
-        var proofWithoutNonce = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
+        var proofWithoutNonce = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var tokenResponse = await SendTokenAsync(client, discovery, code, verifier, proofWithoutNonce);
 
         Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
@@ -99,7 +99,7 @@ public class DPoPNonceTests
         // First UserInfo call: no nonce on the proof — RS issues a fresh nonce challenge
         // (RFC 9449 §9 + §7.1 SHOULD WWW-Authenticate: DPoP).
         var firstProof = proofKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
         var response = await SendUserInfoAsync(client, discovery, accessToken, firstProof);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -120,14 +120,14 @@ public class DPoPNonceTests
 
         // Step 1: no nonce -> challenge carries fresh nonce.
         var firstProof = proofKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
         var challenge = await SendUserInfoAsync(client, discovery, accessToken, firstProof);
         Assert.Equal(HttpStatusCode.Unauthorized, challenge.StatusCode);
         var nonce = challenge.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
 
         // Step 2: retry with the supplied nonce embedded in the proof.
         var secondProof = proofKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken, nonce: nonce);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken, nonce: nonce);
         var success = await SendUserInfoAsync(client, discovery, accessToken, secondProof);
 
         var raw = await success.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -147,13 +147,13 @@ public class DPoPNonceTests
         var code = await AuthorizeAsync(client, discovery, requestUri);
 
         // Step 1: proof without nonce -> challenge carries fresh nonce on DPoP-Nonce header.
-        var firstProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
+        var firstProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var firstResponse = await SendTokenAsync(client, discovery, code, verifier, firstProof);
         Assert.Equal(HttpStatusCode.BadRequest, firstResponse.StatusCode);
         var nonce = firstResponse.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
 
         // Step 2: retry with the nonce embedded; same auth code (RFC 9449 §8 retry semantics).
-        var secondProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint), nonce: nonce);
+        var secondProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint, nonce: nonce);
         var secondResponse = await SendTokenAsync(client, discovery, code, verifier, secondProof);
 
         var raw = await secondResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -258,12 +258,12 @@ public class DPoPNonceTests
         var requestUri = (await ReadBodyAsync(parResponse))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
         var code = await AuthorizeAsync(client, discovery, requestUri);
 
-        var firstProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
+        var firstProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var firstResponse = await SendTokenAsync(client, discovery, code, verifier, firstProof);
         Assert.Equal(HttpStatusCode.BadRequest, firstResponse.StatusCode);
         var nonce = firstResponse.Headers.GetValues(HttpRequestHeaders.DPoPNonce).First();
 
-        var secondProof = proofKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint), nonce: nonce);
+        var secondProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint, nonce: nonce);
         var secondResponse = await SendTokenAsync(client, discovery, code, verifier, secondProof);
         var raw = await secondResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(secondResponse.IsSuccessStatusCode,

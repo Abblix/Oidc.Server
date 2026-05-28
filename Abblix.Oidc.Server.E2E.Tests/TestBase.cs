@@ -268,7 +268,7 @@ public abstract class TestBase(TestFactory factory)
 
 internal static class QueryHelpers
 {
-    public static Uri BuildUri(string baseUri, IEnumerable<KeyValuePair<string, string>> queryParams)
+    public static Uri BuildUri(Uri baseUri, IEnumerable<KeyValuePair<string, string>> queryParams)
     {
         var builder = new UriBuilder(baseUri);
         var query = string.Join('&', queryParams

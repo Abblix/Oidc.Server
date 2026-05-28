@@ -75,7 +75,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
             Payload =
             {
                 Issuer = clientId,
-                Audiences = [discovery.Issuer],
+                Audiences = [discovery.Issuer.AbsoluteUri],
                 IssuedAt = now,
                 ExpiresAt = now.AddMinutes(5),
             },

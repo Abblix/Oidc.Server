@@ -70,7 +70,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null,
-            tokenProof: proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint)));
+            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint));
 
         AssertDPoPBound(tokenResponse, expectedThumbprint: proofKey.Thumbprint);
     }
@@ -107,7 +107,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             discovery,
             clientId: TestConstants.DPoPRequiredClientId,
             parProof: null,
-            tokenProof: proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint)));
+            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint));
 
         AssertDPoPBound(tokenResponse, expectedThumbprint: proofKey.Thumbprint);
     }
@@ -139,8 +139,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var parProof = proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.PushedAuthorizationRequestEndpoint!));
-        var tokenProof = proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint));
+        var parProof = proofKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
+        var tokenProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
 
         var tokenResponse = await DriveParAuthorizeTokenAsync(
             client,
@@ -162,8 +162,8 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var parProof = parKey.BuildProof(HttpMethods.Post,new Uri(discovery.PushedAuthorizationRequestEndpoint!));
-        var tokenProof = tokenKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint));
+        var parProof = parKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
+        var tokenProof = tokenKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
 
         var tokenError = await DriveParAuthorizeTokenExpectingErrorAsync(
             client,
@@ -185,7 +185,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var parProof = parKey.BuildProof(HttpMethods.Post,new Uri(discovery.PushedAuthorizationRequestEndpoint!));
+        var parProof = parKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!);
 
         var tokenError = await DriveParAuthorizeTokenExpectingErrorAsync(
             client,
@@ -211,7 +211,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         // Mint ONE proof and reuse it across two independent flows. First flow succeeds
         // and the AS caches the proof's jti; second flow with the same proof string trips
         // the replay cache regardless of which other request parameters change.
-        var sharedProof = proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint));
+        var sharedProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
 
         var firstResponse = await DriveParAuthorizeTokenAsync(
             client,
@@ -249,13 +249,13 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             client, discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null,
-            tokenProof: proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint)),
+            tokenProof: proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
             scope: $"{Scopes.OpenId} {Scopes.OfflineAccess}");
         AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
         var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         // Fresh proof (new jti, current iat) signed by the SAME keypair.
-        var refreshProof = proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint));
+        var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
             client, discovery, refreshToken, TestConstants.DPoPOpportunisticClientId, refreshProof);
 
@@ -287,14 +287,14 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
             client, discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null,
-            tokenProof: originalKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint)),
+            tokenProof: originalKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint),
             scope: Scopes.OpenId + " " + Scopes.OfflineAccess);
         AssertDPoPBound(initial, expectedThumbprint: originalKey.Thumbprint);
         var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         // Refresh with a freshly rotated key — must succeed and the new access token
         // must be bound to the rotated key (not the original one).
-        var rotatedProof = rotatedKey.BuildProof(HttpMethods.Post, new Uri(discovery.TokenEndpoint));
+        var rotatedProof = rotatedKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
             client, discovery, refreshToken, TestConstants.DPoPOpportunisticClientId, rotatedProof);
 
@@ -319,7 +319,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
 
         // RFC 9449 §7.1: proof must carry ath = base64url(sha256(access_token)).
         var userInfoProof = proofKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
 
         var response = await SendUserInfoAsync(
             client, discovery, accessToken, userInfoProof, scheme: TokenTypes.DPoP);
@@ -369,7 +369,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         // token's binding state, not about a missing proof header.
         using var proofKey = new DPoPProofGenerator();
         var proof = proofKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: unboundAccessToken);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: unboundAccessToken);
 
         var response = await SendUserInfoAsync(
             client, discovery, unboundAccessToken, proof, scheme: TokenTypes.DPoP);
@@ -393,7 +393,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         // accompany the 401 with a WWW-Authenticate: DPoP challenge so the client knows
         // which scheme to use on retry.
         var attackerProof = attackerKey.BuildProof(
-            HttpMethods.Get, new Uri(discovery.UserInfoEndpoint!), accessToken: accessToken);
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
 
         var response = await SendUserInfoAsync(
             client, discovery, accessToken, attackerProof, scheme: TokenTypes.DPoP);
@@ -534,7 +534,7 @@ public class DPoPTests(TestFactory factory) : TestBase(factory)
         DiscoveryDocument discovery,
         DPoPProofGenerator proofKey)
     {
-        var tokenProof = proofKey.BuildProof(HttpMethods.Post,new Uri(discovery.TokenEndpoint));
+        var tokenProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var tokenResponse = await DriveParAuthorizeTokenAsync(
             client, discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
