@@ -39,6 +39,21 @@ public static class TestConstants
     /// (only the per-type validator gates).</summary>
     public const string UnrestrictedClientId = "e2e-unrestricted";
 
+    /// <summary>Client with <c>RequireDPoP = true</c> — every token request MUST carry a
+    /// valid DPoP proof or the AS rejects with <c>invalid_dpop_proof</c>. RFC 9449 §5.2
+    /// mandatory-binding posture.</summary>
+    public const string DPoPRequiredClientId = "e2e-dpop-required";
+
+    /// <summary>Client with <c>RequireDPoP = false</c> — token requests may carry a proof
+    /// (and the AS opportunistically binds the issued access token) or omit it (Bearer
+    /// issued). RFC 9449 §5.2 opportunistic-binding posture.</summary>
+    public const string DPoPOpportunisticClientId = "e2e-dpop-opportunistic";
+
+    /// <summary>Public DPoP client (no client secret, <c>token_endpoint_auth_method = none</c>).
+    /// RFC 9449 §5 mandates same-key binding on refresh for public clients — sender
+    /// constraint comes from DPoP alone, not from client authentication.</summary>
+    public const string DPoPPublicClientId = "e2e-dpop-public";
+
     /// <summary>Shared secret across every pre-seeded client.</summary>
     public const string ConfidentialClientSecret = "e2e-secret";
 
