@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
-using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -29,7 +27,6 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Xunit;
 using ParApiModel = Abblix.Oidc.Server.Mvc.Model.PushedAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
