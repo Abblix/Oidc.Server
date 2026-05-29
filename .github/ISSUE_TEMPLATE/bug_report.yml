@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a defect in Abblix OIDC Server
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For usage and how-to questions, please use
+        [Discussions → Q&A](https://github.com/Abblix/Oidc.Server/discussions/categories/q-a) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Abblix OIDC Server version
+      placeholder: e.g. 2.2.0
+    validations:
+      required: true
+  - type: input
+    id: dotnet
+    attributes:
+      label: .NET / ASP.NET Core version
+      placeholder: e.g. .NET 9
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the bug, including the relevant OAuth/OIDC flow or RFC if applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior (cite the spec section if relevant)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or token (redact all secrets)
+      render: text
