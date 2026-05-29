@@ -17,13 +17,4 @@ public sealed class CriticalHeaderContext
     /// call. Handlers consult these to honour caller policy (algorithm
     /// allowlists, time skew, audience/issuer hooks).</summary>
     public required ValidationParameters Parameters { get; init; }
-
-    /// <summary>The validator's <see cref="TimeProvider"/>. Handlers read the
-    /// current instant from this so freshness checks honour the host's
-    /// fake-clock configuration in tests.</summary>
-    public required TimeProvider TimeProvider { get; init; }
-
-    /// <summary>Caller cancellation propagation for I/O-bound handlers
-    /// (replay-store lookups, audit emitters).</summary>
-    public CancellationToken CancellationToken { get; init; }
 }
