@@ -192,16 +192,15 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// When the host registers a handler whose <see cref="ICriticalHeaderHandler.UnderstoodNames"/>
-    /// covers the 'crit' name and the matching header is present, validation succeeds. This is
-    /// the happy path that lets a future RFC 7797 / RFC 8225 / custom extension plug in without
-    /// further library changes.
+    /// When the host registers a handler under the 'crit' name and the matching header is
+    /// present, validation succeeds. This is the happy path that lets a future RFC 7797 /
+    /// RFC 8225 / custom extension plug in without further library changes.
     /// </summary>
     [Fact]
     public async Task TokenWithRegisteredHandlerInCrit_Validates()
     {
         var sp = CreateServiceProvider(services =>
-            services.AddCriticalHeaderHandler<NoopB64Handler>());
+            services.AddCriticalHeaderHandler<NoopB64Handler>(ExtensionName));
         var jwt = await IssueTokenWithHeader(
             sp,
             criticalNode: new JsonArray((JsonNode)ExtensionName),
@@ -222,7 +221,7 @@ public class CriticalHeaderTests
     public async Task HandlerReturningError_PropagatesAsValidationFailure()
     {
         var sp = CreateServiceProvider(services =>
-            services.AddCriticalHeaderHandler<RejectingB64Handler>());
+            services.AddCriticalHeaderHandler<RejectingB64Handler>(ExtensionName));
         var jwt = await IssueTokenWithHeader(
             sp,
             criticalNode: new JsonArray((JsonNode)ExtensionName),
@@ -236,24 +235,25 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// Two handlers claiming the same JWS 'crit' header name is a host-misconfiguration. The
-    /// validator surfaces it at construction time so the host fails to boot, not on the first
-    /// validating request — boot-time failures are far easier to diagnose than per-request
-    /// rejection cascades.
+    /// Routing is keyed on the DI registration name, not the handler type. A handler registered
+    /// under a different name does not make the 'crit' name in the token routable, so the JWS is
+    /// still rejected as «unknown critical header parameter».
     /// </summary>
     [Fact]
-    public void TwoHandlersClaimingSameName_ThrowsAtValidatorConstruction()
+    public async Task HandlerRegisteredUnderDifferentName_DoesNotRouteCritName()
     {
+        const string otherName = "ppt";
         var sp = CreateServiceProvider(services =>
-        {
-            services.AddCriticalHeaderHandler<NoopB64Handler>();
-            services.AddCriticalHeaderHandler<RejectingB64Handler>();
-        });
+            services.AddCriticalHeaderHandler<NoopB64Handler>(otherName));
+        var jwt = await IssueTokenWithHeader(
+            sp,
+            criticalNode: new JsonArray((JsonNode)ExtensionName),
+            extensionValue: false);
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => sp.GetRequiredService<IJsonWebTokenValidator>());
-        Assert.Contains("'b64'", ex.Message);
-        Assert.Contains(nameof(ICriticalHeaderHandler), ex.Message);
+        var result = await Validate(sp, jwt);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
     private static IServiceProvider CreateServiceProvider(Action<IServiceCollection>? configure = null)
@@ -267,32 +267,26 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// Test-double handler that declares understanding of <c>"b64"</c> (RFC 7797 name reused
-    /// here for convenience; this handler does not implement RFC 7797's signature-input
-    /// transformation — the JWS we sign carries a bare boolean header field). Always
-    /// short-circuits to success, matching the «signature-affecting extension whose work lives
-    /// in the signing pipeline» mode.
+    /// Test-double handler for <c>"b64"</c> (RFC 7797 name reused here for convenience; this
+    /// handler does not implement RFC 7797's signature-input transformation — the JWS we sign
+    /// carries a bare boolean header field). Always short-circuits to success, matching the
+    /// «signature-affecting extension whose work lives in the signing pipeline» mode. The name
+    /// it answers to is the DI key it is registered under, not a property.
     /// </summary>
     private sealed class NoopB64Handler : ICriticalHeaderHandler
     {
-        public IReadOnlySet<string> UnderstoodNames { get; } =
-            new HashSet<string>(StringComparer.Ordinal) { ExtensionName };
-
         public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
             => Task.FromResult<JwtValidationError?>(null);
     }
 
     /// <summary>
-    /// Test-double handler that declares understanding of <c>"b64"</c> and rejects every
-    /// JWS — used to verify that handler rejection actually propagates through the validator
-    /// (and that no earlier guard short-circuits past the handler invocation).
+    /// Test-double handler that rejects every JWS — used to verify that handler rejection
+    /// actually propagates through the validator (and that no earlier guard short-circuits
+    /// past the handler invocation).
     /// </summary>
     private sealed class RejectingB64Handler : ICriticalHeaderHandler
     {
         public const string RejectionReason = "test-double handler rejection";
-
-        public IReadOnlySet<string> UnderstoodNames { get; } =
-            new HashSet<string>(StringComparer.Ordinal) { ExtensionName };
 
         public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
             => Task.FromResult<JwtValidationError?>(
