@@ -25,6 +25,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 using System.Buffers.Text;
 
@@ -37,59 +38,20 @@ namespace Abblix.Jwt;
 /// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
 /// <param name="signer">The JWS signer for validating signatures.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
-/// <param name="critHandlers">Registered handlers for JWS 'crit' header extensions
-/// (RFC 7515 §4.1.11). Each handler self-declares its understood header parameter names
-/// via <see cref="ICriticalHeaderHandler.UnderstoodNames"/>; the validator routes a
-/// 'crit' name to its single owning handler at validation time. An empty enumerable is
-/// the default — the library currently understands no crit extensions and rejects every
-/// well-formed 'crit' header until a host registers a handler via
-/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>.</param>
+/// <param name="serviceProvider">Resolves registered <see cref="ICriticalHeaderHandler"/>
+/// instances by JWS 'crit' header name (RFC 7515 §4.1.11). Handlers are registered as keyed
+/// singletons via <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>;
+/// the validator routes a 'crit' name to its handler with
+/// <c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c> at validation time. With no
+/// handler registered (the default) the library understands no crit extensions and rejects
+/// every well-formed 'crit' header.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
-    IEnumerable<ICriticalHeaderHandler> critHandlers) : IJsonWebTokenValidator
+    IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
-    /// <summary>
-    /// Name → owning handler lookup built once at construction. Building here surfaces
-    /// host-misconfiguration (two handlers claiming the same name, empty UnderstoodNames)
-    /// at first <see cref="IJsonWebTokenValidator"/> resolution rather than at the first
-    /// validating request — boot-time failures are easier to diagnose than per-request
-    /// rejection cascades.
-    /// </summary>
-    private readonly IReadOnlyDictionary<string, ICriticalHeaderHandler> _critHandlersByName =
-        BuildCritHandlerLookup(critHandlers);
-
-    private static IReadOnlyDictionary<string, ICriticalHeaderHandler> BuildCritHandlerLookup(
-        IEnumerable<ICriticalHeaderHandler> handlers)
-    {
-        var lookup = new Dictionary<string, ICriticalHeaderHandler>(StringComparer.Ordinal);
-        foreach (var handler in handlers)
-        {
-            if (handler.UnderstoodNames.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    $"{handler.GetType().FullName} declared an empty " +
-                    $"{nameof(ICriticalHeaderHandler.UnderstoodNames)} set — at least one JWS 'crit' " +
-                    "header name is required for a handler to ever be routed to.");
-            }
-
-            foreach (var name in handler.UnderstoodNames)
-            {
-                if (lookup.TryGetValue(name, out var existing))
-                {
-                    throw new InvalidOperationException(
-                        $"Two {nameof(ICriticalHeaderHandler)} registrations claim the same JWS 'crit' " +
-                        $"header name '{name}': {existing.GetType().FullName} and " +
-                        $"{handler.GetType().FullName}. Each crit name MUST have exactly one handler.");
-                }
-                lookup[name] = handler;
-            }
-        }
-        return lookup;
-    }
-
     /// <summary>
     /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
     /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
@@ -379,8 +341,7 @@ internal class JsonWebTokenValidator(
     /// <see cref="ICriticalHeaderHandler"/>. An unrouted name is rejected as «unknown
     /// critical header parameter» per RFC 7515 §4.1.11 ("If any of the listed extension
     /// Header Parameters are not understood and supported by the recipient, then the JWS
-    /// is invalid"). Each handler whose understood-names overlap 'crit' runs exactly once
-    /// and may reject the JWS by returning an error.
+    /// is invalid").
     /// </summary>
     private async Task<Result<JsonWebToken, JwtValidationError>> ValidateCriticalHeadersAsync(
         JsonWebToken token,
@@ -411,13 +372,13 @@ internal class JsonWebTokenValidator(
 
     /// <summary>
     /// Runs the structural guards from RFC 7515 §4.1.11 (empty array, duplicates, reserved
-    /// standard names, dangling references) plus the registry-routing precondition (every
-    /// surviving name MUST have a registered <see cref="ICriticalHeaderHandler"/>). Returns
-    /// <see langword="null"/> when every name in <paramref name="crit"/> is well-formed and
-    /// routable; otherwise the first rejection in declaration order so the diagnostic
-    /// pinpoints the specific violating name.
+    /// standard names, dangling references), all independent of the handler registry. Returns
+    /// <see langword="null"/> when every name in <paramref name="crit"/> is well-formed;
+    /// otherwise the first rejection in declaration order so the diagnostic pinpoints the
+    /// specific violating name. Routability (whether a handler is registered for a surviving
+    /// name) is decided in <see cref="DispatchCritHandlersAsync"/>.
     /// </summary>
-    private JwtValidationError? ValidateCritStructure(IReadOnlyList<string> crit, JsonWebTokenHeader header)
+    private static JwtValidationError? ValidateCritStructure(IReadOnlyList<string> crit, JsonWebTokenHeader header)
     {
         if (crit.Count == 0)
         {
@@ -445,31 +406,36 @@ internal class JsonWebTokenValidator(
                     JwtError.InvalidToken,
                     $"'crit' lists header name '{name}' that is not present in the JOSE header");
             }
-
-            if (!_critHandlersByName.ContainsKey(name))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"Unknown critical header parameter: {name}");
-            }
         }
 
         return null;
     }
 
     /// <summary>
-    /// Dispatches each crit-listed name to its registered handler. Assumes
-    /// <see cref="ValidateCritStructure"/> has already passed — every name in
-    /// <paramref name="crit"/> is guaranteed routable. Order = appearance in 'crit'; each
-    /// handler runs at most once even when it claims multiple names that all appear in
-    /// 'crit'. <see cref="ReferenceEqualityComparer"/> because handlers are singletons —
-    /// instance identity is the dedup key.
+    /// Resolves the registered handler for each crit-listed name (keyed by name in DI) and
+    /// runs them in declaration order. Every name is resolved BEFORE any handler runs: per
+    /// RFC 7515 §4.1.11 an unknown name invalidates the whole JWS, so an earlier extension's
+    /// side effects must never apply only to reject on a later unknown name. An unresolved
+    /// name is rejected as «unknown critical header parameter».
     /// </summary>
     private async Task<Result<JsonWebToken, JwtValidationError>> DispatchCritHandlersAsync(
         JsonWebToken token,
         ValidationParameters parameters,
         IReadOnlyList<string> crit)
     {
+        var handlers = new ICriticalHeaderHandler[crit.Count];
+        for (var i = 0; i < crit.Count; i++)
+        {
+            if (serviceProvider.GetKeyedService<ICriticalHeaderHandler>(crit[i]) is not { } handler)
+            {
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"Unknown critical header parameter: {crit[i]}");
+            }
+
+            handlers[i] = handler;
+        }
+
         var context = new CriticalHeaderContext
         {
             Token = token,
@@ -477,13 +443,8 @@ internal class JsonWebTokenValidator(
             TimeProvider = timeProvider,
         };
 
-        var ran = new HashSet<ICriticalHeaderHandler>(ReferenceEqualityComparer.Instance);
-        foreach (var name in crit)
-        {
-            var handler = _critHandlersByName[name];
-            if (ran.Add(handler) && await handler.HandleAsync(context) is { } error)
-                return error;
-        }
+        if (await handlers.FirstOrDefaultAsync(handler => handler.HandleAsync(context)) is { } error)
+            return error;
 
         return token;
     }

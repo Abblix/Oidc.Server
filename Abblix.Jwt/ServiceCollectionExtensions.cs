@@ -113,24 +113,31 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers an <see cref="ICriticalHeaderHandler"/> that handles one or more JOSE
-    /// header extension parameters listed in a JWS 'crit' array (RFC 7515 §4.1.11). The
-    /// handler itself declares its understood header names via
-    /// <see cref="ICriticalHeaderHandler.UnderstoodNames"/>, so the registration cannot
-    /// claim a name without backing its value-handling — name and behaviour are inseparable.
+    /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension
+    /// parameter listed in a JWS 'crit' array (RFC 7515 §4.1.11). The parameter name is the
+    /// DI key, so the registration cannot claim a name without a handler behind it — name and
+    /// behaviour are inseparable.
     /// </summary>
     /// <typeparam name="THandler">Concrete handler type.</typeparam>
+    /// <param name="services">The service collection to register the handler in.</param>
+    /// <param name="headerName">The JOSE header parameter name the handler implements
+    /// (byte-exact per RFC 7515 §5.3); used as the DI key the validator routes a 'crit' name
+    /// to. A handler covering a family of related names registers under each.</param>
+    /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
-    /// Uses <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
-    /// so multiple crit extensions coexist; the validator builds a name → handler lookup
-    /// at construction and rejects any registration whose understood-names overlap an already
-    /// registered handler (each crit name MUST have exactly one handler).
+    /// Keyed-name DI mirrors the signer/encryptor registrations in this assembly
+    /// (<see cref="AddDataSigner{TKey,TSigner}"/> by 'alg'): one keyed registration serves
+    /// O(1) request-time dispatch (<c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c>).
+    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddKeyedSingleton{TService,TImplementation}(IServiceCollection,object)"/>
+    /// dedups by (service, key) first-wins, so a host pre-registration for a name wins over a
+    /// later default.
     /// </remarks>
-    public static IServiceCollection AddCriticalHeaderHandler<THandler>(this IServiceCollection services)
+    public static IServiceCollection AddCriticalHeaderHandler<THandler>(
+        this IServiceCollection services,
+        string headerName)
         where THandler : class, ICriticalHeaderHandler
     {
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<ICriticalHeaderHandler, THandler>());
+        services.TryAddKeyedSingleton<ICriticalHeaderHandler, THandler>(headerName);
         return services;
     }
 
