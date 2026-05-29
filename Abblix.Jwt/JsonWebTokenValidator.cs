@@ -440,10 +440,11 @@ internal class JsonWebTokenValidator(
         {
             Token = token,
             Parameters = parameters,
-            TimeProvider = timeProvider,
         };
 
-        if (await handlers.FirstOrDefaultAsync(handler => handler.HandleAsync(context)) is { } error)
+        // The JWS validation pipeline does not thread a CancellationToken (see
+        // IJsonWebTokenValidator.ValidateAsync), so none is available to propagate here.
+        if (await handlers.FirstOrDefaultAsync(handler => handler.HandleAsync(context, CancellationToken.None)) is { } error)
             return error;
 
         return token;
