@@ -28,9 +28,12 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Unit tests for the JWS 'crit' header parameter validation per RFC 7515 §4.1.11.
-/// Tokens are signed with a real RSA key so the signature step passes; the focus is on the
-/// post-signature 'crit' validation pass that decides whether the JOSE header itself is acceptable.
+/// Unit tests for the JWS 'crit' header parameter validation per RFC 7515 §4.1.11. Tokens are
+/// signed with a real RSA key so the signature step passes; the focus is on the post-signature
+/// 'crit' validation pass that decides whether the JOSE header itself is acceptable. Library
+/// ships with zero <see cref="ICriticalHeaderHandler"/> implementations by default — the
+/// «no handler registered» tests exercise the rejection branch, the handler-backed tests
+/// register a test-double handler for <c>"b64"</c> to walk the happy and side-effect paths.
 /// </summary>
 public class CriticalHeaderTests
 {
@@ -115,12 +118,13 @@ public class CriticalHeaderTests
 
     /// <summary>
     /// Every name in 'crit' MUST also appear as a header parameter in the JOSE header.
-    /// A name in 'crit' but absent from the header is a "dangling" reference.
+    /// A name in 'crit' but absent from the header is a "dangling" reference — the validator
+    /// rejects on this earlier guard before reaching the "unknown extension" fallthrough.
     /// </summary>
     [Fact]
     public async Task TokenWithCritNameNotPresentInHeader_FailsValidation()
     {
-        var sp = CreateServiceProvider(ExtensionName);
+        var sp = CreateServiceProvider();
         var jwt = await IssueTokenWithHeader(
             sp,
             criticalNode: new JsonArray((JsonNode)ExtensionName),
@@ -133,9 +137,11 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// A 'crit' name that names an extension the host has not registered MUST be rejected
+    /// A 'crit' name that names an extension this library does not understand MUST be rejected
     /// (RFC 7515 §4.1.11: "If any of the listed extension Header Parameters are not understood
-    /// and supported by the recipient, then the JWS is invalid").
+    /// and supported by the recipient, then the JWS is invalid"). The library currently
+    /// understands no extensions, so any well-formed 'crit' that survives the malformation
+    /// guards lands here.
     /// </summary>
     [Fact]
     public async Task TokenWithUnknownExtensionInCrit_FailsValidation()
@@ -150,25 +156,6 @@ public class CriticalHeaderTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
-    }
-
-    /// <summary>
-    /// When the host has registered a handler for the 'crit' name and the named header is
-    /// present in the JOSE header, validation succeeds. This is the happy path that lets a
-    /// future RFC 7797 / DPoP-style extension be wired into the validator without library changes.
-    /// </summary>
-    [Fact]
-    public async Task TokenWithRegisteredExtensionInCrit_Validates()
-    {
-        var sp = CreateServiceProvider(ExtensionName);
-        var jwt = await IssueTokenWithHeader(
-            sp,
-            criticalNode: new JsonArray((JsonNode)ExtensionName),
-            extensionValue: false);
-
-        var result = await Validate(sp, jwt);
-
-        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -204,22 +191,113 @@ public class CriticalHeaderTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
-    private static IServiceProvider CreateServiceProvider(params string[] understoodHeaderNames)
+    /// <summary>
+    /// When the host registers a handler whose <see cref="ICriticalHeaderHandler.UnderstoodNames"/>
+    /// covers the 'crit' name and the matching header is present, validation succeeds. This is
+    /// the happy path that lets a future RFC 7797 / RFC 8225 / custom extension plug in without
+    /// further library changes.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithRegisteredHandlerInCrit_Validates()
+    {
+        var sp = CreateServiceProvider(services =>
+            services.AddCriticalHeaderHandler<NoopB64Handler>());
+        var jwt = await IssueTokenWithHeader(
+            sp,
+            criticalNode: new JsonArray((JsonNode)ExtensionName),
+            extensionValue: false);
+
+        var result = await Validate(sp, jwt);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// When a registered handler rejects the JWS, the validator surfaces the handler's
+    /// <see cref="JwtValidationError"/> verbatim — confirming that the handler is actually
+    /// invoked (not bypassed by an earlier guard) and that its decision is the validator's
+    /// decision.
+    /// </summary>
+    [Fact]
+    public async Task HandlerReturningError_PropagatesAsValidationFailure()
+    {
+        var sp = CreateServiceProvider(services =>
+            services.AddCriticalHeaderHandler<RejectingB64Handler>());
+        var jwt = await IssueTokenWithHeader(
+            sp,
+            criticalNode: new JsonArray((JsonNode)ExtensionName),
+            extensionValue: false);
+
+        var result = await Validate(sp, jwt);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(RejectingB64Handler.RejectionReason, error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Two handlers claiming the same JWS 'crit' header name is a host-misconfiguration. The
+    /// validator surfaces it at construction time so the host fails to boot, not on the first
+    /// validating request — boot-time failures are far easier to diagnose than per-request
+    /// rejection cascades.
+    /// </summary>
+    [Fact]
+    public void TwoHandlersClaimingSameName_ThrowsAtValidatorConstruction()
+    {
+        var sp = CreateServiceProvider(services =>
+        {
+            services.AddCriticalHeaderHandler<NoopB64Handler>();
+            services.AddCriticalHeaderHandler<RejectingB64Handler>();
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => sp.GetRequiredService<IJsonWebTokenValidator>());
+        Assert.Contains("'b64'", ex.Message);
+        Assert.Contains(nameof(ICriticalHeaderHandler), ex.Message);
+    }
+
+    private static IServiceProvider CreateServiceProvider(Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        foreach (var name in understoodHeaderNames)
-            services.AddCriticalHeaderHandler<UnderstoodHandler>(name);
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 
     /// <summary>
-    /// Empty marker implementation used to fill keyed <see cref="ICriticalHeaderHandler"/>
-    /// registrations in tests; the validator only checks for presence by header name.
+    /// Test-double handler that declares understanding of <c>"b64"</c> (RFC 7797 name reused
+    /// here for convenience; this handler does not implement RFC 7797's signature-input
+    /// transformation — the JWS we sign carries a bare boolean header field). Always
+    /// short-circuits to success, matching the «signature-affecting extension whose work lives
+    /// in the signing pipeline» mode.
     /// </summary>
-    private sealed class UnderstoodHandler : ICriticalHeaderHandler;
+    private sealed class NoopB64Handler : ICriticalHeaderHandler
+    {
+        public IReadOnlySet<string> UnderstoodNames { get; } =
+            new HashSet<string>(StringComparer.Ordinal) { ExtensionName };
+
+        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
+            => Task.FromResult<JwtValidationError?>(null);
+    }
+
+    /// <summary>
+    /// Test-double handler that declares understanding of <c>"b64"</c> and rejects every
+    /// JWS — used to verify that handler rejection actually propagates through the validator
+    /// (and that no earlier guard short-circuits past the handler invocation).
+    /// </summary>
+    private sealed class RejectingB64Handler : ICriticalHeaderHandler
+    {
+        public const string RejectionReason = "test-double handler rejection";
+
+        public IReadOnlySet<string> UnderstoodNames { get; } =
+            new HashSet<string>(StringComparer.Ordinal) { ExtensionName };
+
+        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
+            => Task.FromResult<JwtValidationError?>(
+                new JwtValidationError(JwtError.InvalidToken, RejectionReason));
+    }
 
     private static async Task<string> IssueTokenWithHeader(
         IServiceProvider sp,

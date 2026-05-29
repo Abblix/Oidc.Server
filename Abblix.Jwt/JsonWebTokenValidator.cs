@@ -25,7 +25,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 using System.Buffers.Text;
 
@@ -38,17 +37,59 @@ namespace Abblix.Jwt;
 /// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
 /// <param name="signer">The JWS signer for validating signatures.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
-/// <param name="serviceProvider">Resolves keyed <see cref="ICriticalHeaderHandler"/> registrations
-/// when validating a JWS 'crit' header (RFC 7515 §4.1.11). Hosts register a handler keyed by each
-/// understood JOSE header parameter name via
+/// <param name="critHandlers">Registered handlers for JWS 'crit' header extensions
+/// (RFC 7515 §4.1.11). Each handler self-declares its understood header parameter names
+/// via <see cref="ICriticalHeaderHandler.UnderstoodNames"/>; the validator routes a
+/// 'crit' name to its single owning handler at validation time. An empty enumerable is
+/// the default — the library currently understands no crit extensions and rejects every
+/// well-formed 'crit' header until a host registers a handler via
 /// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
-    IServiceProvider serviceProvider) : IJsonWebTokenValidator
+    IEnumerable<ICriticalHeaderHandler> critHandlers) : IJsonWebTokenValidator
 {
+    /// <summary>
+    /// Name → owning handler lookup built once at construction. Building here surfaces
+    /// host-misconfiguration (two handlers claiming the same name, empty UnderstoodNames)
+    /// at first <see cref="IJsonWebTokenValidator"/> resolution rather than at the first
+    /// validating request — boot-time failures are easier to diagnose than per-request
+    /// rejection cascades.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, ICriticalHeaderHandler> _critHandlersByName =
+        BuildCritHandlerLookup(critHandlers);
+
+    private static IReadOnlyDictionary<string, ICriticalHeaderHandler> BuildCritHandlerLookup(
+        IEnumerable<ICriticalHeaderHandler> handlers)
+    {
+        var lookup = new Dictionary<string, ICriticalHeaderHandler>(StringComparer.Ordinal);
+        foreach (var handler in handlers)
+        {
+            if (handler.UnderstoodNames.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"{handler.GetType().FullName} declared an empty " +
+                    $"{nameof(ICriticalHeaderHandler.UnderstoodNames)} set — at least one JWS 'crit' " +
+                    "header name is required for a handler to ever be routed to.");
+            }
+
+            foreach (var name in handler.UnderstoodNames)
+            {
+                if (lookup.TryGetValue(name, out var existing))
+                {
+                    throw new InvalidOperationException(
+                        $"Two {nameof(ICriticalHeaderHandler)} registrations claim the same JWS 'crit' " +
+                        $"header name '{name}': {existing.GetType().FullName} and " +
+                        $"{handler.GetType().FullName}. Each crit name MUST have exactly one handler.");
+                }
+                lookup[name] = handler;
+            }
+        }
+        return lookup;
+    }
+
     /// <summary>
     /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
     /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
@@ -102,26 +143,20 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Validates a JWS token from string parts.
-    /// Creates JsonWebToken only after successful validation.
+    /// Validates a JWS token from string parts. Each stage in the Bind chain either passes
+    /// the token through unchanged (success) or short-circuits the rest of the chain with
+    /// its <see cref="JwtValidationError"/>. Stages are ordered cheapest-and-most-categorical
+    /// first (signature, then header-level checks, then payload-level checks) so a malformed
+    /// or attacker-supplied token is rejected before any host-supplied callback is invoked.
     /// </summary>
-    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateJwsAsync(
-        string[] jwtParts,
-        ValidationParameters parameters)
-    {
-        return await ParseJws(jwtParts).BindAsync<JsonWebToken>(async token =>
-        {
-            var error =
-                await ValidateSignatureAsync(token, jwtParts, parameters) ??
-                ValidateCriticalHeaders(token.Header) ??
-                ValidateTokenType(token.Header, parameters) ??
-                await ValidateIssuerAsync(token.Payload.Issuer, parameters) ??
-                await ValidateAudienceAsync(token.Payload.Audiences, parameters) ??
-                ValidateLifetime(token.Payload, parameters);
-
-            return error != null ? error : token;
-        });
-    }
+    private Task<Result<JsonWebToken, JwtValidationError>> ValidateJwsAsync(string[] jwtParts, ValidationParameters parameters)
+        => ParseJws(jwtParts)
+            .BindAsync(token => ValidateSignatureAsync(token, jwtParts, parameters))
+            .BindAsync(token => ValidateCriticalHeadersAsync(token, parameters))
+            .Bind(token => ValidateTokenType(token, parameters))
+            .BindAsync(token => ValidateIssuerAsync(token, parameters))
+            .BindAsync(token => ValidateAudienceAsync(token, parameters))
+            .Bind(token => ValidateLifetime(token, parameters));
 
     /// <summary>
     /// Parses JWS string parts into header, payload, and signature.
@@ -136,14 +171,24 @@ internal class JsonWebTokenValidator(
         }
         catch
         {
-            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWT format: base64url decoding failed");
+            return new JwtValidationError(
+                JwtError.MalformedToken,
+                "Invalid JWT format: base64url decoding failed");
         }
 
         if (!TryParseJsonObject(headerPart, out var headerObject))
-            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWS header: must be a JSON object");
+        {
+            return new JwtValidationError(
+                JwtError.MalformedToken,
+                "Invalid JWS header: must be a JSON object");
+        }
 
         if (!TryParseJsonObject(payloadPart, out var payloadObject))
-            return new JwtValidationError(JwtError.MalformedToken, "Invalid JWS payload: must be a JSON object");
+        {
+            return new JwtValidationError(
+                JwtError.MalformedToken,
+                "Invalid JWS payload: must be a JSON object");
+        }
 
         var token = new JsonWebToken
         {
@@ -169,9 +214,11 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Validates the JWS signature according to validation parameters.
+    /// Validates the JWS signature according to validation parameters. Returns the token
+    /// unchanged on success — the chain stage adds nothing to the token, only gates the
+    /// rest of the pipeline behind a successful integrity proof.
     /// </summary>
-    private async Task<JwtValidationError?> ValidateSignatureAsync(
+    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateSignatureAsync(
         JsonWebToken token,
         string[] jwtParts,
         ValidationParameters parameters)
@@ -216,12 +263,12 @@ internal class JsonWebTokenValidator(
                 return new JwtValidationError(
                     JwtError.MalformedToken, "Unsigned token must have empty signature");
 
-            case not SigningAlgorithms.None
-                when parameters.Options.HasAnyFlag(ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey):
+            case not SigningAlgorithms.None when parameters.Options.HasAnyFlag(
+                    ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey):
                 break;
 
             default:
-                return null;
+                return token;
         }
 
         // Two trust-model branches selected by the caller via UseEmbeddedVerificationKey:
@@ -246,11 +293,12 @@ internal class JsonWebTokenValidator(
     /// supplies the candidate key.</param>
     /// <param name="jwtParts">The three compact-serialization segments
     /// (<c>header.payload.signature</c>) needed to recompute and compare the signature.</param>
-    /// <returns><c>null</c> on success, or a <see cref="JwtValidationError"/> with
+    /// <returns>The token unchanged on success; a <see cref="JwtValidationError"/> with
     /// <see cref="JwtError.InvalidHeader"/> when the <c>jwk</c> header is malformed or
-    /// absent, or whatever category <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises
+    /// absent; or whatever category <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises
     /// when the cryptographic check fails.</returns>
-    private async Task<JwtValidationError?> ValidateEmbeddedKeyAsync(JsonWebToken token, string[] jwtParts)
+    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateEmbeddedKeyAsync(
+        JsonWebToken token, string[] jwtParts)
     {
         JsonWebKey? embeddedJwk;
         try
@@ -271,7 +319,8 @@ internal class JsonWebTokenValidator(
                 $"Header '{JwtClaimTypes.JsonWebKeyHeader}' is required when {nameof(ValidationOptions.UseEmbeddedVerificationKey)} is set");
         }
 
-        return await signer.ValidateAsync(jwtParts, token.Header, embeddedJwk.ToAsync());
+        var error = await signer.ValidateAsync(jwtParts, token.Header, embeddedJwk.ToAsync());
+        return error is null ? token : error;
     }
 
     /// <summary>
@@ -290,11 +339,11 @@ internal class JsonWebTokenValidator(
     /// must be configured for this branch and is dereferenced via
     /// <see cref="ObjectExtensions.NotNull{T}(T?, string)"/> so a missing resolver fails
     /// loud rather than silently accepting an unverifiable token.</param>
-    /// <returns><c>null</c> on success, or a <see cref="JwtValidationError"/> with
-    /// <see cref="JwtError.InvalidToken"/> when <c>iss</c> is missing, or whatever category
+    /// <returns>The token unchanged on success; a <see cref="JwtValidationError"/> with
+    /// <see cref="JwtError.InvalidToken"/> when <c>iss</c> is missing; or whatever category
     /// <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises (typically
     /// <see cref="JwtError.InvalidSignature"/>) when no resolved key verifies.</returns>
-    private async Task<JwtValidationError?> ValidateIssuerSignatureAsync(
+    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateIssuerSignatureAsync(
         JsonWebToken token,
         string[] jwtParts,
         ValidationParameters parameters)
@@ -319,18 +368,26 @@ internal class JsonWebTokenValidator(
                 "No signing-key resolver configured: this validation path expected to look up signing keys by 'iss' but the host did not provide ResolveIssuerSigningKeys.");
         }
 
-        return await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+        var error = await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+        return error is null ? token : error;
     }
 
     /// <summary>
-    /// Validates the JWS 'crit' header parameter (RFC 7515 §4.1.11). When present, every name in
-    /// the array MUST be a non-standard JOSE header parameter name that is also present in the
-    /// JOSE header and that the host has registered an <see cref="ICriticalHeaderHandler"/> for.
-    /// Empty 'crit', duplicates, standard header names, dangling references, and unknown
-    /// extension names all cause rejection.
+    /// Validates the JWS 'crit' header parameter (RFC 7515 §4.1.11). Runs the spec-required
+    /// malformation guards (empty array, duplicates, reserved names, dangling references)
+    /// independent of any registry, then routes each crit name to its registered
+    /// <see cref="ICriticalHeaderHandler"/>. An unrouted name is rejected as «unknown
+    /// critical header parameter» per RFC 7515 §4.1.11 ("If any of the listed extension
+    /// Header Parameters are not understood and supported by the recipient, then the JWS
+    /// is invalid"). Each handler whose understood-names overlap 'crit' runs exactly once
+    /// and may reject the JWS by returning an error.
     /// </summary>
-    private JwtValidationError? ValidateCriticalHeaders(JsonWebTokenHeader header)
+    private async Task<Result<JsonWebToken, JwtValidationError>> ValidateCriticalHeadersAsync(
+        JsonWebToken token,
+        ValidationParameters parameters)
     {
+        var header = token.Header;
+
         IReadOnlyList<string>? crit;
         try
         {
@@ -344,8 +401,24 @@ internal class JsonWebTokenValidator(
         }
 
         if (crit is null)
-            return null;
+            return token;
 
+        if (ValidateCritStructure(crit, header) is { } structuralError)
+            return structuralError;
+
+        return await DispatchCritHandlersAsync(token, parameters, crit);
+    }
+
+    /// <summary>
+    /// Runs the structural guards from RFC 7515 §4.1.11 (empty array, duplicates, reserved
+    /// standard names, dangling references) plus the registry-routing precondition (every
+    /// surviving name MUST have a registered <see cref="ICriticalHeaderHandler"/>). Returns
+    /// <see langword="null"/> when every name in <paramref name="crit"/> is well-formed and
+    /// routable; otherwise the first rejection in declaration order so the diagnostic
+    /// pinpoints the specific violating name.
+    /// </summary>
+    private JwtValidationError? ValidateCritStructure(IReadOnlyList<string> crit, JsonWebTokenHeader header)
+    {
         if (crit.Count == 0)
         {
             return new JwtValidationError(
@@ -373,8 +446,7 @@ internal class JsonWebTokenValidator(
                     $"'crit' lists header name '{name}' that is not present in the JOSE header");
             }
 
-            var handler = serviceProvider.GetKeyedService<ICriticalHeaderHandler>(name);
-            if (handler is null)
+            if (!_critHandlersByName.ContainsKey(name))
             {
                 return new JwtValidationError(
                     JwtError.InvalidToken,
@@ -383,6 +455,37 @@ internal class JsonWebTokenValidator(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Dispatches each crit-listed name to its registered handler. Assumes
+    /// <see cref="ValidateCritStructure"/> has already passed — every name in
+    /// <paramref name="crit"/> is guaranteed routable. Order = appearance in 'crit'; each
+    /// handler runs at most once even when it claims multiple names that all appear in
+    /// 'crit'. <see cref="ReferenceEqualityComparer"/> because handlers are singletons —
+    /// instance identity is the dedup key.
+    /// </summary>
+    private async Task<Result<JsonWebToken, JwtValidationError>> DispatchCritHandlersAsync(
+        JsonWebToken token,
+        ValidationParameters parameters,
+        IReadOnlyList<string> crit)
+    {
+        var context = new CriticalHeaderContext
+        {
+            Token = token,
+            Parameters = parameters,
+            TimeProvider = timeProvider,
+        };
+
+        var ran = new HashSet<ICriticalHeaderHandler>(ReferenceEqualityComparer.Instance);
+        foreach (var name in crit)
+        {
+            var handler = _critHandlersByName[name];
+            if (ran.Add(handler) && await handler.HandleAsync(context) is { } error)
+                return error;
+        }
+
+        return token;
     }
 
     /// <summary>
@@ -421,12 +524,13 @@ internal class JsonWebTokenValidator(
     /// before lookup per the §4.1.9 convention so <c>typ=at+jwt</c> and
     /// <c>typ=application/at+jwt</c> both match a registered <c>at+jwt</c> expectation.
     /// </summary>
-    private static JwtValidationError? ValidateTokenType(JsonWebTokenHeader header, ValidationParameters parameters)
+    private static Result<JsonWebToken, JwtValidationError> ValidateTokenType(
+        JsonWebToken token, ValidationParameters parameters)
     {
         if (parameters is not { ExpectedTokenTypes: { Count: > 0 } expected})
-            return null;
+            return token;
 
-        var typ = header.Type;
+        var typ = token.Header.Type;
         if (typ is null)
         {
             return new JwtValidationError(
@@ -442,8 +546,7 @@ internal class JsonWebTokenValidator(
                 $"JWT 'typ' header '{typ}' does not match expected token type(s): {string.Join(", ", expected)}");
         }
 
-        return null;
-
+        return token;
     }
 
     /// <summary>
@@ -460,8 +563,10 @@ internal class JsonWebTokenValidator(
     /// <summary>
     /// Validates the issuer claim according to validation parameters.
     /// </summary>
-    private static async Task<JwtValidationError?> ValidateIssuerAsync(string? issuer, ValidationParameters parameters)
+    private static async Task<Result<JsonWebToken, JwtValidationError>> ValidateIssuerAsync(
+        JsonWebToken token, ValidationParameters parameters)
     {
+        var issuer = token.Payload.Issuer;
         if (issuer != null)
         {
             if (parameters.Options.HasAnyFlag(ValidationOptions.RequireIssuer | ValidationOptions.ValidateIssuer))
@@ -477,17 +582,16 @@ internal class JsonWebTokenValidator(
             return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload");
         }
 
-        return null;
+        return token;
     }
 
     /// <summary>
     /// Validates the audience claim according to validation parameters.
     /// </summary>
-    private static async Task<JwtValidationError?> ValidateAudienceAsync(
-        IEnumerable<string> audiences,
-        ValidationParameters parameters)
+    private static async Task<Result<JsonWebToken, JwtValidationError>> ValidateAudienceAsync(
+        JsonWebToken token, ValidationParameters parameters)
     {
-        var audiencesList = audiences.ToList();
+        var audiencesList = token.Payload.Audiences.ToList();
 
         if (parameters.Options.HasFlag(ValidationOptions.RequireAudience) && audiencesList.Count == 0)
             return new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload");
@@ -502,21 +606,22 @@ internal class JsonWebTokenValidator(
             }
         }
 
-        return null;
+        return token;
     }
 
     /// <summary>
     /// Validates the lifetime claims (nbf and exp) according to validation parameters.
     /// </summary>
-    private JwtValidationError? ValidateLifetime(JsonWebTokenPayload payload, ValidationParameters parameters)
+    private Result<JsonWebToken, JwtValidationError> ValidateLifetime(
+        JsonWebToken token, ValidationParameters parameters)
     {
         if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
-            return null;
+            return token;
 
-        var notBefore = payload.NotBefore;
-        var expiresAt = payload.ExpiresAt;
+        var notBefore = token.Payload.NotBefore;
+        var expiresAt = token.Payload.ExpiresAt;
         if (!notBefore.HasValue && !expiresAt.HasValue)
-            return null;
+            return token;
 
         var utcNow = timeProvider.GetUtcNow();
 
@@ -534,7 +639,7 @@ internal class JsonWebTokenValidator(
                 return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
         }
 
-        return null;
+        return token;
     }
 
 }
