@@ -113,27 +113,24 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers an <see cref="ICriticalHeaderHandler"/> keyed by the JOSE header parameter
-    /// name the host understands when it appears in a JWS 'crit' array (RFC 7515 §4.1.11).
-    /// The validator looks up handlers by header name; a token whose 'crit' lists a name that
-    /// has no matching keyed registration is rejected.
+    /// Registers an <see cref="ICriticalHeaderHandler"/> that handles one or more JOSE
+    /// header extension parameters listed in a JWS 'crit' array (RFC 7515 §4.1.11). The
+    /// handler itself declares its understood header names via
+    /// <see cref="ICriticalHeaderHandler.UnderstoodNames"/>, so the registration cannot
+    /// claim a name without backing its value-handling — name and behaviour are inseparable.
     /// </summary>
-    /// <typeparam name="THandler">The handler implementation type.</typeparam>
-    /// <param name="services">The service collection to register the handler in.</param>
-    /// <param name="headerName">The JOSE header parameter name this handler declares
-    /// understanding of. Used as the DI key, byte-exact match with the 'crit' entry.</param>
-    /// <returns>The service collection for method chaining.</returns>
+    /// <typeparam name="THandler">Concrete handler type.</typeparam>
     /// <remarks>
-    /// Uses <see cref="ServiceCollectionServiceExtensions.AddKeyedSingleton(IServiceCollection,Type,object,Type)"/>
-    /// (via <see cref="ServiceCollectionDescriptorExtensions.TryAdd(IServiceCollection,ServiceDescriptor)"/>)
-    /// so the validator's keyed lookup by header name resolves the handler in O(1).
+    /// Uses <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
+    /// so multiple crit extensions coexist; the validator builds a name → handler lookup
+    /// at construction and rejects any registration whose understood-names overlap an already
+    /// registered handler (each crit name MUST have exactly one handler).
     /// </remarks>
-    public static IServiceCollection AddCriticalHeaderHandler<THandler>(
-        this IServiceCollection services,
-        string headerName)
+    public static IServiceCollection AddCriticalHeaderHandler<THandler>(this IServiceCollection services)
         where THandler : class, ICriticalHeaderHandler
     {
-        services.TryAddKeyedSingleton<ICriticalHeaderHandler, THandler>(headerName);
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ICriticalHeaderHandler, THandler>());
         return services;
     }
 
