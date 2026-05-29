@@ -24,9 +24,11 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Recipient-side handler for one JWS 'crit' header extension spec (RFC 7515 §4.1.11).
-/// Covers «understood AND processed»: the implementation declares which JOSE header
-/// parameter name(s) the extension introduces via <see cref="UnderstoodNames"/>, and
-/// applies the extension's recipient-side semantics via <see cref="HandleAsync"/>.
+/// Covers «understood AND processed»: the handler applies the extension's recipient-side
+/// semantics via <see cref="HandleAsync"/>. The JOSE header parameter name the handler
+/// implements is the DI key it is registered under — see
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/> — so name
+/// and behaviour are inseparable: a name cannot be registered without a handler behind it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -62,27 +64,19 @@ namespace Abblix.Jwt;
 /// need a pre-signature hook that transforms the JWS Signing Input bytes, which
 /// MUST run before signature verification. That hook is a separate sibling
 /// contract on the signing pipeline (out of scope for this interface). A b64
-/// implementation of THIS interface is a thin shim that declares understanding
-/// of "b64" and short-circuits to success — successful signature verification
-/// already proves the directive was honoured.
+/// implementation of THIS interface is a thin shim registered under "b64" that
+/// short-circuits to success — successful signature verification already proves
+/// the directive was honoured.
 /// </para>
 /// <para>
 /// Register with
-/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>.
-/// Two handlers claiming the same name fail loud at validator construction —
-/// each crit name MUST have exactly one handler.
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>,
+/// passing the JOSE header parameter name as the DI key. One handler owns one name;
+/// a handler covering a family of related names registers under each.
 /// </para>
 /// </remarks>
 public interface ICriticalHeaderHandler
 {
-    /// <summary>
-    /// JOSE header parameter names this handler implements. Byte-exact match
-    /// per RFC 7515 §5.3. MUST be non-empty. Multi-name is allowed for specs
-    /// that introduce a family of related parameters (rare); most extensions
-    /// declare a single name.
-    /// </summary>
-    IReadOnlySet<string> UnderstoodNames { get; }
-
     /// <summary>
     /// Apply the extension's recipient-side semantics. May read the parsed
     /// token (header and payload), consult external state via the context's
