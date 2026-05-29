@@ -275,7 +275,7 @@ public class CriticalHeaderTests
     /// </summary>
     private sealed class NoopB64Handler : ICriticalHeaderHandler
     {
-        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
+        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context, CancellationToken cancellationToken)
             => Task.FromResult<JwtValidationError?>(null);
     }
 
@@ -288,7 +288,7 @@ public class CriticalHeaderTests
     {
         public const string RejectionReason = "test-double handler rejection";
 
-        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context)
+        public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context, CancellationToken cancellationToken)
             => Task.FromResult<JwtValidationError?>(
                 new JwtValidationError(JwtError.InvalidToken, RejectionReason));
     }

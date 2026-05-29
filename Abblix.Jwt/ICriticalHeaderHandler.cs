@@ -79,12 +79,15 @@ public interface ICriticalHeaderHandler
 {
     /// <summary>
     /// Apply the extension's recipient-side semantics. May read the parsed
-    /// token (header and payload), consult external state via the context's
-    /// time provider or DI-injected dependencies, perform side effects, and
-    /// reject the JWS by returning a non-null <see cref="JwtValidationError"/>.
-    /// Return <see langword="null"/> on success.
+    /// token (header and payload), consult external state via DI-injected
+    /// dependencies (inject <see cref="TimeProvider"/> if the extension needs
+    /// the clock), perform side effects, and reject the JWS by returning a
+    /// non-null <see cref="JwtValidationError"/>. Return <see langword="null"/>
+    /// on success.
     /// </summary>
-    /// <param name="context">Per-call inputs (parsed token, validation
-    /// parameters, time provider, cancellation token).</param>
-    Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context);
+    /// <param name="context">Per-call inputs: the parsed token and the
+    /// validation parameters in force.</param>
+    /// <param name="cancellationToken">Propagates cancellation to I/O-bound
+    /// handlers (replay-store lookups, audit emitters).</param>
+    Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context, CancellationToken cancellationToken);
 }
