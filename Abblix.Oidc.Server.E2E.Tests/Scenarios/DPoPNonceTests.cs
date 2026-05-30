@@ -41,7 +41,6 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// RequireAtUserInfoEndpoint both = true) under a dedicated xunit collection so the
 /// singleton factory state never leaks to the rest of the DPoP suite.
 /// </summary>
-[Collection(DPoPNonceTestCollection.Name)]
 public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
 {
     [Fact]
@@ -215,15 +214,4 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         request.WithDPoPHeader(proofJwt);
         return await client.SendAsync(request);
     }
-}
-
-/// <summary>
-/// Dedicated xunit collection for nonce-enabled scenarios — separate from
-/// <c>TestCollection</c> so the singleton <see cref="NonceEnabledTestFactory"/>
-/// fixture's per-host options never leak into the default-flow DPoP tests.
-/// </summary>
-[CollectionDefinition(Name)]
-public sealed class DPoPNonceTestCollection : ICollectionFixture<NonceEnabledTestFactory>
-{
-    public const string Name = "DPoPNonce";
 }
