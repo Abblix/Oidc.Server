@@ -34,7 +34,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>backchannel_authentication_request_signing_alg</c> is on the server's supported list.
 /// </summary>
 /// <param name="jwtValidator">Source of supported JWT signing algorithms.</param>
-public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValidator) : IClientRegistrationContextValidator
+public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValidator)
+    : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -61,18 +62,21 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     "Notification endpoint is invalid if the token delivery mode is set to poll");
 
             case {
-                BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push,
+                BackChannelTokenDeliveryMode:
+                    BackchannelTokenDeliveryModes.Ping or
+                    BackchannelTokenDeliveryModes.Push,
                 BackChannelClientNotificationEndpoint: null,
             }:
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
-            case { BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll }:
-            //case { BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push }:
-                break;
-
-            default:
+            case {
+                BackChannelTokenDeliveryMode: not (
+                    BackchannelTokenDeliveryModes.Poll or
+                    BackchannelTokenDeliveryModes.Ping or
+                    BackchannelTokenDeliveryModes.Push),
+            }:
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "The specified token delivery mode is not supported");
