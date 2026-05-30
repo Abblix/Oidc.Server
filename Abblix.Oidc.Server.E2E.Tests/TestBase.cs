@@ -22,7 +22,6 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// the shape of the AuthenticationService.ConformanceTests TestBase so
 /// scenario files read the same way.
 /// </summary>
-[Collection(TestCollection.Name)]
 public abstract class TestBase(TestFactory factory)
 {
     protected HttpClient CreateClient()
