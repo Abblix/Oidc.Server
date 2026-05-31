@@ -135,7 +135,7 @@ public class BackChannelAuthenticationGrantHandler(
             // If the request is still pending and not yet time to poll again
             { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
                 when timeProvider.GetUtcNow() < nextPollAt
-                => new OidcError(ErrorCodes.SlowDown, "The authorization request is still pending as the user hasn't been authenticated"),
+                => new OidcError(ErrorCodes.SlowDown, "The token endpoint was polled before the minimum interval elapsed; reduce the polling rate."),
 
             // If the user has not yet been authenticated and the request is still pending,
             // either wait for status change (long-polling) or return immediately (short-polling)
