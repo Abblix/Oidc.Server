@@ -80,6 +80,18 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientAuthentication(this IServiceCollection services)
     {
+        // Deliberate design: client authentication is a try-each composite, NOT keyed-name DI
+        // by token_endpoint_auth_method. Unlike the keyed-DI extension points in this codebase
+        // (signers by alg, RAR validators by type, crit handlers by name), the auth method is
+        // NOT a discriminator carried in the incoming token request — it is the client's
+        // registered metadata. The request only presents credentials whose FORM implies the
+        // method (Basic header, body secret, mTLS certificate, client_assertion JWT), and
+        // client_id itself is extracted method-specifically (decoded from the Base64 Basic
+        // header vs read from the body vs taken from the assertion's sub). Keying on the method
+        // would require first detecting the credential form to derive it — which is exactly what
+        // each authenticator's TryAuthenticateClientAsync already does — so keyed dispatch would
+        // be circular and strictly more complex. Each authenticator self-selects by inspecting
+        // the request for its own credential shape; the composite returns the first match.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientAuthenticator, NoneClientAuthenticator>(),
             ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretPostAuthenticator>(),
