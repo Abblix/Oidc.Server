@@ -204,6 +204,11 @@ public record ConfigurationResponse
         /// endpoint URLs (RFC 8705 §5).</summary>
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
 
+        /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> metadata flag advertising
+        /// that the provider supports mutual-TLS client certificate-bound access tokens
+        /// (RFC 8705 §3.3).</summary>
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
+
         /// <summary>The <c>acr_values_supported</c> metadata field listing Authentication Context Class
         /// Reference values the provider can satisfy.</summary>
         public const string AcrValuesSupported = "acr_values_supported";
@@ -485,6 +490,14 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.MtlsEndpointAliases)]
     public MtlsAliases? MtlsEndpointAliases { get; init; }
+
+    /// <summary>
+    /// RFC 8705 §3.3: indicates that the provider supports mutual-TLS client certificate-bound
+    /// access tokens. Emitted as <c>true</c> when the provider both issues such tokens and
+    /// enforces the binding at its protected resources; omitted otherwise.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
     /// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.

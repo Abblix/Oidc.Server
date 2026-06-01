@@ -206,18 +206,19 @@ public class UserIdentityValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
+        // Assert — pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Equal("LoginHintToken validation failed.", result.ErrorDescription);
     }
 
     /// <summary>
-    /// Verifies validation succeeds when login_hint_token has InvalidToken error.
-    /// InvalidToken error is treated as non-JWT and skipped.
+    /// Verifies error when login_hint_token fails JWT validation with an InvalidToken error
+    /// while the client opted into JWT parsing (ParseLoginHintTokenAsJwt = true). A token the
+    /// client declared as a JWT but that fails validation (malformed, bad signature, forged)
+    /// must be rejected, not silently accepted as if no usable hint were present.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_LoginHintTokenWithInvalidTokenError_ShouldReturnNull()
+    public async Task ValidateAsync_LoginHintTokenWithInvalidTokenError_ShouldReturnInvalidRequest()
     {
         // Arrange
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Not a JWT");
@@ -233,8 +234,9 @@ public class UserIdentityValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        // Assert — pin the error code (the stable contract), not the description wording.
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>

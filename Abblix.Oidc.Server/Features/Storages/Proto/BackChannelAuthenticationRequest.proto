@@ -30,4 +30,12 @@ message BackChannelAuthenticationRequest {
 
   // Absolute expiration time for this authentication request
   google.protobuf.Timestamp expires_at = 4;
+
+  // Client notification endpoint (ping/push delivery): the URL that receives the
+  // CIBA callback. Absent for poll mode.
+  optional string client_notification_endpoint = 5;
+
+  // Client notification token (ping/push delivery): the bearer secret the callback
+  // authenticates with. Absent for poll mode.
+  optional string client_notification_token = 6;
 }

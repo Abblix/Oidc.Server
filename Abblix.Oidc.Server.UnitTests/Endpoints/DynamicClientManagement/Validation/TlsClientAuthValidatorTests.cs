@@ -79,9 +79,34 @@ public class TlsClientAuthValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
+        // Assert — pin the error code (the stable contract), not the description wording.
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies validation fails when more than one subject identifier is specified.
+    /// RFC 8705 §2.1.2 requires a tls_client_auth client to register exactly one of the
+    /// subject-identifier parameters; supplying both a Subject DN and a SAN must be rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithMultipleSubjectIdentifiers_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp,C=US",
+            TlsClientAuthSanDns = ["client.example.com"],
+        });
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("at least one", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -356,11 +381,12 @@ public class TlsClientAuthValidatorTests
     }
 
     /// <summary>
-    /// Verifies validation succeeds with multiple metadata types.
-    /// Combination of DN, DNS, URI, IP, and email should all be validated.
+    /// Verifies validation fails when several subject-identifier metadata types are combined.
+    /// RFC 8705 §2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
+    /// be rejected rather than accepted.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithMultipleValidMetadata_ShouldReturnNull()
+    public async Task ValidateAsync_WithMultipleMetadataTypes_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
@@ -378,7 +404,8 @@ public class TlsClientAuthValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
