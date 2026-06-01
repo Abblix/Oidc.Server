@@ -53,6 +53,12 @@ partial class JwtBearerGrantHandler
 	private partial void LogMissingSubject(string ClientId);
 
 	[LoggerMessage(
+		EventId = LogEvents.Endpoints.JwtBearer.MissingExpiration,
+		Level = LogLevel.Warning,
+		Message = "JWT assertion missing required 'exp' claim for issuer {Issuer}, client {ClientId}")]
+	private partial void LogMissingExpiration(string ClientId, string Issuer);
+
+	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AlgorithmNotAllowed,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: algorithm {Algorithm} not allowed for issuer {Issuer}, client {ClientId}")]

@@ -44,8 +44,25 @@ public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
     private static Dictionary<Uri, ResourceDefinition> InitializeResources(IOptions<OidcOptions> options)
     {
         var resources = new Dictionary<Uri, ResourceDefinition>();
-        if (options.Value.Resources != null)
-            Array.ForEach(options.Value.Resources, resource => resources.Add(resource.Resource, resource));
+        if (options.Value.Resources == null)
+            return resources;
+
+        foreach (var resource in options.Value.Resources)
+        {
+            // A non-absolute resource URI can never match a request (requests are rejected unless
+            // absolute per RFC 8707 Section 2), so it would sit as a silent dead entry. Fail fast
+            // with a clear message instead.
+            if (!resource.Resource.IsAbsoluteUri)
+                throw new ArgumentException(
+                    $"The configured resource '{resource.Resource}' must be an absolute URI (RFC 8707 Section 2).",
+                    nameof(OidcOptions.Resources));
+
+            if (!resources.TryAdd(resource.Resource, resource))
+                throw new ArgumentException(
+                    $"Duplicate resource definition for '{resource.Resource}'. Each configured resource URI must be unique.",
+                    nameof(OidcOptions.Resources));
+        }
+
         return resources;
     }
 

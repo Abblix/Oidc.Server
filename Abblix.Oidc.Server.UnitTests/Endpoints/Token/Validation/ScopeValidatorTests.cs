@@ -23,6 +23,7 @@
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -55,7 +56,10 @@ public class ScopeValidatorTests
             Scope = scope,
         };
         var clientRequest = new ClientRequest();
-        var context = new TokenValidationContext(tokenRequest, clientRequest);
+        var context = new TokenValidationContext(tokenRequest, clientRequest)
+        {
+            ClientInfo = new ClientInfo("test-client"),
+        };
         if (resources != null)
         {
             context.Resources = resources;
