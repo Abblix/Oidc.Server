@@ -96,7 +96,7 @@ public class AuthenticationCompletionHandlerTests
 
         _notificationService.Setup(n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping))
             .Callback(() => callOrder.Add("notify"))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var handler = CreatePingModeHandler();
 
@@ -280,7 +280,7 @@ public class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         _notificationService.Setup(n => n.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Ping))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var handler = CreatePingModeHandler();
 
@@ -330,7 +330,7 @@ public class AuthenticationCompletionHandlerTests
                 NotificationToken,
                 It.IsAny<IBackChannelNotificationRequest>(),
                 BackchannelTokenDeliveryModes.Push))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId))
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
@@ -347,6 +347,59 @@ public class AuthenticationCompletionHandlerTests
             Times.Once);
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _storage.Verify(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that when push delivery fails, the authenticated request is retained in storage
+    /// rather than removed. Push clients cannot poll, so discarding the grant on a failed delivery
+    /// would silently lose tokens the client never received; the request is kept until it expires.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_DeliveryFails_RetainsRequest()
+    {
+        // Arrange
+        var fixedTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var authSession = new AuthSession(UserId, "session_123", fixedTime, "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), fixedTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            ClientNotificationEndpoint = _notificationEndpoint,
+            ClientNotificationToken = NotificationToken,
+        };
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+
+        var jwt = new Jwt.JsonWebToken();
+        var tokenIssued = new TokenIssued(
+            new EncodedJsonWebToken(jwt, "access_token_jwt"),
+            TokenTypes.Bearer,
+            TimeSpan.FromHours(1),
+            new Uri("urn:ietf:params:oauth:token-type:access_token"));
+
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
+
+        _notificationService.Setup(s => s.SendAsync(
+                _notificationEndpoint,
+                NotificationToken,
+                It.IsAny<IBackChannelNotificationRequest>(),
+                BackchannelTokenDeliveryModes.Push))
+            .ReturnsAsync(false);
+
+        var handler = CreatePushModeHandler();
+
+        // Act
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+
+        // Assert
+        _notificationService.Verify(
+            s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
+            Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>

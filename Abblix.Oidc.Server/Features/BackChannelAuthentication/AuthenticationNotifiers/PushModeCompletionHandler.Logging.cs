@@ -43,4 +43,10 @@ partial class PushModeCompletionHandler
         Level = LogLevel.Error,
         Message = "Failed to generate tokens for CIBA push mode, auth_req_id: {AuthReqId}, Error: {ErrorCode}")]
     private partial void LogTokenGenerationFailed(string AuthReqId, string ErrorCode);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,
+        Level = LogLevel.Warning,
+        Message = "CIBA push delivery failed for auth_req_id: {AuthReqId}; the authenticated request is retained until it expires")]
+    private partial void LogPushDeliveryFailed(string AuthReqId);
 }

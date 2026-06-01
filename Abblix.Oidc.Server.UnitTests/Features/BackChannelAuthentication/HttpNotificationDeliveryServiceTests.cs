@@ -120,9 +120,10 @@ public class HttpNotificationDeliveryServiceTests
 
         // Act
         var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
-        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
+        var delivered = await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
         // Assert
+        Assert.True(delivered);
         _logger.Verify(
             l => l.Log(
                 LogLevel.Information,
@@ -156,8 +157,9 @@ public class HttpNotificationDeliveryServiceTests
 
         // Act & Assert (should not throw)
         var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
-        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
+        var delivered = await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
+        Assert.False(delivered);
         _logger.Verify(
             l => l.Log(
                 LogLevel.Warning,
@@ -192,8 +194,9 @@ public class HttpNotificationDeliveryServiceTests
 
         // Act & Assert (should not throw)
         var payload = new BackChannelPingNotificationRequest { AuthenticationRequestId = AuthReqId };
-        await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
+        var delivered = await _service.SendAsync(_clientNotificationEndpoint, ClientNotificationToken, payload, "ping");
 
+        Assert.False(delivered);
         _logger.Verify(
             l => l.Log(
                 LogLevel.Error,

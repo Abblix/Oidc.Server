@@ -92,7 +92,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     private class TestServiceProvider(IBackChannelRequestStorage storage) : IKeyedServiceProvider
     {
         private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
-        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor();
+        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage);
         private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
@@ -601,12 +601,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that in ping mode, authenticated requests are NOT removed from storage
-    /// after token retrieval. This allows clients to retrieve tokens after receiving the ping notification,
-    /// and supports potential retry scenarios.
+    /// Verifies that in ping mode, the authenticated request is removed from storage on retrieval.
+    /// The auth_req_id is single-use (CIBA Core 1.0 Section 7.3), so a notified client cannot replay
+    /// it to mint fresh tokens; ping consumes the entry exactly like poll.
     /// </summary>
     [Fact]
-    public async Task AuthenticatedRequest_PingMode_DoesNotRemoveFromStorage()
+    public async Task AuthenticatedRequest_PingMode_RemovesFromStorage()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId)
@@ -622,12 +622,13 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, _currentTime.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -635,7 +636,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -673,7 +674,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 

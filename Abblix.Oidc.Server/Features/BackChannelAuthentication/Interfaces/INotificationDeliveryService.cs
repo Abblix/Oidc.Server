@@ -56,8 +56,12 @@ public interface INotificationDeliveryService
     /// <param name="mode">
     /// The CIBA mode (e.g., "ping" or "push") for logging purposes.
     /// </param>
-    /// <returns>A task representing the asynchronous notification operation.</returns>
-    Task SendAsync(
+    /// <returns>
+    /// <c>true</c> if the client endpoint accepted the notification (2xx response); <c>false</c> if
+    /// delivery failed (non-success status or transport error). Push mode relies on this to avoid
+    /// discarding the grant when token delivery did not reach the client.
+    /// </returns>
+    Task<bool> SendAsync(
         Uri clientNotificationEndpoint,
         string clientNotificationToken,
         IBackChannelNotificationRequest payload,
