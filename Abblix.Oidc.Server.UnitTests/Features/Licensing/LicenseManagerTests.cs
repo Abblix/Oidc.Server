@@ -32,6 +32,7 @@ using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
+[Collection("License")]
 public class LicenseManagerTests
 {
     private static License CreateLicense(int? notBefore, int? expiresAt, int? gracePeriod = null)

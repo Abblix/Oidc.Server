@@ -47,6 +47,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// - Concurrent access safety
 /// - Cleanup timer functionality
 /// </remarks>
+[Collection("License")]
 public class LicenseLoggerTests
 {
     #region Basic Throttling Tests
