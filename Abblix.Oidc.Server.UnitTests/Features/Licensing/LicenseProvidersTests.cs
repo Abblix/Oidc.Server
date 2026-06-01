@@ -35,6 +35,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// <summary>
 /// Tests for license JWT provider implementations.
 /// </summary>
+[Collection("License")]
 public class LicenseProvidersTests
 {
     #region StaticLicenseJwtProvider Tests
