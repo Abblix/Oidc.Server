@@ -108,7 +108,18 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt } })
+        // OIDC Core §9: the client-authentication assertion's jti is REQUIRED — "A unique
+        // identifier for the token, which can be used to prevent reuse of the token". Reject an
+        // assertion without it: single-use replay protection is impossible without a unique id,
+        // and accepting it would leave the assertion replayable within its expiry window (the
+        // replay registry below, and the validation decorator, both key off jti).
+        if (token.Payload.JwtId is not { } jwtId)
+        {
+            LogMissingJti(clientInfo.ClientId);
+            return null;
+        }
+
+        if (token.Payload.ExpiresAt is { } expiresAt)
         {
             await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
         }

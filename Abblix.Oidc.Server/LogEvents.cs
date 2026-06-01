@@ -201,6 +201,7 @@ internal static class LogEvents
             public const int AuthMethodNotAllowed = Base + 4;
             public const int SubjectExtractionFailed = Base + 5;
             public const int IssuerSubjectMismatch = Base + 6;
+            public const int MissingJti = Base + 7;
         }
 
         /// <summary>
