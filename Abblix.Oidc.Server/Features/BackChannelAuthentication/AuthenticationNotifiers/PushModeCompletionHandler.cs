@@ -103,16 +103,25 @@ public partial class PushModeCompletionHandler(
                     RefreshToken = tokens.RefreshToken?.EncodedJwt,
                 };
 
-                await notificationService.SendAsync(
+                var delivered = await notificationService.SendAsync(
                     request.ClientNotificationEndpoint,
                     request.ClientNotificationToken,
                     payload,
                     BackchannelTokenDeliveryModes.Push);
 
-                // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes)
-                await _storage.TryRemoveAsync(authenticationRequestId);
-
-                LogTokensDelivered(authenticationRequestId);
+                if (delivered)
+                {
+                    // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes).
+                    await _storage.TryRemoveAsync(authenticationRequestId);
+                    LogTokensDelivered(authenticationRequestId);
+                }
+                else
+                {
+                    // Delivery failed: keep the request so the tokens are not silently lost. Push
+                    // clients cannot poll, so removing here would orphan an authenticated grant the
+                    // client never received; instead it is retained until it expires.
+                    LogPushDeliveryFailed(authenticationRequestId);
+                }
 
                 return null;
             },
