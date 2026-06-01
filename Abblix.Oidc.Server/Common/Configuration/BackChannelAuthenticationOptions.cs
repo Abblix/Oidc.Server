@@ -120,4 +120,11 @@ public record BackChannelAuthenticationOptions
     /// but may impact performance. Longer lifetimes reduce overhead but may cause stale connections.
     /// </remarks>
     public TimeSpan NotificationHttpClientHandlerLifetime { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Bounds how long the server waits when POSTing a ping/push notification to a client's
+    /// notification endpoint. Caps the time a slow or unresponsive client-controlled endpoint can
+    /// tie up the authentication-completion path. Default is 30 seconds.
+    /// </summary>
+    public TimeSpan NotificationHttpClientTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }
