@@ -79,6 +79,71 @@ public class TokenAuthorizationContextEvaluatorTests
         Assert.Equal(expectedThumbprint, result.CertificateSha256Thumbprint);
     }
 
+    [Fact]
+    public void GrantWithoutResources_RequestedResourceIsNotAddedToAudience()
+    {
+        // RFC 8707 §2.2 anti-escalation: a grant that authorized no resource must NOT gain one at
+        // the token endpoint just because the request asks for a (globally registered) resource.
+        // The requested resource is dropped, not folded into the issued token's aud.
+        var request = CreateResourceRequest(
+            grantResources: null,
+            requestedResources: [new Uri("https://api.example/c")]);
+
+        var result = Evaluator.EvaluateAuthorizationContext(request);
+
+        Assert.True(result.Resources is null or { Length: 0 });
+    }
+
+    [Fact]
+    public void RequestedResourceNotInGrant_IsDroppedByIntersection()
+    {
+        // Grant authorized A and B; the request asks for C (registered but never granted). The
+        // intersection is empty — C cannot be escalated into the token's audience.
+        var request = CreateResourceRequest(
+            grantResources: [new Uri("https://api.example/a"), new Uri("https://api.example/b")],
+            requestedResources: [new Uri("https://api.example/c")]);
+
+        var result = Evaluator.EvaluateAuthorizationContext(request);
+
+        Assert.Empty(result.Resources!);
+    }
+
+    [Fact]
+    public void RequestedResourceSubsetOfGrant_IsNarrowedToIntersection()
+    {
+        // A request for a subset of the granted resources narrows the audience to that subset.
+        var a = new Uri("https://api.example/a");
+        var request = CreateResourceRequest(
+            grantResources: [a, new Uri("https://api.example/b")],
+            requestedResources: [a]);
+
+        var result = Evaluator.EvaluateAuthorizationContext(request);
+
+        Assert.Equal([a], result.Resources);
+    }
+
+    private static ValidTokenRequest CreateResourceRequest(Uri[]? grantResources, Uri[] requestedResources)
+    {
+        var fixedTime = DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        var session = new AuthSession("user-123", "session-456", fixedTime, "local");
+        var context = new AuthorizationContext("test-client", [TestConstants.DefaultScope], null)
+        {
+            Resources = grantResources,
+        };
+        var grant = new AuthorizedGrant(session, context);
+        var clientInfo = new ClientInfo("test-client")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+        };
+
+        return new ValidTokenRequest(
+            new TokenRequest(),
+            grant,
+            clientInfo,
+            [],
+            Array.ConvertAll(requestedResources, resource => new ResourceDefinition(resource)));
+    }
+
     private static ValidTokenRequest CreateRefreshRequest(
         string? boundThumbprint,
         X509Certificate2? clientCertificate)
