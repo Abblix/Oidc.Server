@@ -695,4 +695,50 @@ public class MappersTests
         var result = proto.FromProto();
         Assert.Null(result.NextPollAt);
     }
+
+    [Fact]
+    public void BackChannelAuthenticationRequestMapper_RoundTrips_ClientNotificationFields()
+    {
+        // Ping/push delivery depends on these two fields surviving storage: the client
+        // notification endpoint that receives the callback, and the bearer token the
+        // callback authenticates with. Dropping either through the protobuf round-trip
+        // silently breaks ping/push (the notification goes nowhere or carries no secret).
+        var fixedTime = DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        var session = new AuthSession("user-123", "session-456", fixedTime, "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var grant = new AuthorizedGrant(session, context);
+        var request = new BackChannelAuthenticationRequest(grant, fixedTime.AddMinutes(5))
+        {
+            ClientNotificationEndpoint = new Uri("https://client.example/ciba-callback"),
+            ClientNotificationToken = "notif-token-abc123",
+        };
+
+        // Act
+        var proto = request.ToProto();
+        var result = proto.FromProto();
+
+        // Assert
+        Assert.Equal(request.ClientNotificationEndpoint, result.ClientNotificationEndpoint);
+        Assert.Equal(request.ClientNotificationToken, result.ClientNotificationToken);
+    }
+
+    [Fact]
+    public void BackChannelAuthenticationRequestMapper_RoundTrips_NullClientNotificationFields()
+    {
+        // Poll-mode requests carry no notification endpoint/token; the absence must survive
+        // the round-trip as null rather than being coerced into an empty string.
+        var fixedTime = DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        var session = new AuthSession("user-123", "session-456", fixedTime, "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var grant = new AuthorizedGrant(session, context);
+        var request = new BackChannelAuthenticationRequest(grant, fixedTime.AddMinutes(5));
+
+        // Act
+        var proto = request.ToProto();
+        var result = proto.FromProto();
+
+        // Assert
+        Assert.Null(result.ClientNotificationEndpoint);
+        Assert.Null(result.ClientNotificationToken);
+    }
 }
