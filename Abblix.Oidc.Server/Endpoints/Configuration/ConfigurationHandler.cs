@@ -22,6 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -85,6 +86,16 @@ public sealed class ConfigurationHandler(
 		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
 		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+
+		// RFC 8705 §3.3: advertise certificate-bound access tokens only when a mutual-TLS client
+		// authentication method is available — the server then both issues bound tokens and
+		// enforces the binding at its protected resources (MtlsUserInfoValidator).
+		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
+			method => method is ClientAuthenticationMethods.TlsClientAuth
+				or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
+			? true
+			: null,
+
 		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		IdTokenSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,

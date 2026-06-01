@@ -108,6 +108,7 @@ public class ConfigurationResponseFormatter(
 
 			TokenEndpointAuthMethodsSupported = response.TokenEndpointAuthMethodsSupported,
 			TokenEndpointAuthSigningAlgValuesSupported = response.TokenEndpointAuthSigningAlgValuesSupported,
+			TlsClientCertificateBoundAccessTokens = response.TlsClientCertificateBoundAccessTokens,
 
 			IdTokenSigningAlgValuesSupported = response.IdTokenSigningAlgValuesSupported,
 			SubjectTypesSupported = response.SubjectTypesSupported,

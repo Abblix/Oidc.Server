@@ -133,6 +133,14 @@ public record ConfigurationResponse
 	public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
+	/// Indicates support for mutual-TLS client certificate-bound access tokens
+	/// (<c>tls_client_certificate_bound_access_tokens</c>, RFC 8705 §3.3). <c>true</c> when
+	/// the provider both issues such tokens and enforces the binding at its protected
+	/// resources; <c>null</c> (omitted) otherwise.
+	/// </summary>
+	public bool? TlsClientCertificateBoundAccessTokens { init; get; }
+
+	/// <summary>
 	/// Specifies the signing algorithms supported for request objects.
 	/// </summary>
 	public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
