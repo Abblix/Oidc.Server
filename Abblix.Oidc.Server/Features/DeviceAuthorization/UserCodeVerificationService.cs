@@ -33,15 +33,22 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// </summary>
 /// <param name="storage">The storage service for device authorization requests.</param>
 /// <param name="rateLimiter">The rate limiter for preventing brute force attacks.</param>
+/// <param name="normalizer">Canonicalizes user-entered codes before lookup (RFC 8628 Section 6.1).</param>
 /// <param name="httpContextAccessor">Accessor for the current HTTP context to retrieve client IP.</param>
 public class UserCodeVerificationService(
     IDeviceAuthorizationStorage storage,
     IUserCodeRateLimiter rateLimiter,
+    IUserCodeNormalizer normalizer,
     IHttpContextAccessor httpContextAccessor) : IUserCodeVerificationService
 {
     /// <inheritdoc />
     public async Task<UserCodeVerificationResult> VerifyAsync(string userCode)
     {
+        // Canonicalize before both rate limiting and lookup: this accepts the readability variants
+        // the user may have typed and keeps a single rate-limit bucket per logical code, so case or
+        // dash variations cannot be used to multiply the per-code brute-force budget.
+        userCode = normalizer.Normalize(userCode);
+
         var clientIp = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
         // Check rate limiting before attempting verification
@@ -77,6 +84,7 @@ public class UserCodeVerificationService(
     /// <inheritdoc />
     public async Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant)
     {
+        userCode = normalizer.Normalize(userCode);
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
             return false;
@@ -96,6 +104,7 @@ public class UserCodeVerificationService(
     /// <inheritdoc />
     public async Task<bool> DenyAsync(string userCode)
     {
+        userCode = normalizer.Normalize(userCode);
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
             return false;

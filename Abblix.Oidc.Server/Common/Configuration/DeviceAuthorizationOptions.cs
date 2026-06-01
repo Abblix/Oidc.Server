@@ -39,10 +39,35 @@ public record DeviceAuthorizationOptions
     public required TimeSpan PollingInterval { get; set; }
 
     /// <summary>
-    /// The length in bytes of the device code. The device code is a high-entropy string
-    /// used by the client to poll the token endpoint.
+    /// The minimum device code length in bytes (128 bits). The device code is never displayed to
+    /// the user, so it carries no usability constraint and RFC 8628 Section 5.2 requires very high
+    /// entropy; 128 bits is the conventional cryptographic floor for a non-guessable random value.
     /// </summary>
-    public required int DeviceCodeLength { get; set; }
+    private const int MinDeviceCodeLengthBytes = 16;
+
+    private int _deviceCodeLength;
+
+    /// <summary>
+    /// The length in bytes of the device code. The device code is a high-entropy string
+    /// used by the client to poll the token endpoint. Must be at least 128 bits (16 bytes)
+    /// of entropy per RFC 8628 Section 5.2.
+    /// </summary>
+    public required int DeviceCodeLength
+    {
+        get => _deviceCodeLength;
+        set
+        {
+            if (value < MinDeviceCodeLengthBytes)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(DeviceCodeLength),
+                    value,
+                    $"The device_code MUST contain very high entropy per RFC 8628 Section 5.2; " +
+                    $"the length must be at least {MinDeviceCodeLengthBytes} bytes (128 bits).");
+            }
+            _deviceCodeLength = value;
+        }
+    }
 
     /// <summary>
     /// The length of the user code (number of characters).
