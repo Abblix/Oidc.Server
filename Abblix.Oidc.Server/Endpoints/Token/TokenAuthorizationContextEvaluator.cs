@@ -61,9 +61,14 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         }
 
         // Return a new authorization context updated with the determined scopes and resources.
-        // Compute certificate-bound confirmation thumbprint if applicable
-        string? thumbprint = null;
-        if (request.ClientCertificate != null)
+        // Certificate-bound confirmation thumbprint (RFC 8705 §3): preserve the binding the
+        // grant already carries. RFC 8705 §4 says the AS SHOULD keep a refreshed token bound to
+        // the original certificate and check that binding, so an existing thumbprint is never
+        // overwritten — neither dropped when no certificate is re-presented on refresh, nor
+        // rebound to a rotated certificate. A fresh thumbprint is computed only at initial
+        // issuance (no prior binding) when the client authenticated via mTLS.
+        var thumbprint = authContext.CertificateSha256Thumbprint;
+        if (thumbprint == null && request.ClientCertificate != null)
         {
             var authMethod = request.ClientInfo.TokenEndpointAuthMethod;
             if (authMethod == ClientAuthenticationMethods.SelfSignedTlsClientAuth

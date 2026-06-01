@@ -3,6 +3,7 @@
 
 using System.Formats.Asn1;
 using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
@@ -105,20 +106,23 @@ public partial class TlsMetadataClientAuthenticator(
         if (string.IsNullOrWhiteSpace(requiredDn))
             return true; // no requirement
 
+        // A case-insensitive string compare is deliberately NOT used as a fallback: DN string
+        // equality is sensitive to attribute ordering, RDN spacing and encoding, so it both
+        // false-negatives and (on case) matches too loosely — a security-weakening path. The
+        // required DN is validated at registration time (TlsClientAuthValidator), so a parse
+        // failure here can only mean a misconfigured client; authentication fails closed.
+        X500DistinguishedName requiredX500Dn;
         try
         {
-            // Use X500DistinguishedName for proper RFC 4514 parsing and normalization
-            var certDn = cert.SubjectName;
-            var requiredX500Dn = new X500DistinguishedName(requiredDn);
-
-            // Compare binary representation for exact match
-            return certDn.RawData.AsSpan().SequenceEqual(requiredX500Dn.RawData);
+            requiredX500Dn = new X500DistinguishedName(requiredDn);
         }
-        catch
+        catch (CryptographicException)
         {
-            // Fallback to string comparison if parsing fails
-            return string.Equals(cert.Subject, requiredDn, StringComparison.OrdinalIgnoreCase);
+            return false;
         }
+
+        // Compare the binary RFC 4514 representation for an exact match.
+        return cert.SubjectName.RawData.AsSpan().SequenceEqual(requiredX500Dn.RawData);
     }
 
     /// <summary>

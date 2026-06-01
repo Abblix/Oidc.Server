@@ -49,12 +49,21 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
         if (!IsTlsClientAuth(request))
             return null;
 
-        if (!HasAnyTlsMetadata(request))
+        // RFC 8705 §2.1.2: a tls_client_auth client registers EXACTLY ONE subject identifier.
+        switch (CountSubjectIdentifiers(request))
         {
-            return ErrorFactory.InvalidClientMetadata(
-                "When using tls_client_auth, at least one of the following must be specified: " +
-                "tls_client_auth_subject_dn, tls_client_auth_san_dns, tls_client_auth_san_uri, " +
-                "tls_client_auth_san_ip, or tls_client_auth_san_email");
+            case 0:
+                return ErrorFactory.InvalidClientMetadata(
+                    "When using tls_client_auth, exactly one of the following must be specified: " +
+                    "tls_client_auth_subject_dn, tls_client_auth_san_dns, tls_client_auth_san_uri, " +
+                    "tls_client_auth_san_ip, or tls_client_auth_san_email");
+
+            case > 1:
+                return ErrorFactory.InvalidClientMetadata(
+                    "When using tls_client_auth, exactly one subject identifier may be specified " +
+                    "(RFC 8705 §2.1.2): choose a single one of tls_client_auth_subject_dn, " +
+                    "tls_client_auth_san_dns, tls_client_auth_san_uri, tls_client_auth_san_ip, or " +
+                    "tls_client_auth_san_email");
         }
 
         return ValidateSubjectDn(request)
@@ -73,17 +82,22 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
         request.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth;
 
     /// <summary>
-    /// Checks whether any TLS client authentication metadata is provided in the request.
-    /// At least one of Subject DN or SAN fields must be specified for tls_client_auth.
+    /// Counts how many of the five RFC 8705 §2.1.2 subject-identifier metadata parameters are
+    /// present. A SAN array with several entries still counts as a single parameter — the spec
+    /// constrains which parameter is registered, not how many values it carries.
     /// </summary>
-    /// <param name="request">The client registration request to check.</param>
-    /// <returns>True if any TLS metadata is provided; otherwise, false.</returns>
-    private static bool HasAnyTlsMetadata(ClientRegistrationRequest request) =>
-        !string.IsNullOrWhiteSpace(request.TlsClientAuthSubjectDn) ||
-        request.TlsClientAuthSanDns is { Length: > 0 } ||
-        request.TlsClientAuthSanUri is { Length: > 0 } ||
-        request.TlsClientAuthSanIp is { Length: > 0 } ||
-        request.TlsClientAuthSanEmail is { Length: > 0 };
+    /// <param name="request">The client registration request to inspect.</param>
+    /// <returns>The number of populated subject-identifier parameters (0–5).</returns>
+    private static int CountSubjectIdentifiers(ClientRegistrationRequest request)
+    {
+        var count = 0;
+        if (!string.IsNullOrWhiteSpace(request.TlsClientAuthSubjectDn)) count++;
+        if (request.TlsClientAuthSanDns is { Length: > 0 }) count++;
+        if (request.TlsClientAuthSanUri is { Length: > 0 }) count++;
+        if (request.TlsClientAuthSanIp is { Length: > 0 }) count++;
+        if (request.TlsClientAuthSanEmail is { Length: > 0 }) count++;
+        return count;
+    }
 
     /// <summary>
     /// Validates the Subject Distinguished Name field if provided.

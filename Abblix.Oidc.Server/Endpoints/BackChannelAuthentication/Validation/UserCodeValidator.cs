@@ -32,6 +32,12 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// and provider configuration. This validator ensures that if the client or provider requires the
 /// UserCode parameter for backchannel authentication, it is included in the request.
 /// </summary>
+/// <remarks>
+/// This validator checks <em>presence</em> only. Verifying the code's <em>value</em> against the
+/// user's actual code is the host's responsibility and happens during the device interaction — see
+/// the security contract on
+/// <see cref="Features.BackChannelAuthentication.Interfaces.IUserDeviceAuthenticationHandler"/>.
+/// </remarks>
 /// <param name="options">
 /// The OIDC options used to configure the behavior of the backchannel authentication process.</param>
 public class UserCodeValidator(IOptions<OidcOptions> options) : IBackChannelAuthenticationContextValidator
