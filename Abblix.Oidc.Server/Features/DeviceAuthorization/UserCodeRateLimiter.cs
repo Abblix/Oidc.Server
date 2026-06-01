@@ -155,12 +155,12 @@ public partial class UserCodeRateLimiter(
     /// <inheritdoc />
     public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
     {
-        // Clear rate limiting state on successful verification
+        // Clear the per-user-code backoff: this code has now been verified, so its own attempt
+        // history is no longer relevant. The per-IP counter is deliberately left intact — it caps
+        // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.2),
+        // and an occasional successful verification must not reset that cross-code budget.
         var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);
         await storage.RemoveAsync(userCodeKey);
-
-        var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
-        await storage.RemoveAsync(ipKey);
 
         LogUserCodeVerified(userCode, clientIdentifier);
     }
