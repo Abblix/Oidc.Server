@@ -116,6 +116,7 @@ public partial class JwtBearerGrantHandler(
 		return ValidateAssertionParameter(request, clientInfo)
 			.BindAsync(assertion => ValidateJwtAsync(assertion, clientInfo))
 			.BindAsync(jwt => ValidateSubjectAsync(jwt, clientInfo))
+			.Bind(ctx => ValidateExpiration(ctx, clientInfo))
 			.Bind(ctx => ValidateAlgorithm(ctx, clientInfo))
 			.Bind(ctx => ValidateTokenType(ctx, clientInfo))
 			.Bind(ctx => ValidateJwtAge(ctx, clientInfo))
@@ -199,6 +200,23 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
+	/// Validates that the JWT assertion carries an 'exp' (expiration) claim. RFC 7523 Section 3
+	/// requires the assertion to contain an 'exp' claim that limits the window during which it can
+	/// be used; the generic lifetime check treats a token with neither 'nbf' nor 'exp' as valid, so
+	/// this enforces the grant-specific MUST and is also what bounds the replay-cache entry's TTL.
+	/// </summary>
+	private Result<ValidationContext, OidcError> ValidateExpiration(ValidationContext ctx, ClientInfo clientInfo)
+	{
+		if (ctx.Jwt.Payload.ExpiresAt.HasValue)
+			return ctx;
+
+		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
+
+		return new OidcError(ErrorCodes.InvalidGrant,
+			"The JWT assertion must contain an 'exp' (expiration) claim");
+	}
+
+	/// <summary>
 	/// Validates that the JWT signing algorithm is in the allowed list.
 	/// </summary>
 	private Result<ValidationContext, OidcError> ValidateAlgorithm(ValidationContext ctx, ClientInfo clientInfo)
@@ -279,13 +297,15 @@ public partial class JwtBearerGrantHandler(
 				"The JWT assertion must contain a 'jti' (JWT ID) claim for replay protection");
 		}
 
-		if (await issuerProvider.IsReplayedAsync(jti))
+		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
+		// ValidateExpiration guarantees is present) and treat "already present" as a replay. One call
+		// avoids both the lost-TTL bug of a separate mark step and the read-then-write race.
+		if (await issuerProvider.IsReplayedAsync(jti, ctx.Jwt.Payload.ExpiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
 		}
 
-		await issuerProvider.MarkAsUsedAsync(jti, ctx.Jwt.Payload.ExpiresAt);
 		return ctx;
 	}
 

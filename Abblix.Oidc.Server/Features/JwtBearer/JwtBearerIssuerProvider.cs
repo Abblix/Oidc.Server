@@ -134,19 +134,6 @@ public partial class JwtBearerIssuerProvider(
 	}
 
 	/// <inheritdoc />
-	/// <remarks>
-	/// Probes the replay cache by issuing a recording <c>TryAddAsync</c> call and
-	/// inverting the result: a fresh jti is recorded with a default TTL on this
-	/// probe, so the follow-up <see cref="MarkAsUsedAsync"/> call observes a
-	/// duplicate and is a no-op. Net behaviour matches the legacy two-step contract
-	/// for sequential callers; the entry's TTL is the canonical default rather than
-	/// the assertion's actual expiry. New code should adopt the canonical
-	/// <c>TryAddAsync</c> contract directly to avoid this asymmetry.
-	/// </remarks>
-	public async Task<bool> IsReplayedAsync(string jti)
-		=> !await replayCache.TryAddAsync(jti, expiresAt: null);
-
-	/// <inheritdoc />
-	public Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt)
-		=> replayCache.TryAddAsync(jti, expiresAt);
+	public async Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt)
+		=> !await replayCache.TryAddAsync(jti, expiresAt);
 }
