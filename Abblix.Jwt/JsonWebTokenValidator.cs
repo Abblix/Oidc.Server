@@ -590,14 +590,14 @@ internal class JsonWebTokenValidator(
         if (notBefore.HasValue)
         {
             var notBeforeUtc = notBefore.Value.ToUniversalTime();
-            if (utcNow.Add(parameters.ClockSkew) < notBeforeUtc)
+            if (utcNow + parameters.ClockSkew < notBeforeUtc)
                 return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
         }
 
         if (expiresAt.HasValue)
         {
             var expiresUtc = expiresAt.Value.ToUniversalTime();
-            if (expiresUtc <= utcNow.Subtract(parameters.ClockSkew))
+            if (expiresUtc <= utcNow - parameters.ClockSkew)
                 return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
         }
 
