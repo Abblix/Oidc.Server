@@ -526,6 +526,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IDeviceCodeGenerator, DeviceCodeGenerator>();
         services.TryAddSingleton<IUserCodeGenerator, UserCodeGenerator>();
+        services.TryAddSingleton<IUserCodeNormalizer, UserCodeNormalizer>();
         services.TryAddSingleton<IDeviceAuthorizationStorage, DeviceAuthorizationStorage>();
         services.TryAddSingleton<IUserCodeRateLimiter, UserCodeRateLimiter>();
         services.TryAddSingleton<IUserCodeVerificationService, UserCodeVerificationService>();
