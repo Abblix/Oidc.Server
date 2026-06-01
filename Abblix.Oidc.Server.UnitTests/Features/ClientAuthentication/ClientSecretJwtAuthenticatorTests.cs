@@ -363,11 +363,12 @@ public class ClientSecretJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies authentication succeeds when JWT has no JTI.
-    /// Per OIDC Core, JTI is recommended but not required.
+    /// Verifies authentication is rejected when the assertion has no jti. OpenID Connect Core §9
+    /// makes jti REQUIRED ("A unique identifier for the token, which can be used to prevent reuse
+    /// of the token"); without it the assertion is replayable within its expiry window.
     /// </summary>
     [Fact]
-    public async Task TryAuthenticateClientAsync_WithoutJti_ShouldAuthenticate()
+    public async Task TryAuthenticateClientAsync_WithoutJti_ShouldReturnNull()
     {
         // Arrange
         var jwt = "valid.jwt.token";
@@ -412,10 +413,9 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.Null(result);
 
-        // JWT registry should not be called without JTI
+        // A rejected assertion is never recorded in the replay registry.
         _tokenRegistry.Verify(r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()), Times.Never);
     }
 

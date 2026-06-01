@@ -66,7 +66,10 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator();
 
         var clientInfo = CreateClientInfo(ClientId);
-        var validToken = CreateValidJwtToken(ClientId, ClientId);
+        // A spec-valid client assertion carries a jti (OIDC Core §9 REQUIRED).
+        var validToken = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "valid-jti-assertion",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
@@ -339,21 +342,23 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies that authentication succeeds even when jti claim is missing.
-    /// While jti is recommended for preventing replay attacks, it's not strictly required.
+    /// Verifies that an assertion without a jti claim is rejected. OpenID Connect Core §9 makes
+    /// jti REQUIRED ("A unique identifier for the token, which can be used to prevent reuse of the
+    /// token"); accepting a jti-less assertion would leave it replayable within its expiry window,
+    /// since single-use enforcement keys off jti.
     /// </summary>
     [Fact]
-    public async Task ValidJwtWithoutJti_ShouldAuthenticate()
+    public async Task AssertionWithoutJti_ShouldReturnNull()
     {
         // Arrange
         var (authenticator, mocks) = CreateAuthenticator();
 
         var clientInfo = CreateClientInfo(ClientId);
-        var validToken = CreateValidJwtToken(ClientId, ClientId);
+        var tokenWithoutJti = CreateValidJwtToken(ClientId, ClientId);
 
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
+            .ReturnsAsync(new ValidJsonWebToken(tokenWithoutJti, clientInfo));
 
         var request = new ClientRequest
         {
@@ -365,9 +370,8 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
-        // Verify no token registry interaction when jti is missing
+        Assert.Null(result);
+        // A rejected assertion is never recorded in the replay registry.
         mocks.TokenRegistry.Verify(
             r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);

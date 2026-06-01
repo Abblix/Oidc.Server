@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using CryptographicOperations = System.Security.Cryptography.CryptographicOperations;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -148,7 +149,9 @@ public abstract partial class ClientSecretAuthenticator(
 		{
 			hash ??= hashService.Sha(hashAlgorithm, secretValue);
 
-			if (validSecretHash.SequenceEqual(hash))
+			// Constant-time compare of the secret hashes (both are fixed-length digests of the
+			// same algorithm) so the token endpoint does not leak a timing oracle on the hash.
+			if (CryptographicOperations.FixedTimeEquals(validSecretHash, hash))
 				yield return clientSecret;
 		}
 	}

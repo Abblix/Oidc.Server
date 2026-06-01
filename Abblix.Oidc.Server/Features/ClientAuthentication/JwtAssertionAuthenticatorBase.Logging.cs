@@ -62,4 +62,10 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The error during authentication: iss is '{Issuer}', but sub is {Subject}")]
     private partial void LogIssuerSubjectMismatch(string? Issuer, string? Subject);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingJti,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {@ClientId} has no jti claim, which OIDC Core §9 requires for single-use replay protection")]
+    private partial void LogMissingJti(string ClientId);
 }
