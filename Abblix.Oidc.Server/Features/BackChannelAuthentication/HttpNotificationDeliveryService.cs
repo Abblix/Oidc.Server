@@ -44,7 +44,8 @@ public partial class HttpNotificationDeliveryService(
     /// <param name="clientNotificationToken">Bearer token for authenticating the notification request.</param>
     /// <param name="payload">The notification payload to send.</param>
     /// <param name="mode">The CIBA mode (ping or push) for logging purposes.</param>
-    public async Task SendAsync(
+    /// <returns><c>true</c> if the endpoint returned a success status; otherwise <c>false</c>.</returns>
+    public async Task<bool> SendAsync(
         Uri clientNotificationEndpoint,
         string clientNotificationToken,
         IBackChannelNotificationRequest payload,
@@ -65,15 +66,16 @@ public partial class HttpNotificationDeliveryService(
             if (response.IsSuccessStatusCode)
             {
                 LogNotificationSucceeded(mode);
+                return true;
             }
-            else
-            {
-                LogNotificationFailed(mode, response.StatusCode);
-            }
+
+            LogNotificationFailed(mode, response.StatusCode);
+            return false;
         }
         catch (Exception ex)
         {
             LogNotificationError(ex, mode, clientNotificationEndpoint);
+            return false;
         }
     }
 }

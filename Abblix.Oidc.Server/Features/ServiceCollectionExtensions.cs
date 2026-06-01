@@ -184,8 +184,15 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
         services.TryAddSingleton<ILogoutTokenService, LogoutTokenService>();
+        // The back-channel logout URI is a client-supplied URL, so POSTing logout tokens to it must
+        // run through the SSRF-validating handler and carry a bounded timeout, like every other
+        // server-initiated outbound request in this library.
         return services
-            .AddHttpClient<ILogoutTokenSender, BackChannelLogoutTokenSender>()
+            .AddSsrfHttpClient<ILogoutTokenSender, BackChannelLogoutTokenSender>((serviceProvider, client) =>
+            {
+                client.Timeout = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>()
+                    .Value.RequestTimeout;
+            })
             .Services;
     }
 
@@ -508,7 +515,14 @@ public static class ServiceCollectionExtensions
                 httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
             });
 
-        services.AddHttpClient(nameof(HttpNotificationDeliveryService));
+        // The notification endpoint is a client-supplied URL, so server-initiated POSTs to it must
+        // run through the SSRF-validating handler (blocks internal hosts, private IPs, DNS rebinding)
+        // and carry a bounded timeout, exactly like every other outbound fetch in this library.
+        services.AddSsrfHttpClient(nameof(HttpNotificationDeliveryService), (serviceProvider, client) =>
+        {
+            client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>()
+                .Value.BackChannelAuthentication.NotificationHttpClientTimeout;
+        });
 
         // Register CIBA grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
         services.AddAuthorizationGrant<BackChannelAuthenticationGrantHandler>();
@@ -575,13 +589,11 @@ public static class ServiceCollectionExtensions
 
         services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
 
-        services
-            .AddHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
-            {
-                var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
-                client.Timeout = options.RequestTimeout;
-            })
-            .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
+        services.AddSsrfHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
+            client.Timeout = options.RequestTimeout;
+        });
 
         return services;
     }
