@@ -48,11 +48,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// <param name="clientInfoProvider">Loads the <see cref="ClientInfo"/> for the token's client.</param>
 /// <param name="dpopValidator">RFC 9449 §7 DPoP resource-server-side validator that enforces the
 /// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
+/// <param name="mtlsValidator">RFC 8705 §3 mutual-TLS resource-server-side validator that enforces
+/// the certificate binding when the access token carries a <c>cnf.x5t#S256</c> confirmation.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
 	IClientInfoProvider clientInfoProvider,
-	IDPoPUserInfoValidator dpopValidator) : IUserInfoRequestValidator
+	IDPoPUserInfoValidator dpopValidator,
+	IMtlsUserInfoValidator mtlsValidator) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
@@ -132,6 +135,13 @@ public class UserInfoRequestValidator(
 		var dpopError = await dpopValidator.ValidateAsync(clientRequest, token, jwtAccessToken);
 		if (dpopError is not null)
 			return dpopError;
+
+		// RFC 8705 §3 RS-side enforcement: when the access token carries cnf.x5t#S256 the
+		// certificate presented on the mutual-TLS connection MUST hash to the bound value.
+		// Independent of the DPoP binding above — a token carrying both must satisfy each.
+		var mtlsError = mtlsValidator.Validate(clientRequest, token);
+		if (mtlsError is not null)
+			return mtlsError;
 
 		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
 

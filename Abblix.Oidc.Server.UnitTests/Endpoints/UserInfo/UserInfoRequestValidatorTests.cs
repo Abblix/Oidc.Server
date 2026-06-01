@@ -50,6 +50,7 @@ public class UserInfoRequestValidatorTests
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IDPoPUserInfoValidator> _dpopValidator;
+    private readonly Mock<IMtlsUserInfoValidator> _mtlsValidator;
     private readonly UserInfoRequestValidator _validator;
 
     public UserInfoRequestValidatorTests(TestInfrastructure.LicenseFixture fixture)
@@ -61,12 +62,17 @@ public class UserInfoRequestValidatorTests
         _dpopValidator
             .Setup(v => v.ValidateAsync(It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), It.IsAny<string>()))
             .ReturnsAsync((OidcError?)null);
+        _mtlsValidator = new Mock<IMtlsUserInfoValidator>(MockBehavior.Strict);
+        _mtlsValidator
+            .Setup(v => v.Validate(It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>()))
+            .Returns((OidcError?)null);
 
         _validator = new UserInfoRequestValidator(
             _jwtValidator.Object,
             _accessTokenService.Object,
             _clientInfoProvider.Object,
-            _dpopValidator.Object);
+            _dpopValidator.Object,
+            _mtlsValidator.Object);
     }
 
     private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)
