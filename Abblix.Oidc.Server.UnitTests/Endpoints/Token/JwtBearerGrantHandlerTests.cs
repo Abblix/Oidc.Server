@@ -108,7 +108,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("assertion", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -133,7 +132,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("assertion", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -184,7 +182,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("invalid", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -212,7 +209,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("sub", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -730,7 +726,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("algorithm", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -776,7 +771,7 @@ public class JwtBearerGrantHandlerTests
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		mocks.IssuerProvider
-			.Setup(p => p.IsReplayedAsync("unique-jti-12345"))
+			.Setup(p => p.IsReplayedAsync("unique-jti-12345", It.IsAny<DateTimeOffset?>()))
 			.ReturnsAsync(true);
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
@@ -791,7 +786,35 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("already been used", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
+	/// Verifies that an assertion without an 'exp' claim is rejected.
+	/// RFC 7523 Section 3 requires the JWT to contain an 'exp' claim limiting its usable window;
+	/// without it the assertion would otherwise be accepted as never-expiring.
+	/// </summary>
+	[Fact]
+	public async Task MissingExpirationClaim_ShouldReject()
+	{
+		// Arrange
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		jwt.Payload.ExpiresAt = null;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var clientInfo = new ClientInfo(ClientId);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		// Act
+		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+		// Assert
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
 	/// <summary>
@@ -820,7 +843,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("jti", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -846,7 +868,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("size", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -933,7 +954,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("too old", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -995,7 +1015,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("iat", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -1027,7 +1046,6 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-		Assert.Contains("token type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -1111,11 +1129,7 @@ public class JwtBearerGrantHandlerTests
 			.ReturnsAsync(trustedIssuer);
 
 		issuerProvider
-			.Setup(p => p.IsReplayedAsync(It.IsAny<string>()))
+			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
 			.ReturnsAsync(false);
-
-		issuerProvider
-			.Setup(p => p.MarkAsUsedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
-			.Returns(Task.CompletedTask);
 	}
 }

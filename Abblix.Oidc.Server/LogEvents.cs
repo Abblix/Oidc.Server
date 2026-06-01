@@ -61,6 +61,7 @@ internal static class LogEvents
             public const int IssuerNotTrusted = Base + 13;
             public const int AudienceFailedStrict = Base + 14;
             public const int AudienceFailedPermissive = Base + 15;
+            public const int MissingExpiration = Base + 16;
         }
 
         /// <summary>

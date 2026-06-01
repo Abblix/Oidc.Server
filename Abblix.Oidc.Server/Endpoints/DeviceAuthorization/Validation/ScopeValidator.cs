@@ -51,6 +51,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IDeviceAuthorizationCo
         if (!scopeManager.Validate(
                 scopes,
                 context.Resources,
+                context.ClientInfo.AllowedScopes,
                 out var scopeDefinitions,
                 out var errorDescription))
         {

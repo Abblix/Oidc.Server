@@ -241,13 +241,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenContextValidators(this IServiceCollection services)
     {
         // Register individual validators that will participate in a composite pattern.
-        // Order is load-bearing: ClientValidator must precede DPoPTokenEndpointValidator
-        // because the latter reads ClientInfo.RequireDPoP to decide whether DPoP
-        // is mandatory or opportunistic.
+        // Order is load-bearing:
+        // - ClientValidator must precede DPoPTokenEndpointValidator because the latter reads
+        //   ClientInfo.RequireDPoP to decide whether DPoP is mandatory or opportunistic.
+        // - ClientValidator must also precede ScopeValidator: ScopeValidator enforces the client's
+        //   registered scope set and therefore reads ClientInfo, which ClientValidator populates.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>()
         ]);

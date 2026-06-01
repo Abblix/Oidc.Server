@@ -41,6 +41,9 @@ public static class ScopeManagerExtensions
     /// <param name="scopes">A collection of scope identifiers to be validated.</param>
     /// <param name="resources">An optional array of <see cref="ResourceDefinition"/> objects to validate scopes
     /// against.</param>
+    /// <param name="allowedClientScopes">The scopes the requesting client is allowed to request (its registered
+    /// scope set). When non-empty, any requested scope outside this set is rejected. When null or empty, no
+    /// per-client restriction is applied. Mirrors the per-issuer allow-list used by the JWT bearer grant.</param>
     /// <param name="scopeDefinitions">Outputs an array of <see cref="ScopeDefinition"/> objects if
     /// the validation is successful, otherwise null.</param>
     /// <param name="errorDescription">Outputs a string describing the reason for validation failure,
@@ -50,6 +53,7 @@ public static class ScopeManagerExtensions
         this IScopeManager scopeManager,
         IEnumerable<string> scopes,
         ResourceDefinition[]? resources,
+        string[]? allowedClientScopes,
         [MaybeNullWhen(false)] out ScopeDefinition[] scopeDefinitions,
         [MaybeNullWhen(true)] out string errorDescription)
     {
@@ -67,6 +71,16 @@ public static class ScopeManagerExtensions
 
         foreach (var scope in scopes)
         {
+            // Enforce the client's registered scope set: a client must not obtain a scope it was
+            // never registered for (RFC 6749 §3.3 — the AS restricts scope by policy). Empty/null
+            // means no restriction, matching the per-issuer allow-list of the JWT bearer grant.
+            if (allowedClientScopes is { Length: > 0 } &&
+                !allowedClientScopes.Contains(scope, StringComparer.Ordinal))
+            {
+                errorDescription = "The scope is not allowed for this client";
+                return false;
+            }
+
             // Check if the scope is recognized by the scope manager
             if (scopeManager.TryGet(scope, out var scopeDefinition))
             {

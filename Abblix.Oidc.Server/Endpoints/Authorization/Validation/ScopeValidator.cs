@@ -59,6 +59,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 		if (!scopeManager.Validate(
 			    context.Request.Scope,
 			    context.Resources,
+			    context.ClientInfo.AllowedScopes,
 			    out var scopeDefinitions,
 			    out var errorDescription))
 		{
