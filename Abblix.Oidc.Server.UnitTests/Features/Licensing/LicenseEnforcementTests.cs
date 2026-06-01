@@ -43,6 +43,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// This approach tests the underlying license aggregation and enforcement logic
 /// that LicenseChecker relies on, but in a fully isolated manner.
 /// </remarks>
+[Collection("License")]
 public class LicenseEnforcementTests
 {
     #region Client Limit Enforcement

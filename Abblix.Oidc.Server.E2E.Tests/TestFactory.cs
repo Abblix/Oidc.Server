@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
 
@@ -17,8 +18,23 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// (no Initial Access Token) — are applied here; everything else is
 /// what a real consumer of Abblix.Oidc.Server gets.
 /// </summary>
-public class TestFactory : WebApplicationFactory<Program>
+public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    /// <summary>
+    /// Eagerly builds the single shared host once, before the parallel test classes touch it.
+    /// WebApplicationFactory builds its host lazily on first access and its EnsureServer step is
+    /// not thread-safe; under the assembly-fixture + parallel-collection model, concurrent
+    /// first-access would otherwise build the host more than once — each build mints a fresh
+    /// signing key and gets its own isolated in-memory stores, so a token issued through one
+    /// build fails signature validation (or grant lookup) against another. Forcing the build here,
+    /// single-threaded, removes that race. This is test-infrastructure correctness, not behaviour.
+    /// </summary>
+    public ValueTask InitializeAsync()
+    {
+        _ = Server;
+        return ValueTask.CompletedTask;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Test");
