@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -65,7 +66,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(model);
+		var authSessions = await GetAvailableAuthSessionsAsync(model, request.ClientInfo);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
@@ -223,21 +224,27 @@ public class AuthorizationRequestProcessor(
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
 	/// </summary>
 	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
+	/// <param name="clientInfo">The client, supplying default_max_age / default_acr_values fallbacks.</param>
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model, ClientInfo clientInfo)
 	{
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
-		// Filter sessions based on the maximum allowable authentication age, if specified.
-		if (model.MaxAge.HasValue)
+		// Filter by maximum authentication age. When the request omits max_age, fall back to the
+		// client's registered default_max_age (OIDC Core §2 / §3.1.2.1).
+		var maxAge = model.MaxAge ?? clientInfo.DefaultMaxAge;
+		if (maxAge.HasValue)
 		{
-			// skip all sessions older than max_age value
-			var minAuthenticationTime = clock.GetUtcNow() - model.MaxAge;
+			// skip all sessions older than the effective max_age value
+			var minAuthenticationTime = clock.GetUtcNow() - maxAge;
 			authSessions = authSessions.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
-		// Filter sessions based on the required ACR (Authentication Context Class Reference) values, if specified.
-		var acrValues = model.AcrValues;
+		// Filter by required ACR values. When the request omits acr_values, fall back to the client's
+		// registered default_acr_values (OIDC Core §2).
+		var acrValues = model.AcrValues is { Length: > 0 } requestedAcrValues
+			? requestedAcrValues
+			: clientInfo.DefaultAcrValues;
 		if (acrValues is { Length: > 0 })
 		{
 			authSessions = authSessions.Where(
