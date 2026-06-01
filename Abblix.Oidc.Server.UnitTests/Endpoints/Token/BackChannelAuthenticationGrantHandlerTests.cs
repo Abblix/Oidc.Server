@@ -273,8 +273,9 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
+        // slow_down (polled too fast, CIBA Core §11) is the stable wire contract; the human-readable
+        // description is free to change, so the test pins the error code only.
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
-        Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

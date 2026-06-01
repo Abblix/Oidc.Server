@@ -140,11 +140,11 @@ public class BackChannelAuthenticationValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when ping mode with endpoint specified.
-    /// Implementation currently only supports poll mode.
+    /// Verifies validation succeeds with ping mode and a notification endpoint.
+    /// Per OIDC CIBA §4, ping mode is a valid delivery mode and requires the endpoint.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_PingModeWithEndpoint_ShouldReturnError()
+    public async Task ValidateAsync_PingModeWithEndpoint_ShouldReturnNull()
     {
         // Arrange
         var context = CreateContext(
@@ -155,9 +155,7 @@ public class BackChannelAuthenticationValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("not supported", result.ErrorDescription);
+        Assert.Null(result);
     }
 
     /// <summary>
@@ -181,11 +179,11 @@ public class BackChannelAuthenticationValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when push mode with endpoint specified.
-    /// Implementation currently only supports poll mode.
+    /// Verifies validation succeeds with push mode and a notification endpoint.
+    /// Per OIDC CIBA §4, push mode is a valid delivery mode and requires the endpoint.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_PushModeWithEndpoint_ShouldReturnError()
+    public async Task ValidateAsync_PushModeWithEndpoint_ShouldReturnNull()
     {
         // Arrange
         var context = CreateContext(
@@ -196,9 +194,7 @@ public class BackChannelAuthenticationValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("not supported", result.ErrorDescription);
+        Assert.Null(result);
     }
 
     /// <summary>
