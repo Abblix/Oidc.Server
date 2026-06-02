@@ -90,6 +90,18 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
+        // OIDC Core §9 / RFC 7591: when the client registered token_endpoint_auth_signing_alg, the
+        // assertion MUST use exactly that algorithm. The signature is already verified by here; this
+        // pins the registered algorithm so a client cannot authenticate with a different (e.g. weaker)
+        // algorithm its key happens to support.
+        var requiredSigningAlgorithm = clientInfo.TokenEndpointAuthSigningAlgorithm;
+        if (requiredSigningAlgorithm.HasValue() &&
+            !string.Equals(token.Header.Algorithm, requiredSigningAlgorithm, StringComparison.Ordinal))
+        {
+            LogSigningAlgorithmNotAllowed(clientInfo.ClientId, token.Header.Algorithm, requiredSigningAlgorithm);
+            return null;
+        }
+
         string? subject;
         try
         {
