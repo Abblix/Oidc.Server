@@ -95,10 +95,13 @@ public record AuthorizationRequest
 
 	/// <summary>
 	/// The OAuth 2.0 <c>response_mode</c> parameter (OAuth 2.0 Multiple Response Types / OAuth 2.0 Form Post Response Mode)
-	/// selecting how the authorization response is delivered: <c>query</c>, <c>fragment</c>, or <c>form_post</c>.
+	/// selecting how the authorization response is delivered: <c>query</c>, <c>fragment</c>, <c>form_post</c>,
+	/// or their JARM JWT-secured variants <c>query.jwt</c>, <c>fragment.jwt</c>, <c>form_post.jwt</c> and <c>jwt</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseMode)]
-    [AllowedValues(ResponseModes.FormPost, ResponseModes.Fragment, ResponseModes.Query)]
+    [AllowedValues(
+        ResponseModes.FormPost, ResponseModes.Fragment, ResponseModes.Query,
+        ResponseModes.QueryJwt, ResponseModes.FragmentJwt, ResponseModes.FormPostJwt, ResponseModes.Jwt)]
     public string? ResponseMode { get; init; }
 
 	/// <summary>

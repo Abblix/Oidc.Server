@@ -98,6 +98,8 @@ public class UpdateClientRequestProcessor(
             IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
             UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
             RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
             RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
             RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
@@ -110,6 +112,11 @@ public class UpdateClientRequestProcessor(
             SoftwareId = model.SoftwareId,
             SoftwareVersion = model.SoftwareVersion,
         };
+
+        if (model.AuthorizationSignedResponseAlg.HasValue())
+        {
+            updatedClient.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
+        }
 
         // Update logout configuration using wrapper objects
         if (model.BackChannelLogoutUri != null)

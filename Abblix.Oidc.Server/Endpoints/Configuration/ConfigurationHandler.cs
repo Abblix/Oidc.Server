@@ -88,6 +88,12 @@ public sealed class ConfigurationHandler(
 			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
 			: null,
 
+		// JARM (JWT Secured Authorization Response Mode) is always available — a client opts in per request
+		// by selecting a *.jwt response mode — so the supported algorithms are advertised unconditionally.
+		AuthorizationSigningAlgValuesSupported = jwtAlgorithms.AuthorizationSigningAlgValuesSupported,
+		AuthorizationEncryptionAlgValuesSupported = jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported,
+		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
+
 		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 

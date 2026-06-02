@@ -335,6 +335,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IClientJwtValidator, ClientJwtValidator>();
         services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
+        services.TryAddSingleton<IAuthorizationResponseEncoder, AuthorizationResponseEncoder>();
         return services;
     }
 

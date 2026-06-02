@@ -59,4 +59,24 @@ public interface IJwtAlgorithmsProvider
 	/// advertised via <c>request_object_encryption_enc_values_supported</c>.
 	/// </summary>
 	IEnumerable<string> RequestObjectEncryptionEncValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWS algorithms the authorization server uses to sign JARM authorization responses,
+	/// advertised via <c>authorization_signing_alg_values_supported</c> (JARM §4).
+	/// </summary>
+	IEnumerable<string> AuthorizationSigningAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server can use to
+	/// encrypt JARM authorization responses, advertised via <c>authorization_encryption_alg_values_supported</c>
+	/// (JARM §4).
+	/// </summary>
+	IEnumerable<string> AuthorizationEncryptionAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server can use to
+	/// encrypt JARM authorization responses, advertised via <c>authorization_encryption_enc_values_supported</c>
+	/// (JARM §4).
+	/// </summary>
+	IEnumerable<string> AuthorizationEncryptionEncValuesSupported { get; }
 }

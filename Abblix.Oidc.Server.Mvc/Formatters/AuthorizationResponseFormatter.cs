@@ -26,7 +26,9 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.SessionManagement;
+using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -50,6 +52,8 @@ public class AuthorizationResponseFormatter(
     IUriResolver uriResolver,
     IIssuerProvider issuerProvider,
     IAuthorizationMetadataProvider authorizationMetadata,
+    IParametersProvider parametersProvider,
+    IAuthorizationResponseEncoder responseEncoder,
     IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
     /// <summary>
@@ -108,7 +112,21 @@ public class AuthorizationResponseFormatter(
                     SessionState = success.SessionState,
                 };
 
-                var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, success.ResponseMode, redirectUri);
+                // JARM (JWT Secured Authorization Response Mode): when the client requested a *.jwt response
+                // mode, pack the response parameters into a signed/encrypted `response` JWT (built by the core
+                // encoder) and deliver it via the matching plaintext mode.
+                var effectiveResponse = modelResponse;
+                var deliveryMode = success.ResponseMode;
+                if (ResponseModes.IsJwtMode(success.ResponseMode))
+                {
+                    var parameters = parametersProvider.GetParameters(modelResponse).ToArray();
+                    var jarm = await responseEncoder.EncodeAsync(
+                        success.ResponseMode, response.Model.ClientId, carriesTokens, parameters);
+                    effectiveResponse = new AuthorizationResponse { Response = jarm.ResponseJwt };
+                    deliveryMode = jarm.DeliveryMode;
+                }
+
+                var actionResult = await errorFormatter.FormatResponseAsync(effectiveResponse, deliveryMode, redirectUri);
 
                 if (sessionManagementService.Enabled &&
                     success.SessionId.HasValue() &&

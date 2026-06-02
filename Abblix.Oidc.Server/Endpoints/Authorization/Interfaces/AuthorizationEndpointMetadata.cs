@@ -61,7 +61,15 @@ public record AuthorizationEndpointMetadata
     [
         ResponseModes.Query,
         ResponseModes.Fragment,
-        ResponseModes.FormPost
+        ResponseModes.FormPost,
+
+        // JARM (JWT Secured Authorization Response Mode). A client opts in per request by selecting one of
+        // these modes; the response is then signed (and optionally encrypted) per the client's registered
+        // authorization_signed/encrypted_response_* metadata.
+        ResponseModes.QueryJwt,
+        ResponseModes.FragmentJwt,
+        ResponseModes.FormPostJwt,
+        ResponseModes.Jwt
     ];
 
     /// <summary>

@@ -88,7 +88,9 @@ public record AuthorizationRequest
 	/// such as in the query string or fragment of the redirect URI.
 	/// </summary>
 	[BindProperty(SupportsGet = true, Name = Parameters.ResponseMode)]
-    [AllowedValues(ResponseModes.FormPost, ResponseModes.Fragment, ResponseModes.Query)]
+    [AllowedValues(
+        ResponseModes.FormPost, ResponseModes.Fragment, ResponseModes.Query,
+        ResponseModes.QueryJwt, ResponseModes.FragmentJwt, ResponseModes.FormPostJwt, ResponseModes.Jwt)]
     public string? ResponseMode { get; init; }
 
 	/// <summary>
