@@ -571,6 +571,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, EncryptedResponseAlgorithmsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),

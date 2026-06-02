@@ -46,7 +46,7 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 /// </summary>
 public class DiscoverySignedMetadataTests
 {
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string SignedJws = "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ4In0.sig";
 
     private readonly Mock<IOptionsSnapshot<OidcOptions>> _optionsMock = new();

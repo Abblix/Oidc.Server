@@ -1,0 +1,126 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System;
+using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
+
+/// <summary>
+/// Unit tests for <see cref="EncryptedResponseAlgorithmsValidator"/> verifying that the JWE algorithms a client
+/// registers for encrypted ID tokens, UserInfo responses, request objects and JARM authorization responses are
+/// checked against the server's supported key-management (<c>alg</c>) and content-encryption (<c>enc</c>) sets.
+/// </summary>
+public class EncryptedResponseAlgorithmsValidatorTests
+{
+    private const string SupportedAlg = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+    private const string SupportedEnc = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
+
+    private readonly Mock<IJsonWebTokenValidator> _jwtValidator = new(MockBehavior.Strict);
+    private readonly EncryptedResponseAlgorithmsValidator _validator;
+
+    public EncryptedResponseAlgorithmsValidatorTests()
+    {
+        _jwtValidator.Setup(v => v.EncryptionAlgorithmsSupported).Returns([SupportedAlg]);
+        _jwtValidator.Setup(v => v.EncryptionMethodsSupported).Returns([SupportedEnc]);
+        _validator = new EncryptedResponseAlgorithmsValidator(_jwtValidator.Object);
+    }
+
+    private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
+        => new(request);
+
+    private static ClientRegistrationRequest Request()
+        => new() { RedirectUris = [TestConstants.DefaultRedirectUri] };
+
+    [Fact]
+    public async Task ValidateAsync_WithNoAlgorithms_ShouldReturnNull()
+    {
+        var result = await _validator.ValidateAsync(CreateContext(Request()));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithSupportedAlgorithmsForEveryField_ShouldReturnNull()
+    {
+        var request = Request() with
+        {
+            IdTokenEncryptedResponseAlg = SupportedAlg,
+            IdTokenEncryptedResponseEnc = SupportedEnc,
+            UserInfoEncryptedResponseAlg = SupportedAlg,
+            UserInfoEncryptedResponseEnc = SupportedEnc,
+            RequestObjectEncryptionAlg = SupportedAlg,
+            RequestObjectEncryptionEnc = SupportedEnc,
+            AuthorizationEncryptedResponseAlg = SupportedAlg,
+            AuthorizationEncryptedResponseEnc = SupportedEnc,
+        };
+
+        var result = await _validator.ValidateAsync(CreateContext(request));
+
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("id_token_encrypted_response_alg")]
+    [InlineData("userinfo_encrypted_response_alg")]
+    [InlineData("request_object_encryption_alg")]
+    [InlineData("authorization_encrypted_response_alg")]
+    public async Task ValidateAsync_WithUnsupportedKeyManagementAlg_ShouldReturnError(string wireName)
+    {
+        const string unsupported = EncryptionAlgorithms.KeyManagement.Rsa1_5;
+        var request = wireName switch
+        {
+            "id_token_encrypted_response_alg" => Request() with { IdTokenEncryptedResponseAlg = unsupported },
+            "userinfo_encrypted_response_alg" => Request() with { UserInfoEncryptedResponseAlg = unsupported },
+            "request_object_encryption_alg" => Request() with { RequestObjectEncryptionAlg = unsupported },
+            _ => Request() with { AuthorizationEncryptedResponseAlg = unsupported },
+        };
+
+        var result = await _validator.ValidateAsync(CreateContext(request));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains(wireName, result.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithUnsupportedContentEncryption_ShouldReturnError()
+    {
+        var request = Request() with
+        {
+            AuthorizationEncryptedResponseAlg = SupportedAlg,
+            AuthorizationEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+        };
+
+        var result = await _validator.ValidateAsync(CreateContext(request));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("authorization_encrypted_response_enc", result.ErrorDescription);
+    }
+}

@@ -46,7 +46,7 @@ public class ClientJwtValidatorTests
     private const string ValidClientId = TestConstants.DefaultClientId;
     private const string AnotherClientId = "client_456";
     private const string RequestUri = "https://auth.example.com/token";
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string ValidJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRfMTIzIn0.signature";
 
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;

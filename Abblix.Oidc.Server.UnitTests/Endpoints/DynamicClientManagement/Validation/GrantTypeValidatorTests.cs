@@ -44,7 +44,7 @@ public class GrantTypeValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             ResponseTypes = responseTypes,
             GrantTypes = grantTypes
         };

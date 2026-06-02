@@ -51,7 +51,7 @@ public class TokenEndpointAuthMethodValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = tokenEndpointAuthMethod!
         };
 

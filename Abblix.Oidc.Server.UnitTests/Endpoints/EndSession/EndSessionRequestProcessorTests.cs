@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 [Collection("License")]
 public class EndSessionRequestProcessorTests
 {
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private readonly Mock<ILogger<EndSessionRequestProcessor>> _logger;
     private readonly Mock<IAuthSessionService> _authSessionService;

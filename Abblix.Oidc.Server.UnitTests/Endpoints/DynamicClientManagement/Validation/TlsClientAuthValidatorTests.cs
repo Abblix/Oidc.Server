@@ -51,7 +51,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
@@ -72,7 +72,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
         });
 
@@ -95,7 +95,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp,C=US",
             TlsClientAuthSanDns = ["client.example.com"],
@@ -119,7 +119,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp,C=US",
         });
@@ -141,7 +141,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "not a valid DN format!@#",
         });
@@ -167,7 +167,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [dnsName],
         });
@@ -189,7 +189,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [""],
         });
@@ -215,7 +215,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [dnsName],
         });
@@ -241,7 +241,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanUri = [new Uri(uri)],
         });
@@ -266,7 +266,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -293,7 +293,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -317,7 +317,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -343,7 +343,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanEmail = [email],
         });
@@ -367,7 +367,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanEmail = [email],
         });
@@ -391,7 +391,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp",
             TlsClientAuthSanDns = ["client.example.com", "*.example.com"],
@@ -418,7 +418,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = ["valid.example.com", "invalid dns name"],
         });

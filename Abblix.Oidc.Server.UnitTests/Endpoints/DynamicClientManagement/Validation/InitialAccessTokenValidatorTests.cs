@@ -69,7 +69,7 @@ public class InitialAccessTokenValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             AuthorizationHeader = authHeader,
         };
 

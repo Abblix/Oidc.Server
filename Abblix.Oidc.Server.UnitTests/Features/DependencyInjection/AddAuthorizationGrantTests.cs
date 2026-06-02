@@ -255,7 +255,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_RegistersBuiltInGrantHandlersAsGrantTypeInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString);
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -278,7 +278,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_WithoutPasswordOptIn_ExcludesPasswordGrantFromInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString);
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -299,7 +299,7 @@ public class AddAuthorizationGrantTests
     {
         var services = new ServiceCollection();
         services
-            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer)
+            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString)
             .EnablePasswordGrant();
 
         var informerImpls = services
