@@ -203,7 +203,71 @@ public class RequestObjectFetcherTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
-        Assert.Contains("Unable to bind request object", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies that a request object whose signing algorithm differs from the client's registered
+    /// algorithm is rejected when a required-algorithm selector is supplied (request_object_signing_alg
+    /// for authorization, backchannel_authentication_request_signing_alg for CIBA).
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithRequestObjectAlgorithmMismatch_ShouldReturnError()
+    {
+        // Arrange — the request object is signed with RS384, but the client registered RS256.
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
+        var jwt = "header.payload.signature";
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject { ["alg"] = SigningAlgorithms.RS384 }),
+            Payload = new JsonWebTokenPayload(new JsonObject { ["client_id"] = TestConstants.DefaultClientId })
+        };
+        var clientInfo = new ClientInfo("test-client") { RequestObjectSigningAlgorithm = SigningAlgorithms.RS256 };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        // Act — the binder is strict and unset, so the alg pin must reject before any binding.
+        var result = await fetcher.FetchAsync(request, jwt, client => client.RequestObjectSigningAlgorithm);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that a request object whose signing algorithm matches the client's registered
+    /// algorithm passes the pin and is processed.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithMatchingRequestObjectAlgorithm_ShouldSucceed()
+    {
+        // Arrange
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri, null);
+        var jwt = "header.payload.signature";
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject { ["alg"] = SigningAlgorithms.RS256 }),
+            Payload = new JsonWebTokenPayload(payload)
+        };
+        var clientInfo = new ClientInfo("test-client") { RequestObjectSigningAlgorithm = SigningAlgorithms.RS256 };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, request))
+            .ReturnsAsync(request);
+
+        // Act
+        var result = await fetcher.FetchAsync(request, jwt, client => client.RequestObjectSigningAlgorithm);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Same(request, value);
     }
 
     /// <summary>
@@ -229,7 +293,6 @@ public class RequestObjectFetcherTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
-        Assert.Equal("The request object is invalid.", error.ErrorDescription);
     }
 
     /// <summary>

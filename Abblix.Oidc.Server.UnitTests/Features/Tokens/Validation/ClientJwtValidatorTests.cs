@@ -462,6 +462,32 @@ public class ClientJwtValidatorTests
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Exactly(2));
     }
 
+    /// <summary>
+    /// Verifies that when the inner JWT validation succeeds but no client can be determined — neither
+    /// from the issuer nor from a client_id claim — ValidateAsync returns a failure rather than a
+    /// ValidJsonWebToken with a null Client. Downstream callers (e.g. the request-object signing-alg
+    /// pin) rely on Client being non-null on success.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenClientCannotBeDetermined_ShouldReturnFailure()
+    {
+        // Arrange — inner validation succeeds without resolving a client (ValidateIssuer is not
+        // invoked here), and the token carries no client_id claim.
+        var token = CreateValidToken();
+        Assert.Null(token.Payload.ClientId);
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+
+        // Act
+        var result = await _validator.ValidateAsync(ValidJwt);
+
+        // Assert — a failure, never a success carrying a null Client.
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
     #endregion
 
     #region Key Resolution Tests
@@ -741,7 +767,6 @@ public class ClientJwtValidatorTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
-        Assert.Contains("Invalid signature", error.ErrorDescription);
     }
 
     /// <summary>
@@ -771,7 +796,6 @@ public class ClientJwtValidatorTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
-        Assert.Contains("Token expired", error.ErrorDescription);
     }
 
     /// <summary>

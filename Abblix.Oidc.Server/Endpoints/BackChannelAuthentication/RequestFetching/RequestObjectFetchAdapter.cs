@@ -41,5 +41,6 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// be validated and merged into the outer model.
     /// </summary>
     public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
-        => requestObjectFetcher.FetchAsync(request, request.Request);
+        => requestObjectFetcher.FetchAsync(
+            request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
 }

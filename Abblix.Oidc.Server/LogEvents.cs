@@ -602,6 +602,7 @@ internal static class LogEvents
             private const int Base = 9000;
 
             public const int InvalidToken = Base + 1;
+            public const int SigningAlgorithmMismatch = Base + 2;
         }
 
         /// <summary>
