@@ -29,21 +29,22 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
+namespace Abblix.Oidc.Server.UnitTests.Features.Jarm;
 
 /// <summary>
-/// Unit tests for <see cref="AuthorizationResponseEncoder"/> verifying JARM (JWT Secured Authorization Response
+/// Unit tests for <see cref="ResponseJwtBuilder"/> verifying JARM (JWT Secured Authorization Response
 /// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1), signing with the
 /// client's registered algorithm (default RS256, JARM §3), optional signed-then-encrypted output, and the
 /// resolution of the JARM response mode to its plaintext delivery counterpart (JARM §2.3).
 /// </summary>
-public class AuthorizationResponseEncoderTests
+public class ResponseJwtBuilderTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
     private const string Issuer = TestConstants.DefaultIssuer;
@@ -56,21 +57,21 @@ public class AuthorizationResponseEncoderTests
     private readonly Mock<IIssuerProvider> _issuerProvider = new(MockBehavior.Strict);
     private readonly Mock<TimeProvider> _timeProvider = new(MockBehavior.Strict);
 
-    private readonly AuthorizationResponseEncoder _encoder;
+    private readonly ResponseJwtBuilder _builder;
     private readonly ClientInfo _client = new(ClientId);
 
-    private readonly JsonWebKey _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
     private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
     private readonly DateTimeOffset _now = new(2026, 6, 2, 12, 0, 0, TimeSpan.Zero);
 
-    public AuthorizationResponseEncoderTests()
+    public ResponseJwtBuilderTests()
     {
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
         _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
         _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
-        _encoder = new AuthorizationResponseEncoder(
+        _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             _jwtCreator.Object,
             _clientKeys.Object,
@@ -81,7 +82,7 @@ public class AuthorizationResponseEncoderTests
 
     /// <summary>
     /// Mutable holder for the arguments the encoder passes to <see cref="IJsonWebTokenCreator.IssueAsync"/>.
-    /// The callback writes into it during the call, so the test reads it <em>after</em> awaiting EncodeAsync.
+    /// The callback writes into it during the call, so the test reads it <em>after</em> awaiting BuildAsync.
     /// </summary>
     private sealed class IssuedToken
     {
@@ -112,16 +113,14 @@ public class AuthorizationResponseEncoderTests
     }
 
     [Fact]
-    public async Task EncodeAsync_SignedOnly_PopulatesJarmClaimsAndSignsWithDefaultRs256()
+    public async Task BuildAsync_SignedOnly_PopulatesJarmClaimsAndSignsWithDefaultRs256()
     {
         var capture = CaptureIssue();
 
-        var result = await _encoder.EncodeAsync(
-            ResponseModes.QueryJwt, ClientId, carriesTokens: false,
-            [("code", "auth-code"), ("state", "client-state")]);
+        var result = await _builder.BuildAsync(
+            ClientId, [("code", "auth-code"), ("state", "client-state")]);
 
-        Assert.Equal(EncodedJwt, result.ResponseJwt);
-        Assert.Equal(ResponseModes.Query, result.DeliveryMode);
+        Assert.Equal(EncodedJwt, result);
 
         // JARM §2.1 mandated claims.
         Assert.Equal(Issuer, capture.Token.Payload.Issuer);
@@ -137,11 +136,11 @@ public class AuthorizationResponseEncoderTests
     }
 
     [Fact]
-    public async Task EncodeAsync_WithoutEncryptionAlgorithm_DoesNotEncrypt()
+    public async Task BuildAsync_WithoutEncryptionAlgorithm_DoesNotEncrypt()
     {
         var capture = CaptureIssue();
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -149,7 +148,7 @@ public class AuthorizationResponseEncoderTests
     }
 
     [Fact]
-    public async Task EncodeAsync_WithEncryptionAlgorithm_SignsThenEncryptsWithClientKey()
+    public async Task BuildAsync_WithEncryptionAlgorithm_SignsThenEncryptsWithClientKey()
     {
         var capture = CaptureIssue();
         _clientKeys
@@ -159,7 +158,7 @@ public class AuthorizationResponseEncoderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -167,7 +166,7 @@ public class AuthorizationResponseEncoderTests
     }
 
     [Fact]
-    public async Task EncodeAsync_WithEncryptionAlgorithmButNoEnc_DefaultsToA128CbcHs256()
+    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_DefaultsToA128CbcHs256()
     {
         var capture = CaptureIssue();
         _clientKeys
@@ -177,39 +176,40 @@ public class AuthorizationResponseEncoderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         // AuthorizationEncryptedResponseEncryption omitted → JARM §3 default
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
 
     [Fact]
-    public async Task EncodeAsync_HonoursClientConfiguredSigningAlgorithm()
+    public async Task BuildAsync_HonoursClientConfiguredSigningAlgorithm()
     {
         var signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
         _serviceKeys
             .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, signingKeyRS384 }.ToAsyncEnumerable());
+            .Returns(new[] { _signingKeyRs256, signingKeyRS384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }
 
+    /// <summary>
+    /// The JARM response mode is mapped to its plaintext delivery mode by
+    /// <see cref="ResponseModeExtensions.ToDeliveryMode"/>: the fixed variants map to their base mode, and the
+    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
+    /// </summary>
     [Theory]
     [InlineData(ResponseModes.QueryJwt, false, ResponseModes.Query)]
     [InlineData(ResponseModes.FragmentJwt, false, ResponseModes.Fragment)]
     [InlineData(ResponseModes.FormPostJwt, false, ResponseModes.FormPost)]
     [InlineData(ResponseModes.Jwt, false, ResponseModes.Query)]
     [InlineData(ResponseModes.Jwt, true, ResponseModes.Fragment)]
-    public async Task EncodeAsync_ResolvesDeliveryMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
+    public void ToDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
     {
-        CaptureIssue();
-
-        var result = await _encoder.EncodeAsync(responseMode, ClientId, carriesTokens, [("code", "auth-code")]);
-
-        Assert.Equal(expectedDeliveryMode, result.DeliveryMode);
+        Assert.Equal(expectedDeliveryMode, responseMode.ToDeliveryMode(carriesTokens));
     }
 }

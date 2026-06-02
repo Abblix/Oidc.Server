@@ -41,6 +41,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Nonces;
@@ -335,7 +336,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IClientJwtValidator, ClientJwtValidator>();
         services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
-        services.TryAddSingleton<IAuthorizationResponseEncoder, AuthorizationResponseEncoder>();
+        services.TryAddSingleton<IResponseJwtBuilder, ResponseJwtBuilder>();
         return services;
     }
 
