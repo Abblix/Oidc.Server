@@ -117,11 +117,9 @@ public class AuthorizationResponseEncoderTests
         var capture = CaptureIssue();
 
         var result = await _encoder.EncodeAsync(
-            ResponseModes.QueryJwt, ClientId, carriesTokens: false,
-            [("code", "auth-code"), ("state", "client-state")]);
+            ClientId, [("code", "auth-code"), ("state", "client-state")]);
 
-        Assert.Equal(EncodedJwt, result.ResponseJwt);
-        Assert.Equal(ResponseModes.Query, result.DeliveryMode);
+        Assert.Equal(EncodedJwt, result);
 
         // JARM §2.1 mandated claims.
         Assert.Equal(Issuer, capture.Token.Payload.Issuer);
@@ -141,7 +139,7 @@ public class AuthorizationResponseEncoderTests
     {
         var capture = CaptureIssue();
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _encoder.EncodeAsync(ClientId, [("code", "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -159,7 +157,7 @@ public class AuthorizationResponseEncoderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _encoder.EncodeAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -177,7 +175,7 @@ public class AuthorizationResponseEncoderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         // AuthorizationEncryptedResponseEncryption omitted → JARM §3 default
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _encoder.EncodeAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
@@ -193,23 +191,24 @@ public class AuthorizationResponseEncoderTests
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _encoder.EncodeAsync(ResponseModes.QueryJwt, ClientId, carriesTokens: false, [("code", "auth-code")]);
+        await _encoder.EncodeAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }
 
+    /// <summary>
+    /// The JARM response mode is mapped to its plaintext delivery mode by
+    /// <see cref="ResponseModes.ToDeliveryMode"/>: the fixed variants map to their base mode, and the
+    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
+    /// </summary>
     [Theory]
     [InlineData(ResponseModes.QueryJwt, false, ResponseModes.Query)]
     [InlineData(ResponseModes.FragmentJwt, false, ResponseModes.Fragment)]
     [InlineData(ResponseModes.FormPostJwt, false, ResponseModes.FormPost)]
     [InlineData(ResponseModes.Jwt, false, ResponseModes.Query)]
     [InlineData(ResponseModes.Jwt, true, ResponseModes.Fragment)]
-    public async Task EncodeAsync_ResolvesDeliveryMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
+    public void ResolveJwtDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
     {
-        CaptureIssue();
-
-        var result = await _encoder.EncodeAsync(responseMode, ClientId, carriesTokens, [("code", "auth-code")]);
-
-        Assert.Equal(expectedDeliveryMode, result.DeliveryMode);
+        Assert.Equal(expectedDeliveryMode, ResponseModes.ToDeliveryMode(responseMode, carriesTokens));
     }
 }

@@ -22,7 +22,6 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -33,8 +32,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <summary>
 /// Default <see cref="IAuthorizationResponseEncoder"/>: resolves the client, builds the JARM response JWT,
 /// signs it with the authorization server's key and — when the client registered an encryption algorithm —
-/// additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2), then maps the JARM
-/// response mode onto its plaintext delivery counterpart.
+/// additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="jwtCreator">Issues the signed/encrypted JWT.</param>
@@ -57,36 +55,11 @@ public class AuthorizationResponseEncoder(
     private static readonly TimeSpan ResponseLifetime = TimeSpan.FromMinutes(10);
 
     /// <inheritdoc />
-    public async Task<JarmResponse> EncodeAsync(
-        string responseMode,
-        string? clientId,
-        bool carriesTokens,
-        IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<string> EncodeAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
         var clientInfo = (await clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
 
-        var responseJwt = await BuildResponseJwtAsync(clientInfo, parameters);
-
-        // Map the JARM mode to the plaintext delivery mode that carries the `response` JWT. The `jwt` shortcut
-        // resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
-        var deliveryMode = responseMode switch
-        {
-            ResponseModes.QueryJwt => ResponseModes.Query,
-            ResponseModes.FragmentJwt => ResponseModes.Fragment,
-            ResponseModes.FormPostJwt => ResponseModes.FormPost,
-            ResponseModes.Jwt when carriesTokens => ResponseModes.Fragment,
-            ResponseModes.Jwt => ResponseModes.Query,
-            _ => responseMode,
-        };
-
-        return new JarmResponse(responseJwt, deliveryMode);
-    }
-
-    private async Task<string> BuildResponseJwtAsync(
-        ClientInfo clientInfo,
-        IReadOnlyList<(string name, string? value)> parameters)
-    {
         var now = timeProvider.GetUtcNow();
 
         var token = new JsonWebToken

@@ -76,21 +76,24 @@ public class AuthorizationErrorFormatter(
                 // An error response is delivered through the requested response mode, including JARM (JWT)
                 // modes. The core encoder packs the error parameters into the `response` JWT; the `jwt` shortcut
                 // defaults to fragment for token-bearing flows and query otherwise.
-                var effectiveResponse = response;
-                var deliveryMode = error.ResponseMode;
-                if (ResponseModes.IsJwtMode(error.ResponseMode))
+                var responseMode = error.ResponseMode;
+                if (ResponseModes.IsJwtMode(responseMode))
                 {
-                    var carriesTokens = request.ResponseType is { } responseType &&
-                        (responseType.Contains(ResponseTypes.Token) || responseType.Contains(ResponseTypes.IdToken));
-
                     var parameters = parametersProvider.GetParameters(response).ToArray();
-                    var jarm = await responseEncoder.EncodeAsync(
-                        error.ResponseMode, request.ClientId, carriesTokens, parameters);
-                    effectiveResponse = new AuthorizationResponse { Response = jarm.ResponseJwt };
-                    deliveryMode = jarm.DeliveryMode;
+
+                    response = new AuthorizationResponse
+                    {
+                        Response = await responseEncoder.EncodeAsync(request.ClientId, parameters),
+                    };
+
+                    var carriesTokens = request.ResponseType is { } responseType && (
+                        responseType.Contains(ResponseTypes.Token) ||
+                        responseType.Contains(ResponseTypes.IdToken));
+
+                    responseMode = responseMode.ToDeliveryMode(carriesTokens);
                 }
 
-                return await FormatResponseAsync(effectiveResponse, deliveryMode, redirectUri);
+                return await FormatResponseAsync(response, responseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));
