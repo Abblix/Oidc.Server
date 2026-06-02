@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -53,7 +54,7 @@ public class AuthorizationResponseFormatter(
     IIssuerProvider issuerProvider,
     IAuthorizationMetadataProvider authorizationMetadata,
     IParametersProvider parametersProvider,
-    IAuthorizationResponseEncoder responseEncoder,
+    IResponseJwtBuilder responseJwtBuilder,
     IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
     /// <summary>
@@ -115,18 +116,16 @@ public class AuthorizationResponseFormatter(
                 // JARM (JWT Secured Authorization Response Mode): when the client requested a *.jwt response
                 // mode, pack the response parameters into a signed/encrypted `response` JWT (built by the core
                 // encoder) and deliver it via the matching plaintext mode.
-                var effectiveResponse = modelResponse;
-                var deliveryMode = success.ResponseMode;
-                if (ResponseModes.IsJwtMode(success.ResponseMode))
+                var responseMode = success.ResponseMode;
+                if (responseMode.IsJwtMode())
                 {
                     var parameters = parametersProvider.GetParameters(modelResponse).ToArray();
-                    var jarm = await responseEncoder.EncodeAsync(
-                        success.ResponseMode, response.Model.ClientId, carriesTokens, parameters);
-                    effectiveResponse = new AuthorizationResponse { Response = jarm.ResponseJwt };
-                    deliveryMode = jarm.DeliveryMode;
+                    var responseJwt = await responseJwtBuilder.BuildAsync(response.Model.ClientId, parameters);
+                    modelResponse = new AuthorizationResponse { Response = responseJwt };
+                    responseMode = responseMode.ToDeliveryMode(carriesTokens);
                 }
 
-                var actionResult = await errorFormatter.FormatResponseAsync(effectiveResponse, deliveryMode, redirectUri);
+                var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, responseMode, redirectUri);
 
                 if (sessionManagementService.Enabled &&
                     success.SessionId.HasValue() &&

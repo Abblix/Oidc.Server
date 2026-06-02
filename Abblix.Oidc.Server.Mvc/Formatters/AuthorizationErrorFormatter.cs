@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -44,12 +45,12 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// included in error responses if applicable.</param>
 /// <param name="authorizationMetadata">Provider for the discovery metadata needed to map the requested
 /// response mode onto the corresponding redirect-handling strategy.</param>
-/// <param name="responseEncoder">Encodes the response as a JARM JWT when the requested response mode is a JWT variant.</param>
+/// <param name="responseJwtBuilder">Encodes the response as a JARM JWT when the requested response mode is a JWT variant.</param>
 public class AuthorizationErrorFormatter(
     IParametersProvider parametersProvider,
     IIssuerProvider issuerProvider,
     IAuthorizationMetadataProvider authorizationMetadata,
-    IAuthorizationResponseEncoder responseEncoder) : IAuthorizationErrorFormatter
+    IResponseJwtBuilder responseJwtBuilder) : IAuthorizationErrorFormatter
 {
     /// <summary>
     /// Asynchronously formats an authorization error response into an HTTP action result,
@@ -76,21 +77,24 @@ public class AuthorizationErrorFormatter(
                 // An error response is delivered through the requested response mode, including JARM (JWT)
                 // modes. The core encoder packs the error parameters into the `response` JWT; the `jwt` shortcut
                 // defaults to fragment for token-bearing flows and query otherwise.
-                var effectiveResponse = response;
-                var deliveryMode = error.ResponseMode;
-                if (ResponseModes.IsJwtMode(error.ResponseMode))
+                var responseMode = error.ResponseMode;
+                if (responseMode.IsJwtMode())
                 {
-                    var carriesTokens = request.ResponseType is { } responseType &&
-                        (responseType.Contains(ResponseTypes.Token) || responseType.Contains(ResponseTypes.IdToken));
-
                     var parameters = parametersProvider.GetParameters(response).ToArray();
-                    var jarm = await responseEncoder.EncodeAsync(
-                        error.ResponseMode, request.ClientId, carriesTokens, parameters);
-                    effectiveResponse = new AuthorizationResponse { Response = jarm.ResponseJwt };
-                    deliveryMode = jarm.DeliveryMode;
+
+                    response = new AuthorizationResponse
+                    {
+                        Response = await responseJwtBuilder.BuildAsync(request.ClientId, parameters),
+                    };
+
+                    var carriesTokens = request.ResponseType is { } responseType && (
+                        responseType.Contains(ResponseTypes.Token) ||
+                        responseType.Contains(ResponseTypes.IdToken));
+
+                    responseMode = responseMode.ToDeliveryMode(carriesTokens);
                 }
 
-                return await FormatResponseAsync(effectiveResponse, deliveryMode, redirectUri);
+                return await FormatResponseAsync(response, responseMode, redirectUri);
 
             default:
                 return new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription));

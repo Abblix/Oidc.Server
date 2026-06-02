@@ -22,19 +22,18 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
+namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
-/// Default <see cref="IAuthorizationResponseEncoder"/>: resolves the client, builds the JARM response JWT,
-/// signs it with the authorization server's key and — when the client registered an encryption algorithm —
-/// additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2), then maps the JARM
-/// response mode onto its plaintext delivery counterpart.
+/// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
+/// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
+/// response JWT, signs it with the authorization server's key and — when the client registered an encryption
+/// algorithm — additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="jwtCreator">Issues the signed/encrypted JWT.</param>
@@ -42,13 +41,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="serviceKeysProvider">Resolves the authorization server's signing keys.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
-public class AuthorizationResponseEncoder(
+public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
     IIssuerProvider issuerProvider,
-    TimeProvider timeProvider) : IAuthorizationResponseEncoder
+    TimeProvider timeProvider) : IResponseJwtBuilder
 {
     /// <summary>
     /// The maximum lifetime of a JARM response JWT. JARM §2.1 RECOMMENDS a maximum of 10 minutes; the
@@ -57,36 +56,11 @@ public class AuthorizationResponseEncoder(
     private static readonly TimeSpan ResponseLifetime = TimeSpan.FromMinutes(10);
 
     /// <inheritdoc />
-    public async Task<JarmResponse> EncodeAsync(
-        string responseMode,
-        string? clientId,
-        bool carriesTokens,
-        IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
         var clientInfo = (await clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
 
-        var responseJwt = await BuildResponseJwtAsync(clientInfo, parameters);
-
-        // Map the JARM mode to the plaintext delivery mode that carries the `response` JWT. The `jwt` shortcut
-        // resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
-        var deliveryMode = responseMode switch
-        {
-            ResponseModes.QueryJwt => ResponseModes.Query,
-            ResponseModes.FragmentJwt => ResponseModes.Fragment,
-            ResponseModes.FormPostJwt => ResponseModes.FormPost,
-            ResponseModes.Jwt when carriesTokens => ResponseModes.Fragment,
-            ResponseModes.Jwt => ResponseModes.Query,
-            _ => responseMode,
-        };
-
-        return new JarmResponse(responseJwt, deliveryMode);
-    }
-
-    private async Task<string> BuildResponseJwtAsync(
-        ClientInfo clientInfo,
-        IReadOnlyList<(string name, string? value)> parameters)
-    {
         var now = timeProvider.GetUtcNow();
 
         var token = new JsonWebToken
