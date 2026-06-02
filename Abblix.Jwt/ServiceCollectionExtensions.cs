@@ -60,31 +60,36 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>()
             .AddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
 
+        // Tracks the registered JWE algorithms for discovery (request_object_encryption_*_values_supported).
+        var encryptionAlgorithmsProvider = new EncryptionAlgorithmsProvider();
+
         // Register key encryptors by algorithm
         // RSA-based key encryption
         services
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep)
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256)
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5);
+            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep, encryptionAlgorithmsProvider)
+            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256, encryptionAlgorithmsProvider)
+            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5, encryptionAlgorithmsProvider);
 
         // AES-GCM Key Wrap (symmetric key encryption with GCM)
         services
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw)
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192Gcmkw)
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw, encryptionAlgorithmsProvider)
+            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192Gcmkw, encryptionAlgorithmsProvider)
+            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw, encryptionAlgorithmsProvider);
 
         // Direct Key Agreement (no key encryption)
         services
-            .AddKeyEncryptor<OctetJsonWebKey, DirectKeyAgreement>(EncryptionAlgorithms.KeyManagement.Dir);
+            .AddKeyEncryptor<OctetJsonWebKey, DirectKeyAgreement>(EncryptionAlgorithms.KeyManagement.Dir, encryptionAlgorithmsProvider);
 
         // Register content encryptors by algorithm
         services
-            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256)
-            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384)
-            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512)
-            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes128Gcm)
-            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes192Gcm)
-            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm);
+            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, encryptionAlgorithmsProvider)
+            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384, encryptionAlgorithmsProvider)
+            .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512, encryptionAlgorithmsProvider)
+            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, encryptionAlgorithmsProvider)
+            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes192Gcm, encryptionAlgorithmsProvider)
+            .AddContentEncryptor<AesGcmEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, encryptionAlgorithmsProvider);
+
+        services.AddSingleton(encryptionAlgorithmsProvider);
 
         // Register signers by algorithm
         var signingAlgorithmsProvider = new SigningAlgorithmsProvider();
@@ -149,6 +154,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TEncryptor">The IKeyEncryptor implementation for encrypting/decrypting Content Encryption Keys.</typeparam>
     /// <param name="services">The service collection to register the encryptor in.</param>
     /// <param name="algorithm">The JWE key management algorithm identifier (e.g., "RSA-OAEP-256", "A256GCMKW", "dir").</param>
+    /// <param name="encryptionAlgorithmsProvider">Accumulates the registered algorithm for discovery advertisement.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
     /// Registers the encryptor as a keyed singleton service, retrievable by algorithm name.
@@ -156,10 +162,13 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     private static IServiceCollection AddKeyEncryptor<TKey, TEncryptor>(
         this IServiceCollection services,
-        string algorithm)
+        string algorithm,
+        EncryptionAlgorithmsProvider encryptionAlgorithmsProvider)
         where TKey : JsonWebKey
         where TEncryptor : IKeyEncryptor<TKey>
     {
+        encryptionAlgorithmsProvider.AddKeyManagement(algorithm);
+
         return services.AddKeyedSingleton<IKeyEncryptor<TKey>>(
             algorithm,
             (sp, _) => sp.CreateService<TEncryptor>(Dependency.Override(algorithm)));
@@ -172,6 +181,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TEncryptor">The IDataEncryptor implementation for encrypting/decrypting JWE content.</typeparam>
     /// <param name="services">The service collection to register the encryptor in.</param>
     /// <param name="algorithm">The JWE content encryption algorithm identifier (e.g., "A256GCM", "A128CBC-HS256").</param>
+    /// <param name="encryptionAlgorithmsProvider">Accumulates the registered algorithm for discovery advertisement.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
     /// Registers the encryptor as a keyed singleton service, retrievable by algorithm name.
@@ -180,9 +190,12 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     private static IServiceCollection AddContentEncryptor<TEncryptor>(
         this IServiceCollection services,
-        string algorithm)
+        string algorithm,
+        EncryptionAlgorithmsProvider encryptionAlgorithmsProvider)
         where TEncryptor : IDataEncryptor
     {
+        encryptionAlgorithmsProvider.AddContentEncryption(algorithm);
+
         return services.AddKeyedSingleton<IDataEncryptor>(
             algorithm,
             (sp, _) => sp.CreateService<TEncryptor>(Dependency.Override(algorithm)));

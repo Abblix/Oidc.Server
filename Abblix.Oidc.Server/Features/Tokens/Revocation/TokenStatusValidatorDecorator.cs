@@ -46,6 +46,18 @@ public class TokenStatusValidatorDecorator(
 	public IEnumerable<string> SigningAlgorithmsSupported => innerValidator.SigningAlgorithmsSupported;
 
 	/// <summary>
+	/// Forwards the JWE key-management algorithms accepted by the inner validator; revocation checking
+	/// does not influence which encryption algorithms are supported.
+	/// </summary>
+	public IEnumerable<string> EncryptionAlgorithmsSupported => innerValidator.EncryptionAlgorithmsSupported;
+
+	/// <summary>
+	/// Forwards the JWE content-encryption algorithms accepted by the inner validator; revocation checking
+	/// does not influence which encryption algorithms are supported.
+	/// </summary>
+	public IEnumerable<string> EncryptionMethodsSupported => innerValidator.EncryptionMethodsSupported;
+
+	/// <summary>
 	/// Validates a JSON Web Token (JWT) and checks its revocation status.
 	/// </summary>
 	/// <param name="jwt">The JWT to be validated.</param>

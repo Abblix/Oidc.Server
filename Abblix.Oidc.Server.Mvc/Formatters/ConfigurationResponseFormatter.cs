@@ -117,6 +117,8 @@ public class ConfigurationResponseFormatter(
 
 			RequestParameterSupported = response.RequestParameterSupported,
 			RequestObjectSigningAlgValuesSupported = response.RequestObjectSigningAlgValuesSupported,
+			RequestObjectEncryptionAlgValuesSupported = response.RequestObjectEncryptionAlgValuesSupported,
+			RequestObjectEncryptionEncValuesSupported = response.RequestObjectEncryptionEncValuesSupported,
 
 			RequirePushedAuthorizationRequests = response.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = response.RequireSignedRequestObject,

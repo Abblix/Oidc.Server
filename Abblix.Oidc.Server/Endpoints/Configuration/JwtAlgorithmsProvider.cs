@@ -42,4 +42,10 @@ public sealed class JwtAlgorithmsProvider(
 	/// <inheritdoc />
 	public IEnumerable<string> DpopSigningAlgorithmsSupported
 		=> jwtValidator.SigningAlgorithmsSupported.Where(DPoPAlgorithms.Allowed.Contains);
+
+	/// <inheritdoc />
+	public IEnumerable<string> RequestObjectEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> RequestObjectEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
 }

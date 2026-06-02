@@ -36,6 +36,18 @@ public interface IJsonWebTokenValidator
 	IEnumerable<string> SigningAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Indicates which JWE key-management algorithms (the <c>alg</c> header values, e.g. "RSA-OAEP-256")
+	/// the validator can use to decrypt incoming encrypted JWTs, such as JWE-wrapped request objects.
+	/// </summary>
+	IEnumerable<string> EncryptionAlgorithmsSupported { get; }
+
+	/// <summary>
+	/// Indicates which JWE content-encryption algorithms (the <c>enc</c> header values, e.g. "A256GCM")
+	/// the validator can use to decrypt incoming encrypted JWTs, such as JWE-wrapped request objects.
+	/// </summary>
+	IEnumerable<string> EncryptionMethodsSupported { get; }
+
+	/// <summary>
 	/// Asynchronously validates a JWT against a set of specified parameters.
 	/// </summary>
 	/// <param name="jwt">The JWT as a string to be validated.</param>
