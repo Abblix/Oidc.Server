@@ -28,11 +28,11 @@ namespace Abblix.Oidc.Server.Features.Jarm;
 /// Encodes authorization endpoint response parameters into a JWT secured for a specific client, as defined by
 /// JWT Secured Authorization Response Mode for OAuth 2.0 (JARM). This is the framework-agnostic core of JARM:
 /// it builds, signs and optionally encrypts the response JWT. The JARM response mode is mapped to its plaintext
-/// delivery counterpart separately via <see cref="ResponseModes.ToDeliveryMode"/>.
+/// delivery counterpart separately via <see cref="ResponseModeExtensions.ToDeliveryMode"/>.
 /// Hosts (MVC, Minimal API, …) supply the response parameters and emit the resulting <c>response</c> parameter
 /// through their own transport layer.
 /// </summary>
-public interface IAuthorizationResponseEncoder
+public interface IResponseJwtBuilder
 {
     /// <summary>
     /// Builds the JARM response JWT for the given client. The JWT carries the JARM-mandated <c>iss</c>,
@@ -45,5 +45,5 @@ public interface IAuthorizationResponseEncoder
     /// <param name="parameters">The authorization response parameters (the same set the plaintext response modes
     /// would place on the wire), as name-value pairs.</param>
     /// <returns>A task that returns the encoded response JWT.</returns>
-    Task<string> EncodeAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters);
+    Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters);
 }

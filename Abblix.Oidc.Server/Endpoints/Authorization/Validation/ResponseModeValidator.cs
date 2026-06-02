@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Jarm;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -71,7 +72,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 		// is then subject to the same flow-compatibility rules as its plaintext counterpart — so query.jwt
 		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
 		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
-		if (ResponseModes.IsJwtMode(responseMode))
+		if (responseMode.IsJwtMode())
 		{
 			responseMode = responseMode switch
 			{

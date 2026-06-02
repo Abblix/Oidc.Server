@@ -54,7 +54,7 @@ public class AuthorizationResponseFormatter(
     IIssuerProvider issuerProvider,
     IAuthorizationMetadataProvider authorizationMetadata,
     IParametersProvider parametersProvider,
-    IAuthorizationResponseEncoder responseEncoder,
+    IResponseJwtBuilder responseJwtBuilder,
     IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
 {
     /// <summary>
@@ -117,12 +117,12 @@ public class AuthorizationResponseFormatter(
                 // mode, pack the response parameters into a signed/encrypted `response` JWT (built by the core
                 // encoder) and deliver it via the matching plaintext mode.
                 var responseMode = success.ResponseMode;
-                if (ResponseModes.IsJwtMode(responseMode))
+                if (responseMode.IsJwtMode())
                 {
                     var parameters = parametersProvider.GetParameters(modelResponse).ToArray();
-                    var responseJwt = await responseEncoder.EncodeAsync(response.Model.ClientId, parameters);
+                    var responseJwt = await responseJwtBuilder.BuildAsync(response.Model.ClientId, parameters);
                     modelResponse = new AuthorizationResponse { Response = responseJwt };
-                    responseMode = ResponseModes.ToDeliveryMode(success.ResponseMode, carriesTokens);
+                    responseMode = responseMode.ToDeliveryMode(carriesTokens);
                 }
 
                 var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, responseMode, redirectUri);

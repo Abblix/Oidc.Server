@@ -68,31 +68,4 @@ public static class ResponseModes
 	/// (<see cref="QueryJwt"/> for the code flow, <see cref="FragmentJwt"/> for token-bearing flows), per JARM §2.3.4.
 	/// </summary>
 	public const string Jwt = "jwt";
-
-	/// <summary>
-	/// Determines whether the given response mode is a JARM (JWT-secured) mode — one of <see cref="QueryJwt"/>,
-	/// <see cref="FragmentJwt"/>, <see cref="FormPostJwt"/> or <see cref="Jwt"/>.
-	/// </summary>
-	public static bool IsJwtMode(string responseMode)
-		=> responseMode is QueryJwt or FragmentJwt or FormPostJwt or Jwt;
-
-	/// <summary>
-	/// Resolves a JARM (JWT-secured) response mode to the plaintext delivery mode that carries the response JWT:
-	/// <see cref="QueryJwt"/>→<see cref="Query"/>, <see cref="FragmentJwt"/>→<see cref="Fragment"/>,
-	/// <see cref="FormPostJwt"/>→<see cref="FormPost"/>. The <see cref="Jwt"/> shortcut resolves to
-	/// <see cref="Fragment"/> for token-bearing flows and <see cref="Query"/> otherwise (JARM §2.3.4). A non-JWT
-	/// mode is returned unchanged.
-	/// </summary>
-	/// <param name="responseMode">The requested response mode.</param>
-	/// <param name="carriesTokens">Whether the response carries front-channel tokens (used for the
-	/// <see cref="Jwt"/> shortcut).</param>
-	public static string ToDeliveryMode(string responseMode, bool carriesTokens) => responseMode switch
-	{
-		QueryJwt => Query,
-		FragmentJwt => Fragment,
-		FormPostJwt => FormPost,
-		Jwt when carriesTokens => Fragment,
-		Jwt => Query,
-		_ => responseMode,
-	};
 }

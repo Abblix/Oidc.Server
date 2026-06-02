@@ -30,7 +30,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Jarm;
 
 /// <summary>
-/// Default <see cref="IAuthorizationResponseEncoder"/>: resolves the client, builds the JARM response JWT,
+/// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM response JWT,
 /// signs it with the authorization server's key and — when the client registered an encryption algorithm —
 /// additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2).
 /// </summary>
@@ -40,13 +40,13 @@ namespace Abblix.Oidc.Server.Features.Jarm;
 /// <param name="serviceKeysProvider">Resolves the authorization server's signing keys.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
-public class AuthorizationResponseEncoder(
+public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
     IIssuerProvider issuerProvider,
-    TimeProvider timeProvider) : IAuthorizationResponseEncoder
+    TimeProvider timeProvider) : IResponseJwtBuilder
 {
     /// <summary>
     /// The maximum lifetime of a JARM response JWT. JARM §2.1 RECOMMENDS a maximum of 10 minutes; the
@@ -55,7 +55,7 @@ public class AuthorizationResponseEncoder(
     private static readonly TimeSpan ResponseLifetime = TimeSpan.FromMinutes(10);
 
     /// <inheritdoc />
-    public async Task<string> EncodeAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
         var clientInfo = (await clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
