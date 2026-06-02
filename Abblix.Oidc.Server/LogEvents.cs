@@ -203,6 +203,7 @@ internal static class LogEvents
             public const int SubjectExtractionFailed = Base + 5;
             public const int IssuerSubjectMismatch = Base + 6;
             public const int MissingJti = Base + 7;
+            public const int SigningAlgorithmNotAllowed = Base + 8;
         }
 
         /// <summary>
