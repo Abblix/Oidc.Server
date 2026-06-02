@@ -38,6 +38,7 @@ namespace Abblix.Jwt;
 /// <param name="encryptor">The JWE encryptor for decrypting encrypted tokens.</param>
 /// <param name="signer">The JWS signer for validating signatures.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
+/// <param name="encryptionAlgorithmsProvider">The provider for supported JWE encryption algorithms.</param>
 /// <param name="serviceProvider">Resolves registered <see cref="ICriticalHeaderHandler"/>
 /// instances by JWS 'crit' header name (RFC 7515 §4.1.11). Handlers are registered as keyed
 /// singletons via <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>;
@@ -50,6 +51,7 @@ internal class JsonWebTokenValidator(
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
+    EncryptionAlgorithmsProvider encryptionAlgorithmsProvider,
     IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
     /// <summary>
@@ -78,6 +80,18 @@ internal class JsonWebTokenValidator(
     /// Dynamically determined from registered signers in the dependency injection container.
     /// </summary>
     public IEnumerable<string> SigningAlgorithmsSupported => signingAlgorithmsProvider.Algorithms;
+
+    /// <summary>
+    /// Provides the JWE key-management algorithms (the <c>alg</c> values) the validator can decrypt.
+    /// Dynamically determined from registered key encryptors in the dependency injection container.
+    /// </summary>
+    public IEnumerable<string> EncryptionAlgorithmsSupported => encryptionAlgorithmsProvider.KeyManagementAlgorithms;
+
+    /// <summary>
+    /// Provides the JWE content-encryption algorithms (the <c>enc</c> values) the validator can decrypt.
+    /// Dynamically determined from registered content encryptors in the dependency injection container.
+    /// </summary>
+    public IEnumerable<string> EncryptionMethodsSupported => encryptionAlgorithmsProvider.ContentEncryptionAlgorithms;
 
     /// <summary>
     /// Asynchronously validates a JWT string against specified validation parameters.

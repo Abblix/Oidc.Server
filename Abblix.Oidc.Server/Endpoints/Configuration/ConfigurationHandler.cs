@@ -81,6 +81,12 @@ public sealed class ConfigurationHandler(
 		RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
 			? jwtAlgorithms.SigningAlgorithmsSupported
 			: null,
+		RequestObjectEncryptionAlgValuesSupported = authorizationMetadata.RequestParameterSupported
+			? jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported
+			: null,
+		RequestObjectEncryptionEncValuesSupported = authorizationMetadata.RequestParameterSupported
+			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
+			: null,
 
 		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,

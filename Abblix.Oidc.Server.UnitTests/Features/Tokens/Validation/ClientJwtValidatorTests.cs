@@ -52,6 +52,8 @@ public class ClientJwtValidatorTests
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IClientKeysProvider> _clientKeysProvider;
+    private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
+    private readonly JsonWebKey _serverDecryptionKey;
     private readonly ClientJwtValidator _validator;
 
     public ClientJwtValidatorTests()
@@ -62,6 +64,12 @@ public class ClientJwtValidatorTests
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
+        _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+
+        _serverDecryptionKey = new RsaJsonWebKey { KeyId = "server-enc" };
+        _serviceKeysProvider
+            .Setup(p => p.GetEncryptionKeys(true))
+            .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
 
         requestInfoProvider.Setup(p => p.RequestUri).Returns(RequestUri);
         issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
@@ -72,7 +80,8 @@ public class ClientJwtValidatorTests
             _tokenValidator.Object,
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
-            issuerProvider.Object);
+            issuerProvider.Object,
+            _serviceKeysProvider.Object);
     }
 
     #region Audience Validation Tests
@@ -612,6 +621,48 @@ public class ClientJwtValidatorTests
 
         // Verify GetSigningKeys was never called for unknown client
         _clientKeysProvider.Verify(p => p.GetSigningKeys(It.IsAny<ClientInfo>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that ValidateAsync wires the server's own private keys as the token-decryption keys,
+    /// so a request object that the client JWE-encrypted to the server can be decrypted (RFC 9101
+    /// §6.1). The inner signed JWT is still verified with the client's key.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ShouldResolveServerDecryptionKeys()
+    {
+        // Arrange
+        var token = CreateValidToken();
+        var clientInfo = CreateClientInfo(ValidClientId);
+
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>(async (_, p) =>
+            {
+                capturedParams = p;
+                if (p.ValidateIssuer != null)
+                    await p.ValidateIssuer(ValidClientId);
+            })
+            .ReturnsAsync(token);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        // Act
+        await _validator.ValidateAsync(ValidJwt);
+
+        // Assert — the decryption-key resolver is configured and yields the server's private keys.
+        Assert.NotNull(capturedParams);
+        Assert.NotNull(capturedParams!.ResolveTokenDecryptionKeys);
+        var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys!(string.Empty)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(_serverDecryptionKey, decryptionKeys);
     }
 
     #endregion

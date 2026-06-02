@@ -120,6 +120,25 @@ public class JwtEncryptionTests
         Assert.Contains("Token has expired", error.ErrorDescription);
     }
 
+    /// <summary>
+    /// Verifies the self-reporting discovery contract: registering the encryptors via
+    /// <c>AddJsonWebTokens</c> not only wires up decryption but also surfaces the supported
+    /// JWE algorithms through the validator, so adding an encryptor automatically advertises
+    /// its algorithm without a separate registration step.
+    /// </summary>
+    [Fact]
+    public void RegisteredEncryptors_SelfReportSupportedAlgorithms()
+    {
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep256, validator.EncryptionAlgorithmsSupported);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw, validator.EncryptionAlgorithmsSupported);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Dir, validator.EncryptionAlgorithmsSupported);
+
+        Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, validator.EncryptionMethodsSupported);
+        Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, validator.EncryptionMethodsSupported);
+    }
+
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)
         => from claim in token.Payload.Json
             select (claim.Key, claim.Value?.ToJsonString());

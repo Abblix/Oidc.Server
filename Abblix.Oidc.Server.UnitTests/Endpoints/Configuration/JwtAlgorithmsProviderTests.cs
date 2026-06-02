@@ -82,4 +82,34 @@ public class JwtAlgorithmsProviderTests
             new[] { SigningAlgorithms.RS256, SigningAlgorithms.ES256 }.OrderBy(a => a),
             result.OrderBy(a => a));
     }
+
+    [Fact]
+    public void RequestObjectEncryptionAlgValuesSupported_ForwardsValidatorKeyManagementAlgorithms()
+    {
+        string[] keyManagement =
+        [
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+        ];
+        _validator.Setup(v => v.EncryptionAlgorithmsSupported).Returns(keyManagement);
+
+        var result = CreateProvider().RequestObjectEncryptionAlgValuesSupported.ToArray();
+
+        Assert.Equal(keyManagement, result);
+    }
+
+    [Fact]
+    public void RequestObjectEncryptionEncValuesSupported_ForwardsValidatorContentEncryptionAlgorithms()
+    {
+        string[] contentEncryption =
+        [
+            EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+        ];
+        _validator.Setup(v => v.EncryptionMethodsSupported).Returns(contentEncryption);
+
+        var result = CreateProvider().RequestObjectEncryptionEncValuesSupported.ToArray();
+
+        Assert.Equal(contentEncryption, result);
+    }
 }

@@ -146,6 +146,16 @@ public record ConfigurationResponse
 	public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypted request objects.
+	/// </summary>
+	public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypted request objects.
+	/// </summary>
+	public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
+
+	/// <summary>
 	/// Indicates whether the OpenID Provider requires clients to use Pushed Authorization Requests (PAR) only.
 	/// </summary>
 	public bool? RequirePushedAuthorizationRequests { get; set; }
