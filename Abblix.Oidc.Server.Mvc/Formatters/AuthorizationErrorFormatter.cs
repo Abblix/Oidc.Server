@@ -24,7 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Jarm;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Binders;

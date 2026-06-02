@@ -22,7 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 
-namespace Abblix.Oidc.Server.Features.Jarm;
+namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
 /// JARM (JWT Secured Authorization Response Mode) helpers over the <c>response_mode</c> value.

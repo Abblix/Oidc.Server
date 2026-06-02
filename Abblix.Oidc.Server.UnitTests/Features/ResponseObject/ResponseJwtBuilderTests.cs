@@ -29,7 +29,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Jarm;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;

@@ -23,7 +23,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.Jarm;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
