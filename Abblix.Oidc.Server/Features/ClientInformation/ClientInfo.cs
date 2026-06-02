@@ -382,6 +382,27 @@ public record ClientInfo(string ClientId)
     public string? UserInfoEncryptedResponseEncryption { get; set; }
 
     /// <summary>
+    /// JARM (<c>authorization_signed_response_alg</c>): the JWS algorithm used to sign authorization responses
+    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM §3; the
+    /// algorithm <c>none</c> is not permitted. Only consulted when the client requests a JWT response mode.
+    /// </summary>
+    public string AuthorizationSignedResponseAlgorithm { get; set; } = SigningAlgorithms.RS256;
+
+    /// <summary>
+    /// JARM (<c>authorization_encrypted_response_alg</c>): the JWE key-management algorithm used to encrypt
+    /// authorization responses for this client. When set, the signed response JWT is additionally encrypted
+    /// (a Nested JWT). <c>null</c> means no encryption is performed.
+    /// </summary>
+    public string? AuthorizationEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// JARM (<c>authorization_encrypted_response_enc</c>): the JWE content-encryption algorithm used to encrypt
+    /// authorization responses for this client. Only meaningful when
+    /// <see cref="AuthorizationEncryptedResponseAlgorithm"/> is set.
+    /// </summary>
+    public string? AuthorizationEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
     /// Specifies the algorithm required for signing request objects sent to the authorization server.
     /// </summary>
     public string? RequestObjectSigningAlgorithm { get; set; }

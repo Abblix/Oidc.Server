@@ -211,6 +211,30 @@ public record ClientRegistrationRequest
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// The <c>authorization_signed_response_alg</c> (JARM §3): the JWS algorithm the OP must use to sign
+    /// authorization responses packed into a JWT for this client. Defaults to <c>RS256</c>; <c>none</c> is
+    /// not permitted.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationSignedResponseAlg)]
+    public string? AuthorizationSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// The <c>authorization_encrypted_response_alg</c> (JARM §3): the JWE key-management algorithm the OP must
+    /// use when encrypting authorization responses for this client. When set, the signed response JWT is
+    /// additionally encrypted (a Nested JWT).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptedResponseAlg)]
+    public string? AuthorizationEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// The <c>authorization_encrypted_response_enc</c> (JARM §3): the JWE content-encryption algorithm paired
+    /// with <see cref="AuthorizationEncryptedResponseAlg"/> for authorization responses to this client.
+    /// Defaults to <c>A128CBC-HS256</c> when the encryption algorithm is set.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptedResponseEnc)]
+    public string? AuthorizationEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// The <c>request_object_signing_alg</c>: the JWS algorithm the client uses when signing Request Objects
     /// (OIDC Core §6) sent to the authorization endpoint. <c>none</c> indicates an unsigned Request Object.
     /// </summary>
@@ -546,6 +570,18 @@ public record ClientRegistrationRequest
         /// <summary>The <c>userinfo_encrypted_response_enc</c> registration parameter naming the JWE
         /// content-encryption algorithm for UserInfo responses.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>authorization_signed_response_alg</c> registration parameter naming the JWS algorithm
+        /// the OP must use to sign JARM authorization responses for this client.</summary>
+        public const string AuthorizationSignedResponseAlg = "authorization_signed_response_alg";
+
+        /// <summary>The <c>authorization_encrypted_response_alg</c> registration parameter naming the JWE
+        /// key-management algorithm used when encrypting JARM authorization responses.</summary>
+        public const string AuthorizationEncryptedResponseAlg = "authorization_encrypted_response_alg";
+
+        /// <summary>The <c>authorization_encrypted_response_enc</c> registration parameter naming the JWE
+        /// content-encryption algorithm for JARM authorization responses.</summary>
+        public const string AuthorizationEncryptedResponseEnc = "authorization_encrypted_response_enc";
 
         /// <summary>The <c>request_object_signing_alg</c> registration parameter naming the JWS algorithm
         /// the client uses when signing Request Objects.</summary>

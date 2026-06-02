@@ -112,4 +112,38 @@ public class JwtAlgorithmsProviderTests
 
         Assert.Equal(contentEncryption, result);
     }
+
+    [Fact]
+    public void AuthorizationSigningAlgValuesSupported_ForwardsCreatorSignedResponseAlgorithms()
+    {
+        // JARM responses are signed with the same service keys as ID tokens — the creator's signing set.
+        string[] signing = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
+        _creator.Setup(c => c.SignedResponseAlgorithmsSupported).Returns(signing);
+
+        var result = CreateProvider().AuthorizationSigningAlgValuesSupported.ToArray();
+
+        Assert.Equal(signing, result);
+    }
+
+    [Fact]
+    public void AuthorizationEncryptionAlgValuesSupported_ForwardsValidatorKeyManagementAlgorithms()
+    {
+        string[] keyManagement = [EncryptionAlgorithms.KeyManagement.RsaOaep256];
+        _validator.Setup(v => v.EncryptionAlgorithmsSupported).Returns(keyManagement);
+
+        var result = CreateProvider().AuthorizationEncryptionAlgValuesSupported.ToArray();
+
+        Assert.Equal(keyManagement, result);
+    }
+
+    [Fact]
+    public void AuthorizationEncryptionEncValuesSupported_ForwardsValidatorContentEncryptionAlgorithms()
+    {
+        string[] contentEncryption = [EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256];
+        _validator.Setup(v => v.EncryptionMethodsSupported).Returns(contentEncryption);
+
+        var result = CreateProvider().AuthorizationEncryptionEncValuesSupported.ToArray();
+
+        Assert.Equal(contentEncryption, result);
+    }
 }

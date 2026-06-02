@@ -156,6 +156,23 @@ public record ConfigurationResponse
 	public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
 
 	/// <summary>
+	/// Specifies the JWS algorithms supported for signing JARM authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JARM
+	/// authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JARM
+	/// authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
+
+	/// <summary>
 	/// Indicates whether the OpenID Provider requires clients to use Pushed Authorization Requests (PAR) only.
 	/// </summary>
 	public bool? RequirePushedAuthorizationRequests { get; set; }

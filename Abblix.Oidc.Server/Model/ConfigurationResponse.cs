@@ -168,6 +168,18 @@ public record ConfigurationResponse
         /// content-encryption algorithms accepted on encrypted Request Objects.</summary>
         public const string RequestObjectEncryptionEncValuesSupported = "request_object_encryption_enc_values_supported";
 
+        /// <summary>The <c>authorization_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationSigningAlgValuesSupported = "authorization_signing_alg_values_supported";
+
+        /// <summary>The <c>authorization_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationEncryptionAlgValuesSupported = "authorization_encryption_alg_values_supported";
+
+        /// <summary>The <c>authorization_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationEncryptionEncValuesSupported = "authorization_encryption_enc_values_supported";
+
         /// <summary>The <c>userinfo_signing_alg_values_supported</c> metadata field listing JWS algorithms
         /// the provider may use when signing UserInfo responses.</summary>
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
@@ -466,6 +478,26 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectEncryptionEncValuesSupported)]
     public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationSigningAlgValuesSupported)]
+    public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
+    /// JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
+    /// encrypt JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptionEncValuesSupported)]
+    public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.

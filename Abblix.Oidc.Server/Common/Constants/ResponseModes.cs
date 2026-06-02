@@ -44,4 +44,35 @@ public static class ResponseModes
 	/// redirect URI.
 	/// </summary>
 	public const string Fragment = "fragment";
+
+	/// <summary>
+	/// JARM (JWT Secured Authorization Response Mode) variant of <see cref="Query"/>: the response parameters
+	/// are packed into a single JWT delivered via the <c>response</c> query parameter of the redirect URI.
+	/// </summary>
+	public const string QueryJwt = "query.jwt";
+
+	/// <summary>
+	/// JARM variant of <see cref="Fragment"/>: the response parameters are packed into a single JWT delivered
+	/// via the <c>response</c> fragment parameter of the redirect URI.
+	/// </summary>
+	public const string FragmentJwt = "fragment.jwt";
+
+	/// <summary>
+	/// JARM variant of <see cref="FormPost"/>: the response parameters are packed into a single JWT delivered
+	/// as an auto-submitting HTML form's <c>response</c> field.
+	/// </summary>
+	public const string FormPostJwt = "form_post.jwt";
+
+	/// <summary>
+	/// JARM shortcut response mode: indicates the default JWT redirect encoding for the requested response type
+	/// (<see cref="QueryJwt"/> for the code flow, <see cref="FragmentJwt"/> for token-bearing flows), per JARM §2.3.4.
+	/// </summary>
+	public const string Jwt = "jwt";
+
+	/// <summary>
+	/// Determines whether the given response mode is a JARM (JWT-secured) mode — one of <see cref="QueryJwt"/>,
+	/// <see cref="FragmentJwt"/>, <see cref="FormPostJwt"/> or <see cref="Jwt"/>.
+	/// </summary>
+	public static bool IsJwtMode(string responseMode)
+		=> responseMode is QueryJwt or FragmentJwt or FormPostJwt or Jwt;
 }
