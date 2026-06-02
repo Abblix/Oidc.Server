@@ -103,6 +103,12 @@ public class UpdateClientRequestProcessor(
             RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
             TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
             RequestUris = model.RequestUris ?? [],
+            // RFC 7592 update is a full replacement: these must be re-applied or the update silently
+            // drops them. Omitting AllowedScopes in particular reverted the client to "any scope"
+            // (null = unrestricted), defeating the per-client scope enforcement on the update path.
+            AllowedScopes = model.Scope,
+            SoftwareId = model.SoftwareId,
+            SoftwareVersion = model.SoftwareVersion,
         };
 
         // Update logout configuration using wrapper objects
