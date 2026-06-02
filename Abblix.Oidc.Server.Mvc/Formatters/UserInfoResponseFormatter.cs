@@ -91,6 +91,8 @@ public class UserInfoResponseFormatter(
         return new ContentResult
         {
             ContentType = MediaTypes.Jwt,
+            // The UserInfo token carries no id_token/logout type, so the formatter encrypts it with
+            // the client's userinfo_encrypted_response_* metadata rather than the id_token fields.
             Content = await clientJwtFormatter.FormatAsync(token, found.ClientInfo),
         };
     }

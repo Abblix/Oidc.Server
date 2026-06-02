@@ -230,6 +230,111 @@ public class ClientSecretJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// Verifies authentication is rejected when the assertion's algorithm does not match the
+    /// client's registered token_endpoint_auth_signing_alg (OIDC Core §9 / RFC 7591): the client
+    /// registered HS384 but the assertion is signed with HS256.
+    /// </summary>
+    [Fact]
+    public async Task TryAuthenticateClientAsync_WithMismatchedSigningAlg_ShouldReturnNull()
+    {
+        // Arrange
+        var jwt = "valid.jwt.token";
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            TokenEndpointAuthSigningAlgorithm = SigningAlgorithms.HS384,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }],
+        };
+
+        // CreateMockToken signs with HS256, which does not match the registered HS384.
+        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                if (parameters.ValidateIssuer != null)
+                    await parameters.ValidateIssuer(ClientId);
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+                return token;
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ClientId))
+            .ReturnsAsync(clientInfo);
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        };
+
+        // Act
+        var result = await _authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.Null(result);
+        _tokenRegistry.Verify(
+            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies authentication succeeds when the assertion's algorithm matches the client's
+    /// registered token_endpoint_auth_signing_alg.
+    /// </summary>
+    [Fact]
+    public async Task TryAuthenticateClientAsync_WithMatchingSigningAlg_ShouldAuthenticate()
+    {
+        // Arrange
+        var jwtId = "unique-jwt-id-456";
+        var jwt = "valid.jwt.token";
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            TokenEndpointAuthSigningAlgorithm = SigningAlgorithms.HS256,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }],
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, [RequestUri], jwtId, _clock.GetUtcNow().AddMinutes(5));
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                if (parameters.ValidateIssuer != null)
+                    await parameters.ValidateIssuer(ClientId);
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+                return token;
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ClientId))
+            .ReturnsAsync(clientInfo);
+
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        };
+
+        // Act
+        var result = await _authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ClientId, result.ClientId);
+    }
+
+    /// <summary>
     /// Verifies authentication fails when JWT validation fails.
     /// Invalid signature, expired JWT, etc. should result in authentication failure.
     /// </summary>

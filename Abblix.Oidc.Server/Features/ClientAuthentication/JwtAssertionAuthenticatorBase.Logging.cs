@@ -68,4 +68,10 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The client assertion for {@ClientId} has no jti claim, which OIDC Core §9 requires for single-use replay protection")]
     private partial void LogMissingJti(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.SigningAlgorithmNotAllowed,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} uses algorithm {Algorithm}, but the client registered token_endpoint_auth_signing_alg {RequiredAlgorithm}")]
+    private partial void LogSigningAlgorithmNotAllowed(string ClientId, string? Algorithm, string RequiredAlgorithm);
 }

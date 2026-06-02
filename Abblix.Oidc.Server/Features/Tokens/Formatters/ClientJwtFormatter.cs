@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Options;
@@ -43,7 +44,6 @@ public class ClientJwtFormatter(
     IAuthServiceKeysProvider serviceKeysProvider,
     IOptions<OidcOptions> options) : IClientJwtFormatter
 {
-
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, applying the necessary cryptographic operations
     /// based on the client's configuration and the authentication service's capabilities.
@@ -64,11 +64,26 @@ public class ClientJwtFormatter(
         var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
             .FirstOrDefaultAsync();
 
+        // This formatter is shared across client-addressed JWT classes, which carry different
+        // registered encryption metadata. A UserInfo response (no id_token/logout type) must use the
+        // client's userinfo_encrypted_response_* values; id_token and logout_token use the
+        // id_token_encrypted_response_* values.
+        var (registeredKeyAlgorithm, registeredContentEncryption) = token.Header.Type switch
+        {
+            JwtTypes.IdToken or JwtTypes.LogoutToken => (
+                clientInfo.IdentityTokenEncryptedResponseAlgorithm,
+                clientInfo.IdentityTokenEncryptedResponseEncryption),
+
+            _ => (
+                clientInfo.UserInfoEncryptedResponseAlgorithm,
+                clientInfo.UserInfoEncryptedResponseEncryption),
+        };
+
         var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
-            ?? clientInfo.IdentityTokenEncryptedResponseAlgorithm
+            ?? registeredKeyAlgorithm
             ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
-        var contentEncryptionAlgorithm = clientInfo.IdentityTokenEncryptedResponseEncryption
+        var contentEncryptionAlgorithm = registeredContentEncryption
             ?? options.Value.DefaultContentEncryptionAlgorithm;
 
         return await jwtCreator.IssueAsync(
