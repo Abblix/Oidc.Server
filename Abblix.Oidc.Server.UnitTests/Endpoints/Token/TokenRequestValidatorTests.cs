@@ -54,7 +54,7 @@ public class TokenRequestValidatorTests
     {
         GrantType = GrantTypes.AuthorizationCode,
         Code = "auth_code_123",
-        RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+        RedirectUri = TestConstants.DefaultRedirectUri,
     };
 
     private static ClientRequest CreateClientRequest() => new()
@@ -334,7 +334,7 @@ public class TokenRequestValidatorTests
         {
             GrantType = GrantTypes.AuthorizationCode,
             Code = "auth_code_123",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
         };
 
         var refreshTokenRequest = new TokenRequest

@@ -51,7 +51,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             GrantTypes = grantTypes,
         };
         return new ClientRegistrationValidationContext(request);

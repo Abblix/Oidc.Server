@@ -49,7 +49,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 /// </summary>
 public class RefreshTokenServiceTests
 {
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string ClientId = "test_client_123";
     private const string UserId = "user_456";
     private const string SessionId = "session_789";

@@ -585,7 +585,7 @@ public class MappersTests
             },
             ResponseType = ["code", "id_token"],
             ClientId = "client-123",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
             ResponseMode = "form_post",
             Nonce = "nonce-abc",
@@ -610,7 +610,7 @@ public class MappersTests
         Assert.NotNull(proto.Claims);
         Assert.Equal(2, proto.ResponseType.Count);
         Assert.Equal("client-123", proto.ClientId);
-        Assert.Equal(TestConstants.DefaultRedirectUri, proto.RedirectUri);
+        Assert.Equal(TestConstants.DefaultRedirectUri.OriginalString, proto.RedirectUri);
         Assert.Equal("state-xyz", proto.State);
         Assert.Equal("form_post", proto.ResponseMode);
         Assert.Equal("nonce-abc", proto.Nonce);

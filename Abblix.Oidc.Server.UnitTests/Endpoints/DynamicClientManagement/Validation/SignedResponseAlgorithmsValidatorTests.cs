@@ -54,7 +54,7 @@ public class SignedResponseAlgorithmsValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             IdTokenSignedResponseAlg = idTokenSignedResponseAlg,
             UserInfoSignedResponseAlg = userInfoSignedResponseAlg,
             AuthorizationSignedResponseAlg = authorizationSignedResponseAlg

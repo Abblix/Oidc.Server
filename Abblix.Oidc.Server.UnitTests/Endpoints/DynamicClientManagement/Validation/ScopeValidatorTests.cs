@@ -50,7 +50,7 @@ public class ScopeValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             Scope = scope,
         };
         return new ClientRegistrationValidationContext(request);

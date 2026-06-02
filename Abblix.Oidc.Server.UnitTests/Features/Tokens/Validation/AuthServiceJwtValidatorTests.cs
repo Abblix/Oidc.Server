@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 /// </summary>
 public class AuthServiceJwtValidatorTests
 {
-    private const string ExpectedIssuer = TestConstants.DefaultIssuer;
+    private static readonly string ExpectedIssuer = TestConstants.DefaultIssuer.OriginalString;
     private const string ValidClientId = TestConstants.DefaultClientId;
     private const string InvalidClientId = "invalid_client";
     private const string ValidJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature";

@@ -54,7 +54,7 @@ public class BackChannelAuthenticationValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             BackChannelTokenDeliveryMode = tokenDeliveryMode,
             BackChannelClientNotificationEndpoint = notificationEndpoint,
             BackChannelAuthenticationRequestSigningAlg = signingAlg

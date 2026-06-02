@@ -58,7 +58,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             ResponseTypes = responseTypes,
         };
         return new ClientRegistrationValidationContext(request);

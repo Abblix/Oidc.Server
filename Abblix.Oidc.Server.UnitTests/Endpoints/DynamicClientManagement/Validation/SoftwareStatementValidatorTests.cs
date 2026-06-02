@@ -64,7 +64,7 @@ public class SoftwareStatementValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             SoftwareStatement = softwareStatement,
         };
         return new ClientRegistrationValidationContext(request);

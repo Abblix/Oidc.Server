@@ -47,7 +47,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Jarm;
 public class ResponseJwtBuilderTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string EncodedJwt = "header.payload.signature";
 
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);

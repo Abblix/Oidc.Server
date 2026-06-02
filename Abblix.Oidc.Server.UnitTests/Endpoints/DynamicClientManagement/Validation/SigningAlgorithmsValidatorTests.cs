@@ -54,7 +54,7 @@ public class SigningAlgorithmsValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             RequestObjectSigningAlg = requestObjectSigningAlg,
             BackChannelAuthenticationRequestSigningAlg = backChannelAuthSigningAlg,
             TokenEndpointAuthSigningAlg = tokenEndpointAuthSigningAlg

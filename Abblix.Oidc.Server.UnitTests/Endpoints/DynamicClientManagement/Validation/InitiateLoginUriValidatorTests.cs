@@ -42,7 +42,7 @@ public class InitiateLoginUriValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             InitiateLoginUri = initiateLoginUri
         };
 

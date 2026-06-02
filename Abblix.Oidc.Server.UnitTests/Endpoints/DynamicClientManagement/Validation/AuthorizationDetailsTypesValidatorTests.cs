@@ -64,7 +64,7 @@ public class AuthorizationDetailsTypesValidatorTests
     private static ClientRegistrationValidationContext Context(string[]? authorizationDetailsTypes)
         => new(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             AuthorizationDetailsTypes = authorizationDetailsTypes,
         });
 
