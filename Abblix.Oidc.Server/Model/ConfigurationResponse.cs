@@ -160,6 +160,14 @@ public record ConfigurationResponse
         /// algorithms accepted on Request Objects.</summary>
         public const string RequestObjectSigningAlgValuesSupported = "request_object_signing_alg_values_supported";
 
+        /// <summary>The <c>request_object_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms accepted on encrypted Request Objects.</summary>
+        public const string RequestObjectEncryptionAlgValuesSupported = "request_object_encryption_alg_values_supported";
+
+        /// <summary>The <c>request_object_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms accepted on encrypted Request Objects.</summary>
+        public const string RequestObjectEncryptionEncValuesSupported = "request_object_encryption_enc_values_supported";
+
         /// <summary>The <c>userinfo_signing_alg_values_supported</c> metadata field listing JWS algorithms
         /// the provider may use when signing UserInfo responses.</summary>
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
@@ -444,6 +452,20 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectSigningAlgValuesSupported)]
     public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider supports
+    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestObjectEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider supports
+    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestObjectEncryptionEncValuesSupported)]
+    public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.

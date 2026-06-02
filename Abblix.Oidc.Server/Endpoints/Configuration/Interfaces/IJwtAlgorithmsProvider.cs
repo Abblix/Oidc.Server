@@ -45,4 +45,18 @@ public interface IJwtAlgorithmsProvider
 	/// client signs, it does not issue them.
 	/// </summary>
 	IEnumerable<string> DpopSigningAlgorithmsSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server
+	/// accepts when a client encrypts a request object to the server (RFC 9101 §6.1),
+	/// advertised via <c>request_object_encryption_alg_values_supported</c>.
+	/// </summary>
+	IEnumerable<string> RequestObjectEncryptionAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server
+	/// accepts when a client encrypts a request object to the server (RFC 9101 §6.1),
+	/// advertised via <c>request_object_encryption_enc_values_supported</c>.
+	/// </summary>
+	IEnumerable<string> RequestObjectEncryptionEncValuesSupported { get; }
 }
