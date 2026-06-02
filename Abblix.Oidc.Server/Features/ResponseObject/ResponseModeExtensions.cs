@@ -25,7 +25,8 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
-/// JARM (JWT Secured Authorization Response Mode) helpers over the <c>response_mode</c> value.
+/// Helpers over the <c>response_mode</c> value for JARM
+/// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>).
 /// </summary>
 public static class ResponseModeExtensions
 {

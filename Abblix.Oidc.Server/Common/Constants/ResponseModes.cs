@@ -46,8 +46,9 @@ public static class ResponseModes
 	public const string Fragment = "fragment";
 
 	/// <summary>
-	/// JARM (JWT Secured Authorization Response Mode) variant of <see cref="Query"/>: the response parameters
-	/// are packed into a single JWT delivered via the <c>response</c> query parameter of the redirect URI.
+	/// JARM (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response
+	/// Mode</see>) variant of <see cref="Query"/>: the response parameters are packed into a single JWT delivered
+	/// via the <c>response</c> query parameter of the redirect URI.
 	/// </summary>
 	public const string QueryJwt = "query.jwt";
 

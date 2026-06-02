@@ -26,9 +26,10 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
 /// Encodes authorization endpoint response parameters into a JWT secured for a specific client, as defined by
-/// JWT Secured Authorization Response Mode for OAuth 2.0 (JARM). This is the framework-agnostic core of JARM:
-/// it builds, signs and optionally encrypts the response JWT. The JARM response mode is mapped to its plaintext
-/// delivery counterpart separately via <see cref="ResponseModeExtensions.ToDeliveryMode"/>.
+/// JWT Secured Authorization Response Mode for OAuth 2.0 (JARM),
+/// <see href="https://openid.net/specs/oauth-v2-jarm-final.html">JARM</see>. This is the framework-agnostic core
+/// of JARM: it builds, signs and optionally encrypts the response JWT. The JARM response mode is mapped to its
+/// plaintext delivery counterpart separately via <see cref="ResponseModeExtensions.ToDeliveryMode"/>.
 /// Hosts (MVC, Minimal API, …) supply the response parameters and emit the resulting <c>response</c> parameter
 /// through their own transport layer.
 /// </summary>

@@ -30,9 +30,10 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
-/// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM response JWT,
-/// signs it with the authorization server's key and — when the client registered an encryption algorithm —
-/// additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2).
+/// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
+/// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
+/// response JWT, signs it with the authorization server's key and — when the client registered an encryption
+/// algorithm — additionally encrypts it to the client's public key (a Nested JWT per JARM §2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="jwtCreator">Issues the signed/encrypted JWT.</param>
