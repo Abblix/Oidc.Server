@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Jarm;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -59,7 +60,7 @@ public class AuthorizationResponseEncoderTests
     private readonly AuthorizationResponseEncoder _encoder;
     private readonly ClientInfo _client = new(ClientId);
 
-    private readonly JsonWebKey _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
     private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
     private readonly DateTimeOffset _now = new(2026, 6, 2, 12, 0, 0, TimeSpan.Zero);
 
@@ -68,7 +69,7 @@ public class AuthorizationResponseEncoderTests
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
         _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
         _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
         _encoder = new AuthorizationResponseEncoder(
             _clientInfoProvider.Object,
@@ -186,7 +187,7 @@ public class AuthorizationResponseEncoderTests
         var signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
         _serviceKeys
             .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, signingKeyRS384 }.ToAsyncEnumerable());
+            .Returns(new[] { _signingKeyRs256, signingKeyRS384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
@@ -207,7 +208,7 @@ public class AuthorizationResponseEncoderTests
     [InlineData(ResponseModes.FormPostJwt, false, ResponseModes.FormPost)]
     [InlineData(ResponseModes.Jwt, false, ResponseModes.Query)]
     [InlineData(ResponseModes.Jwt, true, ResponseModes.Fragment)]
-    public void ResolveJwtDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
+    public void ToDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
     {
         Assert.Equal(expectedDeliveryMode, ResponseModes.ToDeliveryMode(responseMode, carriesTokens));
     }

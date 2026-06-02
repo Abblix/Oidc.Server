@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Jarm;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Binders;
@@ -121,7 +122,7 @@ public class AuthorizationResponseFormatter(
                     var parameters = parametersProvider.GetParameters(modelResponse).ToArray();
                     var responseJwt = await responseEncoder.EncodeAsync(response.Model.ClientId, parameters);
                     modelResponse = new AuthorizationResponse { Response = responseJwt };
-                    responseMode = success.ResponseMode.ToDeliveryMode(carriesTokens);
+                    responseMode = ResponseModes.ToDeliveryMode(success.ResponseMode, carriesTokens);
                 }
 
                 var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, responseMode, redirectUri);

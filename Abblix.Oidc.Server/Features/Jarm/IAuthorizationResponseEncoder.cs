@@ -22,7 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 
-namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
+namespace Abblix.Oidc.Server.Features.Jarm;
 
 /// <summary>
 /// Encodes authorization endpoint response parameters into a JWT secured for a specific client, as defined by

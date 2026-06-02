@@ -27,7 +27,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
+namespace Abblix.Oidc.Server.Features.Jarm;
 
 /// <summary>
 /// Default <see cref="IAuthorizationResponseEncoder"/>: resolves the client, builds the JARM response JWT,

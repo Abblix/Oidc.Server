@@ -86,7 +86,7 @@ public static class ResponseModes
 	/// <param name="responseMode">The requested response mode.</param>
 	/// <param name="carriesTokens">Whether the response carries front-channel tokens (used for the
 	/// <see cref="Jwt"/> shortcut).</param>
-	public static string ToDeliveryMode(this string responseMode, bool carriesTokens) => responseMode switch
+	public static string ToDeliveryMode(string responseMode, bool carriesTokens) => responseMode switch
 	{
 		QueryJwt => Query,
 		FragmentJwt => Fragment,
