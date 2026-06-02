@@ -70,7 +70,7 @@ public class PushModeValidatorRegistrationTests
 
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
+            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
             options.RequireInitialAccessToken = false;
         });

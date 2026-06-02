@@ -165,7 +165,7 @@ public class ProtobufSerializerTests
             })
         {
             CertificateSha256Thumbprint = "abc123def456",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = "S256",
@@ -227,7 +227,7 @@ public class ProtobufSerializerTests
             Scope = [TestConstants.DefaultScope, "profile", "email"],
             ResponseType = ["code"],
             ClientId = "client-123",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
             ResponseMode = "query",
             Nonce = "nonce-abc",

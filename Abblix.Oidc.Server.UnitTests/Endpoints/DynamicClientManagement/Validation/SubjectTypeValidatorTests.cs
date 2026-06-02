@@ -76,7 +76,7 @@ public class SubjectTypeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             subjectType: SubjectTypes.Public);
 
         // Act
@@ -121,7 +121,7 @@ public class SubjectTypeValidatorTests
         var context = CreateContext(
             redirectUris:
             [
-                new Uri(TestConstants.DefaultRedirectUri),
+                TestConstants.DefaultRedirectUri,
                 new Uri("https://other.com/callback")
             ],
             subjectType: SubjectTypes.Pairwise);
@@ -197,7 +197,7 @@ public class SubjectTypeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: new Uri("http://example.com/sector.json"));
 
@@ -222,7 +222,7 @@ public class SubjectTypeValidatorTests
         var sectorUri = new Uri("https://example.com/sector.json");
         var sectorContent = new[]
         {
-            new Uri(TestConstants.DefaultRedirectUri),
+            TestConstants.DefaultRedirectUri,
             new Uri("http://example.com/callback2") // Invalid HTTP
         };
 
@@ -231,7 +231,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
 
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
@@ -255,7 +255,7 @@ public class SubjectTypeValidatorTests
         var sectorUri = new Uri("https://example.com/sector.json");
         var sectorContent = new[]
         {
-            new Uri(TestConstants.DefaultRedirectUri),
+            TestConstants.DefaultRedirectUri,
             new Uri("https://example.com/extra") // Not in redirect URIs
         };
 
@@ -264,7 +264,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
 
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
@@ -293,7 +293,7 @@ public class SubjectTypeValidatorTests
             .ReturnsAsync(Result<Uri[], OidcError>.Failure(fetchError));
 
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 

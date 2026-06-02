@@ -44,7 +44,7 @@ public class PostLogoutRedirectUrisValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             PostLogoutRedirectUris = postLogoutRedirectUris,
             ApplicationType = applicationType
         };

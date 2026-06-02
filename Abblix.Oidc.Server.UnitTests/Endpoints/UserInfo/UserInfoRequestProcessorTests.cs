@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 [Collection("License")]
 public class UserInfoRequestProcessorTests
 {
-    private const string Issuer = TestConstants.DefaultIssuer;
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IUserClaimsProvider> _userClaimsProvider;
@@ -300,7 +300,7 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = TestConstants.DefaultIssuer;
+        var issuer = TestConstants.DefaultIssuer.OriginalString;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(

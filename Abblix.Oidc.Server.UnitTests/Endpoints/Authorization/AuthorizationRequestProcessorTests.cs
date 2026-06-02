@@ -94,7 +94,7 @@ public class AuthorizationRequestProcessorTests
         {
             ClientId = TestConstants.DefaultClientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,
@@ -780,7 +780,7 @@ public class AuthorizationRequestProcessorTests
         {
             ClientId = TestConstants.DefaultClientId,
             ResponseType = [ResponseTypes.Code],
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = [Scopes.OpenId, "email"],
             Nonce = nonce,
             CodeChallenge = codeChallenge,
