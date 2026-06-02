@@ -90,6 +90,16 @@ public abstract class TestBase(TestFactory factory)
         await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "error");
 
     /// <summary>
+    /// Drives /authorize for a JARM (JWT Secured Authorization Response Mode) request and returns the value of
+    /// the single <c>response</c> callback parameter — the signed (and optionally encrypted) response JWT.
+    /// </summary>
+    protected static async Task<string> AuthorizeAndExtractResponseJwtAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Dictionary<string, string> queryParams) =>
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "response");
+
+    /// <summary>
     /// Drives /authorize, asserts the AS responded with a 302/303 back to <c>redirect_uri</c>,
     /// and returns the value of the requested callback-URI query parameter. Shared body of
     /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>.

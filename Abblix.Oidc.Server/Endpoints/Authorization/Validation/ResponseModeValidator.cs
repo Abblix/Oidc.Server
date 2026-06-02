@@ -65,10 +65,29 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 	/// <param name="responseMode">The response mode to validate.</param>
 	/// <param name="flowType">The flow type associated with the authorization request.</param>
 	/// <returns>A boolean value indicating whether the response mode is allowed for the specified flow type.</returns>
-	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType) => flowType switch
+	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType)
 	{
-		FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
-		FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
-		_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
-	};
+		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
+		// is then subject to the same flow-compatibility rules as its plaintext counterpart — so query.jwt
+		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
+		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
+		if (ResponseModes.IsJwtMode(responseMode))
+		{
+			responseMode = responseMode switch
+			{
+				ResponseModes.QueryJwt => ResponseModes.Query,
+				ResponseModes.FragmentJwt => ResponseModes.Fragment,
+				ResponseModes.FormPostJwt => ResponseModes.FormPost,
+				ResponseModes.Jwt => flowType == FlowTypes.AuthorizationCode ? ResponseModes.Query : ResponseModes.Fragment,
+				_ => responseMode,
+			};
+		}
+
+		return flowType switch
+		{
+			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
+			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
+			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
+		};
+	}
 }
