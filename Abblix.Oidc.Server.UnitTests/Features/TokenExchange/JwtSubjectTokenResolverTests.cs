@@ -41,6 +41,12 @@ public class JwtSubjectTokenResolverTests
 {
     private const string TokenWire = "header.payload.signature";
 
+    // RFC 8693 subject tokens are not minted for this AS, so the resolver must validate them with
+    // the audience constraint dropped (signature + issuer + lifetime only). Strict mocks assert
+    // this exact option set -- a regression that re-enables audience validation fails to match.
+    private const ValidationOptions SubjectTokenValidation =
+        ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
+
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
     private readonly JwtSubjectTokenResolver _resolver;
@@ -56,7 +62,7 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: "https://idp.example.com");
         jwt.Payload.Scope = ["openid", "profile"];
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -75,7 +81,7 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails] = (JsonArray)JsonNode.Parse(adWire)!;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -91,7 +97,7 @@ public class JwtSubjectTokenResolverTests
     public async Task JwtValidationFailure_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -106,7 +112,7 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: null, issuer: null);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -116,7 +122,75 @@ public class JwtSubjectTokenResolverTests
         Assert.Contains("sub", error.ErrorDescription);
     }
 
-    private JsonWebToken NewJwt(string? subject, string? issuer)
+    [Fact]
+    public async Task IdTokenShape_OriginalClientId_DerivedFromSingleAudience()
+    {
+        // An id_token carries no client_id claim. The client it was minted for is the sole
+        // audience, and the resolver must surface that so the handler confused-deputy guard can
+        // fire. Otherwise any client could exchange any user id_token.
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal("client-A", ctx.OriginalClientId);
+    }
+
+    [Fact]
+    public async Task ClientIdClaim_TakesPrecedenceOverAzpAndAudience()
+    {
+        // Access tokens carry client_id directly and may also list resource-server audiences
+        // (RFC 8707). client_id is the authoritative origin and must win over both.
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["https://api.example.com"]);
+        jwt.Payload.ClientId = "client-A";
+        jwt.Payload.AuthorizedParty = "client-Z";
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal("client-A", ctx.OriginalClientId);
+    }
+
+    [Fact]
+    public async Task Azp_UsedWhenClientIdAbsentAndMultipleAudiences()
+    {
+        // Multi-audience id_token: OIDC Core mandates azp, and the single-audience shortcut does
+        // not apply. azp names the client the token was issued to.
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A", "client-B"]);
+        jwt.Payload.AuthorizedParty = "client-A";
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal("client-A", ctx.OriginalClientId);
+    }
+
+    [Fact]
+    public async Task NoClientIdNoAzpMultipleAudiences_OriginalClientIdNull()
+    {
+        // Genuinely ambiguous: no client_id, no azp, more than one audience. The resolver leaves
+        // origin undetermined rather than guessing; the cross-client guard then cannot narrow it.
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["a", "b"]);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Null(ctx.OriginalClientId);
+    }
+
+    private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
         var jwt = new JsonWebToken
@@ -126,6 +200,7 @@ public class JwtSubjectTokenResolverTests
         };
         if (issuer is not null) jwt.Payload.Issuer = issuer;
         if (subject is not null) jwt.Payload.Subject = subject;
+        if (audiences is not null) jwt.Payload.Audiences = audiences;
         return jwt;
     }
 }
