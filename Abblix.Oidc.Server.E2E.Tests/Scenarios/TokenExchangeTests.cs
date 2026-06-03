@@ -18,6 +18,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 {
     private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
     private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
+    private const string IdTokenType = "urn:ietf:params:oauth:token-type:id_token";
 
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -119,6 +120,44 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(2, echoed!.Count);
         Assert.Equal("urn:ietf:params:oauth:token-type:access_token", echoed[0]!.GetValue<string>());
         Assert.Equal("urn:ietf:params:oauth:token-type:id_token", echoed[1]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Cross_client_id_token_exchange_rejected_by_default()
+    {
+        // Client A obtains an id_token whose audience names client A. A different client B presents
+        // that id_token as subject_token. The confused-deputy guard must reject the exchange even
+        // though the id_token is a valid, AS-signed token: an id_token carries no client_id claim,
+        // so its origin is recovered from the audience. Without that recovery any client could
+        // exchange any user's id_token for an access token bound to itself.
+        var clientA = TestConstants.ConfidentialClientId;
+        var issued = await PerformParFlowAsync(
+            clientA, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+        var idToken = issued["id_token"]!.GetValue<string>();
+
+        // Premise of the finding: the id_token's aud is client A and it has no client_id claim.
+        var idPayload = DecodeJwtPayload(idToken);
+        Assert.Equal(clientA, idPayload["aud"]!.GetValue<string>());
+        Assert.Null(idPayload["client_id"]);
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            ["subject_token"] = idToken,
+            ["subject_token_type"] = IdTokenType,
+            // Client B presents client A's id_token. Same shared secret across pre-seeded clients.
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var raw = await response.Content.ReadAsStringAsync();
+        Assert.False(response.IsSuccessStatusCode,
+            $"Expected cross-client exchange to be rejected, but got {(int)response.StatusCode}: {raw}");
+        var error = JsonNode.Parse(raw)?.AsObject();
+        Assert.Equal(ErrorCodes.InvalidRequest, error?["error"]?.GetValue<string>());
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)

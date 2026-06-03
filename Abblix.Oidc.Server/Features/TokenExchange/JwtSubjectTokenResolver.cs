@@ -45,12 +45,23 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="jwtValidator">Validates own-issued JWTs (signature against AS keys, claims).</param>
 public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidator) : ISubjectTokenResolver
 {
+    /// <summary>
+    /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
+    /// -- never for this AS as its audience. Enforcing the default "aud must be a registered client"
+    /// rule would wrongly reject a resource-scoped access token presented for exchange. The token's
+    /// binding to the requesting client is enforced separately by the confused-deputy guard in
+    /// <see cref="Endpoints.Token.Grants.TokenExchangeGrantHandler"/>, so here we validate signature,
+    /// issuer and lifetime but deliberately drop the audience constraint.
+    /// </summary>
+    private const ValidationOptions SubjectTokenValidation =
+        ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
+
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken);
+        var validation = await jwtValidator.ValidateAsync(subjectToken, SubjectTokenValidation);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
@@ -81,10 +92,16 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
         {
             Act = act,
 
-            // Origin tracking for the confused-deputy guard: the JWT's client_id claim names
-            // the party the token was originally minted for. Null when the claim was absent
-            // (which itself surfaces at the handler's cross-client check).
-            OriginalClientId = jwt.Payload.ClientId,
+            // Origin tracking for the confused-deputy guard. Access and refresh tokens name their
+            // client in the client_id claim, but an id_token carries no such claim -- it identifies
+            // its client through a sole audience, or through azp when several audiences are present.
+            // Without this fallback the guard would silently skip every id_token exchange, letting
+            // any client exchange any user's id_token. The preference order matches how each token
+            // shape encodes its client; a token with several audiences and neither client_id nor azp
+            // stays null, i.e. its origin is genuinely undeterminable.
+            OriginalClientId = jwt.Payload.ClientId
+                ?? jwt.Payload.AuthorizedParty
+                ?? SingleAudience(jwt),
 
             // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
             JwtTokenType = jwt.Header.Type,
@@ -93,4 +110,23 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
 
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode
         => jwt.Payload.Json[name] is T node ? (T?)node.DeepClone() : null;
+
+    /// <summary>
+    /// Returns the sole audience of the token, or null when there is none or more than one. A
+    /// single-audience own-issued token (id_token, logout_token) puts the client there; multiple
+    /// audiences are ambiguous, so origin is determined from azp instead (handled by the caller).
+    /// </summary>
+    private static string? SingleAudience(JsonWebToken jwt)
+    {
+        string? single = null;
+        foreach (var audience in jwt.Payload.Audiences)
+        {
+            if (single is not null)
+                return null;
+
+            single = audience;
+        }
+
+        return single;
+    }
 }

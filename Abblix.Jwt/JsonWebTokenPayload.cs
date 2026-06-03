@@ -143,6 +143,17 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
+	/// The authorized party (azp) the JWT was issued to. OpenID Connect Core mandates this claim
+	/// in an id_token when there is a single audience that differs from the issuer, and whenever
+	/// the token has more than one audience, naming the party the token was minted for.
+	/// </summary>
+	public string? AuthorizedParty
+	{
+		get => Json.GetProperty<string>(IanaClaimTypes.Azp);
+		set => Json.SetProperty(IanaClaimTypes.Azp, value);
+	}
+
+	/// <summary>
 	/// The scope of access granted by the JWT.
 	/// Scope is typically a space-separated list of permissions or access levels and is not part of the standard JWT claims.
 	/// </summary>
