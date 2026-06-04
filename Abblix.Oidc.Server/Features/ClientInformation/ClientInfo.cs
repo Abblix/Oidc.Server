@@ -382,6 +382,25 @@ public record ClientInfo(string ClientId)
     public string? UserInfoEncryptedResponseEncryption { get; set; }
 
     /// <summary>
+    /// RFC 9701 (<c>introspection_signed_response_alg</c>): the JWS algorithm used to sign introspection responses
+    /// returned to this client as a JWT. <see cref="SigningAlgorithms.None"/> (the default) means the client receives
+    /// a plain JSON introspection response; any other value opts the client into a signed JWT response.
+    /// </summary>
+    public string IntrospectionSignedResponseAlgorithm { get; set; } = SigningAlgorithms.None;
+
+    /// <summary>
+    /// RFC 9701 (<c>introspection_encrypted_response_alg</c>): the key-management algorithm used to encrypt
+    /// introspection-response JWTs returned to the client.
+    /// </summary>
+    public string? IntrospectionEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// RFC 9701 (<c>introspection_encrypted_response_enc</c>): the content-encryption algorithm used to encrypt
+    /// introspection-response JWTs returned to the client.
+    /// </summary>
+    public string? IntrospectionEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
     /// JARM (<c>authorization_signed_response_alg</c>): the JWS algorithm used to sign authorization responses
     /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM §3; the
     /// algorithm <c>none</c> is not permitted. Only consulted when the client requests a JWT response mode.

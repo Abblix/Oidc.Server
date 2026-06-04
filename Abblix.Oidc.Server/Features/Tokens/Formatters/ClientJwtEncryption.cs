@@ -68,6 +68,16 @@ public sealed record ClientJwtEncryption(
 		RequireRegisteredAlgorithm: false);
 
 	/// <summary>
+	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts whenever the client published
+	/// encryption keys, using its <c>introspection_encrypted_response_*</c> metadata.
+	/// </summary>
+	public static ClientJwtEncryption ForIntrospection(ClientInfo clientInfo, OidcOptions options) => new(
+		clientInfo.IntrospectionEncryptedResponseAlgorithm,
+		clientInfo.IntrospectionEncryptedResponseEncryption,
+		options.DefaultContentEncryptionAlgorithm,
+		RequireRegisteredAlgorithm: false);
+
+	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered
 	/// <c>authorization_encrypted_response_alg</c> (JARM §2.2 / §3 opt-in), defaulting the content-encryption to
 	/// <c>A128CBC-HS256</c> when <c>authorization_encrypted_response_enc</c> is omitted (JARM §3).

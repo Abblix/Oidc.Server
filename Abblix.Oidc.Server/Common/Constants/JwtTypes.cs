@@ -73,4 +73,10 @@ public static class JwtTypes
 	/// per the RFC 8725 §3.11 token-class-confusion guidance.
 	/// </summary>
 	public const string DPoPProof = "dpop+jwt";
+
+	/// <summary>
+	/// The "token introspection response" JWT type per RFC 9701 §5. The <c>typ</c> header equals this value so a
+	/// signed introspection response cannot be replayed as a different JWT class (RFC 8725 §3.11).
+	/// </summary>
+	public const string TokenIntrospection = "token-introspection+jwt";
 }

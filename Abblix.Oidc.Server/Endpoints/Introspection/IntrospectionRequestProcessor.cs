@@ -58,13 +58,13 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 
 			// Note that to avoid disclosing too much of the authorization server's state to a third party, the authorization server
 			// SHOULD NOT include any additional information about an inactive token, including why the token is inactive.
-			return new IntrospectionSuccess(false, null);
+			return new IntrospectionSuccess(false, null, request.ClientInfo);
 		}
 
 		// The authorization server MAY respond differently to different protected resources making the same request.
 		// For instance, an authorization server MAY limit which scopes from a given token are returned for each protected resource
 		// to prevent a protected resource from learning more about the larger network than is necessary for its operation.
 
-		return new IntrospectionSuccess(true, request.Token.Payload.Json);
+		return new IntrospectionSuccess(true, request.Token.Payload.Json, request.ClientInfo);
 	}
 }
