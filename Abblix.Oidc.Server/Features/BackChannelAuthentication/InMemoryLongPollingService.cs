@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -76,7 +77,7 @@ public partial class InMemoryLongPollingService(
         var waiters = _waiters.GetOrAdd(authenticationRequestId, _ => new ConcurrentBag<TaskCompletionSource<bool>>());
         waiters.Add(tcs);
 
-        LogWaitingForStatusChange(authenticationRequestId, timeout);
+        LogWaitingForStatusChange(authenticationRequestId.Sanitized(), timeout);
 
         try
         {
@@ -90,11 +91,11 @@ public partial class InMemoryLongPollingService(
 
             if (completedTask == tcs.Task)
             {
-                LogStatusChangeReceived(authenticationRequestId);
+                LogStatusChangeReceived(authenticationRequestId.Sanitized());
                 return true;
             }
 
-            LogWaitTimedOut(authenticationRequestId);
+            LogWaitTimedOut(authenticationRequestId.Sanitized());
             return false;
         }
         catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
@@ -113,7 +114,7 @@ public partial class InMemoryLongPollingService(
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
     private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
     {
-        LogWaitCancelled(ex, authenticationRequestId);
+        LogWaitCancelled(ex, authenticationRequestId.Sanitized());
         return false;
     }
 
@@ -128,11 +129,11 @@ public partial class InMemoryLongPollingService(
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))
         {
             // No one waiting - this is normal and expected
-            LogNoWaiters(newStatus, authenticationRequestId);
+            LogNoWaiters(newStatus, authenticationRequestId.Sanitized());
             return Task.CompletedTask;
         }
 
-        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId);
+        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId.Sanitized());
 
         // Signal all waiting tasks
         foreach (var waiter in waiters)
