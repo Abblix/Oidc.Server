@@ -173,6 +173,23 @@ public record ConfigurationResponse
 	public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
 
 	/// <summary>
+	/// Specifies the JWS algorithms supported for signing JWT introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JWT
+	/// introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JWT
+	/// introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
+
+	/// <summary>
 	/// Indicates whether the OpenID Provider requires clients to use Pushed Authorization Requests (PAR) only.
 	/// </summary>
 	public bool? RequirePushedAuthorizationRequests { get; set; }
