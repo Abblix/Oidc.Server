@@ -9,17 +9,21 @@
 
 name: "Abblix CodeQL config"
 
-# security-and-quality is the lighter standard suite.
-# security-extended adds expensive taint-tracking queries
-# that doubled May 2026 runtime — avoid until proven needed.
-queries:
-  - uses: security-and-quality
+# Query suite: the DEFAULT security suite (used when `queries:` is omitted).
+# We deliberately do NOT use security-and-quality — its maintainability/quality queries
+# (cs/useless-upcast, cs/missed-ternary-operator, cs/missed-readonly-modifier, …) duplicate
+# SonarAnalyzer.CSharp and flooded code-scanning with ~260 style warnings.
+# security-extended adds expensive taint-tracking queries that doubled May 2026 runtime — avoid
+# until proven needed. The default suite is security-only and the lightest runtime; code quality
+# stays SonarAnalyzer's job, security stays CodeQL's.
 
 paths-ignore:
   - "**/bin/**"
   - "**/obj/**"
   - "**/node_modules/**"
   - "**/*.Tests/**"
+  - "**/*.UnitTests/**"    # the *.Tests glob does not match the *.UnitTests suffix
+  - "**/*.TestHost/**"     # E2E test host project, not production code
   - "**/*.IntegrationTests/**"
   - "**/*.ConformanceTests/**"
   - "external/**"          # vendored / submodule code — owned upstream
