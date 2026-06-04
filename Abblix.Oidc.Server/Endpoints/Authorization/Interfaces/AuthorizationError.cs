@@ -61,7 +61,7 @@ public record AuthorizationError(
 	string ResponseMode,
 	Uri? RedirectUri,
 	Uri? ErrorUri = null)
-	: AuthorizationResponse(Model)
+	: ClientDeliveredResponse(Model, ResponseMode)
 {
 	/// <summary>
 	/// Constructs an instance of <see cref="AuthorizationError"/> from an <see cref="AuthorizationRequest"/> and
