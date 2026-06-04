@@ -50,6 +50,7 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
         var request = context.Request;
         return Validate(request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg) ??
                Validate(request.UserInfoSignedResponseAlg, Parameters.UserInfoSignedResponseAlg) ??
+               Validate(request.IntrospectionSignedResponseAlg, Parameters.IntrospectionSignedResponseAlg) ??
                ValidateAuthorizationSignedResponseAlg(request.AuthorizationSignedResponseAlg);
     }
 

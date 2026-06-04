@@ -79,4 +79,24 @@ public interface IJwtAlgorithmsProvider
 	/// (JARM §4).
 	/// </summary>
 	IEnumerable<string> AuthorizationEncryptionEncValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWS algorithms the authorization server uses to sign JWT introspection responses,
+	/// advertised via <c>introspection_signing_alg_values_supported</c> (RFC 9701 §7).
+	/// </summary>
+	IEnumerable<string> IntrospectionSigningAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server can use to encrypt
+	/// JWT introspection responses, advertised via <c>introspection_encryption_alg_values_supported</c>
+	/// (RFC 9701 §7).
+	/// </summary>
+	IEnumerable<string> IntrospectionEncryptionAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server can use to
+	/// encrypt JWT introspection responses, advertised via <c>introspection_encryption_enc_values_supported</c>
+	/// (RFC 9701 §7).
+	/// </summary>
+	IEnumerable<string> IntrospectionEncryptionEncValuesSupported { get; }
 }

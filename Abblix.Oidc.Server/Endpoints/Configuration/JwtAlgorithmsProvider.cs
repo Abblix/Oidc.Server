@@ -57,4 +57,13 @@ public sealed class JwtAlgorithmsProvider(
 
 	/// <inheritdoc />
 	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
 }

@@ -205,6 +205,25 @@ public record ClientRegistrationRequest
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// JWS algorithm required for signing introspection responses sent to this client (RFC 9701).
+    /// When omitted, introspection is returned as plain JSON.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE key-management algorithm required for encrypting introspection responses sent to this client (RFC 9701).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE content-encryption method required for encrypting introspection responses sent to this client (RFC 9701).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// JSON Web Signature (JWS) algorithm that MUST be used for Request Objects sent to the OP.
     /// Specifies the client's preferred algorithm for signing Request Objects.
     /// </summary>
@@ -435,6 +454,10 @@ public record ClientRegistrationRequest
             UserInfoEncryptedResponseAlg = UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = UserInfoEncryptedResponseEnc,
             UserInfoSignedResponseAlg = UserInfoSignedResponseAlg,
+
+            IntrospectionSignedResponseAlg = IntrospectionSignedResponseAlg,
+            IntrospectionEncryptedResponseAlg = IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEnc = IntrospectionEncryptedResponseEnc,
 
             BackChannelLogoutUri = BackChannelLogoutUri,
             BackChannelLogoutSessionRequired = BackChannelLogoutSessionRequired,

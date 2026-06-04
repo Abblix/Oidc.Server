@@ -50,17 +50,55 @@ public class SignedResponseAlgorithmsValidatorTests
     private ClientRegistrationValidationContext CreateContext(
         string? idTokenSignedResponseAlg = null,
         string? userInfoSignedResponseAlg = null,
-        string? authorizationSignedResponseAlg = null)
+        string? authorizationSignedResponseAlg = null,
+        string? introspectionSignedResponseAlg = null)
     {
         var request = new ClientRegistrationRequest
         {
             RedirectUris = [TestConstants.DefaultRedirectUri],
             IdTokenSignedResponseAlg = idTokenSignedResponseAlg,
             UserInfoSignedResponseAlg = userInfoSignedResponseAlg,
-            AuthorizationSignedResponseAlg = authorizationSignedResponseAlg
+            AuthorizationSignedResponseAlg = authorizationSignedResponseAlg,
+            IntrospectionSignedResponseAlg = introspectionSignedResponseAlg
         };
 
         return new ClientRegistrationValidationContext(request);
+    }
+
+    /// <summary>
+    /// Verifies validation succeeds with a supported introspection_signed_response_alg (RFC 9701).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithSupportedIntrospectionAlg_ShouldReturnNull()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(introspectionSignedResponseAlg: SigningAlgorithms.ES256);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verifies error when introspection_signed_response_alg is not supported (RFC 9701).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUnsupportedIntrospectionAlg_ShouldReturnError()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256]);
+
+        var context = CreateContext(introspectionSignedResponseAlg: SigningAlgorithms.PS384);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -96,7 +134,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("authorization_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -116,7 +154,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("authorization_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -177,7 +215,7 @@ public class SignedResponseAlgorithmsValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("id_token_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IdTokenSignedResponseAlg, result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
     }
 
@@ -222,7 +260,7 @@ public class SignedResponseAlgorithmsValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("userinfo_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.UserInfoSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -269,7 +307,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("id_token_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IdTokenSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>

@@ -24,6 +24,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -32,6 +33,7 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 using System.Buffers.Text;
 
@@ -50,11 +52,14 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// the security requirements for transmission.</param>
 /// <param name="userClaimsProvider">Retrieves user-specific claims to be embedded in the identity token,
 /// based on the authentication session and client's requested scopes and claims.</param>
+/// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
+/// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
 internal class IdentityTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	IClientJwtFormatter jwtFormatter,
-	IUserClaimsProvider userClaimsProvider) : IIdentityTokenService
+	IUserClaimsProvider userClaimsProvider,
+	IOptions<OidcOptions> options) : IIdentityTokenService
 {
 	/// <summary>
 	/// Generates an identity token encapsulating the user's authenticated session, optionally embedding claims based on
@@ -143,7 +148,10 @@ internal class IdentityTokenService(
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
 
-		return new EncodedJsonWebToken(identityToken, await jwtFormatter.FormatAsync(identityToken, clientInfo));
+		return new EncodedJsonWebToken(
+			identityToken,
+			await jwtFormatter.FormatAsync(
+				identityToken, clientInfo, ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value)));
 	}
 
 	private static void AppendAdditionalClaims(
