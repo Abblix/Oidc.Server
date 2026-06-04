@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -87,6 +88,17 @@ public class RegisterClientRequestProcessor(
             JwksUri = clientInfo.JwksUri,
             UserInfoEncryptedResponseAlg = clientInfo.UserInfoEncryptedResponseAlgorithm,
             UserInfoEncryptedResponseEnc = clientInfo.UserInfoEncryptedResponseEncryption,
+
+            // RFC 9701: echo the registered introspection response algorithms. The signed algorithm is omitted
+            // when it is the implicit "none" default so the response only advertises an explicit opt-in.
+            IntrospectionSignedResponseAlg = clientInfo.IntrospectionSignedResponseAlgorithm switch
+            {
+                SigningAlgorithms.None => null,
+                _ => clientInfo.IntrospectionSignedResponseAlgorithm,
+            },
+            IntrospectionEncryptedResponseAlg = clientInfo.IntrospectionEncryptedResponseAlgorithm,
+            IntrospectionEncryptedResponseEnc = clientInfo.IntrospectionEncryptedResponseEncryption,
+
             Contacts = clientInfo.Contacts,
             RequestUris = clientInfo.RequestUris,
             InitiateLoginUri = clientInfo.InitiateLoginUri,
