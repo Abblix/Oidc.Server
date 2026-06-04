@@ -152,6 +152,8 @@ public class RegisterClientRequestProcessor(
             IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
             UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
             AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
             AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
             RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
@@ -198,6 +200,11 @@ public class RegisterClientRequestProcessor(
         if (model.UserInfoSignedResponseAlg.HasValue())
         {
             clientInfo.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
+        }
+
+        if (model.IntrospectionSignedResponseAlg.HasValue())
+        {
+            clientInfo.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
         }
 
         if (model.IdTokenSignedResponseAlg.HasValue())

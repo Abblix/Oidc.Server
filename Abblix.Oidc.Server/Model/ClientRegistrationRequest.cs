@@ -211,6 +211,27 @@ public record ClientRegistrationRequest
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// The <c>introspection_signed_response_alg</c> (RFC 9701): the JWS algorithm the OP must use when signing
+    /// introspection responses returned to this client. When omitted, introspection is returned as plain JSON.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// The <c>introspection_encrypted_response_alg</c> (RFC 9701): the JWE key-management algorithm the OP must use
+    /// when encrypting introspection responses for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// The <c>introspection_encrypted_response_enc</c> (RFC 9701): the JWE content-encryption algorithm paired with
+    /// <see cref="IntrospectionEncryptedResponseAlg"/> for introspection responses to this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// The <c>authorization_signed_response_alg</c> (JARM §3): the JWS algorithm the OP must use to sign
     /// authorization responses packed into a JWT for this client. Defaults to <c>RS256</c>; <c>none</c> is
     /// not permitted.
@@ -570,6 +591,18 @@ public record ClientRegistrationRequest
         /// <summary>The <c>userinfo_encrypted_response_enc</c> registration parameter naming the JWE
         /// content-encryption algorithm for UserInfo responses.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>introspection_signed_response_alg</c> registration parameter (RFC 9701) naming the JWS
+        /// algorithm the OP must use when signing introspection responses for this client.</summary>
+        public const string IntrospectionSignedResponseAlg = "introspection_signed_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_alg</c> registration parameter (RFC 9701) naming the JWE
+        /// key-management algorithm used when encrypting introspection responses.</summary>
+        public const string IntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_enc</c> registration parameter (RFC 9701) naming the JWE
+        /// content-encryption algorithm for introspection responses.</summary>
+        public const string IntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc";
 
         /// <summary>The <c>authorization_signed_response_alg</c> registration parameter naming the JWS algorithm
         /// the OP must use to sign JARM authorization responses for this client.</summary>

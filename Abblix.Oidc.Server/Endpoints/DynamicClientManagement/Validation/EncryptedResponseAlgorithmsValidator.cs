@@ -47,6 +47,8 @@ public class EncryptedResponseAlgorithmsValidator(IJsonWebTokenValidator jwtVali
             ?? ValidateEnc(request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc)
             ?? ValidateAlg(request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg)
             ?? ValidateEnc(request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc)
+            ?? ValidateAlg(request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg)
+            ?? ValidateEnc(request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc)
             ?? ValidateAlg(request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg)
             ?? ValidateEnc(request.RequestObjectEncryptionEnc, Parameters.RequestObjectEncryptionEnc)
             ?? ValidateAlg(request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg)
