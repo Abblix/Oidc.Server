@@ -96,7 +96,9 @@ public class UserInfoResponseFormatter(
             ContentType = MediaTypes.Jwt,
             // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
             Content = await clientJwtFormatter.FormatAsync(
-                token, found.ClientInfo, ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value)),
+                token,
+                found.ClientInfo,
+                ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value)),
         };
     }
 }

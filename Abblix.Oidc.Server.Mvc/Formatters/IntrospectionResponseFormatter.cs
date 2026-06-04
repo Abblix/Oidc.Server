@@ -111,7 +111,9 @@ public class IntrospectionResponseFormatter(
         {
             ContentType = MediaTypes.TokenIntrospectionJwt,
             Content = await clientJwtFormatter.FormatAsync(
-                token, clientInfo, ClientJwtEncryption.ForIntrospection(clientInfo, options.Value)),
+                token,
+                clientInfo,
+                ClientJwtEncryption.ForIntrospection(clientInfo, options.Value)),
         };
     }
 
