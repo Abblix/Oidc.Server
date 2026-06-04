@@ -98,7 +98,6 @@ public static class ServiceCollectionExtensions
 		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
 		services.TryAddSingleton<IUrlHelperFactory, UrlHelperFactory>();
 		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
-		services.TryAddScoped<IAuthorizationErrorFormatter, AuthorizationErrorFormatter>();
 		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
 		services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
 		services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();

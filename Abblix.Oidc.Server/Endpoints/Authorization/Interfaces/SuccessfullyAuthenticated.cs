@@ -39,7 +39,7 @@ public record SuccessfullyAuthenticated(
 	string ResponseMode,
 	string? SessionId,
 	ICollection<string> AffectedClientIds)
-	: AuthorizationResponse(Model)
+	: ClientDeliveredResponse(Model, ResponseMode)
 {
 	/// <summary>
 	/// An authorization code that can be exchanged for tokens. This code is issued only if
@@ -70,4 +70,10 @@ public record SuccessfullyAuthenticated(
 	/// session at the authorization server and may be used for managing session continuity and logout.
 	/// </summary>
 	public string? SessionState { get; set; }
+
+	/// <summary>
+	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder for
+	/// implicit/hybrid flows only (where the response itself carries tokens). <c>null</c> for the code flow.
+	/// </summary>
+	public string? Scope { get; set; }
 }

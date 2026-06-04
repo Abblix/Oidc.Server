@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -46,6 +45,7 @@ public class AuthorizationHandlerTests
     private readonly Mock<IAuthorizationRequestFetcher> _fetcher;
     private readonly Mock<IAuthorizationRequestValidator> _validator;
     private readonly Mock<IAuthorizationRequestProcessor> _processor;
+    private readonly Mock<IAuthorizationResponseEncoder> _encoder;
     private readonly AuthorizationHandler _handler;
 
     public AuthorizationHandlerTests()
@@ -53,23 +53,13 @@ public class AuthorizationHandlerTests
         _fetcher = new Mock<IAuthorizationRequestFetcher>(MockBehavior.Strict);
         _validator = new Mock<IAuthorizationRequestValidator>(MockBehavior.Strict);
         _processor = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
-        // Register all three response processors so existing tests asserting that Implicit grant
-        // and the full response-type combination set are advertised continue to pass. New tests
-        // that exercise the default-off Implicit configuration construct their own handler.
-        IAuthorizationResponseBuilder[] responseProcessors =
-        [
-            Mock.Of<IAuthorizationResponseBuilder>(p =>
-                p.ResponseType == ResponseTypes.Code &&
-                p.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode }),
-            Mock.Of<IAuthorizationResponseBuilder>(p =>
-                p.ResponseType == ResponseTypes.Token &&
-                p.GrantTypesSupported == new[] { GrantTypes.Implicit }),
-            Mock.Of<IAuthorizationResponseBuilder>(p =>
-                p.ResponseType == ResponseTypes.IdToken &&
-                p.GrantTypesSupported == new[] { GrantTypes.Implicit }),
-        ];
+        _encoder = new Mock<IAuthorizationResponseEncoder>(MockBehavior.Strict);
+        _encoder.Setup(e => e.EncodeAsync(It.IsAny<AuthorizationResponse>())).Returns(Task.CompletedTask);
         _handler = new AuthorizationHandler(
-            _fetcher.Object, _validator.Object, _processor.Object, responseProcessors);
+            _fetcher.Object,
+            _validator.Object,
+            _processor.Object,
+            _encoder.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()
@@ -238,115 +228,6 @@ public class AuthorizationHandlerTests
         // Assert
         _validator.Verify(v => v.ValidateAsync(
             It.Is<AuthorizationRequest>(r => r.State == "modified_state")), Times.Once);
-    }
-
-    /// <summary>
-    /// Verifies metadata indicates request parameter support.
-    /// Per JAR (RFC 9101), request parameter should be advertised.
-    /// </summary>
-    [Fact]
-    public void Metadata_ShouldIndicateRequestParameterSupported()
-    {
-        // Act
-        var metadata = _handler.Metadata;
-
-        // Assert
-        Assert.True(metadata.RequestParameterSupported);
-    }
-
-    /// <summary>
-    /// Verifies metadata indicates claims parameter support.
-    /// Per OIDC Core Section 5.5, claims parameter support should be advertised.
-    /// </summary>
-    [Fact]
-    public void Metadata_ShouldIndicateClaimsParameterSupported()
-    {
-        // Act
-        var metadata = _handler.Metadata;
-
-        // Assert
-        Assert.True(metadata.ClaimsParameterSupported);
-    }
-
-    /// <summary>
-    /// Verifies grant types supported includes implicit.
-    /// Per OIDC Core, authorization endpoint supports implicit grant.
-    /// </summary>
-    [Fact]
-    public void GrantTypesSupported_ShouldIncludeImplicit()
-    {
-        // Act
-        var grantTypes = _handler.GrantTypesSupported.ToArray();
-
-        // Assert
-        Assert.Contains(GrantTypes.Implicit, grantTypes);
-    }
-
-    /// <summary>
-    /// Verifies that without <c>EnableImplicitFlow()</c> being called, the discovery document
-    /// does NOT advertise the implicit grant. Per OAuth 2.1 §1.4 the Implicit Grant is deprecated
-    /// and library defaults to off; this test locks that contract on the discovery side.
-    /// </summary>
-    [Fact]
-    public void GrantTypesSupported_WhenImplicitFlowDisabled_DoesNotIncludeImplicit()
-    {
-        // Arrange — only the Code processor is registered, mirroring the default
-        // (EnableImplicitFlow not called).
-        var handler = new AuthorizationHandler(
-            _fetcher.Object, _validator.Object, _processor.Object,
-            [Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code)]);
-
-        // Act
-        var grantTypes = handler.GrantTypesSupported.ToArray();
-
-        // Assert
-        Assert.DoesNotContain(GrantTypes.Implicit, grantTypes);
-    }
-
-    /// <summary>
-    /// Verifies that without <c>EnableImplicitFlow()</c>, the discovery document advertises only
-    /// the <c>code</c> response type; <c>token</c>, <c>id_token</c>, and the four hybrid
-    /// combinations are absent. Per OAuth 2.1 §1.4 default-off Implicit Flow contract.
-    /// </summary>
-    [Fact]
-    public void Metadata_ResponseTypesSupported_WhenImplicitFlowDisabled_ContainsOnlyCode()
-    {
-        // Arrange — only the Code processor registered.
-        var handler = new AuthorizationHandler(
-            _fetcher.Object, _validator.Object, _processor.Object,
-            [Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code)]);
-
-        // Act
-        var responseTypesSupported = handler.Metadata.ResponseTypesSupported;
-
-        // Assert
-        Assert.Equal([ResponseTypes.Code], responseTypesSupported);
-    }
-
-    /// <summary>
-    /// Verifies that when <c>EnableImplicitFlow()</c> is in effect (all three response-type
-    /// processors registered), the discovery document advertises every canonical RFC-defined
-    /// response-type combination: the three single parts and the four hybrid combinations.
-    /// Locks the contract that the opt-in produces the full implicit / hybrid surface.
-    /// </summary>
-    [Fact]
-    public void Metadata_ResponseTypesSupported_WhenImplicitFlowEnabled_ContainsAllSevenCombinations()
-    {
-        // Default fixture handler has all three processors registered, mirroring EnableImplicitFlow.
-        var responseTypesSupported = _handler.Metadata.ResponseTypesSupported;
-
-        Assert.Equal(
-            new[]
-            {
-                ResponseTypes.Code,
-                ResponseTypes.Token,
-                ResponseTypes.IdToken,
-                $"{ResponseTypes.Code} {ResponseTypes.Token}",
-                $"{ResponseTypes.Code} {ResponseTypes.IdToken}",
-                $"{ResponseTypes.Token} {ResponseTypes.IdToken}",
-                $"{ResponseTypes.Code} {ResponseTypes.Token} {ResponseTypes.IdToken}",
-            },
-            responseTypesSupported);
     }
 
     /// <summary>

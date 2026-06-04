@@ -40,7 +40,6 @@ public class AuthorizationRequestProcessorDecorator(
     IAuthorizationRequestProcessor inner,
     ISessionManagementService sessionManagementService): IAuthorizationRequestProcessor
 {
-
     /// <summary>
     /// Delegates to the wrapped processor and, when session management is enabled and the response is a successful
     /// OpenID Connect authentication, attaches the OIDC Session Management 1.0 <c>session_state</c> value so the

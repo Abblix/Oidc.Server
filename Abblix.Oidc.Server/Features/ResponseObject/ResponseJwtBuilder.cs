@@ -22,10 +22,12 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -41,20 +43,16 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <param name="serviceKeysProvider">Resolves the authorization server's signing keys.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
+/// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
 public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
     IIssuerProvider issuerProvider,
-    TimeProvider timeProvider) : IResponseJwtBuilder
+    TimeProvider timeProvider,
+    IOptions<OidcOptions> options) : IResponseJwtBuilder
 {
-    /// <summary>
-    /// The maximum lifetime of a JARM response JWT. JARM §2.1 RECOMMENDS a maximum of 10 minutes; the
-    /// authorization response is consumed by the client immediately upon redirect, so a short window suffices.
-    /// </summary>
-    private static readonly TimeSpan ResponseLifetime = TimeSpan.FromMinutes(10);
-
     /// <inheritdoc />
     public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
@@ -69,7 +67,7 @@ public class ResponseJwtBuilder(
             Payload =
             {
                 IssuedAt = now,
-                ExpiresAt = now + ResponseLifetime,
+                ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
                 Issuer = issuerProvider.GetIssuer(),
                 Audiences = [clientInfo.ClientId],
             },

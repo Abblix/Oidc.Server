@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -32,6 +33,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -77,7 +79,8 @@ public class ResponseJwtBuilderTests
             _clientKeys.Object,
             _serviceKeys.Object,
             _issuerProvider.Object,
-            _timeProvider.Object);
+            _timeProvider.Object,
+            Options.Create(new OidcOptions()));
     }
 
     /// <summary>

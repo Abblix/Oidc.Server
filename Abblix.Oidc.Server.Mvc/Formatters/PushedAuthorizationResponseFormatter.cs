@@ -37,8 +37,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <remarks>
 /// PAR is a server-to-server endpoint per RFC 9126; responses are always JSON. Error responses
 /// never redirect — that would land programmatic OAuth clients on a user-facing login page.
-/// For the same reason this formatter does not delegate to <see cref="IAuthorizationErrorFormatter"/>,
-/// which is intended for the authorization endpoint's browser flow.
+/// For the same reason this formatter does not delegate to the browser-flow redirect delivery in
+/// <see cref="AuthorizationResponseFormatter"/>, which is intended for the authorization endpoint.
 /// </remarks>
 public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponseFormatter
 {

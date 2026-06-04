@@ -154,6 +154,14 @@ public record OidcOptions
 	public TimeSpan PushedAuthorizationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(1);
 
 	/// <summary>
+	/// The lifetime of a JARM (JWT Secured Authorization Response Mode) <c>response</c> JWT. The authorization
+	/// response is consumed by the client immediately upon redirect, so a short window suffices and mostly
+	/// absorbs clock skew. JARM §2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
+	/// (e.g. FAPI) may shorten it.
+	/// </summary>
+	public TimeSpan JwtAuthorizationResponseExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+
+	/// <summary>
 	/// A JWT used for licensing and configuration validation of the OIDC service. This token contains claims that the
 	/// OIDC service uses to validate its configuration, features, and licensing status, ensuring the service operates
 	/// within its licensed capabilities. Proper validation of this token is crucial for the service's legal and

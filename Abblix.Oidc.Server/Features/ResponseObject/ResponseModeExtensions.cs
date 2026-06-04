@@ -35,9 +35,11 @@ public static class ResponseModeExtensions
     /// <see cref="ResponseModes.QueryJwt"/>, <see cref="ResponseModes.FragmentJwt"/>,
     /// <see cref="ResponseModes.FormPostJwt"/> or <see cref="ResponseModes.Jwt"/>.
     /// </summary>
-    public static bool IsJwtMode(this string responseMode)
-        => responseMode is ResponseModes.QueryJwt or ResponseModes.FragmentJwt
-            or ResponseModes.FormPostJwt or ResponseModes.Jwt;
+    public static bool IsJwtMode(this string responseMode) => responseMode is
+        ResponseModes.QueryJwt or
+        ResponseModes.FragmentJwt or
+        ResponseModes.FormPostJwt or
+        ResponseModes.Jwt;
 
     /// <summary>
     /// Resolves a JARM (JWT-secured) response mode to the plaintext delivery mode that carries the response JWT:
