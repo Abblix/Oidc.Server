@@ -91,12 +91,16 @@ public class UserInfoResponseFormatter(
             }
         };
 
+        // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
+        var jwt = await clientJwtFormatter.FormatAsync(
+            token,
+            found.ClientInfo,
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+
         return new ContentResult
         {
             ContentType = MediaTypes.Jwt,
-            // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
-            Content = await clientJwtFormatter.FormatAsync(
-                token, found.ClientInfo, ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value)),
+            Content = jwt,
         };
     }
 }
