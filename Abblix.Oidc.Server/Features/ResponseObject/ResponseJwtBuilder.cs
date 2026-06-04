@@ -76,6 +76,9 @@ public class ResponseJwtBuilder(
 
         // JARM §2.2 / §3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
         // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted.
-        return await clientJwtFormatter.FormatAsync(token, clientInfo, ClientJwtEncryption.ForJarm(clientInfo));
+        return await clientJwtFormatter.FormatAsync(
+            token,
+            clientInfo,
+            ClientJwtEncryption.ForJarm(clientInfo));
     }
 }

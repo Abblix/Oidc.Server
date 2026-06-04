@@ -148,10 +148,12 @@ internal class IdentityTokenService(
 
 		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
 
-		return new EncodedJsonWebToken(
+		var jwt = await jwtFormatter.FormatAsync(
 			identityToken,
-			await jwtFormatter.FormatAsync(
-				identityToken, clientInfo, ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value)));
+			clientInfo,
+			ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
+
+		return new EncodedJsonWebToken(identityToken, jwt);
 	}
 
 	private static void AppendAdditionalClaims(
