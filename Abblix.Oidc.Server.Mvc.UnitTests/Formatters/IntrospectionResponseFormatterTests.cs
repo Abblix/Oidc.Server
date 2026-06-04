@@ -36,7 +36,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Moq;
-using Xunit;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 

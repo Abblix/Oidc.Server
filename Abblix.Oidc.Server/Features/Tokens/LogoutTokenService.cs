@@ -115,11 +115,11 @@ public partial class LogoutTokenService(
 
         LogTokenPrepared(logoutToken);
 
-        return new EncodedJsonWebToken(
+        var jwt = await jwtFormatter.FormatAsync(
             logoutToken,
-            await jwtFormatter.FormatAsync(
-                logoutToken,
-                clientInfo,
-                ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value)));
+            clientInfo,
+            ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
+
+        return new EncodedJsonWebToken(logoutToken, jwt);
     }
 }

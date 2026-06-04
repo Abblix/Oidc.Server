@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Linq;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -107,13 +106,15 @@ public class IntrospectionResponseFormatter(
             },
         };
 
+        var jwt = await clientJwtFormatter.FormatAsync(
+            token,
+            clientInfo,
+            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value));
+
         return new ContentResult
         {
             ContentType = MediaTypes.TokenIntrospectionJwt,
-            Content = await clientJwtFormatter.FormatAsync(
-                token,
-                clientInfo,
-                ClientJwtEncryption.ForIntrospection(clientInfo, options.Value)),
+            Content = jwt,
         };
     }
 
