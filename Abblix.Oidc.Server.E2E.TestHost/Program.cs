@@ -33,29 +33,6 @@ builder.Services.AddOidcServices(options =>
     options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
-    static ClientInfo Mint(string id, ClientSecret secret, Uri redirect, string[]? allowlist, bool idTokenRar, bool requireDPoP = false, bool isPublic = false) =>
-        new(id)
-        {
-            // Public clients carry no shared secret; the AS gates them on PKCE + (when DPoP
-            // is in play) on the proof-of-possession key. TokenEndpointAuthMethod = "none"
-            // flips ClientInfo.ClientType to Public, which in turn forces RFC 9449 §5
-            // same-key refresh binding (no client-auth fallback to sender-constrain).
-            ClientSecrets = isPublic ? [] : [secret],
-            TokenEndpointAuthMethod = isPublic
-                ? ClientAuthenticationMethods.None
-                : ClientAuthenticationMethods.ClientSecretPost,
-            // RFC 8693 Token Exchange is admitted on the confidential client so the E2E suite can
-            // exercise the impersonation + delegation flows against a real access token issued by
-            // the auth-code path. TokenExchangeAllowedSubjectTokenTypes is null = no per-client
-            // constraint (tri-state default; library-wide resolver registry decides).
-            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.TokenExchange],
-            PkceRequired = true,
-            RedirectUris = [redirect],
-            AuthorizationDetailsTypes = allowlist,
-            ForceAuthorizationDetailsInIdentityToken = idTokenRar,
-            OfflineAccessAllowed = true,
-            RequireDPoP = requireDPoP,
-        };
 
     options.Clients =
     [
@@ -70,6 +47,37 @@ builder.Services.AddOidcServices(options =>
         // RFC 9449 §5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
     ];
+    return;
+
+    static ClientInfo Mint(
+        string id,
+        ClientSecret secret,
+        Uri redirect,
+        string[]? allowlist,
+        bool idTokenRar,
+        bool requireDPoP = false,
+        bool isPublic = false) => new(id)
+    {
+        // Public clients carry no shared secret; the AS gates them on PKCE + (when DPoP
+        // is in play) on the proof-of-possession key. TokenEndpointAuthMethod = "none"
+        // flips ClientInfo.ClientType to Public, which in turn forces RFC 9449 §5
+        // same-key refresh binding (no client-auth fallback to sender-constrain).
+        ClientSecrets = isPublic ? [] : [secret],
+        TokenEndpointAuthMethod = isPublic
+            ? ClientAuthenticationMethods.None
+            : ClientAuthenticationMethods.ClientSecretPost,
+        // RFC 8693 Token Exchange is admitted on the confidential client so the E2E suite can
+        // exercise the impersonation + delegation flows against a real access token issued by
+        // the auth-code path. TokenExchangeAllowedSubjectTokenTypes is null = no per-client
+        // constraint (tri-state default; library-wide resolver registry decides).
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.TokenExchange],
+        PkceRequired = true,
+        RedirectUris = [redirect],
+        AuthorizationDetailsTypes = allowlist,
+        ForceAuthorizationDetailsInIdentityToken = idTokenRar,
+        OfflineAccessAllowed = true,
+        RequireDPoP = requireDPoP,
+    };
 });
 
 builder.Services.AddRichAuthorizationRequests();
