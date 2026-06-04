@@ -231,8 +231,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSessionManagement(this IServiceCollection services)
     {
         services.TryAddScoped<ISessionManagementService, SessionManagementService>();
-        return services
-            .Decorate<IAuthorizationRequestProcessor, AuthorizationRequestProcessorDecorator>();
+        return services.Decorate<IAuthorizationRequestProcessor, AuthorizationRequestProcessorDecorator>();
     }
 
     /// <summary>

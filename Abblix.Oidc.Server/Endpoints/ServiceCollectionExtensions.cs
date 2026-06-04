@@ -117,6 +117,10 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
+        // Response encoding (iss/scope gating + JARM packing) lives in the framework-agnostic core and
+        // runs from the handler after the full processing chain. Scoped: it reads per-request issuer state.
+        services.TryAddScoped<IAuthorizationResponseEncoder, AuthorizationResponseEncoder>();
+
         // Authorization Code Flow is registered by default. Implicit / Hybrid Flow components
         // (token, id_token response processors) are registered only when the host calls
         // EnableImplicitFlow(); without that call those response types are not in the DI graph
