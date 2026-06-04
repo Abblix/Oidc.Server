@@ -76,16 +76,16 @@ public partial class IntrospectionRequestValidator(
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
 					// The token was issued to another client
-					return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 				}
 
-				return new ValidIntrospectionRequest(introspectionRequest, token);
+				return new ValidIntrospectionRequest(introspectionRequest, clientInfo, token);
 
 			},
 			error =>
 			{
 				LogInvalidJwt(error);
-				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
 }

@@ -277,4 +277,23 @@ public class RegisterClientHandlerIntegrationTests
         Assert.Equal(new Uri("https://client.example.com/callback"), success.RedirectUris[0]);
         Assert.True(success.DpopBoundAccessTokens);
     }
+
+    /// <summary>
+    /// RFC 9701 §6: the registration response echoes a registered <c>introspection_signed_response_alg</c>, while a
+    /// client that did not register one (the implicit <c>none</c> default) gets no such field in the response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_RegistrationResponse_EchoesIntrospectionSignedResponseAlg()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var withAlg = CreateRequest() with { IntrospectionSignedResponseAlg = SigningAlgorithms.RS256 };
+        Assert.True((await handler.HandleAsync(withAlg)).TryGetSuccess(out var registered));
+        Assert.Equal(SigningAlgorithms.RS256, registered.IntrospectionSignedResponseAlg);
+
+        var withoutAlg = CreateRequest();
+        Assert.True((await handler.HandleAsync(withoutAlg)).TryGetSuccess(out var registeredDefault));
+        Assert.Null(registeredDefault.IntrospectionSignedResponseAlg);
+    }
 }

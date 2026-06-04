@@ -123,6 +123,10 @@ public class ConfigurationResponseFormatter(
 			AuthorizationEncryptionAlgValuesSupported = response.AuthorizationEncryptionAlgValuesSupported,
 			AuthorizationEncryptionEncValuesSupported = response.AuthorizationEncryptionEncValuesSupported,
 
+			IntrospectionSigningAlgValuesSupported = response.IntrospectionSigningAlgValuesSupported,
+			IntrospectionEncryptionAlgValuesSupported = response.IntrospectionEncryptionAlgValuesSupported,
+			IntrospectionEncryptionEncValuesSupported = response.IntrospectionEncryptionEncValuesSupported,
+
 			RequirePushedAuthorizationRequests = response.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = response.RequireSignedRequestObject,
 

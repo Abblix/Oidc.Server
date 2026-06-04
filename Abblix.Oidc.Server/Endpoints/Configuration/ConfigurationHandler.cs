@@ -94,6 +94,12 @@ public sealed class ConfigurationHandler(
 		AuthorizationEncryptionAlgValuesSupported = jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported,
 		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
 
+		// RFC 9701 JWT introspection responses are always available — a client opts in per request via Accept and
+		// its registered introspection_signed_response_alg — so the supported algorithms are advertised unconditionally.
+		IntrospectionSigningAlgValuesSupported = jwtAlgorithms.IntrospectionSigningAlgValuesSupported,
+		IntrospectionEncryptionAlgValuesSupported = jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported,
+		IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
+
 		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 

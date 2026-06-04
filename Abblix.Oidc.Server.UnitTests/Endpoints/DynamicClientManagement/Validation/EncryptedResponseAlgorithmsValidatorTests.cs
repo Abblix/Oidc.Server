@@ -74,6 +74,8 @@ public class EncryptedResponseAlgorithmsValidatorTests
             IdTokenEncryptedResponseEnc = SupportedEnc,
             UserInfoEncryptedResponseAlg = SupportedAlg,
             UserInfoEncryptedResponseEnc = SupportedEnc,
+            IntrospectionEncryptedResponseAlg = SupportedAlg,
+            IntrospectionEncryptedResponseEnc = SupportedEnc,
             RequestObjectEncryptionAlg = SupportedAlg,
             RequestObjectEncryptionEnc = SupportedEnc,
             AuthorizationEncryptedResponseAlg = SupportedAlg,
@@ -86,18 +88,20 @@ public class EncryptedResponseAlgorithmsValidatorTests
     }
 
     [Theory]
-    [InlineData("id_token_encrypted_response_alg")]
-    [InlineData("userinfo_encrypted_response_alg")]
-    [InlineData("request_object_encryption_alg")]
-    [InlineData("authorization_encrypted_response_alg")]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseAlg)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseAlg)]
     public async Task ValidateAsync_WithUnsupportedKeyManagementAlg_ShouldReturnError(string wireName)
     {
         const string unsupported = EncryptionAlgorithms.KeyManagement.Rsa1_5;
         var request = wireName switch
         {
-            "id_token_encrypted_response_alg" => Request() with { IdTokenEncryptedResponseAlg = unsupported },
-            "userinfo_encrypted_response_alg" => Request() with { UserInfoEncryptedResponseAlg = unsupported },
-            "request_object_encryption_alg" => Request() with { RequestObjectEncryptionAlg = unsupported },
+            ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg => Request() with { IdTokenEncryptedResponseAlg = unsupported },
+            ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg => Request() with { UserInfoEncryptedResponseAlg = unsupported },
+            ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseAlg => Request() with { IntrospectionEncryptedResponseAlg = unsupported },
+            ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg => Request() with { RequestObjectEncryptionAlg = unsupported },
             _ => Request() with { AuthorizationEncryptedResponseAlg = unsupported },
         };
 
@@ -121,6 +125,6 @@ public class EncryptedResponseAlgorithmsValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("authorization_encrypted_response_enc", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, result.ErrorDescription);
     }
 }

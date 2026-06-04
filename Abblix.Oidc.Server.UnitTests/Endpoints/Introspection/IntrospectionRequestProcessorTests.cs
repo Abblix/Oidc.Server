@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 
@@ -62,7 +63,7 @@ public class IntrospectionRequestProcessorTests
         IntrospectionRequest request,
         JsonWebToken? token = null)
     {
-        return new ValidIntrospectionRequest(request, token!);
+        return new ValidIntrospectionRequest(request, new ClientInfo("test_client"), token!);
     }
 
     /// <summary>

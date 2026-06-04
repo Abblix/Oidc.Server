@@ -48,4 +48,8 @@ public sealed record DiscoveryDocument
     /// <summary>RFC 9449 §5.1: JWS algorithms the AS accepts for DPoP proofs.</summary>
     [JsonPropertyName("dpop_signing_alg_values_supported")]
     public string[]? DPoPSigningAlgValuesSupported { get; init; }
+
+    /// <summary>RFC 9701 §7: JWS algorithms the AS uses to sign JWT introspection responses.</summary>
+    [JsonPropertyName("introspection_signing_alg_values_supported")]
+    public string[]? IntrospectionSigningAlgValuesSupported { get; init; }
 }

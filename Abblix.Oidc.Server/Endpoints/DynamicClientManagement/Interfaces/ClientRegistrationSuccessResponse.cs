@@ -146,6 +146,24 @@ public record ClientRegistrationSuccessResponse(
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// JWS algorithm for signing introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>alg</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>enc</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// Array of contact email addresses for people responsible for this client.
     /// Optional client metadata. Per RFC 7591 §2.
     /// </summary>
@@ -238,6 +256,9 @@ public record ClientRegistrationSuccessResponse(
         public const string JwksUri = "jwks_uri";
         public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+        public const string IntrospectionSignedResponseAlg = "introspection_signed_response_alg";
+        public const string IntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg";
+        public const string IntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc";
         public const string Contacts = "contacts";
         public const string RequestUris = "request_uris";
         public const string InitiateLoginUri = "initiate_login_uri";

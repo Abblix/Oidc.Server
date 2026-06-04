@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -81,7 +82,8 @@ public class LogoutTokenServiceTests
             timeProvider,
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object);
+            _tokenIdGenerator.Object,
+            Options.Create(new OidcOptions()));
     }
 
     #region JWT Structure Tests
@@ -468,8 +470,8 @@ public class LogoutTokenServiceTests
             .Returns(string.Empty);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo))
-            .Callback<JsonWebToken, ClientInfo>((token, _) => capturedToken = token)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => capturedToken = token)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -507,7 +509,7 @@ public class LogoutTokenServiceTests
         Assert.Same(capturedToken, result.Token);
         Assert.Equal(EncodedJwt, result.EncodedJwt);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     /// <summary>
@@ -529,8 +531,8 @@ public class LogoutTokenServiceTests
             .Returns(SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>()))
-            .Callback<JsonWebToken, ClientInfo>((token, client) =>
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, client, _) =>
             {
                 formattedToken = token;
                 formattedClient = client;
@@ -544,7 +546,7 @@ public class LogoutTokenServiceTests
         Assert.NotNull(formattedToken);
         Assert.Same(clientInfo, formattedClient);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     #endregion
@@ -588,8 +590,8 @@ public class LogoutTokenServiceTests
             .Returns(logoutContext.SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo))
-            .Callback<JsonWebToken, ClientInfo>((token, _) => captureToken(token))
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => captureToken(token))
             .ReturnsAsync(EncodedJwt);
     }
 

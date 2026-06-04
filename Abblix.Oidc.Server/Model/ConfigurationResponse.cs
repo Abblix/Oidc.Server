@@ -184,6 +184,18 @@ public record ConfigurationResponse
         /// the provider may use when signing UserInfo responses.</summary>
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
 
+        /// <summary>The <c>introspection_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionSigningAlgValuesSupported = "introspection_signing_alg_values_supported";
+
+        /// <summary>The <c>introspection_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionEncryptionAlgValuesSupported = "introspection_encryption_alg_values_supported";
+
+        /// <summary>The <c>introspection_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionEncryptionEncValuesSupported = "introspection_encryption_enc_values_supported";
+
         /// <summary>The <c>dpop_signing_alg_values_supported</c> metadata field listing JWS algorithms
         /// accepted on DPoP proofs (RFC 9449 §5.1).</summary>
         public const string DpopSigningAlgValuesSupported = "dpop_signing_alg_values_supported";
@@ -498,6 +510,26 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEncryptionEncValuesSupported)]
     public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSigningAlgValuesSupported)]
+    public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
+    /// JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
+    /// encrypt JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptionEncValuesSupported)]
+    public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.

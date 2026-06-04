@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
@@ -31,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// JSON via additional top-level members; cross-domain extensions should be listed in the
 /// IANA "OAuth Token Introspection Response" registry (RFC 7662 §3.1).
 /// </summary>
-public record IntrospectionSuccess(bool Active, JsonObject? Claims)
+public record IntrospectionSuccess(bool Active, JsonObject? Claims, ClientInfo ClientInfo)
 {
     /// <summary>
     /// RFC 7662 <c>active</c> field: <c>true</c> only if the token is currently valid and the
@@ -46,4 +47,10 @@ public record IntrospectionSuccess(bool Active, JsonObject? Claims)
     /// guidance not to leak information about inactive tokens.
     /// </summary>
     public JsonObject? Claims { get; } = Claims;
+
+    /// <summary>
+    /// The authenticated client that requested the introspection. Not serialized into the response body; it selects
+    /// the response format (plain JSON vs. a signed/encrypted JWT per RFC 9701).
+    /// </summary>
+    public ClientInfo ClientInfo { get; } = ClientInfo;
 }
