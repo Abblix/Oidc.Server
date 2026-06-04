@@ -25,5 +25,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Abblix.Oidc.Server.E2E.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 
 </Project>
