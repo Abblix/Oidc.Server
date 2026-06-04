@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -33,6 +34,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -42,7 +44,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    IIssuerProvider issuerProvider) : IUserInfoResponseFormatter
+    IIssuerProvider issuerProvider,
+    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -91,9 +94,9 @@ public class UserInfoResponseFormatter(
         return new ContentResult
         {
             ContentType = MediaTypes.Jwt,
-            // The UserInfo token carries no id_token/logout type, so the formatter encrypts it with
-            // the client's userinfo_encrypted_response_* metadata rather than the id_token fields.
-            Content = await clientJwtFormatter.FormatAsync(token, found.ClientInfo),
+            // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
+            Content = await clientJwtFormatter.FormatAsync(
+                token, found.ClientInfo, ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value)),
         };
     }
 }

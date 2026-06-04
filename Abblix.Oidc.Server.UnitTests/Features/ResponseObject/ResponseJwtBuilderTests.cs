@@ -73,11 +73,17 @@ public class ResponseJwtBuilderTests
         _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
         _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
-        _builder = new ResponseJwtBuilder(
-            _clientInfoProvider.Object,
+        // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
+        // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
+        var clientJwtFormatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeys.Object,
             _serviceKeys.Object,
+            Options.Create(new OidcOptions()));
+
+        _builder = new ResponseJwtBuilder(
+            _clientInfoProvider.Object,
+            clientJwtFormatter,
             _issuerProvider.Object,
             _timeProvider.Object,
             Options.Create(new OidcOptions()));
@@ -182,6 +188,34 @@ public class ResponseJwtBuilderTests
         await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
+    }
+
+    /// <summary>
+    /// Characterizes the unified key-management algorithm selection shared by all client-addressed JWTs: when the
+    /// client's encryption key declares its own <c>alg</c>, that algorithm is used in preference to the registered
+    /// <c>authorization_encrypted_response_alg</c>. This is the long-standing UserInfo/ID-token rule, now applied to
+    /// JARM as well; it is observable only when a client's JWK declares an <c>alg</c> different from the registered
+    /// value (a contradictory configuration).
+    /// </summary>
+    [Fact]
+    public async Task BuildAsync_WhenClientKeyDeclaresAlgorithm_PrefersKeyDeclaredAlgorithm()
+    {
+        var capture = CaptureIssue();
+        var keyWithOwnAlgorithm = new RsaJsonWebKey
+        {
+            KeyId = "client-enc",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(new[] { (JsonWebKey)keyWithOwnAlgorithm }.ToAsyncEnumerable());
+
+        // Registered key-management algorithm differs from the key's own declared algorithm.
+        _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
+
+        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
     }
 
     [Fact]

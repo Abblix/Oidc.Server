@@ -35,6 +35,10 @@ using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
+// These tests deliberately exercise the obsolete type-dispatch FormatAsync(token, clientInfo) overload to lock its
+// back-compat behavior (it now delegates to the policy overload via the token's header type).
+#pragma warning disable CS0618
+
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
 /// <summary>
