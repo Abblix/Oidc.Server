@@ -46,6 +46,23 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
         // RFC 9449 §5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
+
+        // RFC 6749 §4.4 client_credentials client, used to verify that an RFC 8707 resource
+        // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
+        // no redirect_uri / PKCE is configured.
+        new ClientInfo(TestConstants.ClientCredentialsClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+    ];
+
+    // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
+    // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
+    options.Resources =
+    [
+        new ResourceDefinition(new Uri(TestConstants.ApiResource)),
     ];
     return;
 

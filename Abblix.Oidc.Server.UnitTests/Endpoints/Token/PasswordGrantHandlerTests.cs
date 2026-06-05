@@ -321,4 +321,46 @@ public class PasswordGrantHandlerTests
         Assert.Equal(ClientId, capturedContext.ClientId);
         Assert.Equal(tokenRequest.Scope, capturedContext.Scope);
     }
+
+    /// <summary>
+    /// Verifies that RFC 8707 resource indicators on the request are seeded onto the authorization
+    /// context handed to the credentials authenticator, so they reach the issued token's audience.
+    /// password is a direct grant: the token request itself is the authorization, so a requested
+    /// resource is the authorized audience.
+    /// </summary>
+    [Fact]
+    public async Task Request_WithResources_ShouldSeedResourcesOntoContext()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var resources = new[] { new Uri("https://api.example.com/orders") };
+        var tokenRequest = new TokenRequest
+        {
+            UserName = UserName,
+            Password = Password,
+            Scope = [Scopes.OpenId],
+            Resources = resources,
+        };
+
+        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
+        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
+
+        var fixedTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var expectedGrant = new AuthorizedGrant(
+            new AuthSession("user123", "session1", fixedTime, "192.168.1.1"),
+            Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
+
+        AuthorizationContext? capturedContext = null;
+        _credentialsAuthenticator
+            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .ReturnsAsync(expectedGrant)
+            .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
+
+        // Act
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.NotNull(capturedContext);
+        Assert.Equal(resources, capturedContext.Resources);
+    }
 }

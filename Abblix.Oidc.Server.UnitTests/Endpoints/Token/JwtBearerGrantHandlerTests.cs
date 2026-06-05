@@ -317,6 +317,35 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
+	/// Verifies that RFC 8707 resource indicators on the request are seeded onto the authorization
+	/// context, so they reach the issued access token's audience. jwt-bearer is a direct grant: the
+	/// token request itself is the authorization, so a requested resource is the authorized audience.
+	/// </summary>
+	[Fact]
+	public async Task ValidRequest_WithResources_ShouldSeedResourcesInContext()
+	{
+		// Arrange
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		var clientInfo = new ClientInfo(ClientId);
+		var resources = new[] { new Uri("https://api.example.com/orders") };
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion,
+			Resources = resources
+		};
+
+		// Act
+		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+		// Assert
+		Assert.True(result.TryGetSuccess(out var grant));
+		Assert.Equal(resources, grant.Context.Resources);
+	}
+
+	/// <summary>
 	/// Verifies that a request without scope still succeeds with null scope in context.
 	/// </summary>
 	[Fact]

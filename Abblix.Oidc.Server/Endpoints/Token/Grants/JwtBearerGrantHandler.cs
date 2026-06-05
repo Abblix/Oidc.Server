@@ -122,7 +122,7 @@ public partial class JwtBearerGrantHandler(
 			.Bind(ctx => ValidateJwtAge(ctx, clientInfo))
 			.BindAsync(ctx => ValidateReplayProtectionAsync(ctx, clientInfo))
 			.Bind(ctx => ValidateScopes(ctx, request.Scope))
-			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, clientInfo)));
+			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, request.Resources, clientInfo)));
 	}
 
 	/// <summary>
@@ -331,13 +331,18 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Creates the authorized grant after successful validation.
 	/// </summary>
-	private AuthorizedGrant CreateAuthorizedGrant(ValidationContext ctx, string[] scope, ClientInfo clientInfo)
+	private AuthorizedGrant CreateAuthorizedGrant(
+		ValidationContext ctx, string[] scope, Uri[]? resources, ClientInfo clientInfo)
 	{
 		LogGrantSucceeded(
 			clientInfo.ClientId, ctx.Subject, ctx.Issuer, ctx.Jwt.Payload.JwtId ?? "none",
 			ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 
-		var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
+		// jwt-bearer is a direct grant: the token request itself IS the authorization, so the
+		// RFC 8707 resource indicators are the authorized audience and are passed to the context
+		// so they reach the issued token's aud claim. The resource validator has already rejected
+		// any unregistered target with invalid_target before this handler runs.
+		var context = new AuthorizationContext(clientInfo.ClientId, scope, null, resources);
 
 		var authSession = new AuthSession(
 			Subject: ctx.Subject,
