@@ -56,12 +56,21 @@ public record AuthorizationContext
     /// Optional claims that the client is requesting as part of the authorization process,
     /// providing additional information about the user's identity.
     /// </param>
+    /// <param name="resources">
+    /// Optional RFC 8707 resource indicators (absolute URIs) the issued token is bound to. This is
+    /// the single construction point every path funnels the resource set through: the direct grants
+    /// (client_credentials, password, jwt-bearer, token-exchange), the authorize/CIBA/device path
+    /// (via the <see cref="ScopeDefinition"/>/<see cref="ResourceDefinition"/> overload below), and
+    /// the JWT round-trip. An empty set is canonicalized to <c>null</c> (no audience restriction).
+    /// </param>
     [JsonConstructor]
-    public AuthorizationContext(string clientId, string[] scope, RequestedClaims? requestedClaims)
+    public AuthorizationContext(
+        string clientId, string[] scope, RequestedClaims? requestedClaims, Uri[]? resources = null)
     {
         ClientId = clientId;
         Scope = scope;
         RequestedClaims = requestedClaims;
+        Resources = resources is { Length: > 0 } ? resources : null;
     }
 
     /// <summary>
@@ -77,9 +86,12 @@ public record AuthorizationContext
         ScopeDefinition[] scopes,
         ResourceDefinition[] resources,
         RequestedClaims? requestedClaims)
-        : this(clientId, GetScopeNames(scopes, resources), requestedClaims)
+        : this(
+            clientId,
+            GetScopeNames(scopes, resources),
+            requestedClaims,
+            Array.ConvertAll(resources, resource => resource.Resource))
     {
-        Resources = Array.ConvertAll(resources, resource => resource.Resource);
     }
 
     /// <summary>

@@ -54,8 +54,19 @@ public static class TestConstants
     /// constraint comes from DPoP alone, not from client authentication.</summary>
     public const string DPoPPublicClientId = "e2e-dpop-public";
 
+    /// <summary>Pre-seeded client restricted to the client_credentials grant (RFC 6749 §4.4),
+    /// used to verify RFC 8707 resource indicators reach the issued access token's audience.</summary>
+    public const string ClientCredentialsClientId = "e2e-client-credentials";
+
     /// <summary>Shared secret across every pre-seeded client.</summary>
     public const string ConfidentialClientSecret = "e2e-secret";
+
+    /// <summary>A registered RFC 8707 resource indicator (absolute URI) the AS mints
+    /// audience-restricted access tokens for. An unregistered target is rejected with
+    /// <c>invalid_target</c>.</summary>
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test resource indicator shared by resource-indicator scenarios; not a deployment URL.")]
+    public const string ApiResource = "https://api.example.com/orders";
 
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",

@@ -74,7 +74,12 @@ public class PasswordGrantHandler(
         var userName = request.UserName;
         var password = request.Password;
         var scope = request.Scope;
-        var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
+
+        // password is a direct grant: the token request itself IS the authorization, so the
+        // RFC 8707 resource indicators are the authorized audience and are passed to the context
+        // so they reach the issued token's aud claim. The resource validator has already rejected
+        // any unregistered target with invalid_target before this handler runs.
+        var context = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources);
 
         // Delegate the actual user credential validation and authentication to the custom authenticator.
         return userCredentialsAuthenticator.ValidateAsync(userName, password, context);

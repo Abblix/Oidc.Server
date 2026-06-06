@@ -129,10 +129,10 @@ public static class AuthorizationContextExtensions
         return new AuthorizationContext(
             payload.ClientId.NotNull(nameof(payload.ClientId)),
             payload.Scope.NotNull(nameof(payload.Scope)).ToArray(),
-            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions))
+            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions),
+            resources)
         {
             Nonce = payload.Nonce,
-            Resources = resources,
             CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
             ProofKeyThumbprint = cnf?.JwkThumbprint,
             AuthorizationDetails = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw

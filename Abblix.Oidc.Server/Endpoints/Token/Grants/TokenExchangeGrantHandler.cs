@@ -405,14 +405,13 @@ public class TokenExchangeGrantHandler(
             }
         }
 
-        var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null)
+        // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
+        // (RFC 8693 §2.1) through the initializer into the issued token's claims rather than
+        // silently dropping them
+        var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
             AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
-
-            // propagate the requested resource(s) (RFC 8707) and audience(s) (RFC 8693 §2.1)
-            // into the issued token's claims rather than silently dropping them
-            Resources = request.Resources is { Length: > 0 } ? request.Resources : null,
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
         };
 
