@@ -307,4 +307,56 @@ public class ClientCredentialsGrantHandlerTests
         Assert.Equal("client1", grant1.AuthSession.Subject);
         Assert.Equal("client2", grant2.AuthSession.Subject);
     }
+
+    /// <summary>
+    /// Verifies that RFC 8707 resource indicators on the request are seeded onto the grant's
+    /// authorization context, so they reach the issued access token's audience. client_credentials
+    /// is a direct grant: the token request itself is the authorization, so a requested resource is
+    /// the authorized audience (the token endpoint's resource validator has already rejected any
+    /// unregistered target before this handler runs).
+    /// </summary>
+    [Fact]
+    public async Task Request_WithResources_ShouldSeedResourcesOntoContext()
+    {
+        // Arrange
+        var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
+        sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
+        var clientInfo = new ClientInfo(ClientId);
+        var resources = new[] { new Uri("https://api.example.com/orders") };
+        var tokenRequest = new TokenRequest
+        {
+            Scope = ["api.read"],
+            Resources = resources,
+        };
+
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(resources, grant.Context.Resources);
+    }
+
+    /// <summary>
+    /// Verifies that when no resource indicator is supplied the grant carries no resources (the
+    /// audience falls back to the client id downstream) rather than an empty array.
+    /// </summary>
+    [Fact]
+    public async Task Request_WithoutResources_ShouldLeaveContextResourcesNull()
+    {
+        // Arrange
+        var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
+        sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
+        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { Scope = ["api.read"] };
+
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Null(grant.Context.Resources);
+    }
 }
