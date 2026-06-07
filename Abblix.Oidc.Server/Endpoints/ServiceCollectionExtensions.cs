@@ -177,7 +177,9 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
-            ServiceDescriptor.Singleton<IAuthorizationContextValidator, FlowTypeValidator>(),
+            // Scoped: FlowTypeValidator consumes IEnumerable<IAuthorizationResponseBuilder>, which
+            // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.
+            ServiceDescriptor.Scoped<IAuthorizationContextValidator, FlowTypeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, ResponseModeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
@@ -421,10 +423,15 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TImpl">The concrete response-builder implementation to register.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(this IServiceCollection services)
+    public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(
+        this IServiceCollection services,
+        ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TImpl : class, IAuthorizationResponseBuilder
     {
-        services.TryAddSingleton<TImpl>();
+        // The IAuthorizationResponseBuilder / IGrantTypeInformer aliases inherit this lifetime
+        // (BuildAliasDescriptor preserves the source lifetime), so a builder with scoped
+        // dependencies registers Scoped and its aliases follow — no captive dependency.
+        services.TryAdd(new ServiceDescriptor(typeof(TImpl), typeof(TImpl), lifetime));
         services.TryAddEnumerableAlias<IAuthorizationResponseBuilder, TImpl>();
         services.TryAddEnumerableAlias<IGrantTypeInformer, TImpl>();
         return services;
@@ -565,8 +572,11 @@ public static class ServiceCollectionExtensions
             // Server-level support gates run before the consistency check so the rejection message
             // surfaces "this server doesn't support that" rather than the more confusing
             // "your response_types/grant_types are inconsistent" from GrantTypeValidator.
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SupportedResponseTypeValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SupportedGrantTypeValidator>(),
+            // Scoped: these gates consume IEnumerable<IAuthorizationResponseBuilder> /
+            // IEnumerable<IGrantTypeInformer>, which include the scoped IdTokenResponseBuilder
+            // once EnableImplicitFlow() is called.
+            ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedResponseTypeValidator>(),
+            ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedGrantTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, GrantTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
