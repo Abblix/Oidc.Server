@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Custom JWT implementation replacing Microsoft.IdentityModel.Tokens, JWK operation capability validation, improved JWK serialization, and RFC 7523 audience validation fix. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.2</PackageReleaseNotes>
+    <PackageReleaseNotes>JWE-encrypted token handling, JOSE critical-header processing (RFC 7515), JWS verification key pinned to its declared algorithm (RFC 7517), enforced HMAC key length (RFC 7518), typed accessors for JWS header parameters, and granular key-resolution diagnostics. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.3</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

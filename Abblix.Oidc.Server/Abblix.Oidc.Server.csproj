@@ -17,7 +17,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>ACR values support with RFC 8176 AMR compliance, front-channel logout with CSP nonce support, configurable session cookie path, and dynamic client registration JWKS validation fix. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.2</PackageReleaseNotes>
+        <PackageReleaseNotes>Rich Authorization Requests (RFC 9396), Token Exchange (RFC 8693), DPoP sender-constrained tokens (RFC 9449), certificate-bound access token verification (RFC 8705), JARM signed authorization responses, JWT-secured token introspection (RFC 9701), JWE-encrypted request objects (RFC 9101), signed authorization server metadata (RFC 8414), and secure-by-default hardening (Implicit Flow opt-in, Initial Access Token for client registration). Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.3</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
