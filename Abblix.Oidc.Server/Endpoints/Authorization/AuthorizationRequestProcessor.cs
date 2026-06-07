@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -46,7 +47,8 @@ public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
 	TimeProvider clock,
-	IEnumerable<IAuthorizationResponseBuilder> responseProcessors) : IAuthorizationRequestProcessor
+	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
+	IAuthorizationRequestStorage authorizationRequestStorage) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -213,6 +215,16 @@ public class AuthorizationRequestProcessor(
 				continue;
 
 			await processor.BuildResponseAsync(request, authorizedGrant, result);
+		}
+
+		// Single-use PAR: a terminal success was produced and an authorization code (or token) was
+		// minted, so consume the request_uri now to prevent replay within its TTL (RFC 9126 §6).
+		// The fetch step deliberately leaves it in place so multi-step UI flows (login, consent) can
+		// re-read it; this is the matching downstream consume the fetcher defers to.
+		if (request.Model is { RequestUri: { } requestUri } &&
+			requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
+		{
+			await authorizationRequestStorage.TryGetAsync(requestUri, shouldRemove: true);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.
