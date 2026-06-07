@@ -48,8 +48,12 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
     public static IServiceCollection EnableImplicitFlow(this IServiceCollection services)
     {
+        // TokenResponseBuilder depends only on the singleton IAccessTokenService, so it stays a
+        // singleton. IdTokenResponseBuilder depends on the scoped IIdentityTokenService (which in
+        // turn consumes the scoped IUserClaimsProvider), so it must be scoped to avoid a captive
+        // dependency under host service-provider scope validation.
         services.AddAuthorizationResponseProcessor<TokenResponseBuilder>();
-        services.AddAuthorizationResponseProcessor<IdTokenResponseBuilder>();
+        services.AddAuthorizationResponseProcessor<IdTokenResponseBuilder>(ServiceLifetime.Scoped);
         return services;
     }
 }
