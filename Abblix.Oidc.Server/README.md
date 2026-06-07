@@ -2,18 +2,22 @@
 
 **Abblix OIDC Server** is a robust .NET library that implements the OpenID Connect protocol on the server side. Designed with modular and hexagonal architecture patterns, it provides a compliant, extensible framework for adding OIDC-based authentication and authorization to .NET applications. It supports Dependency Injection using the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
 
-## What's New in Version 2.2
+## What's New in Version 2.3
 
 🚀 **Features**
-- **Custom JWT Implementation**: Complete JWT signing/encryption infrastructure replacing `Microsoft.IdentityModel.Tokens` — uses `System.Text.Json.Nodes` and .NET crypto primitives directly
-- **Enhanced JWE Algorithms**: `RSA-OAEP-256`, AES-GCM key wrapping (`A128GCMKW`/`A192GCMKW`/`A256GCMKW`), and direct key agreement (`dir`)
-- **ACR/AMR Compliance (RFC 8176)**: Authentication Context Class Reference values in discovery and RFC 8176 Authentication Method References
-- **CSP Nonce Support**: Template-based front-channel logout and check session iframe compatible with strict Content Security Policies
+- **Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant
+- **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**: impersonation and delegation with multiple subject- and actor-token formats
+- **DPoP sender-constrained tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449))**: signature-based proof of possession for public clients that cannot use mTLS
+- **Certificate-bound access token verification ([RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705) §3)**: resource-server check that a presented token matches the client certificate
+- **JARM**: signed, optionally encrypted JWT authorization responses
+- **JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701))**: signed introspection responses via content negotiation
+- **JWE-encrypted request objects ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101))**: confidential request parameters in the front channel and by reference
+- **Signed authorization server metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))**: opt-in, integrity-protected discovery document
 
 ✏️ **Improvements**
-- Configurable session cookie path in OIDC Session Management
-- Operation capability validation for `JsonWebKey` classes
-- Bidirectional interoperability tests with `Microsoft.IdentityModel.Tokens`
+- Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591))
+- Token-class confusion defense via opt-in token-type pinning ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725)), JWS key pinned to its declared algorithm ([RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517)), enforced HMAC key length ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518))
+- Authorization-response issuer parameter ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)) advertised in discovery
 
 ## Implemented Standards
 
