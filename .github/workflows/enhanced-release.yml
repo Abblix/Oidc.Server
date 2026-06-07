@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 2.3.0 or 2.3.0-beta3)'
+        description: 'Version to release (e.g., 2.3 or 2.3.0-beta3)'
         required: true
         type: string
       pre_release:
@@ -18,7 +18,11 @@ permissions:
 
 concurrency:
   group: release
-  cancel-in-progress: true
+  # Release/publish workflow: never cancel an in-flight run. A second dispatch
+  # must not kill a publish mid-flight (half-pushed packages, a dangling tag).
+  # This deliberately overrides the org-wide "cancel-in-progress: true" default,
+  # which exists for runaway analyzer/PR queues, not for state-mutating releases.
+  cancel-in-progress: false
 
 jobs:
   versioning:
@@ -29,9 +33,18 @@ jobs:
       version: ${{ steps.set_version.outputs.version }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
     steps:
+      # harden-runner in audit mode: capture baseline egress without blocking.
+      # Promote to egress-policy: block + disable-sudo: true once the allowlist
+      # is known (per the GHA security checklist rollout guidance).
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
         timeout-minutes: 3
       - name: Resolve version
         id: set_version
@@ -61,17 +74,33 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Build-provenance attestation signs the produced packages through the
+      # Sigstore OIDC flow and records the attestation in the repo (SLSA L3).
+      id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
         timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: '10.0'
+        timeout-minutes: 3
+      - name: Log build context
+        run: |
+          echo "Commit:  $(git rev-parse HEAD)"
+          echo "Ref:     $GITHUB_REF"
+          echo "Version: $VERSION"
         timeout-minutes: 3
       - name: Restore dependencies
         run: dotnet restore
@@ -85,10 +114,26 @@ jobs:
         run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION"
         timeout-minutes: 3
       - name: Test
-        run: dotnet test --no-build -c Release --verbosity normal
+        run: |
+          dotnet test --no-build -c Release --verbosity normal -- \
+            --report-trx --report-trx-filename test-results.trx \
+            --results-directory ./TestResults
+        timeout-minutes: 3
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          retention-days: 7
         timeout-minutes: 3
       - name: Pack
         run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION"
+        timeout-minutes: 3
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: 'nupkg/*.nupkg'
         timeout-minutes: 3
       - name: Upload NuGet packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -108,16 +153,23 @@ jobs:
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - name: Checkout main repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: main-repo
+          persist-credentials: false
         timeout-minutes: 3
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           path: getting-started
+          persist-credentials: false
         timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -179,6 +231,11 @@ jobs:
     outputs:
       is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - name: Validate and normalize inputs
         id: validate_inputs
         env:
@@ -190,6 +247,9 @@ jobs:
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
         timeout-minutes: 3
+      # This job pushes a tag on the pre-release path, so the checkout keeps its
+      # git credentials (no persist-credentials: false). Stable releases must
+      # already carry a human-created signed tag - see "Create or verify tag".
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -201,22 +261,37 @@ jobs:
           path: nupkg
         timeout-minutes: 3
       - name: Create or verify tag
+        env:
+          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
         run: |
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists - using existing tag"
+            if [ "$(git cat-file -t "v$VERSION")" = "tag" ]; then
+              echo "Tag v$VERSION exists and is annotated - using it"
+            else
+              echo "Error: tag v$VERSION is lightweight (not annotated/signed)."
+              echo "Stable releases require an annotated, GPG-signed tag carrying the release notes."
+              echo "Recreate it: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              exit 1
+            fi
           else
-            echo "Creating new tag v$VERSION"
+            if [ "$INPUT_PRE_RELEASE" != "true" ]; then
+              echo "Error: no tag v$VERSION found."
+              echo "A stable release must be tagged (annotated + GPG-signed) before this workflow runs."
+              echo "Create it on the release branch: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              exit 1
+            fi
+            echo "Pre-release: creating annotated tag v$VERSION"
             git config user.name "GitHub Actions"
             git config user.email "actions@github.com"
-            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git tag -a "v$VERSION" -m "Pre-release v$VERSION"
             git push origin "v$VERSION"
           fi
         timeout-minutes: 3
       - name: Generate changelog
         id: changelog
         run: |
-          if git tag -v "v$VERSION" >/dev/null 2>&1; then
-            echo "Using signed tag message as release notes"
+          if [ "$(git cat-file -t "v$VERSION" 2>/dev/null)" = "tag" ]; then
+            echo "Using annotated tag message as release notes"
             git tag -l --format='%(contents)' "v$VERSION" > CHANGELOG.md
           elif [ -n "$PREVIOUS_VERSION" ]; then
             echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
@@ -268,10 +343,18 @@ jobs:
   publish-github-packages:
     needs: [versioning, build-and-test, test-getting-started, create-release]
     runs-on: ubuntu-latest
+    # Same approval gate as NuGet.org: no package leaves the build for any
+    # registry without passing the publish-packages environment reviewers.
+    environment: publish-packages
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -307,12 +390,8 @@ jobs:
       - name: Verify publication
         run: |
           echo "Verification: https://github.com/Abblix/Oidc.Server/packages"
-          echo "Published packages:"
-          for pkg in nupkg/*.nupkg; do
-            PACKAGE_NAME=$(basename "$pkg" .nupkg)
-            echo "  - $PACKAGE_NAME"
-          done
-
+          echo "Published packages (sha256):"
+          sha256sum nupkg/*.nupkg
         timeout-minutes: 3
     timeout-minutes: 5
   publish-nuget-org:
@@ -322,6 +401,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -359,12 +443,8 @@ jobs:
         run: |
           echo "Verification: https://www.nuget.org/packages?q=Abblix"
           echo "Wait 5-15 minutes for package indexing to complete"
-          echo "Published packages:"
-          for pkg in nupkg/*.nupkg; do
-            PACKAGE_NAME=$(basename "$pkg" .nupkg)
-            echo "  - $PACKAGE_NAME"
-          done
-
+          echo "Published packages (sha256):"
+          sha256sum nupkg/*.nupkg
         timeout-minutes: 3
     timeout-minutes: 5
   update-getting-started:
@@ -377,6 +457,13 @@ jobs:
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # This job pushes to the GettingStarted repo using a scoped PAT, so the
+      # checkout keeps the token configured (no persist-credentials: false).
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -392,7 +479,11 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git commit -m "Update Abblix packages to v$VERSION" || exit 0
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update Abblix packages to v$VERSION"
+            git push
+          fi
         timeout-minutes: 3
     timeout-minutes: 5
