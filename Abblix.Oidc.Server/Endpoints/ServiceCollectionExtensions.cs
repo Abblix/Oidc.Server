@@ -60,6 +60,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -116,6 +117,11 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<AuthorizationHandler>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
+
+        // Single-use PAR (RFC 9126 §6): decorate the processor so a pushed request_uri is consumed once a
+        // terminal success has minted a code or token. Mirrors the session-management decorator and stacks
+        // with it; both act independently on a SuccessfullyAuthenticated outcome.
+        services.Decorate<IAuthorizationRequestProcessor, PushedAuthorizationRequestProcessorDecorator>();
 
         // Response encoding (iss/scope gating + JARM packing) lives in the framework-agnostic core and
         // runs from the handler after the full processing chain. Scoped: it reads per-request issuer state.
