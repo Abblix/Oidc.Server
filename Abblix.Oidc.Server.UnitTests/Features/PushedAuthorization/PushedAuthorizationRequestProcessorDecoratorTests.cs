@@ -60,7 +60,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
-            RequestUri = requestUri,
+            PushedRequestUri = requestUri,
         };
         var context = new AuthorizationValidationContext(model)
         {

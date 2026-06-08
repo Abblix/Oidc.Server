@@ -46,7 +46,7 @@ public record ValidAuthorizationRequest
 	{
 		ResponseMode = context.ResponseMode;
 		Model = context.Request;
-		RequestUri = context.Request.RequestUri;
+		RequestUri = context.Request.PushedRequestUri;
 		ClientInfo = context.ClientInfo;
 		Scope = context.Scope;
 		Resources = context.Resources;
