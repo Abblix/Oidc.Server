@@ -130,7 +130,7 @@ public static class ServiceCollectionExtensions
         // Authorization Code Flow is registered by default. Implicit / Hybrid Flow components
         // (token, id_token response processors) are registered only when the host calls
         // EnableImplicitFlow(); without that call those response types are not in the DI graph
-        // and the authorization endpoint rejects them per OAuth 2.1 §1.4 deprecation guidance.
+        // and the authorization endpoint rejects them per OAuth 2.1 (draft) deprecation guidance.
         services.AddAuthorizationResponseProcessor<AuthorizationCodeBuilder>();
 
         // AuthorizationHandler is no longer aliased as IGrantTypeInformer: each registered
