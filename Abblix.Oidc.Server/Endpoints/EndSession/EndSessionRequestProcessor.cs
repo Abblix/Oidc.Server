@@ -93,6 +93,10 @@ public partial class EndSessionRequestProcessor(
 
 		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));
 
+		// Await every back-channel/front-channel notification. The async task a notifier returns is
+		// WaitingForActivation, not Running, so an earlier status filter silently dropped them all from
+		// the await set — the back-channel logout POST then ran detached and was abandoned when the
+		// request scope (and its HttpClient) was disposed. Collect each task and await the whole set.
 		var tasks = new List<Task>();
 		foreach (var clientId in authSession.AffectedClientIds)
 		{
@@ -100,9 +104,7 @@ public partial class EndSessionRequestProcessor(
 			if (clientInfo == null)
 				continue;
 
-			var task = logoutNotifier.NotifyClientAsync(clientInfo, context);
-			if (task.Status == TaskStatus.Running)
-				tasks.Add(task);
+			tasks.Add(logoutNotifier.NotifyClientAsync(clientInfo, context));
 		}
 		await Task.WhenAll(tasks);
 
