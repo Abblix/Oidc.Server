@@ -57,7 +57,6 @@ public class AuthorizationRequestProcessorTests
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
-    private readonly Mock<IAuthorizationRequestStorage> _authorizationRequestStorage;
     private readonly FakeTimeProvider _timeProvider;
     private readonly AuthorizationRequestProcessor _processor;
 
@@ -68,13 +67,6 @@ public class AuthorizationRequestProcessorTests
         _authorizationCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
-        _authorizationRequestStorage = new Mock<IAuthorizationRequestStorage>(MockBehavior.Strict);
-
-        // Non-PAR requests in these tests carry no request_uri, so the single-use consume is not
-        // reached; a permissive stub keeps the strict mock satisfied if a test does exercise it.
-        _authorizationRequestStorage
-            .Setup(s => s.TryGetAsync(It.IsAny<Uri>(), It.IsAny<bool>()))
-            .ReturnsAsync((AuthorizationRequest?)null);
 
         _timeProvider = new FakeTimeProvider();
 
@@ -86,8 +78,7 @@ public class AuthorizationRequestProcessorTests
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
-            ],
-            _authorizationRequestStorage.Object);
+            ]);
     }
 
     private static ValidAuthorizationRequest CreateRequest(
