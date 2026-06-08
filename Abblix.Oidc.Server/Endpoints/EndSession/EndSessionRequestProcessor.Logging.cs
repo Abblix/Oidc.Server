@@ -31,4 +31,10 @@ partial class EndSessionRequestProcessor
         Level = LogLevel.Debug,
         Message = "The user with subject={Subject} was logged out from session {Session}")]
     private partial void LogUserLoggedOut(string Subject, string Session);
+
+    [LoggerMessage(
+        EventId = LogEvents.Endpoints.EndSessionRequestProcessor.ClientNotificationFailed,
+        Level = LogLevel.Error,
+        Message = "Failed to deliver a logout notification to client {ClientId}; the user's logout still completes")]
+    private partial void LogClientLogoutNotificationFailed(Exception exception, string ClientId);
 }
