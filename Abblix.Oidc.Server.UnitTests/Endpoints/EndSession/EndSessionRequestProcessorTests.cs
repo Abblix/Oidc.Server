@@ -512,4 +512,50 @@ public class EndSessionRequestProcessorTests
         Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri!.ToString());
     }
 
+    /// <summary>
+    /// Regression: the processor must await in-flight client notifications before completing. A faulty
+    /// <c>task.Status == TaskStatus.Running</c> filter previously excluded async notification tasks
+    /// (which are <see cref="TaskStatus.WaitingForActivation"/>, not <see cref="TaskStatus.Running"/>),
+    /// so the back-channel logout POST ran detached and was abandoned when the request scope and its
+    /// HttpClient were disposed. With the fix the processor stays pending until notifications finish.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ShouldAwaitInFlightClientNotifications()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
+        var client1 = new ClientInfo("client_1");
+        var notificationGate = new TaskCompletionSource();
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .ReturnsAsync(client1);
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Returns(notificationGate.Task);
+
+        // Act
+        var processTask = _processor.ProcessAsync(request);
+
+        // Assert — the processor must still be awaiting the pending notification, not done.
+        Assert.False(processTask.IsCompleted);
+
+        notificationGate.SetResult();
+        var result = await processTask;
+        Assert.True(result.TryGetSuccess(out _));
+    }
 }
