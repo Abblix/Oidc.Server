@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net;
-using System.Net.Sockets;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -40,6 +39,9 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// - DNS resolution with private IP blocking (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.)
 /// - Protection against DNS rebinding where attacker changes DNS between validation and request
 ///
+/// The synchronous scheme/hostname/IP-literal rules are shared with registration-time validation via
+/// <see cref="ISecureUriValidator"/>; the DNS re-resolution below is unique to the request path.
+///
 /// Attack scenario prevented:
 /// 1. Initial validation: evil.com resolves to 8.8.8.8 (public IP, passes validation)
 /// 2. DNS TTL expires (low TTL like 1 second)
@@ -47,7 +49,9 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
 /// </remarks>
-public class SsrfValidatingHttpMessageHandler(IOptions<SecureHttpFetchOptions> options) : DelegatingHandler(
+public class SsrfValidatingHttpMessageHandler(
+    IOptions<SecureHttpFetchOptions> options,
+    ISecureUriValidator uriValidator) : DelegatingHandler(
     new HttpClientHandler
     {
         // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
@@ -62,37 +66,6 @@ public class SsrfValidatingHttpMessageHandler(IOptions<SecureHttpFetchOptions> o
     })
 {
     /// <summary>
-    /// Common hostnames that typically resolve to internal/private networks.
-    /// These are blocked to prevent SSRF attacks targeting internal infrastructure.
-    /// </summary>
-    private static readonly string[] BlockedHostnames = [
-        "localhost",
-        "loopback",
-        "broadcasthost",
-        "local",
-        "internal",
-        "intranet",
-        "private",
-        "corp",
-        "home",
-        "lan"
-    ];
-
-    /// <summary>
-    /// Top-level domains (TLDs) commonly used for internal networks.
-    /// These are blocked as they typically indicate non-public infrastructure.
-    /// </summary>
-    private static readonly string[] BlockedTlds = [
-        ".local",
-        ".localhost",
-        ".internal",
-        ".intranet",
-        ".corp",
-        ".home",
-        ".lan"
-    ];
-
-    /// <summary>
     /// Sends HTTP request with comprehensive SSRF validation immediately before making the request.
     /// Validates both hostname patterns and DNS resolution to prevent SSRF and DNS rebinding attacks.
     /// </summary>
@@ -106,58 +79,35 @@ public class SsrfValidatingHttpMessageHandler(IOptions<SecureHttpFetchOptions> o
             throw new InvalidOperationException("Request URI cannot be null");
         }
 
-        // Check allowed schemes if configured
-        if (options.Value.AllowedSchemes is { Length: > 0 } &&
-            !options.Value.AllowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
+        // Synchronous policy (scheme, internal hostname, private/reserved IP literal), shared with
+        // registration-time validation. A null result means the URI passed these checks.
+        var rejection = uriValidator.Validate(uri);
+        if (rejection != null)
         {
-            throw new HttpRequestException(
-                $"SSRF protection: URI scheme '{uri.Scheme}' is not allowed. " +
-                $"Allowed schemes: {string.Join(", ", options.Value.AllowedSchemes)}");
+            throw new HttpRequestException($"SSRF protection: {rejection}");
         }
 
-        var hostname = uri.Host;
-
-        // Check for blocked hostnames before DNS resolution (if private network blocking is enabled)
-        if (options.Value.BlockPrivateNetworks && IsInternalHostname(hostname))
-        {
-            throw new HttpRequestException(
-                $"SSRF protection: Hostname '{hostname}' matches internal hostname pattern. " +
-                $"Request blocked to prevent access to internal infrastructure.");
-        }
-
-        // For IP addresses, validate directly without DNS lookup
-        if (IPAddress.TryParse(hostname, out var ipAddress))
-        {
-            if (options.Value.BlockPrivateNetworks && IsPrivateOrReservedAddress(ipAddress))
-            {
-                throw new HttpRequestException(
-                    $"SSRF protection: IP address '{ipAddress}' is private/internal. " +
-                    $"Request blocked to prevent access to internal infrastructure.");
-            }
-            return await base.SendAsync(request, cancellationToken);
-        }
-
-        // Resolve DNS and validate all resolved IP addresses (if private network blocking is enabled)
-        if (options.Value.BlockPrivateNetworks)
+        // DNS rebinding (TOCTOU) defence: for a resolvable hostname (not an IP literal, already checked
+        // above), re-resolve immediately before the request and reject if any address is private.
+        if (options.Value.BlockPrivateNetworks && !IPAddress.TryParse(uri.Host, out _))
         {
             IPHostEntry hostEntry;
             try
             {
-                hostEntry = await Dns.GetHostEntryAsync(hostname, cancellationToken);
+                hostEntry = await Dns.GetHostEntryAsync(uri.Host, cancellationToken);
             }
             catch (Exception ex)
             {
                 throw new HttpRequestException(
-                    $"SSRF protection: Unable to resolve hostname '{hostname}' immediately before request",
+                    $"SSRF protection: Unable to resolve hostname '{uri.Host}' immediately before request",
                     ex);
             }
 
-            // Check if any resolved address is private/reserved
-            var privateAddress = hostEntry.AddressList.FirstOrDefault(IsPrivateOrReservedAddress);
+            var privateAddress = hostEntry.AddressList.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
             if (privateAddress != null)
             {
                 throw new HttpRequestException(
-                    $"SSRF protection: DNS rebinding detected. Hostname '{hostname}' resolved to private/internal address {privateAddress} " +
+                    $"SSRF protection: DNS rebinding detected. Hostname '{uri.Host}' resolved to private/internal address {privateAddress} " +
                     $"immediately before HTTP request. This may indicate a DNS rebinding attack where the hostname resolved to " +
                     $"a public IP during initial validation but now resolves to a private IP.");
             }
@@ -165,66 +115,5 @@ public class SsrfValidatingHttpMessageHandler(IOptions<SecureHttpFetchOptions> o
 
         // All checks passed, proceed with request
         return await base.SendAsync(request, cancellationToken);
-    }
-
-    /// <summary>
-    /// Checks if a hostname appears to be internal or non-public.
-    /// </summary>
-    private static bool IsInternalHostname(string hostname)
-    {
-        // Normalize to lowercase for comparison
-        var normalizedHost = hostname.ToLowerInvariant();
-
-        // Block common internal hostnames
-        if (BlockedHostnames.Contains(normalizedHost))
-            return true;
-
-        // Block hostnames that end with common internal TLDs
-        if (BlockedTlds.Any(normalizedHost.EndsWith))
-            return true;
-
-        // Block single-label hostnames (no dots) as they're typically internal
-        // Exception: Allow if it's a valid IP address
-        if (!normalizedHost.Contains('.') && !IPAddress.TryParse(normalizedHost, out _))
-            return true;
-
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if an IP address is private, loopback, link-local, or otherwise reserved.
-    /// </summary>
-    private static bool IsPrivateOrReservedAddress(IPAddress address)
-    {
-        // Loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
-        if (IPAddress.IsLoopback(address))
-            return true;
-
-        var bytes = address.GetAddressBytes();
-
-        return address.AddressFamily switch
-        {
-            AddressFamily.InterNetwork =>
-                // Private: 10.0.0.0/8
-                bytes[0] == 10 ||
-                // Private: 172.16.0.0/12
-                (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
-                // Private: 192.168.0.0/16
-                (bytes[0] == 192 && bytes[1] == 168) ||
-                // Link-local: 169.254.0.0/16 (AWS/Azure metadata)
-                (bytes[0] == 169 && bytes[1] == 254) ||
-                // Multicast: 224.0.0.0/4
-                bytes[0] >= 224,
-
-            AddressFamily.InterNetworkV6 =>
-                // Link-local: fe80::/10
-                (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) ||
-                // Unique local: fc00::/7
-                (bytes[0] & 0xfe) == 0xfc ||
-                // Multicast: ff00::/8
-                bytes[0] == 0xff,
-
-            _ => true,
-        };
     }
 }

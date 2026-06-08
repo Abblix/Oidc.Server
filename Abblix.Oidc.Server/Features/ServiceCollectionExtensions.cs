@@ -588,6 +588,7 @@ public static class ServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        services.TryAddSingleton<ISecureUriValidator, SecureUriValidator>();
         services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
 
         services.AddSsrfHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
