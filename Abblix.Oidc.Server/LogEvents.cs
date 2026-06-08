@@ -133,6 +133,7 @@ internal static class LogEvents
             private const int Base = 2070;
 
             public const int UserLoggedOut = Base + 1;
+            public const int ClientNotificationFailed = Base + 2;
         }
 
         /// <summary>
