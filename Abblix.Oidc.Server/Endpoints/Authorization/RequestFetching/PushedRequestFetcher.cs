@@ -79,9 +79,10 @@ public class PushedRequestFetcher(
             {
                 null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
 
-                // Carry the request_uri forward onto the resolved request so the validator can surface it on
-                // ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
-                _ => requestObject with { RequestUri = requestUrn },
+                // Carry the URN forward on a dedicated, non-wire field — not RequestUri, whose https
+                // validation a urn: value would fail in the next fetcher — so the validator can surface it
+                // on ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
+                _ => requestObject with { PushedRequestUri = requestUrn },
             };
         }
 

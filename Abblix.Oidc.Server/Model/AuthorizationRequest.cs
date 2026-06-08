@@ -207,6 +207,15 @@ public record AuthorizationRequest
 	public Uri? RequestUri { get; init; }
 
 	/// <summary>
+	/// The pushed authorization request URN (RFC 9126) this request was resolved from, populated by the
+	/// fetcher after the stored request is retrieved. Kept off the wire and out of <see cref="RequestUri"/>
+	/// (whose https validation a <c>urn:</c> value would fail) so the single-use decorator can consume it
+	/// once a code or token has been issued.
+	/// </summary>
+	[JsonIgnore]
+	public Uri? PushedRequestUri { get; init; }
+
+	/// <summary>
 	/// Specifies the resource for which the access token is requested.
 	/// As defined in RFC 8707, this parameter is used to request access tokens with a specific scope for a particular
 	/// resource.
