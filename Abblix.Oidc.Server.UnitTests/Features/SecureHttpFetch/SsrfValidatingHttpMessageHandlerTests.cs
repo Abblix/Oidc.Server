@@ -37,7 +37,8 @@ public class SsrfValidatingHttpMessageHandlerTests
 {
     private static HttpClient CreateClient(SecureHttpFetchOptions options)
     {
-        var handler = new SsrfValidatingHttpMessageHandler(Options.Create(options));
+        var optionsAccessor = Options.Create(options);
+        var handler = new SsrfValidatingHttpMessageHandler(optionsAccessor, new SecureUriValidator(optionsAccessor));
         return new HttpClient(handler);
     }
 
