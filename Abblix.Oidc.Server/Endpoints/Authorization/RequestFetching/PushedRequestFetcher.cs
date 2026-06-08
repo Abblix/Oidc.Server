@@ -71,15 +71,17 @@ public class PushedRequestFetcher(
             // multi-step UI flow brittle: page refresh during login, back-button after
             // ConsentRequired, or the OIDF Conformance Suite's reuse-protection probes all
             // produce a spurious "Can't find a request by urn:…" instead of the expected
-            // continuation. Single-use is still enforced — by the cache TTL upper bound
-            // and (when the flow completes) by the same downstream code that mints the
-            // authorization code. The deferred consume is tracked in the AS request-handling
-            // pipeline; see AuthorizationResponseFormatterDecorator.
+            // continuation. Single-use is still enforced — by the cache TTL upper bound and,
+            // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
+            // consumes the request_uri carried forward below once a code or token is issued.
             var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
             return requestObject switch
             {
                 null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
-                _ => requestObject,
+
+                // Carry the request_uri forward onto the resolved request so the validator can surface it on
+                // ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
+                _ => requestObject with { RequestUri = requestUrn },
             };
         }
 

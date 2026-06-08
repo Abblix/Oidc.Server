@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -45,6 +46,7 @@ public record ValidAuthorizationRequest
 	{
 		ResponseMode = context.ResponseMode;
 		Model = context.Request;
+		RequestUri = context.Request.RequestUri;
 		ClientInfo = context.ClientInfo;
 		Scope = context.Scope;
 		Resources = context.Resources;
@@ -60,6 +62,13 @@ public record ValidAuthorizationRequest
 	/// The original or recovered request model that was validated.
 	/// </summary>
 	public AuthorizationRequest Model { get; init; }
+
+	/// <summary>
+	/// The pushed authorization request URN (RFC 9126) this request was resolved from, or <c>null</c> when
+	/// the request was not pushed. Surfaced here so the single-use decorator can consume it once a code or
+	/// token has been issued, without reaching into <see cref="Model"/>.
+	/// </summary>
+	public Uri? RequestUri { get; init; }
 
 	/// <summary>
 	/// Information about the client making the request, as determined during validation.
