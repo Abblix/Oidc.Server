@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// response — the access-token contributor of the Implicit / Hybrid Flow. Generates an
 /// access token via <see cref="IAccessTokenService"/> and stores it on the running
 /// <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host calls
-/// <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 §1.4 deprecation guidance.
+/// <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 (draft) deprecation guidance.
 /// Declares <c>implicit</c> in <see cref="GrantTypesSupported"/> so opting in surfaces the
 /// implicit grant in discovery and registration-time gating without extra DI wiring.
 /// </summary>

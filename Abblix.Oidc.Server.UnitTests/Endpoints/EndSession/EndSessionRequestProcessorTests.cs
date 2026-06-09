@@ -558,4 +558,43 @@ public class EndSessionRequestProcessorTests
         var result = await processTask;
         Assert.True(result.TryGetSuccess(out _));
     }
+
+    /// <summary>
+    /// A failing client notification (unreachable endpoint, blocked scheme, etc.) is isolated: the
+    /// end-user's logout still completes successfully rather than surfacing the exception.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenClientNotificationThrows_StillCompletesLogout()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
+        var client1 = new ClientInfo("client_1");
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .ReturnsAsync(client1);
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .ThrowsAsync(new InvalidOperationException("client endpoint unreachable"));
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert — logout succeeds despite the notification failure.
+        Assert.True(result.TryGetSuccess(out _));
+    }
 }

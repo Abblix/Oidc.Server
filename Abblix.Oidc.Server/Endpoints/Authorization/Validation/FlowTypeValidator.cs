@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// <param name="logger">The logger to be used for logging purposes.</param>
 /// <param name="processors">The set of registered authorization response processors. The
 /// validator rejects requests whose <c>response_type</c> contains a part with no matching
-/// registered processor — this enforces OAuth 2.1 §1.4 default-off Implicit Flow at the validation
+/// registered processor — this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
 public partial class FlowTypeValidator(
