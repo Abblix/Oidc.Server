@@ -484,13 +484,15 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      # This job pushes to the GettingStarted repo using a scoped PAT, so the
-      # checkout keeps the token configured (no persist-credentials: false).
+      # Read-only checkout to edit the csproj locally; the signed commit is made
+      # through the Contents API (next step), so nothing is git-pushed here and
+      # the token must not be persisted as a git credential.
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          persist-credentials: false
         timeout-minutes: 3
       - name: Update package references to released version
         run: |
@@ -513,9 +515,14 @@ jobs:
           # through the Contents API instead: GitHub signs API commits (satisfies
           # required_signatures) and the PR satisfies the pull_request rule. A
           # code owner still reviews and merges (1 approval required).
-          BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
-          gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA" 2>/dev/null \
-            || echo "Branch $BRANCH already exists; reusing it."
+          # Existence is checked explicitly so real errors fail the job loudly
+          # instead of being masked by "|| echo".
+          if gh api "repos/$REPO/git/ref/heads/$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists; reusing it."
+          else
+            BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
+            gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA"
+          fi
           FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
           CONTENT=$(base64 -w0 "$FILE")
           gh api -X PUT "repos/$REPO/contents/$FILE" \
@@ -523,9 +530,12 @@ jobs:
             -f "content=$CONTENT" \
             -f "sha=$FILE_SHA" \
             -f "branch=$BRANCH"
-          gh pr create --repo "$REPO" --base master --head "$BRANCH" \
-            --title "Update Abblix packages to v$VERSION" \
-            --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection." \
-            || echo "A pull request for $BRANCH already exists."
-        timeout-minutes: 5
+          if [ "$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
+            echo "A pull request for $BRANCH is already open."
+          else
+            gh pr create --repo "$REPO" --base master --head "$BRANCH" \
+              --title "Update Abblix packages to v$VERSION" \
+              --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection."
+          fi
+        timeout-minutes: 3
     timeout-minutes: 5
