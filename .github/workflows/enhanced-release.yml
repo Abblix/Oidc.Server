@@ -496,16 +496,36 @@ jobs:
         run: |
           sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
         timeout-minutes: 3
-      - name: Commit and push changes
+      - name: Open a pull request with a signed commit
+        env:
+          GH_TOKEN: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update Abblix packages to v$VERSION"
-            git push
+          REPO="Abblix/Oidc.Server.GettingStarted"
+          FILE="OpenIDProviderApp/OpenIDProviderApp.csproj"
+          BRANCH="chore/bump-abblix-v$VERSION"
+          # Nothing to do if the version already matches.
+          if git diff --quiet -- "$FILE"; then
+            echo "No version change needed; skipping PR."
+            exit 0
           fi
-        timeout-minutes: 3
+          # The master branch ruleset requires signed commits AND a pull request,
+          # so a plain git push is rejected (GH013). Commit the bumped file
+          # through the Contents API instead: GitHub signs API commits (satisfies
+          # required_signatures) and the PR satisfies the pull_request rule. A
+          # code owner still reviews and merges (1 approval required).
+          BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
+          gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA" 2>/dev/null \
+            || echo "Branch $BRANCH already exists; reusing it."
+          FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
+          CONTENT=$(base64 -w0 "$FILE")
+          gh api -X PUT "repos/$REPO/contents/$FILE" \
+            -f "message=Update Abblix packages to v$VERSION" \
+            -f "content=$CONTENT" \
+            -f "sha=$FILE_SHA" \
+            -f "branch=$BRANCH"
+          gh pr create --repo "$REPO" --base master --head "$BRANCH" \
+            --title "Update Abblix packages to v$VERSION" \
+            --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection." \
+            || echo "A pull request for $BRANCH already exists."
+        timeout-minutes: 5
     timeout-minutes: 5
