@@ -18,7 +18,7 @@
        the floating range AuthSvc consumes (2.3.0-dev.*) is unambiguous. Tagged releases
        drop the suffix automatically (v2.3.0 -> 2.3.0). -->
   <PropertyGroup>
-    <MinVerMinimumMajorMinor>2.3</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>
