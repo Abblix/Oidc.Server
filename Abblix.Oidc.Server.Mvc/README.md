@@ -2,15 +2,14 @@
 
 **Abblix.OIDC.Server.MVC** integrates the Abblix OIDC Server with ASP.NET MVC, providing controller classes, model binding, and routing mechanisms for seamless OpenID Connect integration. This is the recommended package for adding OIDC-based authentication and authorization to ASP.NET WebApi and MVC applications.
 
-## What's New in Version 2.2
+## What's New in Version 2.3
 
 🚀 **Features**
-- **CSP Nonce Support**: Template-based front-channel logout and check session iframe compatible with strict Content Security Policies
-- **ACR/AMR Compliance (RFC 8176)**: Authentication Context Class Reference values in discovery and RFC 8176 Authentication Method References
+- **JARM**: MVC support for signed, optionally encrypted JWT authorization responses
+- **JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701))**: content-negotiated signed introspection responses
 
 ✏️ **Improvements**
-- Configurable session cookie path in OIDC Session Management
-- Template-based Razor rendering for front-channel logout pages, replacing inline HTML generation
+- Request binding for **Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))** and **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**
 
 ## Key Features
 

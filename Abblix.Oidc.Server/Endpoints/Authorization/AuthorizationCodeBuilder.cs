@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response — the Authorization Code Flow contributor. Generates an authorization code via
 /// <see cref="IAuthorizationCodeService"/> and stores it on the running
 /// <see cref="SuccessfullyAuthenticated"/> result. Registered by default through
-/// <c>AddAuthorizationEndpoint()</c>; covers the OAuth 2.1-recommended flow. Declares
+/// <c>AddAuthorizationEndpoint()</c>; covers the OAuth 2.1 (draft) recommended flow. Declares
 /// <c>authorization_code</c> in <see cref="GrantTypesSupported"/> so the discovery
 /// endpoint and registration-time gates aggregate it transparently.
 /// </summary>

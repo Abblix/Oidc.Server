@@ -31,6 +31,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.set_version.outputs.version }}
+      version_full: ${{ steps.set_version.outputs.version_full }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
     steps:
       # harden-runner in audit mode: capture baseline egress without blocking.
@@ -58,14 +59,31 @@ jobs:
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the
+          # X.Y release input to a full X.Y.0 SemVer for the build/pack override. The tag
+          # and GitHub Release keep the X.Y form; NuGet normalizes X.Y to X.Y.0 anyway, so
+          # the published package version is identical. A -prerelease suffix is preserved.
+          CORE="${VERSION%%-*}"
+          PRERELEASE=""
+          [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
+          if [[ "$CORE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            VERSION_FULL="${CORE}.0${PRERELEASE}"
+          else
+            VERSION_FULL="$VERSION"
+          fi
+          echo "MinVer override version: $VERSION_FULL"
+
           PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$PREVIOUS_VERSION" ]; then
             PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
             echo "Previous version: $PREVIOUS_VERSION"
           fi
 
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$VERSION"
+            echo "version_full=$VERSION_FULL"
+            echo "previous_version=$PREVIOUS_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
         timeout-minutes: 3
     timeout-minutes: 5
@@ -80,6 +98,7 @@ jobs:
       attestations: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -111,7 +130,7 @@ jobs:
       # in lock-step.
         timeout-minutes: 3
       - name: Build
-        run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION"
+        run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
         timeout-minutes: 3
       - name: Test
         run: |
@@ -128,7 +147,7 @@ jobs:
           retention-days: 7
         timeout-minutes: 3
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION"
+        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL"
         timeout-minutes: 3
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
@@ -292,7 +311,10 @@ jobs:
         run: |
           if [ "$(git cat-file -t "v$VERSION" 2>/dev/null)" = "tag" ]; then
             echo "Using annotated tag message as release notes"
-            git tag -l --format='%(contents)' "v$VERSION" > CHANGELOG.md
+            # %(contents) includes the GPG/SSH signature block; strip it so the
+            # release body is only the notes. The tag must be created with
+            # --cleanup=verbatim so Markdown "##" headers in the notes survive.
+            git tag -l --format='%(contents)' "v$VERSION" | sed '/-----BEGIN .* SIGNATURE-----/,$d' > CHANGELOG.md
           elif [ -n "$PREVIOUS_VERSION" ]; then
             echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
             echo "" >> CHANGELOG.md
@@ -462,28 +484,58 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      # This job pushes to the GettingStarted repo using a scoped PAT, so the
-      # checkout keeps the token configured (no persist-credentials: false).
+      # Read-only checkout to edit the csproj locally; the signed commit is made
+      # through the Contents API (next step), so nothing is git-pushed here and
+      # the token must not be persisted as a git credential.
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          persist-credentials: false
         timeout-minutes: 3
       - name: Update package references to released version
         run: |
           sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
         timeout-minutes: 3
-      - name: Commit and push changes
+      - name: Open a pull request with a signed commit
+        env:
+          GH_TOKEN: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
+          REPO="Abblix/Oidc.Server.GettingStarted"
+          FILE="OpenIDProviderApp/OpenIDProviderApp.csproj"
+          BRANCH="chore/bump-abblix-v$VERSION"
+          # Nothing to do if the version already matches.
+          if git diff --quiet -- "$FILE"; then
+            echo "No version change needed; skipping PR."
+            exit 0
+          fi
+          # The master branch ruleset requires signed commits AND a pull request,
+          # so a plain git push is rejected (GH013). Commit the bumped file
+          # through the Contents API instead: GitHub signs API commits (satisfies
+          # required_signatures) and the PR satisfies the pull_request rule. A
+          # code owner still reviews and merges (1 approval required).
+          # Existence is checked explicitly so real errors fail the job loudly
+          # instead of being masked by "|| echo".
+          if gh api "repos/$REPO/git/ref/heads/$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists; reusing it."
           else
-            git commit -m "Update Abblix packages to v$VERSION"
-            git push
+            BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
+            gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA"
+          fi
+          FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
+          CONTENT=$(base64 -w0 "$FILE")
+          gh api -X PUT "repos/$REPO/contents/$FILE" \
+            -f "message=Update Abblix packages to v$VERSION" \
+            -f "content=$CONTENT" \
+            -f "sha=$FILE_SHA" \
+            -f "branch=$BRANCH"
+          if [ "$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
+            echo "A pull request for $BRANCH is already open."
+          else
+            gh pr create --repo "$REPO" --base master --head "$BRANCH" \
+              --title "Update Abblix packages to v$VERSION" \
+              --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection."
           fi
         timeout-minutes: 3
     timeout-minutes: 5

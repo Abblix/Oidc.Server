@@ -35,7 +35,7 @@ public static class ServiceCollectionExtensions
     /// processors that emit access tokens and ID tokens directly from the authorization endpoint.
     /// </summary>
     /// <remarks>
-    /// OAuth 2.1 §1.4 deprecates the Implicit Grant. By default this library does not register
+    /// OAuth 2.1 (draft) deprecates the Implicit Grant. By default this library does not register
     /// the <c>token</c> or <c>id_token</c> response-type processors, so the authorization endpoint
     /// rejects requests for those response types with <c>unsupported_response_type</c> and the
     /// discovery document advertises only <c>code</c> in <c>response_types_supported</c> and
