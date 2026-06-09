@@ -311,7 +311,10 @@ jobs:
         run: |
           if [ "$(git cat-file -t "v$VERSION" 2>/dev/null)" = "tag" ]; then
             echo "Using annotated tag message as release notes"
-            git tag -l --format='%(contents)' "v$VERSION" > CHANGELOG.md
+            # %(contents) includes the GPG/SSH signature block; strip it so the
+            # release body is only the notes. The tag must be created with
+            # --cleanup=verbatim so Markdown "##" headers in the notes survive.
+            git tag -l --format='%(contents)' "v$VERSION" | sed '/-----BEGIN .* SIGNATURE-----/,$d' > CHANGELOG.md
           elif [ -n "$PREVIOUS_VERSION" ]; then
             echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
             echo "" >> CHANGELOG.md
