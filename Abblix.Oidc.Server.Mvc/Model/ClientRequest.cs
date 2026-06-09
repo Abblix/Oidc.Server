@@ -80,6 +80,13 @@ public record ClientRequest
     public X509Certificate2? ClientCertificate { get; set; }
 
     /// <summary>
+    /// The compact-form DPoP proof JWT taken from the inbound request's <c>DPoP</c> header
+    /// per RFC 9449 §4.1. <c>null</c> when the client did not present a proof.
+    /// </summary>
+    [FromHeader(Name = HttpRequestHeaders.DPoP)]
+    public string? DPoPProof { get; set; }
+
+    /// <summary>
     /// Maps the properties of this client request to a <see cref="Core.ClientRequest"/> object.
     /// This method is used to translate the request data into a format that can be processed by the core logic of the server.
     /// </summary>
@@ -95,7 +102,8 @@ public record ClientRequest
 
             ClientAssertionType = ClientAssertionType,
             ClientAssertion = ClientAssertion,
-            ClientCertificate = ClientCertificate
+            ClientCertificate = ClientCertificate,
+            DPoPProof = DPoPProof,
         };
     }
 }

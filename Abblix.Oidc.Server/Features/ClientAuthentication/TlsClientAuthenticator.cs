@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// registered JWKS (jwks or jwks_uri). If matched and the client's configured token endpoint
 /// auth method is <c>self_signed_tls_client_auth</c>, the client is authenticated.
 /// </summary>
-public class TlsClientAuthenticator(
+public partial class TlsClientAuthenticator(
     ILogger<TlsClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientKeysProvider) : IClientAuthenticator
@@ -89,7 +89,7 @@ public class TlsClientAuthenticator(
         var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (client == null)
         {
-            logger.LogDebug("mTLS auth failed: unknown client_id {ClientId}", clientId);
+            LogClientNotFound(clientId);
             return null;
         }
 
@@ -103,12 +103,11 @@ public class TlsClientAuthenticator(
         var certJwk = certificate.ToJsonWebKey();
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
-            logger.LogWarning("mTLS auth failed: no matching JWKS public key found for client_id {ClientId}", clientId);
+            LogNoMatchingPublicKey(clientId);
             return null;
         }
 
-        logger.LogInformation("mTLS client authenticated via self-signed certificate for client_id {ClientId}",
-            clientId);
+        LogAuthenticated(clientId);
         return client;
     }
 
@@ -158,7 +157,7 @@ public class TlsClientAuthenticator(
                            X: { } jwkX,
                            Y: { } jwkY,
                        } &&
-                       string.Equals(certCurve, jwkCurve, StringComparison.Ordinal) &&
+                       certCurve == jwkCurve &&
                        certX.SequenceEqual(jwkX) &&
                        certY.SequenceEqual(jwkY),
 

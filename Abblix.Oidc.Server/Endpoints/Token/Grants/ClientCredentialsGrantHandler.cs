@@ -75,8 +75,12 @@ public class ClientCredentialsGrantHandler(
 		// Extract the requested scope from the request (may be null/empty)
 		var scope = request.Scope;
 
-		// Create an authorization context for the client with the requested scope
-		var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
+		// Create an authorization context for the client with the requested scope.
+		// client_credentials is a direct grant: the token request itself IS the authorization, so
+		// the RFC 8707 resource indicators are the authorized audience and are passed to the context
+		// so they reach the issued token's aud claim. The resource validator has already rejected
+		// any unregistered target with invalid_target before this handler runs.
+		var context = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources);
 
 		// Create an authentication session representing the client (not a user)
 		// In client credentials flow, the client itself is the "subject"

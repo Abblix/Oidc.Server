@@ -67,8 +67,8 @@ public sealed record OctetJsonWebKey : JsonWebKey
     {
         return includePrivateKeys switch
         {
-            true when KeyValue is { Length: > 0 } => this,
-            true => throw new InvalidOperationException($"There is no key value for kid={KeyId}"),
+            true when HasPrivateKey => this,
+            true => throw new InvalidOperationException($"There is no private key for kid={KeyId}"),
             false => this with { KeyValue = null },
         };
     }
@@ -90,4 +90,13 @@ public sealed record OctetJsonWebKey : JsonWebKey
     /// </remarks>
     [JsonIgnore]
     public override bool HasPrivateKey => KeyValue is { Length: > 0 };
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Required oct members per RFC 7638 §3.2 in lexicographic order: <c>k</c>,
+    /// <c>kty</c>. The base64url-encoded key value contains only characters that need
+    /// no JSON escaping.
+    /// </remarks>
+    protected override string CanonicalJson()
+        => $$"""{"k":"{{Encode(JsonWebKeyPropertyNames.KeyValue, KeyValue)}}","kty":"{{KeyType}}"}""";
 }

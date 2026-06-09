@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -49,16 +48,112 @@ public class SignedResponseAlgorithmsValidatorTests
 
     private ClientRegistrationValidationContext CreateContext(
         string? idTokenSignedResponseAlg = null,
-        string? userInfoSignedResponseAlg = null)
+        string? userInfoSignedResponseAlg = null,
+        string? authorizationSignedResponseAlg = null,
+        string? introspectionSignedResponseAlg = null)
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             IdTokenSignedResponseAlg = idTokenSignedResponseAlg,
-            UserInfoSignedResponseAlg = userInfoSignedResponseAlg
+            UserInfoSignedResponseAlg = userInfoSignedResponseAlg,
+            AuthorizationSignedResponseAlg = authorizationSignedResponseAlg,
+            IntrospectionSignedResponseAlg = introspectionSignedResponseAlg
         };
 
         return new ClientRegistrationValidationContext(request);
+    }
+
+    /// <summary>
+    /// Verifies validation succeeds with a supported introspection_signed_response_alg (RFC 9701).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithSupportedIntrospectionAlg_ShouldReturnNull()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(introspectionSignedResponseAlg: SigningAlgorithms.ES256);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verifies error when introspection_signed_response_alg is not supported (RFC 9701).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUnsupportedIntrospectionAlg_ShouldReturnError()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256]);
+
+        var context = CreateContext(introspectionSignedResponseAlg: SigningAlgorithms.PS384);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg, result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies validation succeeds with a supported JARM authorization_signed_response_alg (JARM §3).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithSupportedAuthorizationAlg_ShouldReturnNull()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(authorizationSignedResponseAlg: SigningAlgorithms.ES256);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verifies error when the JARM authorization_signed_response_alg is not supported.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUnsupportedAuthorizationAlg_ShouldReturnError()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256]);
+
+        var context = CreateContext(authorizationSignedResponseAlg: SigningAlgorithms.ES512);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies the JARM authorization response cannot be signed with <c>none</c> (JARM §3 forbids it),
+    /// even when the server otherwise advertises <c>none</c> (e.g. for unsigned UserInfo).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoneForAuthorizationAlg_ShouldReturnError()
+    {
+        _jwtCreator
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.None, SigningAlgorithms.RS256]);
+
+        var context = CreateContext(authorizationSignedResponseAlg: SigningAlgorithms.None);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -119,7 +214,7 @@ public class SignedResponseAlgorithmsValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("id_token_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IdTokenSignedResponseAlg, result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
     }
 
@@ -164,7 +259,7 @@ public class SignedResponseAlgorithmsValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("userinfo_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.UserInfoSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>
@@ -211,7 +306,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("id_token_signed_response_alg", result.ErrorDescription);
+        Assert.Contains(ClientRegistrationRequest.Parameters.IdTokenSignedResponseAlg, result.ErrorDescription);
     }
 
     /// <summary>

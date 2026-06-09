@@ -35,6 +35,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// <summary>
 /// Tests for license JWT provider implementations.
 /// </summary>
+[Collection("License")]
 public class LicenseProvidersTests
 {
     #region StaticLicenseJwtProvider Tests
@@ -51,7 +52,7 @@ public class LicenseProvidersTests
 
         // Act
         var licenses = provider.GetLicenseJwtAsync();
-        var licenseList = await licenses.ToListAsync();
+        var licenseList = await licenses.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(licenseList);
@@ -70,7 +71,7 @@ public class LicenseProvidersTests
 
         // Act
         var licenses = provider.GetLicenseJwtAsync();
-        var licenseList = await licenses.ToListAsync();
+        var licenseList = await licenses.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(licenseList);
@@ -89,8 +90,8 @@ public class LicenseProvidersTests
         var provider = new StaticLicenseJwtProvider(jwt);
 
         // Act
-        var licenses1 = await provider.GetLicenseJwtAsync().ToListAsync();
-        var licenses2 = await provider.GetLicenseJwtAsync().ToListAsync();
+        var licenses1 = await provider.GetLicenseJwtAsync().ToListAsync(TestContext.Current.CancellationToken);
+        var licenses2 = await provider.GetLicenseJwtAsync().ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(licenses1, licenses2);
@@ -113,7 +114,7 @@ public class LicenseProvidersTests
 
         // Act
         var licenses = provider.GetLicenseJwtAsync();
-        var licenseList = await licenses!.ToListAsync();
+        var licenseList = await licenses!.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(licenseList);
@@ -150,7 +151,7 @@ public class LicenseProvidersTests
 
         // Act
         var licenses = provider.GetLicenseJwtAsync();
-        var licenseList = await licenses!.ToListAsync();
+        var licenseList = await licenses!.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(licenseList);
@@ -170,8 +171,8 @@ public class LicenseProvidersTests
         var provider = new OptionsLicenseJwtProvider(options);
 
         // Act
-        var licenses1 = await provider.GetLicenseJwtAsync()!.ToListAsync();
-        var licenses2 = await provider.GetLicenseJwtAsync()!.ToListAsync();
+        var licenses1 = await provider.GetLicenseJwtAsync()!.ToListAsync(TestContext.Current.CancellationToken);
+        var licenses2 = await provider.GetLicenseJwtAsync()!.ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(licenses1, licenses2);

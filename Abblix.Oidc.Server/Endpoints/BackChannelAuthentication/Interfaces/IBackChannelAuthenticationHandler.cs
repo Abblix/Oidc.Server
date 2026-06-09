@@ -27,23 +27,22 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 
 /// <summary>
-/// Defines the contract for handling backchannel authentication requests in the context of OpenID Connect.
-/// Implementations of this interface are responsible for processing the incoming authorization requests
-/// and generating appropriate backchannel authentication responses.
+/// Endpoint contract for the OpenID Connect CIBA (Client-Initiated Backchannel Authentication) flow,
+/// orchestrating fetch, validation and processing of an incoming backchannel authentication request
+/// to produce the response defined in CIBA Core 1.0 §7.
 /// </summary>
 public interface IBackChannelAuthenticationHandler
 {
     /// <summary>
-    /// Handles the processing of a backchannel authentication request asynchronously.
-    /// The method takes an authorization request as input and returns a corresponding
-    /// backchannel authentication response, which could be a success or error response.
+    /// Processes a backchannel authentication request and returns either a successful response
+    /// (containing <c>auth_req_id</c>, <c>expires_in</c> and the polling <c>interval</c>) or an
+    /// <see cref="OidcError"/> describing why the request was rejected.
     /// </summary>
-    /// <param name="request">
-    ///     The authorization request containing the details of the backchannel authentication request.</param>
-    /// <param name="clientRequest"></param>
-    /// <returns>
-    /// A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.
-    /// </returns>
+    /// <param name="request">The incoming CIBA authentication request, after parsing of standard parameters.</param>
+    /// <param name="clientRequest">Transport-level information about the client invocation
+    /// (e.g. authentication credentials, headers) used to identify and authorize the calling client.</param>
+    /// <returns>A <see cref="Result{TSuccess,TFailure}"/> wrapping a
+    /// <see cref="BackChannelAuthenticationSuccess"/> or an <see cref="OidcError"/>.</returns>
     Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest);

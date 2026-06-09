@@ -26,7 +26,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -41,7 +40,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 /// <param name="logger">The logger for logging authentication events.</param>
 /// <param name="clientInfoProvider">The provider for retrieving client information.</param>
-public class NoneClientAuthenticator(
+public partial class NoneClientAuthenticator(
     ILogger<NoneClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider): IClientAuthenticator
 {
@@ -76,7 +75,7 @@ public class NoneClientAuthenticator(
         switch (client)
         {
             case null:
-                logger.LogDebug("Client authentication failed: Client information with id {ClientId} is missing", Value(clientId));
+                LogClientNotFound(clientId);
                 return null;
 
             case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:

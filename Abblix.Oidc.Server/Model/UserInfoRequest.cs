@@ -25,13 +25,21 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to retrieve user information, typically used in OpenID Connect flows.
-/// Inherits from <see cref="ClientRequest"/>.
+/// Parameters of a request to the OIDC <c>userinfo_endpoint</c> (OIDC Core §5.3). The access token
+/// is normally presented in the HTTP <c>Authorization</c> header per RFC 6750 §2.1, but RFC 6750 §2.2
+/// also permits the form-encoded <c>access_token</c> body parameter modeled here.
 /// </summary>
 public record UserInfoRequest
 {
+    /// <summary>
+    /// Wire-level parameter names accepted at the OIDC UserInfo endpoint (OIDC Core §5.3,
+    /// RFC 6750 §2 token transport).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>access_token</c> form parameter carrying the bearer access token when the
+        /// client submits it in the request body rather than the <c>Authorization</c> header
+        /// (RFC 6750 §2.2).</summary>
         public const string AccessToken = "access_token";
     }
 

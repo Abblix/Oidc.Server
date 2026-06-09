@@ -73,16 +73,12 @@ public interface IJwtBearerIssuerProvider
 	IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(string issuer);
 
 	/// <summary>
-	/// Checks if a JWT with the specified JTI has already been used (replay protection).
+	/// Atomically records the JWT's JTI for replay protection and reports whether it had already
+	/// been recorded. The entry is kept until the assertion's own expiration, so a JWT cannot be
+	/// replayed for any part of its validity window.
 	/// </summary>
-	/// <param name="jti">The JWT ID (jti claim) to check.</param>
-	/// <returns>True if the JWT has already been used; false otherwise.</returns>
-	Task<bool> IsReplayedAsync(string jti);
-
-	/// <summary>
-	/// Marks a JWT as used by storing its JTI until the specified expiration time.
-	/// </summary>
-	/// <param name="jti">The JWT ID (jti claim) to mark as used.</param>
-	/// <param name="expiresAt">The time at which the JWT expires.</param>
-	Task MarkAsUsedAsync(string jti, DateTimeOffset? expiresAt);
+	/// <param name="jti">The JWT ID (jti claim) to reserve.</param>
+	/// <param name="expiresAt">The assertion's expiration; bounds how long the JTI is remembered.</param>
+	/// <returns>True if this JTI was already recorded (a replay); false if it was recorded just now.</returns>
+	Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt);
 }

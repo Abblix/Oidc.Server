@@ -43,7 +43,8 @@ public static class JsonWebKeyFactory
         if (usage is not (PublicKeyUsages.Signature or PublicKeyUsages.Encryption))
         {
             throw new ArgumentException(
-                $"Invalid usage specified. Valid options are '{PublicKeyUsages.Signature}' for signing or '{PublicKeyUsages.Encryption}' for encryption.",
+                $"Invalid usage specified. Valid options are '{PublicKeyUsages.Signature}' for signing" +
+                $" or '{PublicKeyUsages.Encryption}' for encryption.",
                 nameof(usage));
         }
 
@@ -152,7 +153,7 @@ public static class JsonWebKeyFactory
             ({} x, {} y) => x.Concat(y),
             ({} x, null) => x,
             (null, {} y) => y,
-            (null, null) => Array.Empty<byte>(),
+            (null, null) => [],
         };
 
         return SHA256.HashData(keyMaterial).ToHexString();

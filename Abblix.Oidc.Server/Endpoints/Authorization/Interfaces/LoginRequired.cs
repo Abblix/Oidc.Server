@@ -25,7 +25,10 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
-/// Means that there is no user logged in or the current user is forced to re-authenticate by the client
+/// Outcome signalling that the host must surface its login UI: either no eligible session
+/// exists, or the client requested forced reauthentication via <c>prompt=login</c> /
+/// <c>max_age</c>. Maps to OpenID Connect Core 1.0 §3.1.2.6 <c>login_required</c>
+/// when <c>prompt=none</c>.
 /// </summary>
 public record LoginRequired(AuthorizationRequest Model)
     : AuthorizationResponse(Model);

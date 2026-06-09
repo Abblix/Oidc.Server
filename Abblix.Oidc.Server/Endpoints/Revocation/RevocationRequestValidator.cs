@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -29,7 +28,6 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Revocation;
@@ -49,7 +47,7 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// The JWT validator to be used for validating the token included in the revocation request. Ensures that
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
-public class RevocationRequestValidator(
+public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator) : IRevocationRequestValidator
@@ -94,7 +92,7 @@ public class RevocationRequestValidator(
 				// If the token was issued to a different client, log a warning and return an invalid token result.
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
-					logger.LogWarning("The token was issued to another client {ClientId}", Value(clientId));
+					LogTokenIssuedToAnotherClient(clientId);
 					return ValidRevocationRequest.InvalidToken(revocationRequest);
 				}
 
@@ -103,7 +101,7 @@ public class RevocationRequestValidator(
 			},
 			error =>
 			{
-				logger.LogWarning("The token validation failed: {@Error}", error);
+				LogTokenValidationFailed(error);
 				return ValidRevocationRequest.InvalidToken(revocationRequest);
 			});
 	}

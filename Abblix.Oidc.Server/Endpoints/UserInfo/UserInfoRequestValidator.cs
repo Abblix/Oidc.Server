@@ -37,16 +37,25 @@ using static Abblix.Oidc.Server.Model.UserInfoRequest;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
-/// Validates user information requests by verifying the access token and ensuring the request conforms to expected standards.
-/// Implements the <see cref="IUserInfoRequestValidator"/> interface.
+/// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form/query parameter, but not both),
+/// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
+/// resolves the originating authentication session, authorization context and client.
 /// </summary>
-/// <param name="jwtValidator">The JWT validator used for validating the access tokens.</param>
-/// <param name="accessTokenService">The service responsible for managing access tokens.</param>
-/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+/// <param name="jwtValidator">Validates access-token JWTs issued by this authorization server.</param>
+/// <param name="accessTokenService">Resolves an <see cref="Abblix.Oidc.Server.Features.UserAuthentication.AuthSession"/> and
+/// <see cref="AuthorizationContext"/> from the access token.</param>
+/// <param name="clientInfoProvider">Loads the <see cref="ClientInfo"/> for the token's client.</param>
+/// <param name="dpopValidator">RFC 9449 §7 DPoP resource-server-side validator that enforces the
+/// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
+/// <param name="mtlsValidator">RFC 8705 §3 mutual-TLS resource-server-side validator that enforces
+/// the certificate binding when the access token carries a <c>cnf.x5t#S256</c> confirmation.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
-	IClientInfoProvider clientInfoProvider) : IUserInfoRequestValidator
+	IClientInfoProvider clientInfoProvider,
+	IDPoPUserInfoValidator dpopValidator,
+	IMtlsUserInfoValidator mtlsValidator) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
@@ -64,17 +73,20 @@ public class UserInfoRequestValidator(
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader != null)
 		{
-			if (authorizationHeader.Scheme != TokenTypes.Bearer)
+			// RFC 9449 §7.1: DPoP-bound access tokens are presented via the DPoP scheme.
+			// The actual scheme/binding compatibility check runs after JWT parse so we can
+			// inspect cnf.jkt — here we only filter out unrecognised schemes.
+			if (authorizationHeader.Scheme is not (TokenTypes.Bearer or TokenTypes.DPoP))
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 			}
 
 			if (userInfoRequest.AccessToken != null)
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 					$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
 			}
@@ -82,7 +94,7 @@ public class UserInfoRequestValidator(
 			if (authorizationHeader.Parameter == null)
 			{
 				return new OidcError(
-					ErrorCodes.InvalidGrant,
+					ErrorCodes.InvalidToken,
 					$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 			}
 
@@ -91,7 +103,7 @@ public class UserInfoRequestValidator(
 		else if (userInfoRequest.AccessToken == null)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
 		}
@@ -103,7 +115,7 @@ public class UserInfoRequestValidator(
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		if (result.TryGetFailure(out var error))
-			return new OidcError(ErrorCodes.InvalidGrant, error.ToString());
+			return new OidcError(ErrorCodes.InvalidToken, error.ToString());
 
 		var token = result.GetSuccess();
 
@@ -111,9 +123,25 @@ public class UserInfoRequestValidator(
 		if (tokenType != JwtTypes.AccessToken)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"Invalid token type: {tokenType}");
 		}
+
+		// RFC 9449 §7.1 RS-side enforcement: when the access token carries cnf.jkt the
+		// request MUST present it via the DPoP scheme together with a valid DPoP proof
+		// whose key thumbprint matches cnf.jkt and whose ath claim matches the access
+		// token. Runs before AuthenticateByAccessTokenAsync so a bad-DPoP token never
+		// surfaces auth-session probes downstream.
+		var dpopError = await dpopValidator.ValidateAsync(clientRequest, token, jwtAccessToken);
+		if (dpopError is not null)
+			return dpopError;
+
+		// RFC 8705 §3 RS-side enforcement: when the access token carries cnf.x5t#S256 the
+		// certificate presented on the mutual-TLS connection MUST hash to the bound value.
+		// Independent of the DPoP binding above — a token carrying both must satisfy each.
+		var mtlsError = mtlsValidator.Validate(clientRequest, token);
+		if (mtlsError is not null)
+			return mtlsError;
 
 		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
 
@@ -121,7 +149,7 @@ public class UserInfoRequestValidator(
 		if (clientInfo == null)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ErrorCodes.InvalidToken,
 				$"The client '{authContext.ClientId}' is not found");
 		}
 

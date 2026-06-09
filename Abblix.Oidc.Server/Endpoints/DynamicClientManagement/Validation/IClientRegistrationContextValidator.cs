@@ -25,20 +25,20 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Provides an interface for client registration context validators. Implementations of this interface
-/// are responsible for validating various aspects of client registration requests, such as client identifiers,
-/// redirect URIs, grant types, and more. The validators check the validity of client registration data and
-/// may return validation errors if the data is invalid.
+/// One step in the client-registration validation pipeline (RFC 7591 §2 / OIDC DCR 1.0).
+/// Implementations check a specific aspect of the supplied metadata (redirect URIs,
+/// grant types, signing algorithms, sector identifier, software statement, etc.) and
+/// either clear it or surface an <see cref="OidcError"/> for the response.
+/// Aggregated by <see cref="ClientRegistrationContextValidatorComposite"/>.
 /// </summary>
 public interface IClientRegistrationContextValidator
 {
 	/// <summary>
-	/// Validates the client registration context asynchronously.
+	/// Validates the slice of registration metadata this implementation owns.
+	/// May mutate <see cref="ClientRegistrationValidationContext"/> with derived values
+	/// (for example the resolved sector identifier).
 	/// </summary>
-	/// <param name="context">The context containing client registration data to validate.</param>
-	/// <returns>
-	/// A task that represents the asynchronous validation operation. The task result is a
-	/// AuthError if validation fails, or null if the request is valid.
-	/// </returns>
+	/// <param name="context">The shared validation context for the current request.</param>
+	/// <returns>An <see cref="OidcError"/> describing the rejection, or <c>null</c> when valid.</returns>
 	Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context);
 }

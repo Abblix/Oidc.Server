@@ -64,18 +64,126 @@ public static class ServiceCollectionExtensions
         where TImplementation : class, TService
         where TService : class
     {
-        // Find the most recent registration of TImplementation
-        var source = services.LastOrDefault(s =>
-            s.ServiceType == typeof(TImplementation) ||
-            s.ImplementationType == typeof(TImplementation))
-            ?? throw new InvalidOperationException(
-                $"No registration found for {typeof(TImplementation).Name}. " +
-                $"Register it first before creating an alias.");
-
-        // Clone the descriptor with TService as the new ServiceType
-        services.Add(source.Clone(typeof(TService)));
-
+        services.Add(services.BuildAliasDescriptor<TService, TImplementation>());
         return services;
+    }
+
+    /// <summary>
+    /// Adds <typeparamref name="TService"/> to an enumerable strategy set as a SHARED-instance
+    /// alias for the existing <typeparamref name="TImplementation"/> registration. Sister of
+    /// <see cref="AddAlias{TService,TImplementation}"/>: same semantic of «route this service
+    /// to that already-registered impl», but adds via <c>TryAddEnumerable</c> (so repeated
+    /// calls dedupe on <c>(ServiceType, ImplementationType)</c>) and always uses a typed
+    /// factory delegate that resolves through the source registration — guaranteeing the
+    /// alias and the source share one instance.
+    /// </summary>
+    /// <typeparam name="TService">The enumerable service type to register the alias under.</typeparam>
+    /// <typeparam name="TImplementation">The implementation type already registered as a
+    /// concrete (or as another <typeparamref name="TService"/>) in the service collection.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    /// <exception cref="InvalidOperationException">No registration was found for
+    /// <typeparamref name="TImplementation"/>.</exception>
+    public static IServiceCollection TryAddEnumerableAlias<TService, TImplementation>(this IServiceCollection services)
+        where TImplementation : class, TService
+        where TService : class
+    {
+        services.TryAddEnumerable(services.BuildAliasDescriptor<TService, TImplementation>());
+        return services;
+    }
+
+    /// <summary>
+    /// Builds the alias <see cref="ServiceDescriptor"/> shared by
+    /// <see cref="AddAlias{TService,TImplementation}"/> and
+    /// <see cref="TryAddEnumerableAlias{TService,TImplementation}"/>. Combines the two
+    /// always-paired steps: locate the source registration of
+    /// <typeparamref name="TImplementation"/> and produce a typed-factory descriptor that
+    /// routes <typeparamref name="TService"/> through the source's ServiceType, preserving
+    /// the source's lifetime so the alias and the source share an instance.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two-tier lookup of the source: a concrete registration
+    /// (<c>ServiceType == TImpl</c>) wins over an alias registration
+    /// (<c>ImplementationType == TImpl</c>) — without this priority a second alias-helper
+    /// call would pick the previous alias as «source», capture the wrong ServiceType, and
+    /// break later <c>Compose&lt;&gt;</c>-style replacements with an
+    /// <see cref="InvalidCastException"/> at resolve. The fallback derives implementation
+    /// type through <see cref="ResolveImplementationType"/> so the lookup works for the
+    /// .NET 10 typed-factory descriptor shape produced by generic
+    /// <c>AddSingleton&lt;TService, TImpl&gt;</c>.
+    /// </para>
+    /// <para>
+    /// The 3-way switch over Lifetime exists for one reason: TryAddEnumerable's dedup
+    /// compares <c>(ServiceType, ImplementationType)</c>, and ImplementationType for a
+    /// factory descriptor is derived from the factory delegate's generic-arg-1. The
+    /// untyped <c>ServiceDescriptor.Describe(Type, Func&lt;IServiceProvider, object&gt;, Lifetime)</c>
+    /// overload bakes the factory as <c>Func&lt;IServiceProvider, object&gt;</c>, so dedup
+    /// sees <c>ImplementationType = object</c>, hits the «implementationType == typeof(object)»
+    /// guard, and <c>TryAddEnumerable</c> throws. The typed
+    /// <c>Singleton&lt;TService, TImpl&gt;(factory)</c> / <c>Scoped&lt;TService, TImpl&gt;(factory)</c>
+    /// / <c>Transient&lt;TService, TImpl&gt;(factory)</c> overloads bake
+    /// <c>Func&lt;IServiceProvider, TImpl&gt;</c>, so <c>ImplementationType = TImpl</c> and
+    /// repeated calls with the same TImpl dedupe correctly.
+    /// <see cref="AddAlias{TService,TImplementation}"/> uses the same shape for symmetry
+    /// with <see cref="TryAddEnumerableAlias{TService,TImplementation}"/>.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">No registration was found for
+    /// <typeparamref name="TImplementation"/>, or its lifetime is not
+    /// Singleton / Scoped / Transient.</exception>
+    private static ServiceDescriptor BuildAliasDescriptor<TService, TImplementation>(this IServiceCollection services)
+        where TImplementation : class, TService
+        where TService : class
+    {
+        var source =
+            services.LastOrDefault(s => s.ServiceType == typeof(TImplementation)) ??
+            services.LastOrDefault(s => ResolveImplementationType(s) == typeof(TImplementation)) ??
+            throw new InvalidOperationException(
+                $"No registration found for {typeof(TImplementation).Name}. Register it first before creating an alias.");
+
+        var sourceServiceType = source.ServiceType;
+        return source.Lifetime switch
+        {
+            ServiceLifetime.Singleton => ServiceDescriptor.Singleton<TService, TImplementation>(
+                sp => (TImplementation)sp.GetRequiredService(sourceServiceType)),
+
+            ServiceLifetime.Scoped => ServiceDescriptor.Scoped<TService, TImplementation>(
+                sp => (TImplementation)sp.GetRequiredService(sourceServiceType)),
+
+            ServiceLifetime.Transient => ServiceDescriptor.Transient<TService, TImplementation>(
+                sp => (TImplementation)sp.GetRequiredService(sourceServiceType)),
+
+            _ => throw new InvalidOperationException(
+                $"Unsupported lifetime '{source.Lifetime}' on the source registration of " +
+                $"{typeof(TImplementation).Name}."),
+        };
+    }
+
+    /// <summary>
+    /// Stand-in for the internal <c>ServiceDescriptor.GetImplementationType()</c>: returns the
+    /// implementation type whether the descriptor was registered with an explicit
+    /// <c>ImplementationType</c>, an <c>ImplementationInstance</c>, or a typed factory
+    /// <c>Func&lt;IServiceProvider, TImpl&gt;</c> (.NET 10 generic AddSingleton uses the last shape,
+    /// so the property alone returns null for those registrations).
+    /// </summary>
+    private static Type? ResolveImplementationType(ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationType != null)
+            return descriptor.ImplementationType;
+
+        if (descriptor.ImplementationInstance != null)
+            return descriptor.ImplementationInstance.GetType();
+
+        var factory = descriptor.ImplementationFactory;
+        if (factory != null)
+        {
+            var args = factory.GetType().GetGenericArguments();
+            if (args.Length == 2)
+                return args[1];
+        }
+
+        return null;
     }
 
     /// <summary>

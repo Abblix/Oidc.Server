@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -44,7 +43,7 @@ public class GrantTypeValidatorTests
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             ResponseTypes = responseTypes,
             GrantTypes = grantTypes
         };

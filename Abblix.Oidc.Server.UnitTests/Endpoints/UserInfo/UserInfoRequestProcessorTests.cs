@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 [Collection("License")]
 public class UserInfoRequestProcessorTests
 {
-    private const string Issuer = "https://auth.example.com";
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IUserClaimsProvider> _userClaimsProvider;
@@ -151,7 +151,7 @@ public class UserInfoRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         Assert.Contains("user claims", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -300,7 +300,7 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = "https://auth.example.org";
+        var issuer = TestConstants.DefaultIssuer.OriginalString;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(

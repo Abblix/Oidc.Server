@@ -176,6 +176,17 @@ public static class ErrorCodes
 	/// </remarks>
 	public const string InvalidClientMetadata = "invalid_client_metadata";
 
+	/// <summary>
+	/// The software statement presented is invalid per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string InvalidSoftwareStatement = "invalid_software_statement";
+
+	/// <summary>
+	/// The software statement was valid but the software has not been approved
+	/// for use by this authorization server per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
+
 	#endregion
 
 	/// <summary>
@@ -229,4 +240,41 @@ public static class ErrorCodes
 	/// The binding message is invalid or unacceptable for use in the context of the given request.
 	/// </summary>
 	public const string InvalidBindingMessage = "invalid_binding_message";
+
+	/// <summary>
+	/// The access token provided is expired, revoked, malformed, or invalid for other reasons.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
+	/// </summary>
+	public const string InvalidToken = "invalid_token";
+
+	/// <summary>
+	/// The DPoP proof JWT presented with the request is invalid (RFC 9449 §7.1). This is the
+	/// OAuth-protocol-level error code returned to the client for ANY structural,
+	/// algorithmic, claim-binding, signature, or replay-protection failure of a DPoP proof.
+	/// The fine-grained internal reason (used in logs and metrics) is carried separately.
+	/// </summary>
+	public const string InvalidDPoPProof = "invalid_dpop_proof";
+
+	/// <summary>
+	/// The authorization server or resource server requires a DPoP-Nonce in the proof
+	/// (RFC 9449 §8). The response carries a <c>DPoP-Nonce</c> header with the nonce value
+	/// the client must include in subsequent proofs.
+	/// </summary>
+	public const string UseDPoPNonce = "use_dpop_nonce";
+
+	/// <summary>
+	/// The request requires higher privileges than provided by the access token.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 403 (Forbidden)
+	/// and SHOULD include the <c>scope</c> attribute in the <c>WWW-Authenticate</c> header
+	/// listing the required scopes.
+	/// </summary>
+	public const string InsufficientScope = "insufficient_scope";
+
+	/// <summary>
+	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 §5:
+	/// an entry's <c>type</c> is unknown to the AS, fields do not match the registered per-type
+	/// schema, field values are out of the wrong JSON type, or the request otherwise fails to
+	/// satisfy the per-type validator. The AS MUST refuse to process the request.
+	/// </summary>
+	public const string InvalidAuthorizationDetails = "invalid_authorization_details";
 }

@@ -99,14 +99,12 @@ public class UserIdentityValidator(
             }
             else
             {
-                var error = loginHintTokenResult.GetFailure();
-                if (error.Error != JwtError.InvalidToken)
-                {
-                    // If JWT validation fails, return an error
-                    return new OidcError(
-                        ErrorCodes.InvalidRequest,
-                        "LoginHintToken validation failed.");
-                }
+                // The client opted into JWT parsing (ParseLoginHintTokenAsJwt), so any
+                // validation failure — including a malformed / forged token surfacing as
+                // InvalidToken — is rejected rather than silently treated as "no usable hint".
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "LoginHintToken validation failed.");
             }
         }
 

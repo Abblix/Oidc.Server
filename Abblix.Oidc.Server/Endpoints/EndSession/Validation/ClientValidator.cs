@@ -30,23 +30,17 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Validates the client associated with an end-session request.
+/// Resolves the client referenced by the request (either via <c>client_id</c> directly or via
+/// <c>id_token_hint</c>'s audience) into a <see cref="ClientInfo"/> stored on the context for
+/// later steps such as post-logout redirect URI validation. A request with no client identifier
+/// at all is permitted to pass; an identifier that does not resolve yields
+/// <see cref="ErrorCodes.UnauthorizedClient"/>.
 /// </summary>
-/// <remarks>
-/// This class checks if the client exists and is authorized for the end-session request.
-/// If the client is not found, it returns an error indicating an unauthorized client.
-/// </remarks>
-/// <param name="logger">The logger to be used for logging purposes.</param>
-/// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
-public class ClientValidator(
+public partial class ClientValidator(
     ILogger<ClientValidator> logger,
     IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Validates the client associated with an end-session request.
-    /// </summary>
-    /// <param name="context">The validation context containing client information.</param>
-    /// <returns>An error if the validation fails, or null if the request is valid.</returns>
+    /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
@@ -55,7 +49,7 @@ public class ClientValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(context.ClientId));
+            LogClientNotFound(context.ClientId);
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The client is not authorized");

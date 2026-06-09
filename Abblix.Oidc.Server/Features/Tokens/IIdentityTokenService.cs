@@ -27,9 +27,10 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Provides functionality for creating and managing identity tokens as part of OpenID Connect authentication processes.
-/// This service is responsible for generating identity tokens that encapsulate the authenticated user's identity
-/// information and any additional claims or information authorized for release to the requesting client application.
+/// Issues OpenID Connect ID Tokens (OIDC Core §2 and §3.1.3.6) for authenticated end-users,
+/// embedding the standard claims of OIDC Core §5.1, the client's nonce, and where applicable
+/// the <c>c_hash</c>/<c>at_hash</c> binding claims (OIDC Core §3.1.3.6 and §3.2.2.10) that tie
+/// the ID Token to a co-issued authorization code or access token.
 /// </summary>
 public interface IIdentityTokenService
 {

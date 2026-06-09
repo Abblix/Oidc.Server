@@ -30,7 +30,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using static System.Web.HttpUtility;
-using static Abblix.Utils.HttpServerUtility;
+using System.Buffers.Text;
 
 
 namespace Abblix.Oidc.Server.Features.SessionManagement;
@@ -97,7 +97,7 @@ public class SessionManagementService(
         var origin = request.RedirectUri.NotNull(nameof(request.RedirectUri)).GetOrigin();
         var salt = CryptoRandom.GetRandomBytes(16).ToHexString();
         var sessionState = string.Join(" ", request.ClientId, origin, sessionId, salt);
-        var hash = UrlTokenEncode(SHA256.HashData(Encoding.UTF8.GetBytes(sessionState)));
+        var hash = Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(sessionState)));
         return string.Join(".", hash, salt);
     }
 

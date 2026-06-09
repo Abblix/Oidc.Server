@@ -354,4 +354,37 @@ public class ResourceManagerTests
         Assert.Single(writeScope.ClaimTypes);
         Assert.Contains("write_claim1", writeScope.ClaimTypes);
     }
+
+    /// <summary>
+    /// Verifies that a non-absolute configured resource URI is rejected at construction, rather than
+    /// becoming a silent dead entry that can never match a request (RFC 8707 Section 2).
+    /// </summary>
+    [Fact]
+    public void Construction_WithNonAbsoluteResourceUri_Throws()
+    {
+        var resource = new ResourceDefinition(new Uri("/relative/api", UriKind.Relative), new ScopeDefinition("read"));
+        var options = Options.Create(new OidcOptions { Resources = [resource] });
+
+        Assert.Throws<ArgumentException>(() => new ResourceManager(options));
+    }
+
+    /// <summary>
+    /// Verifies that two configured resource definitions sharing a URI fail fast at construction with
+    /// a clear error rather than an opaque dictionary exception.
+    /// </summary>
+    [Fact]
+    public void Construction_WithDuplicateResourceUris_Throws()
+    {
+        var uri = new Uri("https://api.example.com");
+        var options = Options.Create(new OidcOptions
+        {
+            Resources =
+            [
+                new ResourceDefinition(uri, new ScopeDefinition("read")),
+                new ResourceDefinition(uri, new ScopeDefinition("write")),
+            ],
+        });
+
+        Assert.Throws<ArgumentException>(() => new ResourceManager(options));
+    }
 }

@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
 /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
-public class RequestUriFetcher(
+public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
     IClientInfoProvider clientInfoProvider,
     ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
@@ -93,7 +93,7 @@ public class RequestUriFetcher(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            logger.LogWarning("The client with id {ClientId} was not found", Sanitized.Value(clientId));
+            LogClientNotFound(clientId);
             return AuthorizationErrorFactory.ValidationError(
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }

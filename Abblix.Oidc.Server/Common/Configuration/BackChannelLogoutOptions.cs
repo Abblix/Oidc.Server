@@ -23,22 +23,31 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Represents options for back-channel logout for a client.
+/// Back-channel logout settings for a single client, as defined by the OpenID Connect Back-Channel Logout 1.0
+/// specification. The OP delivers a signed logout token directly (server-to-server) to the configured endpoint
+/// when an end-session occurs, bypassing the user agent.
 /// </summary>
+/// <param name="Uri">The client's back-channel logout endpoint that receives the logout token.</param>
+/// <param name="RequiresSessionId">
+/// When <c>true</c>, the logout token must include the <c>sid</c> claim so the client can scope the
+/// invalidation to a specific session.
+/// </param>
 public record BackChannelLogoutOptions(Uri Uri, bool RequiresSessionId = true)
 {
     /// <summary>
-    /// Gets or initializes the logout URI.
+    /// The client's back-channel logout endpoint that receives the signed logout token.
     /// </summary>
     public Uri Uri { get; init; } = Uri;
 
     /// <summary>
-    /// Gets or initializes whether a session ID is for logout.
+    /// When <c>true</c>, the issued logout token must carry the <c>sid</c> claim so the client can
+    /// invalidate the matching session rather than every session of the user.
     /// </summary>
     public bool RequiresSessionId { get; init; } = RequiresSessionId;
 
     /// <summary>
-    /// The duration a logout token is valid for.
+    /// Lifetime of the issued logout token. Kept short to limit the replay window for the token,
+    /// since back-channel logout tokens cross the network as bearer credentials.
     /// </summary>
     public TimeSpan LogoutTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(5);
 }

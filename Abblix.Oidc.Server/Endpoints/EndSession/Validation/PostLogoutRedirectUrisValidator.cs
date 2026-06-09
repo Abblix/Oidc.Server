@@ -23,26 +23,21 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.UriValidation;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.EndSessionRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Validates the post-logout redirect URIs for an end-session request.
+/// Verifies that the request's <c>post_logout_redirect_uri</c> is one of the URIs the
+/// resolved client previously registered (OpenID Connect RP-Initiated Logout 1.0 §2).
+/// A request without <c>post_logout_redirect_uri</c> is allowed; if one is present but
+/// the client cannot be resolved from <c>client_id</c> or <c>id_token_hint</c>, the
+/// redirect URI cannot be safely validated and the request is rejected.
 /// </summary>
-/// <param name="logger">The logger for capturing validation information.</param>
-public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
+public partial class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
 {
-    /// <summary>
-    /// Validates the end-session request asynchronously.
-    /// </summary>
-    /// <param name="context">The end-session validation context.</param>
-    /// <returns>
-    /// A task that represents the asynchronous validation operation.
-    /// Returns an AuthError if validation fails, or null if successful.
-    /// </returns>
+    /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
@@ -65,9 +60,7 @@ public class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValid
         if (uriValidator.IsValid(redirectUri))
             return null;
 
-        logger.LogWarning("The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-            Sanitized.Value(redirectUri),
-            context.ClientInfo.ClientId);
+        LogInvalidPostLogoutRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
         return new OidcError(
             ErrorCodes.InvalidRequest,

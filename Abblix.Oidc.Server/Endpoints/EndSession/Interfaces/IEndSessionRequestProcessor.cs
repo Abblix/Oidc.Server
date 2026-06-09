@@ -26,14 +26,20 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Represents the interface for processing end-session requests.
+/// Performs the side-effects of RP-initiated logout once a request has been validated:
+/// signs the end user out of the OP session, notifies every client that participated
+/// in the session (back-channel and/or front-channel logout), and assembles the
+/// post-logout redirect target.
 /// </summary>
 public interface IEndSessionRequestProcessor
 {
 	/// <summary>
-	/// Processes the specified end-session request.
+	/// Executes logout for an already-validated request.
 	/// </summary>
-	/// <param name="request">The valid end-session request.</param>
-	/// <returns>A task representing the asynchronous operation, returning the end-session response.</returns>
+	/// <param name="request">A request that passed all validation steps.</param>
+	/// <returns>
+	/// An <see cref="EndSessionSuccess"/> describing the post-logout redirect and any
+	/// front-channel URIs to invoke; an <see cref="OidcError"/> if processing cannot complete.
+	/// </returns>
 	Task<Result<EndSessionSuccess, OidcError>> ProcessAsync(ValidEndSessionRequest request);
 }

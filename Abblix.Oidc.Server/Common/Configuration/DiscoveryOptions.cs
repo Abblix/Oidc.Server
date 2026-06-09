@@ -33,6 +33,16 @@ public class DiscoveryOptions
     public bool AllowEndpointPathsDiscovery { get; set; } = true;
 
     /// <summary>
+    /// RFC 8414 §2.1: when enabled, the discovery document additionally carries a
+    /// <c>signed_metadata</c> JWS whose payload is the same metadata set, signed with the
+    /// authorization server's signing key. This lets relying parties verify the
+    /// configuration's origin independently of the TLS layer (relevant behind CDNs, API
+    /// gateways, or aggressive caches). Off by default: clients that do not validate the
+    /// signature gain nothing from it, and an unconsumed field only adds payload weight.
+    /// </summary>
+    public bool SignedMetadata { get; set; }
+
+    /// <summary>
     /// RFC 8705: Optional mTLS endpoint aliases to advertise.
     /// Configure with absolute URIs hosted on an mTLS-enabled origin.
     /// </summary>

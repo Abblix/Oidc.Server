@@ -31,6 +31,11 @@ namespace Abblix.Oidc.Server.Common.Exceptions;
 /// </remarks>
 public class UnexpectedTypeException : InvalidOperationException
 {
+    /// <summary>
+    /// Creates the exception with a message naming the offending parameter and the runtime type observed.
+    /// </summary>
+    /// <param name="paramName">Name of the variable, parameter, or member whose type was unexpected.</param>
+    /// <param name="paramType">The runtime type that the calling code did not know how to handle.</param>
     public UnexpectedTypeException(string? paramName, Type paramType)
         : base($"Something goes wrong: {paramName} has unexpected type {paramType}")
     {

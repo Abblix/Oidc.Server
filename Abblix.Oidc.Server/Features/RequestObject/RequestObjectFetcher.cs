@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +44,7 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
-public class RequestObjectFetcher(
+public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
@@ -63,13 +64,16 @@ public class RequestObjectFetcher(
     /// This method is used to decode and validate the JWT contained in the request. If the JWT is valid, the payload
     /// is bound to the request model. If the JWT is invalid, an error is returned and logged.
     /// </remarks>
-    public async Task<Result<T, OidcError>> FetchAsync<T>(T request, string? requestObject)
+    public async Task<Result<T, OidcError>> FetchAsync<T>(
+        T request,
+        string? requestObject,
+        Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
         where T : class
     {
         if (!requestObject.HasValue())
             return request;
 
-        var validationResult = await ValidateAsync(requestObject);
+        var validationResult = await ValidateAsync(requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
             async payload =>
             {
@@ -95,7 +99,9 @@ public class RequestObjectFetcher(
     /// This method uses the configured OIDC options to determine whether the JWT must be signed and validates
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
-    private async Task<Result<JsonObject, OidcError>> ValidateAsync(string requestObject)
+    private async Task<Result<JsonObject, OidcError>> ValidateAsync(
+        string requestObject,
+        Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
@@ -113,13 +119,30 @@ public class RequestObjectFetcher(
         var result = await tokenValidator.ValidateAsync(requestObject, validationOptions);
 
         return result.Match<Result<JsonObject, OidcError>>(
-            validJwt => validJwt.Token.Payload.Json,
+            validJwt =>
+            {
+                // Pin the request object's alg to what the resolved client registered for this
+                // request-object kind. The signature is already verified; this rejects a request
+                // object signed with a different (e.g. weaker) algorithm than the client registered.
+                var requiredAlgorithm = requiredSigningAlgorithm?.Invoke(validJwt.Client);
+                if (requiredAlgorithm.HasValue() &&
+                    !string.Equals(validJwt.Token.Header.Algorithm, requiredAlgorithm, StringComparison.Ordinal))
+                {
+                    LogSigningAlgorithmMismatch(
+                        validJwt.Client.ClientId, validJwt.Token.Header.Algorithm, requiredAlgorithm);
+                    return new OidcError(
+                        ErrorCodes.InvalidRequestObject,
+                        "The request object signing algorithm does not match the client's registered algorithm");
+                }
+
+                return validJwt.Token.Payload.Json;
+            },
             error => InvalidRequestObject(error));
     }
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {
-        logger.LogWarning("The request object contains invalid token: {@Error}", error);
+        LogInvalidToken(error);
         return new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 

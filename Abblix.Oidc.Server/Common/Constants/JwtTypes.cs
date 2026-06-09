@@ -59,4 +59,24 @@ public static class JwtTypes
 	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely registering clients.
 	/// </summary>
 	public const string RegistrationAccessToken = "registration+jwt";
+
+	/// <summary>
+	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
+	/// per RFC 7591 Section 3.
+	/// </summary>
+	public const string InitialAccessToken = "initial_access+jwt";
+
+	/// <summary>
+	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
+	/// value so a relying party that trusts the same client across multiple JWT classes
+	/// (id_token, request_object, DPoP proof) cannot have one class replayed as another
+	/// per the RFC 8725 §3.11 token-class-confusion guidance.
+	/// </summary>
+	public const string DPoPProof = "dpop+jwt";
+
+	/// <summary>
+	/// The "token introspection response" JWT type per RFC 9701 §5. The <c>typ</c> header equals this value so a
+	/// signed introspection response cannot be replayed as a different JWT class (RFC 8725 §3.11).
+	/// </summary>
+	public const string TokenIntrospection = "token-introspection+jwt";
 }

@@ -67,6 +67,10 @@ public class DeviceAuthorizationRequestProcessor(
         {
             Status = DeviceAuthorizationStatus.Pending,
             NextPollAt = timeProvider.GetUtcNow() + deviceAuthOptions.PollingInterval,
+            // RFC 9396 §3: stash authorization_details on the persisted record so the
+            // host's user-verification step can read it (via ValidUserCode) and thread it
+            // onto the AuthorizedGrant's AuthorizationContext when approving.
+            AuthorizationDetails = request.AuthorizationDetails,
         };
 
         await storage.StoreAsync(deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);

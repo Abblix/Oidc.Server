@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -57,6 +58,9 @@ internal static class DeviceAuthorizationRequestMapper
         if (source.AuthorizedGrant != null)
             proto.AuthorizedGrant = source.AuthorizedGrant.ToProto();
 
+        if (source.AuthorizationDetails is { Count: > 0 })
+            proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
+
         return proto;
     }
 
@@ -82,6 +86,9 @@ internal static class DeviceAuthorizationRequestMapper
             NextPollAt = source.NextPollAt != null ? source.NextPollAt.ToDateTimeOffset() : null,
             Status = source.Status.FromProtoStatus(),
             AuthorizedGrant = source.AuthorizedGrant?.FromProto(),
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
+                ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
+                : null,
         };
     }
 

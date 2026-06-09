@@ -53,7 +53,7 @@ public class AuthorizationRequestValidatorTests
     {
         ClientId = TestConstants.DefaultClientId,
         ResponseType = [ResponseTypes.Code],
-        RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+        RedirectUri = TestConstants.DefaultRedirectUri,
         Scope = [Scopes.OpenId],
     };
 
@@ -298,7 +298,7 @@ public class AuthorizationRequestValidatorTests
         {
             ClientId = "client_1",
             ResponseType = [ResponseTypes.Code],
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = [Scopes.OpenId],
         };
 

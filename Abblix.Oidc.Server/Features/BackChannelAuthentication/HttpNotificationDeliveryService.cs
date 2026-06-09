@@ -31,11 +31,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// HTTP-based implementation of backchannel notification service for CIBA ping and push modes.
 /// Sends HTTP POST notifications to client endpoints with authentication request status updates or token delivery.
 /// </summary>
-/// <param name="httpClientFactory">Factory for creating HTTP clients.</param>
 /// <param name="logger">Logger for tracking notification attempts and failures.</param>
-public class HttpNotificationDeliveryService(
-    IHttpClientFactory httpClientFactory,
-    ILogger<HttpNotificationDeliveryService> logger) : INotificationDeliveryService
+/// <param name="httpClientFactory">Factory for creating HTTP clients.</param>
+public partial class HttpNotificationDeliveryService(
+    ILogger<HttpNotificationDeliveryService> logger,
+    IHttpClientFactory httpClientFactory) : INotificationDeliveryService
 {
     /// <summary>
     /// Sends an HTTP POST notification to the client's registered endpoint.
@@ -44,7 +44,8 @@ public class HttpNotificationDeliveryService(
     /// <param name="clientNotificationToken">Bearer token for authenticating the notification request.</param>
     /// <param name="payload">The notification payload to send.</param>
     /// <param name="mode">The CIBA mode (ping or push) for logging purposes.</param>
-    public async Task SendAsync(
+    /// <returns><c>true</c> if the endpoint returned a success status; otherwise <c>false</c>.</returns>
+    public async Task<bool> SendAsync(
         Uri clientNotificationEndpoint,
         string clientNotificationToken,
         IBackChannelNotificationRequest payload,
@@ -58,29 +59,23 @@ public class HttpNotificationDeliveryService(
             request.AddBearerToken(clientNotificationToken);
             request.Content = JsonContent.Create(payload, payload.GetType());
 
-            logger.LogInformation(
-                "Sending CIBA {Mode} notification to {Endpoint}",
-                mode,
-                clientNotificationEndpoint);
+            LogSendingNotification(mode, clientNotificationEndpoint);
 
             var response = await httpClient.SendAsync(request);
 
             if (response.IsSuccessStatusCode)
             {
-                logger.LogInformation("Successfully sent CIBA {Mode} notification", mode);
+                LogNotificationSucceeded(mode);
+                return true;
             }
-            else
-            {
-                logger.LogWarning("Failed to send CIBA {Mode} notification. Status: {StatusCode}", mode, response.StatusCode);
-            }
+
+            LogNotificationFailed(mode, response.StatusCode);
+            return false;
         }
         catch (Exception ex)
         {
-            logger.LogError(
-                ex,
-                "Error sending CIBA {Mode} notification to {Endpoint}",
-                mode,
-                clientNotificationEndpoint);
+            LogNotificationError(ex, mode, clientNotificationEndpoint);
+            return false;
         }
     }
 }

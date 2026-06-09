@@ -27,23 +27,18 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Defines a contract for handling requests to remove or unregister clients from the authorization server.
+/// Handles <c>DELETE</c> requests to the client configuration endpoint per RFC 7592 §2.3,
+/// deregistering an existing client after verifying its registration access token.
+/// A successful deletion invalidates the client's <c>client_id</c>, <c>client_secret</c>,
+/// the registration access token, and any outstanding grants and tokens.
 /// </summary>
 public interface IRemoveClientHandler
 {
     /// <summary>
-    /// Asynchronously processes a request for client removal, validating and executing the unregistration based
-    /// on the provided client information.
+    /// Validates the request, then removes the addressed client. The HTTP layer is expected to
+    /// translate the success result into <c>204 No Content</c> per RFC 7592 §2.3.
     /// </summary>
-    /// <param name="clientRequest">
-    /// The client request containing the necessary information to identify the client to be removed.</param>
-    /// <returns>A task that results in a <see cref="Result{RemoveClientSuccessfulResponse, AuthError}"/>, encapsulating the outcome of the client
-    /// removal process, which can be a confirmation of successful removal or details of any errors encountered.
-    /// </returns>
-    /// <remarks>
-    /// This method is crucial for maintaining the security and integrity of the client registry within an OAuth 2.0
-    /// and OpenID Connect framework. It ensures that only authorized and validated requests result in the removal of
-    /// a client, adhering to the standards and practices of dynamic client management.
-    /// </remarks>
+    /// <param name="clientRequest">The incoming request including the registration access token
+    /// and target <c>client_id</c>.</param>
     Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
 }

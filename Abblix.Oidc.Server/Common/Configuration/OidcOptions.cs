@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -153,6 +154,14 @@ public record OidcOptions
 	public TimeSpan PushedAuthorizationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(1);
 
 	/// <summary>
+	/// The lifetime of a JARM (JWT Secured Authorization Response Mode) <c>response</c> JWT. The authorization
+	/// response is consumed by the client immediately upon redirect, so a short window suffices and mostly
+	/// absorbs clock skew. JARM §2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
+	/// (e.g. FAPI) may shorten it.
+	/// </summary>
+	public TimeSpan JwtAuthorizationResponseExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+
+	/// <summary>
 	/// A JWT used for licensing and configuration validation of the OIDC service. This token contains claims that the
 	/// OIDC service uses to validate its configuration, features, and licensing status, ensuring the service operates
 	/// within its licensed capabilities. Proper validation of this token is crucial for the service's legal and
@@ -221,8 +230,36 @@ public record OidcOptions
 	public bool RequireSignedRequestObject { get; set; } = false;
 
 	/// <summary>
+	/// Determines whether the client registration endpoint requires an initial access token
+	/// in the Authorization header per RFC 7591 Section 3.
+	/// When <c>true</c>, POST requests to the registration endpoint must include a valid
+	/// Bearer token. When <c>false</c>, open registration is allowed.
+	/// </summary>
+	public bool RequireInitialAccessToken { get; set; } = true;
+
+	/// <summary>
+	/// The set of revoked initial access token identifiers (JWT subject claims).
+	/// Tokens whose subject appears in this set will be rejected during client registration.
+	/// For production use with large or dynamic revocation lists, replace
+	/// <see cref="Endpoints.DynamicClientManagement.Interfaces.IInitialAccessTokenRevocationProvider"/>
+	/// with a database- or cache-backed implementation.
+	/// </summary>
+	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
+
+	/// <summary>
 	/// Configuration options for JWT Bearer grant type (RFC 7523).
 	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
 	/// </summary>
 	public JwtBearerOptions JwtBearer { get; set; } = new();
+
+	/// <summary>
+	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
+	/// </summary>
+	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();
+
+	/// <summary>
+	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the
+	/// <see cref="ProofValidator"/> behaviour and related primitives.
+	/// </summary>
+	public DPoPOptions DPoP { get; set; } = new();
 }

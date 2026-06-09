@@ -22,6 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -49,7 +50,8 @@ public sealed class ConfigurationHandler(
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
 	IAuthenticationCompletionHandler cibaCompletionHandler,
-	IAcrMetadataProvider acrMetadata) : IConfigurationHandler
+	IAcrMetadataProvider acrMetadata,
+	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
 {
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
@@ -79,19 +81,52 @@ public sealed class ConfigurationHandler(
 		RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
 			? jwtAlgorithms.SigningAlgorithmsSupported
 			: null,
+		RequestObjectEncryptionAlgValuesSupported = authorizationMetadata.RequestParameterSupported
+			? jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported
+			: null,
+		RequestObjectEncryptionEncValuesSupported = authorizationMetadata.RequestParameterSupported
+			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
+			: null,
+
+		// JARM (JWT Secured Authorization Response Mode) is always available — a client opts in per request
+		// by selecting a *.jwt response mode — so the supported algorithms are advertised unconditionally.
+		AuthorizationSigningAlgValuesSupported = jwtAlgorithms.AuthorizationSigningAlgValuesSupported,
+		AuthorizationEncryptionAlgValuesSupported = jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported,
+		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
+
+		// RFC 9701 JWT introspection responses are always available — a client opts in per request via Accept and
+		// its registered introspection_signed_response_alg — so the supported algorithms are advertised unconditionally.
+		IntrospectionSigningAlgValuesSupported = jwtAlgorithms.IntrospectionSigningAlgValuesSupported,
+		IntrospectionEncryptionAlgValuesSupported = jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported,
+		IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
 
 		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
 		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+
+		// RFC 8705 §3.3: advertise certificate-bound access tokens only when a mutual-TLS client
+		// authentication method is available — the server then both issues bound tokens and
+		// enforces the binding at its protected resources (MtlsUserInfoValidator).
+		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
+			method => method is ClientAuthenticationMethods.TlsClientAuth
+				or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
+			? true
+			: null,
+
 		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		IdTokenSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
+		DpopSigningAlgValuesSupported = jwtAlgorithms.DpopSigningAlgorithmsSupported,
 
 		BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
 		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler.TokenDeliveryModesSupported,
 		BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
 		AcrValuesSupported = acrMetadata.AcrValuesSupported,
+
+		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
+
+		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
 	});
 }

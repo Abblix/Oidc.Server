@@ -27,27 +27,36 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request to revoke a token, typically used in OAuth 2.0 token revocation scenarios.
-/// Inherits from <see cref="ClientRequest"/>.
+/// Parameters of an OAuth 2.0 token revocation request (RFC 7009 §2.1) sent to the
+/// <c>revocation_endpoint</c>. Client authentication is required and is supplied alongside this payload.
 /// </summary>
 public record RevocationRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the OAuth 2.0 revocation endpoint (RFC 7009 §2.1).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>token</c> revocation request parameter carrying the access or refresh token
+		/// to be revoked.</summary>
 		public const string Token = "token";
+
+		/// <summary>The <c>token_type_hint</c> revocation request parameter advising whether the token is
+		/// an <c>access_token</c> or a <c>refresh_token</c>.</summary>
 		public const string TokenTypeHint = "token_type_hint";
 	}
 
 	/// <summary>
-	/// The token that the client wants to revoke.
+	/// The <c>token</c> parameter (RFC 7009 §2.1): the access token or refresh token string the client
+	/// is asking the authorization server to revoke. Required.
 	/// </summary>
 	[JsonPropertyName(Parameters.Token)]
 	[Required]
 	public string Token { get; set; } = null!;
 
 	/// <summary>
-	/// A hint about the type of the token submitted for revocation.
-	/// This property can help the authorization server to optimize the revocation process.
+	/// The optional <c>token_type_hint</c> (RFC 7009 §2.1) advising whether <see cref="Token"/> is an
+	/// <c>access_token</c> or <c>refresh_token</c>, allowing the server to look it up faster.
 	/// </summary>
 	[JsonPropertyName(Parameters.TokenTypeHint)]
 	public string? TokenTypeHint { get; set; }

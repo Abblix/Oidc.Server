@@ -20,9 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+
+using System.Buffers.Text;
 
 namespace Abblix.Jwt.UnitTests;
 
@@ -34,6 +37,9 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JsonWebTokenValidationTests
 {
+    private const string IssuerUri = "https://issuer.example.com";
+    private const string TestAudience = "test-audience";
+
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
     private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
     private static readonly JsonWebKey WrongSigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
@@ -95,7 +101,7 @@ public class JsonWebTokenValidationTests
     /// Returns JwtError.InvalidToken - unable to verify signature without keys.
     /// </summary>
     [Fact]
-    public async Task ValidToken_WithNoSigningKey_FailsValidation()
+    public async Task ValidToken_WithNoSigningKey_FailsValidationWithSpecificError()
     {
         var token = CreateValidToken();
         var jwt = await IssueToken(token, SigningKey);
@@ -112,6 +118,36 @@ public class JsonWebTokenValidationTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
+        // Empty-JWKS case must surface differently from the wrong-kid case so audit logs
+        // can tell a misconfigured issuer (zero keys) from a stale-cache kid mismatch.
+        Assert.Contains("no signing keys configured", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that when the issuer has signing keys but the token's <c>kid</c> header does
+    /// not match any of them, validation fails with an error description that distinguishes
+    /// this case from "issuer has no keys at all" (RFC 7515 §4.1.4 / §6 — observability).
+    /// Both still surface as <see cref="JwtError.InvalidToken"/>; the distinction lives in
+    /// the description text and (separately) in the structured log event.
+    /// </summary>
+    [Fact]
+    public async Task ValidToken_WithKidNotInIssuerKeys_FailsWithSpecificError()
+    {
+        // Sign with one key; expose only a different key (different kid) to the validator.
+        // Models the kid-rotation incident from RFC 7515 §4.1.4: the relying party's cached
+        // JWKS no longer contains the kid the issuer used to sign this token.
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(WrongSigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("kid", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(SigningKey.KeyId!, error.ErrorDescription);
     }
 
     /// <summary>
@@ -131,7 +167,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);
@@ -186,7 +222,7 @@ public class JsonWebTokenValidationTests
 
         var jwt = await IssueToken(token, SigningKey);
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime;
@@ -248,7 +284,7 @@ public class JsonWebTokenValidationTests
     /// Verifies that JWTs with invalid Base64URL encoding fail validation.
     /// Tests handling of malformed tokens that cannot be decoded.
     /// Per RFC 7515 Section 3, JWTs must use Base64URL encoding for header, payload, and signature.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithInvalidBase64_FailsValidation()
@@ -261,14 +297,14 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.MalformedToken, error.Error);
     }
 
     /// <summary>
     /// Verifies that JWTs with missing parts (header/payload/signature) fail validation.
     /// Per RFC 7515, a JWS compact serialization must have exactly 3 parts separated by dots: header.payload.signature
     /// Tests rejection of structurally invalid tokens.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithMissingParts_FailsValidation()
@@ -281,13 +317,64 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(malformedJwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.MalformedToken, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that a 5-segment JWE-shaped input on a validation path that does not wire a
+    /// decryption-key resolver returns <see cref="JwtError.InvalidToken"/> instead of
+    /// throwing <see cref="InvalidOperationException"/>. Caught 2026-05-14 at /connect/userinfo
+    /// against an OIDF FAPI 2.0 sub-test that injected two DPoP HTTP headers — ASP.NET Core
+    /// concatenated them with a comma producing a 5-segment string, which routed the
+    /// validator to the JWE branch and crashed it. The token itself may be a perfectly
+    /// well-formed JWE; the failure here is a callsite category mismatch (this path
+    /// validates JWS only), not malformed input.
+    /// </summary>
+    [Fact]
+    public async Task JweWithoutDecryptionKeys_ReturnsInvalidTokenError()
+    {
+        var jweShapedJwt = "header.encryptedKey.iv.ciphertext.tag";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+
+        var result = await validator.ValidateAsync(jweShapedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("decryption keys", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Symmetric to <see cref="JweWithoutDecryptionKeys_ReturnsInvalidTokenError"/>: a 3-segment
+    /// JWS on the issuer-keys trust branch without a ResolveIssuerSigningKeys resolver returns
+    /// <see cref="JwtError.InvalidToken"/> rather than throwing
+    /// <see cref="InvalidOperationException"/>. Closes the second of the two NotNull-throw
+    /// hotspots in <c>JsonWebTokenValidator</c>.
+    /// </summary>
+    [Fact]
+    public async Task JwsWithoutSigningKeysResolver_ReturnsInvalidTokenError()
+    {
+        var token = CreateValidToken();
+        var signedJwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        // ValidationOptions.Default selects the issuer-resolved-keys trust branch, but the
+        // host did not provide a ResolveIssuerSigningKeys resolver — the validator must
+        // return a typed error, not throw an InvalidOperationException.
+        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+
+        var result = await validator.ValidateAsync(signedJwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("ResolveIssuerSigningKeys", error.ErrorDescription);
     }
 
     /// <summary>
     /// Verifies that empty string input fails validation.
     /// Tests edge case of completely empty token input.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.MalformedToken.
     /// </summary>
     [Fact]
     public async Task MalformedJwt_WithEmptyString_FailsValidation()
@@ -298,7 +385,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(string.Empty, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.MalformedToken, error.Error);
     }
 
     /// <summary>
@@ -361,7 +448,7 @@ public class JsonWebTokenValidationTests
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),
             ResolveTokenDecryptionKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
         };
 
@@ -375,7 +462,8 @@ public class JsonWebTokenValidationTests
     /// Verifies that unsigned JWTs (algorithm: none) fail validation when signatures are required.
     /// Critical security check - prevents acceptance of unsigned tokens that could be trivially forged.
     /// Per RFC 7515 Section 3.1, "none" algorithm indicates unsecured JWTs.
-    /// Returns JwtError.InvalidToken.
+    /// Returns JwtError.InvalidAlgorithm — alg "none" is rejected by the algorithm gate before
+    /// signature verification when RequireSignedTokens is set.
     /// </summary>
     [Fact]
     public async Task UnsignedToken_WithSignatureRequired_FailsValidation()
@@ -389,7 +477,7 @@ public class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
     }
 
     /// <summary>
@@ -552,8 +640,8 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 ExpiresAt = issuedAt.AddHours(1),
             },
         };
@@ -715,10 +803,59 @@ public class JsonWebTokenValidationTests
         // On Linux, validation may succeed - this is acceptable platform-specific behavior
     }
 
+    /// <summary>
+    /// Verifies that a verify-key whose declared 'alg' is compatible with the token header alg
+    /// validates successfully. Per RFC 7517 §4.4 the JWK 'alg' is OPTIONAL: a null value means
+    /// the key may be used with any compatible algorithm; a matching value pins the key to that
+    /// algorithm exactly. Both cases must succeed. Locks the contract that the per-key alg
+    /// pinning fix does not over-restrict legitimate verification.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(null)]
+    public async Task Validate_VerifyKeyAlgCompatibleWithHeaderAlg_VerifiesSuccessfully(string? verifyKeyAlg)
+    {
+        var result = await ValidateTokenWithVerifyKeyAlg(verifyKeyAlg);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that a JWS is rejected when the resolved verification key declares an 'alg'
+    /// pinning it to a different algorithm than the one in the token header. Per RFC 7517 §4.4,
+    /// when a JWK declares its 'alg', recipients MUST NOT use that key with any other algorithm.
+    /// Pre-fix the validator ignored key.Algorithm and would happily verify (e.g.) an RS256 token
+    /// with a key declared as PS256-only, opening within-family algorithm-confusion. Post-fix the
+    /// key is filtered out by the validator before verification is attempted, and validation
+    /// fails as no usable key remains.
+    /// </summary>
+    [Fact]
+    public async Task Validate_VerifyKeyAlgPinnedToDifferentAlg_FailsValidation()
+    {
+        var result = await ValidateTokenWithVerifyKeyAlg(SigningAlgorithms.PS256);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    private static async Task<Result<JsonWebToken, JwtValidationError>> ValidateTokenWithVerifyKeyAlg(
+        string? verifyKeyAlg)
+    {
+        var unpinnedKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, unpinnedKey);
+
+        var verifyKey = unpinnedKey with { Algorithm = verifyKeyAlg };
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(verifyKey);
+
+        return await validator.ValidateAsync(jwt, parameters);
+    }
+
     private static string EncodeBase64Url(string input)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(input);
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     private static JsonWebToken CreateValidToken()
@@ -730,9 +867,9 @@ public class JsonWebTokenValidationTests
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = "https://issuer.example.com",
+                Issuer = IssuerUri,
                 Subject = "test-user",
-                Audiences = ["test-audience"],
+                Audiences = [TestAudience],
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt.AddHours(1),
@@ -832,15 +969,15 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 NotBefore = baseTime,
                 ExpiresAt = baseTime.AddSeconds(1), // Add 1 second to ensure exp > nbf after rounding
             },
         };
 
         var jwt = await IssueToken(token, SigningKey);
-        await Task.Delay(100); // Token already expired (created 2 minutes ago)
+        await Task.Delay(100, TestContext.Current.CancellationToken); // Token already expired (created 2 minutes ago)
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);
@@ -863,8 +1000,8 @@ public class JsonWebTokenValidationTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload =
             {
-                Issuer = "https://issuer.example.com",
-                Audiences = ["test-audience"],
+                Issuer = IssuerUri,
+                Audiences = [TestAudience],
                 NotBefore = DateTimeOffset.UtcNow.AddHours(1),
             },
         };
@@ -880,6 +1017,131 @@ public class JsonWebTokenValidationTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
+    /// <summary>
+    /// Verifies that a JWS specifying an algorithm not registered for the resolved key type
+    /// fails validation gracefully instead of leaking the DI resolution exception.
+    /// Concretely: a token with header alg=HS256 against an RsaJsonWebKey has no
+    /// IDataSigner&lt;RsaJsonWebKey&gt; registered for "HS256", so GetRequiredKeyedService
+    /// would throw. Per the IJsonWebTokenValidator contract, validation must return a
+    /// Result.Failure with JwtError.InvalidToken — never an unhandled exception.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithAlgorithmUnsupportedForResolvedKeyType_FailsValidation()
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = """{"alg":"HS256","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(headerJson));
+        var payloadEnc = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payloadJson));
+        var sigEnc = Base64Url.EncodeToString(new byte[32]);
+        var jwt = $"{headerEnc}.{payloadEnc}.{sigEnc}";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidSignature, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that JWTs with case-variant 'none' algorithm are rejected even when RequireSignedTokens is cleared.
+    /// Per RFC 7515 §5.3 and §10.13, JOSE algorithm names must be compared verbatim (byte-exact).
+    /// Pre-fix: validator silently accepts alg="None"/"NONE"/"nOnE" as unsigned because the comparison uses
+    /// OrdinalIgnoreCase. Post-fix: rejects them as unknown algorithm. Reproduces the bug from #76.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenWithCaseVariantNoneAlg_RejectedWhenSigningOptional(string algValue)
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"{{algValue}}","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
+    }
+
+    /// <summary>
+    /// Sanity check that the legitimate alg="none" still passes when RequireSignedTokens is cleared.
+    /// Locks the contract that the strict-comparison fix did not over-tighten the unsigned-token path.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithLowercaseNoneAlg_AcceptedWhenSigningOptional()
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"none","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = ValidationOptions.Default & ~ValidationOptions.RequireSignedTokens;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Verifies that case-variant 'none' alg is also rejected under default options (which include RequireSignedTokens).
+    /// Defense-in-depth: confirms the default-config invariant holds across both the legacy and the fixed code paths.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenWithCaseVariantNoneAlg_RejectedWithDefaultOptions(string algValue)
+    {
+        var exp = ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        var headerJson = $$"""{"alg":"{{algValue}}","typ":"JWT"}""";
+        var payloadJson = $$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","exp":{{exp}},"sub":"test-user"}""";
+        var headerEnc = EncodeBase64Url(headerJson);
+        var payloadEnc = EncodeBase64Url(payloadJson);
+        var jwt = $"{headerEnc}.{payloadEnc}.";
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that signing a token whose header explicitly carries case-variant 'none' fails to issue.
+    /// Adjacent verification for JsonWebTokenSigner.cs:49: the existing byte-exact == comparison there
+    /// means a header alg of 'None'/'NONE'/'nOnE' is treated as an unknown algorithm, not as the
+    /// special unsigned-token contradiction. With an RSA signing key (declared alg=RS256), signing
+    /// fails at the algorithm-mismatch check; either way it throws InvalidOperationException.
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("NONE")]
+    [InlineData("nOnE")]
+    public async Task TokenSigning_WithCaseVariantNoneAlgInHeader_FailsToIssue(string algValue)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algValue;
+
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => IssueToken(token, SigningKey));
+    }
+
     private static ValidationParameters CreateValidationParameters(
         JsonWebKey signingKey,
         JsonWebKey? decryptionKey = null,
@@ -889,11 +1151,204 @@ public class JsonWebTokenValidationTests
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
-            ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
             ResolveTokenDecryptionKeys = decryptionKey != null
-                ? _ => new[] { decryptionKey }.ToAsyncEnumerable()
+                ? _ => decryptionKey.ToAsync()
                 : _ => AsyncEnumerable.Empty<JsonWebKey>(),
             Options = options ?? ValidationOptions.Default
         };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RFC 8725 §3.11 — pin the JWT 'typ' header (RFC 7515 §4.1.9) via
+    // ValidationParameters.ExpectedTokenTypes so token-class confusion (replaying a
+    // logout_token as an id_token, etc.) is rejected inside the validator instead of
+    // relying on every caller to post-check token.Header.Type.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sanity baseline: when <see cref="ValidationParameters.ExpectedTokenTypes"/> is null,
+    /// the validator skips <c>typ</c> enforcement entirely — preserves historical behaviour
+    /// for callers that have not opted in to the RFC 8725 §3.11 hook.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_NullByDefault_SkipsTypValidation()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// When the JWT's <c>typ</c> matches the configured expected value, validation passes.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMatches_Validates()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "at+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// When the JWT's <c>typ</c> does not match any configured expected value, the validator
+    /// rejects with <see cref="JwtError.InvalidTokenType"/> — the very token-class-confusion
+    /// rejection RFC 8725 §3.11 prescribes.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMismatch_RejectsAsInvalidTokenType()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidTokenType, error.Error);
+        Assert.Contains("logout+jwt", error.ErrorDescription);
+        Assert.Contains("at+jwt", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// When <see cref="ValidationParameters.ExpectedTokenTypes"/> is configured but the JWT
+    /// has no <c>typ</c> header at all, validation rejects: the caller asked for typ pinning
+    /// and the token does not declare its class.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypMissing_RejectsAsInvalidTokenType()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = null;
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidTokenType, error.Error);
+        Assert.Contains("missing", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// RFC 7515 §4.1.9: a <c>typ</c> value without a slash is treated as if
+    /// <c>application/</c> were prepended. The validator strips that prefix before lookup so
+    /// callers can register the bare canonical form (<c>at+jwt</c>) and tokens whose
+    /// producer wrote out the long form (<c>application/at+jwt</c>) still validate.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_ApplicationPrefixStripped_Matches()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "application/at+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// RFC 7515 §5.3: the <c>typ</c> header is case-sensitive. <c>At+JWT</c> does NOT match
+    /// the canonical <c>at+jwt</c>; the validator rejects the mismatched casing instead of
+    /// silently coercing to the spec value.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_TypIsCaseSensitive()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "At+JWT";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// When the configured set has multiple values, any one of them is acceptable. Lets a
+    /// caller accept several token classes through the same validator invocation — for
+    /// example, a transitional period where both <c>at+jwt</c> and a legacy custom
+    /// <c>access+jwt</c> are honoured.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_MultipleValues_AnyMatchPasses()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "access+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt", "access+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Empty set is treated identically to null — no enforcement. Defensive default for
+    /// callers that build the set programmatically and may hit edge cases producing zero
+    /// expected types.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_EmptySet_SkipsTypValidation()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "logout+jwt";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal),
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
     }
 }

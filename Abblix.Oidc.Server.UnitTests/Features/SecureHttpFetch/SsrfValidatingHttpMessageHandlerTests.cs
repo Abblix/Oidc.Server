@@ -37,7 +37,8 @@ public class SsrfValidatingHttpMessageHandlerTests
 {
     private static HttpClient CreateClient(SecureHttpFetchOptions options)
     {
-        var handler = new SsrfValidatingHttpMessageHandler(Options.Create(options));
+        var optionsAccessor = Options.Create(options);
+        var handler = new SsrfValidatingHttpMessageHandler(optionsAccessor, new SecureUriValidator(optionsAccessor));
         return new HttpClient(handler);
     }
 
@@ -76,7 +77,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://localhost/api"));
+            () => client.GetAsync("https://localhost/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("Hostname 'localhost' matches internal hostname pattern", exception.Message);
     }
@@ -93,7 +94,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://127.0.0.1/api"));
+            () => client.GetAsync("https://127.0.0.1/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("IP address '127.0.0.1' is private/internal", exception.Message);
     }
@@ -110,7 +111,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://192.168.1.1/api"));
+            () => client.GetAsync("https://192.168.1.1/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("IP address '192.168.1.1' is private/internal", exception.Message);
     }
@@ -127,7 +128,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://myserver.local/api"));
+            () => client.GetAsync("https://myserver.local/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("Hostname 'myserver.local' matches internal hostname pattern", exception.Message);
     }
@@ -144,7 +145,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://intranet/api"));
+            () => client.GetAsync("https://intranet/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("Hostname 'intranet' matches internal hostname pattern", exception.Message);
     }
@@ -290,7 +291,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("http://example.com/api"));
+            () => client.GetAsync("http://example.com/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("URI scheme 'http' is not allowed", exception.Message);
     }
@@ -365,7 +366,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://10.0.0.1/api"));
+            () => client.GetAsync("https://10.0.0.1/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("IP address '10.0.0.1' is private/internal", exception.Message);
     }
@@ -382,7 +383,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://172.16.0.1/api"));
+            () => client.GetAsync("https://172.16.0.1/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("IP address '172.16.0.1' is private/internal", exception.Message);
     }
@@ -399,7 +400,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://169.254.169.254/api"));
+            () => client.GetAsync("https://169.254.169.254/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("IP address '169.254.169.254' is private/internal", exception.Message);
     }
@@ -416,7 +417,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://[::1]/api"));
+            () => client.GetAsync("https://[::1]/api", TestContext.Current.CancellationToken));
 
         Assert.Contains("is private/internal", exception.Message);
     }
@@ -433,7 +434,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GetAsync("https://api.internal/data"));
+            () => client.GetAsync("https://api.internal/data", TestContext.Current.CancellationToken));
 
         Assert.Contains("Hostname 'api.internal' matches internal hostname pattern", exception.Message);
     }

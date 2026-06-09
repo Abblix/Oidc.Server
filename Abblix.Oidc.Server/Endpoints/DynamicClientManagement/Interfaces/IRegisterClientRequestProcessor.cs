@@ -26,14 +26,15 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Provides an interface for processing client registration requests.
+/// Persists a new client and constructs the RFC 7591 §3.2.1 success response from a request
+/// whose metadata has already been validated. Generates credentials and the
+/// <c>registration_access_token</c> bound to the new <c>client_id</c>.
 /// </summary>
 public interface IRegisterClientRequestProcessor
 {
     /// <summary>
-    /// Processes the given client registration request asynchronously.
+    /// Stores the validated client and returns the registration response payload.
     /// </summary>
-    /// <param name="request">The client registration request to process.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the client registration response.</returns>
+    /// <param name="request">The validated registration request.</param>
     Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request);
 }

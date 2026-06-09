@@ -64,13 +64,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
-public class JwtBearerGrantHandler(
+public partial class JwtBearerGrantHandler(
+	ILogger<JwtBearerGrantHandler> logger,
 	IJsonWebTokenValidator jwtValidator,
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider,
-	ILogger<JwtBearerGrantHandler> logger) : IAuthorizationGrantHandler
+	TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -116,12 +116,13 @@ public class JwtBearerGrantHandler(
 		return ValidateAssertionParameter(request, clientInfo)
 			.BindAsync(assertion => ValidateJwtAsync(assertion, clientInfo))
 			.BindAsync(jwt => ValidateSubjectAsync(jwt, clientInfo))
+			.Bind(ctx => ValidateExpiration(ctx, clientInfo))
 			.Bind(ctx => ValidateAlgorithm(ctx, clientInfo))
 			.Bind(ctx => ValidateTokenType(ctx, clientInfo))
 			.Bind(ctx => ValidateJwtAge(ctx, clientInfo))
 			.BindAsync(ctx => ValidateReplayProtectionAsync(ctx, clientInfo))
 			.Bind(ctx => ValidateScopes(ctx, request.Scope))
-			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, clientInfo)));
+			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, request.Resources, clientInfo)));
 	}
 
 	/// <summary>
@@ -138,15 +139,13 @@ public class JwtBearerGrantHandler(
 
 		if (string.IsNullOrWhiteSpace(request.Assertion))
 		{
-			logger.LogWarning("JWT Bearer grant request missing required 'assertion' parameter from client {ClientId}",
-				clientInfo.ClientId);
+			LogMissingAssertion(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant, "The 'assertion' parameter is required for JWT Bearer grant type");
 		}
 
 		if (request.Assertion.Length > options.MaxJwtSize)
 		{
-			logger.LogWarning("JWT assertion too large ({Length} chars, max {MaxSize}) from client {ClientId}",
-				request.Assertion.Length, options.MaxJwtSize, clientInfo.ClientId);
+			LogAssertionTooLarge(request.Assertion.Length, options.MaxJwtSize, clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant,
 				$"The JWT assertion exceeds maximum allowed size of {options.MaxJwtSize} characters");
 		}
@@ -176,9 +175,7 @@ public class JwtBearerGrantHandler(
 		{
 			var (error, errorDescription) = failure;
 
-			logger.LogWarning(
-				"JWT assertion validation failed for client {ClientId}: {ErrorCode} - {ErrorDescription}",
-				clientInfo.ClientId, error, errorDescription);
+			LogValidationFailed(clientInfo.ClientId, error, errorDescription);
 
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion is invalid or has expired");
 		});
@@ -192,7 +189,7 @@ public class JwtBearerGrantHandler(
 		var subject = jwt.Payload.Subject;
 		if (string.IsNullOrWhiteSpace(subject))
 		{
-			logger.LogWarning("JWT assertion missing required 'sub' claim for client {ClientId}", clientInfo.ClientId);
+			LogMissingSubject(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion must contain a 'sub' (subject) claim");
 		}
 
@@ -200,6 +197,23 @@ public class JwtBearerGrantHandler(
 		var trustedIssuer = await issuerProvider.GetTrustedIssuerAsync(issuer);
 
 		return new ValidationContext(jwt, subject, issuer, trustedIssuer);
+	}
+
+	/// <summary>
+	/// Validates that the JWT assertion carries an 'exp' (expiration) claim. RFC 7523 Section 3
+	/// requires the assertion to contain an 'exp' claim that limits the window during which it can
+	/// be used; the generic lifetime check treats a token with neither 'nbf' nor 'exp' as valid, so
+	/// this enforces the grant-specific MUST and is also what bounds the replay-cache entry's TTL.
+	/// </summary>
+	private Result<ValidationContext, OidcError> ValidateExpiration(ValidationContext ctx, ClientInfo clientInfo)
+	{
+		if (ctx.Jwt.Payload.ExpiresAt.HasValue)
+			return ctx;
+
+		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
+
+		return new OidcError(ErrorCodes.InvalidGrant,
+			"The JWT assertion must contain an 'exp' (expiration) claim");
 	}
 
 	/// <summary>
@@ -213,8 +227,7 @@ public class JwtBearerGrantHandler(
 		if (allowedAlgorithms.Contains(algorithm, StringComparer.OrdinalIgnoreCase))
 			return ctx;
 
-		logger.LogWarning("JWT assertion rejected: algorithm {Algorithm} not allowed for issuer {Issuer}, client {ClientId}",
-			algorithm, ctx.Issuer, clientInfo.ClientId);
+		LogAlgorithmNotAllowed(algorithm, ctx.Issuer, clientInfo.ClientId);
 
 		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion uses an unsupported signature algorithm");
 	}
@@ -232,9 +245,7 @@ public class JwtBearerGrantHandler(
 		if (allowedTypes.Contains(tokenType, StringComparer.OrdinalIgnoreCase))
 			return ctx;
 
-		logger.LogWarning(
-			"JWT assertion rejected: token type '{TokenType}' not in allowed types [{AllowedTypes}], client {ClientId}, issuer {Issuer}",
-			tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
+		LogTokenTypeNotAllowed(tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
 
 		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has an unsupported token type");
 	}
@@ -251,9 +262,7 @@ public class JwtBearerGrantHandler(
 		var issuedAt = ctx.Jwt.Payload.IssuedAt;
 		if (issuedAt == null)
 		{
-			logger.LogWarning(
-				"JWT assertion rejected: missing 'iat' claim but MaxJwtAge is configured, client {ClientId}, issuer {Issuer}",
-				clientInfo.ClientId, ctx.Issuer);
+			LogMissingIssuedAt(clientInfo.ClientId, ctx.Issuer);
 
 			return new OidcError(ErrorCodes.InvalidGrant,
 				"The JWT assertion must contain an 'iat' (issued at) claim when age validation is enabled");
@@ -265,9 +274,7 @@ public class JwtBearerGrantHandler(
 		if (jwtAge <= maxAge + options.ClockSkew)
 			return ctx;
 
-		logger.LogWarning(
-			"JWT assertion rejected: JWT too old. Issued at {IssuedAt}, age {JwtAge}, max allowed {MaxAge}, client {ClientId}, issuer {Issuer}",
-			issuedAt, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
+		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
 
 		return new OidcError(ErrorCodes.InvalidGrant,
 			"The JWT assertion is too old. Please use a freshly issued JWT.");
@@ -285,21 +292,20 @@ public class JwtBearerGrantHandler(
 		var jti = ctx.Jwt.Payload.JwtId;
 		if (string.IsNullOrWhiteSpace(jti))
 		{
-			logger.LogWarning("JWT assertion missing required 'jti' claim for client {ClientId}, issuer {Issuer}",
-				clientInfo.ClientId, ctx.Issuer);
+			LogMissingJti(clientInfo.ClientId, ctx.Issuer);
 			return new OidcError(ErrorCodes.InvalidGrant,
 				"The JWT assertion must contain a 'jti' (JWT ID) claim for replay protection");
 		}
 
-		if (await issuerProvider.IsReplayedAsync(jti))
+		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
+		// ValidateExpiration guarantees is present) and treat "already present" as a replay. One call
+		// avoids both the lost-TTL bug of a separate mark step and the read-then-write race.
+		if (await issuerProvider.IsReplayedAsync(jti, ctx.Jwt.Payload.ExpiresAt))
 		{
-			logger.LogWarning(
-				"SECURITY: JWT replay attack detected - JTI: {JwtId}, Client: {ClientId}, Issuer: {Issuer}, KeyId: {KeyId}, IP: {ClientIp}",
-				jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
+			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
 		}
 
-		await issuerProvider.MarkAsUsedAsync(jti, ctx.Jwt.Payload.ExpiresAt);
 		return ctx;
 	}
 
@@ -315,8 +321,7 @@ public class JwtBearerGrantHandler(
 		if (invalidScopes.Length == 0)
 			return ctx;
 
-		logger.LogWarning("JWT Bearer grant rejected: scopes {InvalidScopes} not allowed for issuer {Issuer}",
-			invalidScopes, ctx.Issuer);
+		LogScopesNotAllowed(string.Join(", ", invalidScopes).Sanitized(), ctx.Issuer);
 
 		return new OidcError(
 			ErrorCodes.InvalidScope,
@@ -326,14 +331,18 @@ public class JwtBearerGrantHandler(
 	/// <summary>
 	/// Creates the authorized grant after successful validation.
 	/// </summary>
-	private AuthorizedGrant CreateAuthorizedGrant(ValidationContext ctx, string[] scope, ClientInfo clientInfo)
+	private AuthorizedGrant CreateAuthorizedGrant(
+		ValidationContext ctx, string[] scope, Uri[]? resources, ClientInfo clientInfo)
 	{
-		logger.LogInformation(
-			"AUDIT: JWT Bearer grant SUCCESS - Client: {ClientId}, Subject: {Subject}, Issuer: {Issuer}, JTI: {JwtId}, KeyId: {KeyId}, IP: {ClientIp}",
+		LogGrantSucceeded(
 			clientInfo.ClientId, ctx.Subject, ctx.Issuer, ctx.Jwt.Payload.JwtId ?? "none",
 			ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 
-		var context = new AuthorizationContext(clientInfo.ClientId, scope, null);
+		// jwt-bearer is a direct grant: the token request itself IS the authorization, so the
+		// RFC 8707 resource indicators are the authorized audience and are passed to the context
+		// so they reach the issued token's aud claim. The resource validator has already rejected
+		// any unregistered target with invalid_target before this handler runs.
+		var context = new AuthorizationContext(clientInfo.ClientId, scope, null, resources);
 
 		var authSession = new AuthSession(
 			Subject: ctx.Subject,
@@ -359,7 +368,7 @@ public class JwtBearerGrantHandler(
 		var isTrusted = await issuerProvider.IsTrustedIssuerAsync(issuer);
 		if (!isTrusted)
 		{
-			logger.LogWarning("JWT Bearer assertion rejected: issuer {Issuer} is not trusted", issuer);
+			LogIssuerNotTrusted(issuer);
 		}
 		return isTrusted;
 	}
@@ -376,31 +385,26 @@ public class JwtBearerGrantHandler(
 	private Task<bool> ValidateAudience(IEnumerable<string> audiences)
 	{
 		var options = issuerProvider.Options;
+		var audienceList = audiences.Materialize();
 
 		if (!Uri.TryCreate(requestInfoProvider.RequestUri, UriKind.Absolute, out var tokenEndpoint))
 			return Task.FromResult(false);
 
 		var isValid = options.StrictAudienceValidation
-			? ValidateStrict(audiences, tokenEndpoint)
-			: ValidatePermissive(audiences, tokenEndpoint, requestInfoProvider.ApplicationUri);
+			? ValidateStrict(audienceList, tokenEndpoint)
+			: ValidatePermissive(audienceList, tokenEndpoint, requestInfoProvider.ApplicationUri);
 
 		if (isValid)
 			return Task.FromResult(true);
 
+		var actualAudiences = string.Join(", ", audienceList);
 		if (options.StrictAudienceValidation)
 		{
-			logger.LogWarning(
-				"JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, got {@Audiences}",
-				tokenEndpoint,
-				audiences);
+			LogAudienceFailedStrict(tokenEndpoint, actualAudiences);
 		}
 		else
 		{
-			logger.LogWarning(
-				"JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {@Audiences}",
-				tokenEndpoint,
-				requestInfoProvider.ApplicationUri,
-				audiences);
+			LogAudienceFailedPermissive(tokenEndpoint, requestInfoProvider.ApplicationUri, actualAudiences);
 		}
 
 		return Task.FromResult(false);
@@ -430,5 +434,5 @@ public class JwtBearerGrantHandler(
 		=> string.Equals(uri1.Scheme, uri2.Scheme, StringComparison.OrdinalIgnoreCase) &&
 		   string.Equals(uri1.Host, uri2.Host, StringComparison.OrdinalIgnoreCase) &&
 		   uri1.Port == uri2.Port &&
-		   string.Equals(uri1.AbsolutePath.TrimEnd('/'), uri2.AbsolutePath.TrimEnd('/'), StringComparison.Ordinal);
+		   uri1.AbsolutePath.TrimEnd('/') == uri2.AbsolutePath.TrimEnd('/');
 }

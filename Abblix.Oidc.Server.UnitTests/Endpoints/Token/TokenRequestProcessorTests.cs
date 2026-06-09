@@ -598,4 +598,102 @@ public class TokenRequestProcessorTests
                 accessToken.EncodedJwt),
             Times.Once);
     }
+
+    /// <summary>
+    /// Verifies the RFC 9449 §7.1 token-type contract: an authorization context carrying a
+    /// DPoP proof-key thumbprint produces <c>token_type: "DPoP"</c> (so the client sends a
+    /// DPoP proof on every resource-server request); absent the thumbprint, the response
+    /// advertises <c>token_type: "Bearer"</c>. The Bearer row is the regression guard for
+    /// non-DPoP clients.
+    /// </summary>
+    [Theory]
+    [InlineData("test-jkt", TokenTypes.DPoP)]
+    [InlineData(null, TokenTypes.Bearer)]
+    public async Task ProcessAsync_TokenTypeReflectsProofKeyThumbprint(
+        string? proofKeyThumbprint,
+        string expectedTokenType)
+    {
+        // Arrange
+        var request = CreateValidTokenRequest([]);
+        var accessToken = CreateAccessToken();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
+        {
+            ProofKeyThumbprint = proofKeyThumbprint,
+        };
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Equal(expectedTokenType, tokenIssued.TokenType);
+    }
+
+    /// <summary>
+    /// Verifies the RFC 9449 §5 split: a public client's refresh token inherits the
+    /// committed proof-key thumbprint (the binding survives rotation, so the client
+    /// must keep presenting matching proofs); a confidential client's refresh token
+    /// is stripped of the binding because client authentication already
+    /// sender-constrains it, and forcing further DPoP proofs at refresh time would
+    /// violate the spec.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.None, "jkt-bound")]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, null)]
+    public async Task ProcessAsync_RefreshTokenIssuance_StripsThumbprintForConfidentialClient(
+        string tokenEndpointAuthMethod,
+        string? expectedRefreshContextThumbprint)
+    {
+        // Arrange — set up a grant whose stored context carries the bound jkt and an
+        // offline_access scope so the refresh-token branch fires.
+        const string boundThumbprint = "jkt-bound";
+        var tokenRequest = new TokenRequest { GrantType = GrantTypes.AuthorizationCode };
+        var authSession = new AuthSession("user_123", "session_123", DateTimeOffset.UnixEpoch, "local");
+        var storedContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OfflineAccess], null)
+        {
+            ProofKeyThumbprint = boundThumbprint,
+        };
+        var authorizedGrant = new AuthorizedGrant(authSession, storedContext);
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = tokenEndpointAuthMethod,
+        };
+        var request = new ValidTokenRequest(tokenRequest, authorizedGrant, clientInfo, [], []);
+
+        var evaluatedContext = storedContext;
+        var accessToken = CreateAccessToken();
+        var refreshToken = CreateRefreshToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(evaluatedContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), evaluatedContext, clientInfo))
+            .ReturnsAsync(accessToken);
+
+        AuthorizationContext? capturedRefreshContext = null;
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                It.IsAny<AuthSession>(),
+                It.IsAny<AuthorizationContext>(),
+                clientInfo,
+                It.IsAny<Jwt.JsonWebToken?>()))
+            .Callback<AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?>(
+                (_, ctx, _, _) => capturedRefreshContext = ctx)
+            .ReturnsAsync(refreshToken);
+
+        // Act
+        await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.NotNull(capturedRefreshContext);
+        Assert.Equal(expectedRefreshContextThumbprint, capturedRefreshContext.ProofKeyThumbprint);
+    }
 }

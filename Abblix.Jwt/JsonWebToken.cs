@@ -51,6 +51,12 @@ public record JsonWebToken
 	/// </remarks>
 	public JsonWebTokenPayload Payload { get; init; } = new(new JsonObject());
 
+	/// <summary>
+	/// Splits the token into its header and payload components, enabling pattern-style
+	/// destructuring at the call site.
+	/// </summary>
+	/// <param name="header">Receives the JWS/JWT header section.</param>
+	/// <param name="payload">Receives the claim-bearing payload section.</param>
 	public void Deconstruct(out JsonWebTokenHeader header, out JsonWebTokenPayload payload)
 	{
 		header = Header;

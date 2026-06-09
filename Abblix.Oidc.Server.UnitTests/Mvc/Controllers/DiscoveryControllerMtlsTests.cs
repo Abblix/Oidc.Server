@@ -22,11 +22,14 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -62,7 +65,14 @@ public class DiscoveryControllerMtlsTests
 
         SetupEndpointResolver();
 
-        _formatter = new ConfigurationResponseFormatter(_optionsMock.Object, _endpointResolverMock.Object);
+        // SignedMetadata defaults off in these fixtures, so the signing collaborators are
+        // never exercised — supplied only to satisfy the constructor.
+        _formatter = new ConfigurationResponseFormatter(
+            _optionsMock.Object,
+            _endpointResolverMock.Object,
+            Mock.Of<IJsonWebTokenCreator>(),
+            Mock.Of<IAuthServiceKeysProvider>(),
+            new FakeTimeProvider());
     }
 
     /// <summary>
@@ -266,6 +276,42 @@ public class DiscoveryControllerMtlsTests
         Assert.Equal(new Uri("https://custom2.example.com/introspect"), result.Value.MtlsEndpointAliases.IntrospectionEndpoint);
         Assert.Equal(new Uri("https://mtls.example.com/revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
         Assert.Equal(new Uri("https://mtls.example.com/userinfo"), result.Value.MtlsEndpointAliases.UserInfoEndpoint);
+    }
+
+    /// <summary>
+    /// Verifies the RFC 8705 §3.3 tls_client_certificate_bound_access_tokens flag surfaces in the
+    /// formatted discovery document when the handler advertised support.
+    /// </summary>
+    [Fact]
+    public async Task ConfigurationAsync_WithCertificateBoundTokensSupported_ShouldSurfaceFlag()
+    {
+        // Arrange
+        var baseResponse = new ConfigurationResponse { TlsClientCertificateBoundAccessTokens = true };
+
+        // Act
+        var result = await _formatter.FormatResponseAsync(baseResponse);
+
+        // Assert
+        Assert.NotNull(result.Value);
+        Assert.True(result.Value.TlsClientCertificateBoundAccessTokens);
+    }
+
+    /// <summary>
+    /// Verifies the flag is omitted (null) when the provider does not advertise certificate-bound
+    /// token support, so the discovery document carries no misleading "false".
+    /// </summary>
+    [Fact]
+    public async Task ConfigurationAsync_WithoutCertificateBoundTokens_ShouldOmitFlag()
+    {
+        // Arrange
+        var baseResponse = new ConfigurationResponse();
+
+        // Act
+        var result = await _formatter.FormatResponseAsync(baseResponse);
+
+        // Assert
+        Assert.NotNull(result.Value);
+        Assert.Null(result.Value.TlsClientCertificateBoundAccessTokens);
     }
 
     private void SetupEndpointResolver()

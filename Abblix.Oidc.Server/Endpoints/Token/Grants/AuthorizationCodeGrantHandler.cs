@@ -31,18 +31,19 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// Handles the authorization code grant type for OAuth 2.0.
-/// This class validates the provided authorization code, verifies client details, and checks for PKCE compliance.
-/// PKCE is a security mechanism primarily used in public clients, and its enforcement helps prevent code injection
-/// attacks.
+/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=authorization_code</c> (RFC 6749 §4.1.3).
+/// Resolves the code to its stored <see cref="AuthorizedGrant"/>, asserts that the redeeming client is
+/// the same one the code was issued to, and, when a <c>code_challenge</c> was bound at the authorization
+/// request, runs the RFC 7636 §4.6 verification by transforming the submitted <c>code_verifier</c> with
+/// the recorded <c>plain</c> / <c>S256</c> / <c>S512</c> method.
 /// </summary>
-/// <param name="parameterValidator">
-/// Service for validating request parameters, ensuring required fields are provided.</param>
-/// <param name="authorizationCodeService">
-/// Service responsible for generating, validating, and managing authorization codes.</param>
+/// <param name="parameterValidator">Asserts that required wire parameters (<c>code</c>) are present.</param>
+/// <param name="authorizationCodeService">Persists, looks up and removes authorization codes.</param>
 public class AuthorizationCodeGrantHandler(
     IParameterValidator parameterValidator,
     IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
@@ -130,11 +131,11 @@ public class AuthorizationCodeGrantHandler(
     private static string CalculateChallenge(string method, string codeVerifier) => method switch
     {
         // Encodes the code verifier using SHA256 and URL-safe base64 encoding for 'S256' method.
-        CodeChallengeMethods.S256 => HttpServerUtility.UrlTokenEncode(
+        CodeChallengeMethods.S256 => Base64Url.EncodeToString(
             SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
 
         // Encodes the code verifier using SHA512 and URL-safe base64 encoding for 'S512' method.
-        CodeChallengeMethods.S512 => HttpServerUtility.UrlTokenEncode(
+        CodeChallengeMethods.S512 => Base64Url.EncodeToString(
             SHA512.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
 
         // Returns the code verifier as-is for the 'plain' method.

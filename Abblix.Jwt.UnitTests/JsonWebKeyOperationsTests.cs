@@ -30,6 +30,9 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class JsonWebKeyOperationsTests
 {
+    private const string ModulusValue = "modulus";
+    private const string CurveP256 = "P-256";
+
     #region RSA Key Tests
 
     [Fact]
@@ -38,7 +41,7 @@ public class JsonWebKeyOperationsTests
         var key = new RsaJsonWebKey
         {
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
-            Modulus = Encoding.UTF8.GetBytes("modulus"),
+            Modulus = Encoding.UTF8.GetBytes(ModulusValue),
             PrivateExponent = Encoding.UTF8.GetBytes("private-exponent"),
         };
 
@@ -52,7 +55,7 @@ public class JsonWebKeyOperationsTests
         var key = new RsaJsonWebKey
         {
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
-            Modulus = Encoding.UTF8.GetBytes("modulus"),
+            Modulus = Encoding.UTF8.GetBytes(ModulusValue),
         };
 
         Assert.True(key.HasPublicKey);
@@ -65,7 +68,7 @@ public class JsonWebKeyOperationsTests
         var key = new RsaJsonWebKey
         {
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
-            Modulus = Encoding.UTF8.GetBytes("modulus"),
+            Modulus = Encoding.UTF8.GetBytes(ModulusValue),
             PrivateExponent = Array.Empty<byte>(),
         };
 
@@ -82,7 +85,7 @@ public class JsonWebKeyOperationsTests
     {
         var key = new EllipticCurveJsonWebKey
         {
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x-coordinate"),
             Y = Encoding.UTF8.GetBytes("y-coordinate"),
             PrivateKey = Encoding.UTF8.GetBytes("private-key"),
@@ -97,7 +100,7 @@ public class JsonWebKeyOperationsTests
     {
         var key = new EllipticCurveJsonWebKey
         {
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x-coordinate"),
             Y = Encoding.UTF8.GetBytes("y-coordinate"),
         };
@@ -111,7 +114,7 @@ public class JsonWebKeyOperationsTests
     {
         var key = new EllipticCurveJsonWebKey
         {
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x-coordinate"),
             Y = Encoding.UTF8.GetBytes("y-coordinate"),
             PrivateKey = Array.Empty<byte>(),
@@ -171,7 +174,7 @@ public class JsonWebKeyOperationsTests
         var privateKey = new RsaJsonWebKey
         {
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
-            Modulus = Encoding.UTF8.GetBytes("modulus"),
+            Modulus = Encoding.UTF8.GetBytes(ModulusValue),
             PrivateExponent = Encoding.UTF8.GetBytes("d"),
         };
 
@@ -182,7 +185,7 @@ public class JsonWebKeyOperationsTests
         var publicKey = new RsaJsonWebKey
         {
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
-            Modulus = Encoding.UTF8.GetBytes("modulus"),
+            Modulus = Encoding.UTF8.GetBytes(ModulusValue),
         };
 
         Assert.False(publicKey.HasPrivateKey);
@@ -194,7 +197,7 @@ public class JsonWebKeyOperationsTests
     {
         var privateKey = new EllipticCurveJsonWebKey
         {
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x"),
             Y = Encoding.UTF8.GetBytes("y"),
             PrivateKey = Encoding.UTF8.GetBytes("d"),
@@ -206,7 +209,7 @@ public class JsonWebKeyOperationsTests
 
         var publicKey = new EllipticCurveJsonWebKey
         {
-            Curve = "P-256",
+            Curve = CurveP256,
             X = Encoding.UTF8.GetBytes("x"),
             Y = Encoding.UTF8.GetBytes("y"),
         };

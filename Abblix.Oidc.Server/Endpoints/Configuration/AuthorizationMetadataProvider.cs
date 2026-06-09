@@ -20,32 +20,42 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
 /// <summary>
-/// Provides authorization-related metadata by delegating to the authorization handler.
+/// Provides authorization-endpoint metadata for discovery, computed directly from the registered response
+/// builders. Deliberately does not depend on <see cref="IAuthorizationHandler"/>: resolving the handler just to
+/// read metadata would also construct its request-time dependencies (the JARM response encoder and its crypto
+/// graph), which the discovery path must not do.
 /// </summary>
-public sealed class AuthorizationMetadataProvider(IAuthorizationHandler authorizationHandler)
+/// <param name="responseBuilders">The registered response builders the supported response types are derived from.</param>
+public sealed class AuthorizationMetadataProvider(IEnumerable<IAuthorizationResponseBuilder> responseBuilders)
 	: IAuthorizationMetadataProvider
 {
-	/// <inheritdoc />
-	public IEnumerable<string> ResponseTypesSupported => authorizationHandler.Metadata.ResponseTypesSupported;
+	private readonly AuthorizationEndpointMetadata _metadata = AuthorizationEndpointMetadataFactory.Create(responseBuilders);
 
 	/// <inheritdoc />
-	public IEnumerable<string> ResponseModesSupported => authorizationHandler.Metadata.ResponseModesSupported;
+	public IEnumerable<string> ResponseTypesSupported => _metadata.ResponseTypesSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> PromptValuesSupported => authorizationHandler.Metadata.PromptValuesSupported;
+	public IEnumerable<string> ResponseModesSupported => _metadata.ResponseModesSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> CodeChallengeMethodsSupported => authorizationHandler.Metadata.CodeChallengeMethodsSupported;
+	public IEnumerable<string> PromptValuesSupported => _metadata.PromptValuesSupported;
 
 	/// <inheritdoc />
-	public bool ClaimsParameterSupported => authorizationHandler.Metadata.ClaimsParameterSupported;
+	public IEnumerable<string> CodeChallengeMethodsSupported => _metadata.CodeChallengeMethodsSupported;
 
 	/// <inheritdoc />
-	public bool RequestParameterSupported => authorizationHandler.Metadata.RequestParameterSupported;
+	public bool ClaimsParameterSupported => _metadata.ClaimsParameterSupported;
+
+	/// <inheritdoc />
+	public bool RequestParameterSupported => _metadata.RequestParameterSupported;
+
+	/// <inheritdoc />
+	public bool AuthorizationResponseIssParameterSupported { get; init; } = true;
 }

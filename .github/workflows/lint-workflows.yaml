@@ -1,0 +1,76 @@
+name: Lint workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/lint-no-inline-secrets.py'
+      - '.github/codeql/**'
+  push:
+    branches: [master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-inline-secrets:
+    name: Block inline untrusted-input interpolation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+        timeout-minutes: 3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      # --only-binary :all: skips arbitrary setup-script execution at install
+      # time (closes Sonar S8541). --require-hashes + pinned requirements file
+      # locks both the resolved version and the artifact bytes — a malicious
+      # PyPI release with the same version cannot pass the hash check (closes
+      # Sonar S8544).
+        timeout-minutes: 3
+      - name: Install PyYAML
+        run: |
+          pip install --disable-pip-version-check --only-binary :all: \
+            --require-hashes -r .github/workflows/requirements/lint-workflows.txt
+
+        timeout-minutes: 3
+      - name: "Block inline untrusted-input interpolation in run: blocks"
+        run: python .github/scripts/lint-no-inline-secrets.py
+
+        timeout-minutes: 3
+    timeout-minutes: 5
+  actionlint:
+    name: actionlint (schema + shellcheck)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_VERSION: '1.7.10'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+        timeout-minutes: 3
+      - name: Install actionlint
+        run: |
+          curl --proto '=https' -fsSL -o actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          chmod +x actionlint
+
+        timeout-minutes: 3
+      - name: Run actionlint
+        run: ./actionlint -color
+        timeout-minutes: 3
+    timeout-minutes: 5

@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Options;
@@ -43,33 +44,57 @@ public class ClientJwtFormatter(
     IAuthServiceKeysProvider serviceKeysProvider,
     IOptions<OidcOptions> options) : IClientJwtFormatter
 {
-
     /// <summary>
-    /// Asynchronously formats a JWT for a specific client, applying the necessary cryptographic operations
-    /// based on the client's configuration and the authentication service's capabilities.
+    /// Asynchronously formats a JWT for a specific client, inferring the encryption metadata from the token's
+    /// header <c>typ</c> (id_token/logout_token vs. UserInfo).
     /// </summary>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued, including any requirements for encryption.</param>
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
-    /// <remarks>
-    /// This method ensures the JWT is signed with the appropriate key from the authentication service. If the client's configuration supports encryption,
-    /// the method also encrypts the JWT using the client's public key and the client's preferred encryption algorithms.
-    /// The result is a JWT that conforms to the security requirements of both the client and the authentication service.
-    /// </remarks>
-    public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
+    [Obsolete("Use FormatAsync(JsonWebToken, ClientInfo, ClientJwtEncryption) with an explicit encryption policy. " +
+              "This overload infers the policy from token.Header.Type and is kept for backward compatibility.")]
+    public Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
+    {
+        // The legacy contract picks the client's registered encryption metadata by JWT class: id_token and
+        // logout_token use id_token_encrypted_response_*, everything else (UserInfo) uses userinfo_encrypted_response_*.
+        var encryption = token.Header.Type switch
+        {
+            JwtTypes.IdToken or JwtTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
+            _ => ClientJwtEncryption.ForUserInfo(clientInfo, options.Value),
+        };
+
+        return FormatAsync(token, clientInfo, encryption);
+    }
+
+    /// <summary>
+    /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
+    /// the token's header algorithm and — per the supplied <paramref name="encryption"/> policy — optionally
+    /// encrypting it to the client's registered public key.
+    /// </summary>
+    /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
+    /// <param name="clientInfo">Information about the client to which the JWT is issued.</param>
+    /// <param name="encryption">The encryption policy: which registered client metadata governs encryption, the
+    /// content-encryption default, and whether encryption requires a registered key-management algorithm.</param>
+    /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
+    public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
     {
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
+
+        // JARM §2.2 / §3 opt-in: when the policy requires a registered key-management algorithm and the client has
+        // not registered one, the response is signed only — the client's encryption keys are not even resolved.
+        if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
+            return await jwtCreator.IssueAsync(token, signingCredentials);
 
         var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
             .FirstOrDefaultAsync();
 
         var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
-            ?? clientInfo.IdentityTokenEncryptedResponseAlgorithm
+            ?? encryption.KeyManagementAlgorithm
             ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
-        var contentEncryptionAlgorithm = clientInfo.IdentityTokenEncryptedResponseEncryption
-            ?? options.Value.DefaultContentEncryptionAlgorithm;
+        var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
+            ?? encryption.DefaultContentEncryptionAlgorithm;
 
         return await jwtCreator.IssueAsync(
             token,

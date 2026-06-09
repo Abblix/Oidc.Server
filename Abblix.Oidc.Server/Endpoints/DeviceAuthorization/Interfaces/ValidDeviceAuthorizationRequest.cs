@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -27,16 +28,22 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 
 /// <summary>
-/// Represents a validated device authorization request with resolved client information.
+/// A device authorization request (RFC 8628 §3.1) that has passed all validators, paired with the
+/// authenticated client and the scope/resource sets resolved against the provider's catalog.
 /// </summary>
 public record ValidDeviceAuthorizationRequest
 {
+    /// <summary>
+    /// Builds the validated request snapshot from a populated <see cref="DeviceAuthorizationValidationContext"/>,
+    /// flattening scope and resource definitions to their wire-form identifiers.
+    /// </summary>
     public ValidDeviceAuthorizationRequest(DeviceAuthorizationValidationContext context)
     {
         Model = context.Request;
         ClientInfo = context.ClientInfo;
         Scope = context.Scope.Select(s => s.Scope).ToArray();
         Resources = context.Resources.Select(r => r.Resource).ToArray();
+        AuthorizationDetails = context.AuthorizationDetails;
     }
 
     /// <summary>
@@ -58,4 +65,11 @@ public record ValidDeviceAuthorizationRequest
     /// The validated and resolved resources for the request.
     /// </summary>
     public Uri[]? Resources { get; }
+
+    /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array (post-validation), which the downstream
+    /// processor stashes on the persisted <c>DeviceAuthorizationRequest</c> so the
+    /// user-verification step can carry it onto the eventual <c>AuthorizedGrant</c>.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; }
 }

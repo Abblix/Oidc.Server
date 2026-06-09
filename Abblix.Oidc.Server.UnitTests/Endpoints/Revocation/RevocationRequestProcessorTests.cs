@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -40,14 +41,14 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Revocation;
 public class RevocationRequestProcessorTests
 {
     private readonly Mock<ITokenRegistry> _tokenRegistry;
-    private readonly Mock<TimeProvider> _clock;
+    private readonly FakeTimeProvider _clock;
     private readonly RevocationRequestProcessor _processor;
 
     public RevocationRequestProcessorTests()
     {
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
-        _clock = new Mock<TimeProvider>(MockBehavior.Strict);
-        _processor = new RevocationRequestProcessor(_tokenRegistry.Object, _clock.Object);
+        _clock = new FakeTimeProvider();
+        _processor = new RevocationRequestProcessor(_tokenRegistry.Object, _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()
@@ -56,11 +57,11 @@ public class RevocationRequestProcessorTests
         TokenTypeHint = "access_token",
     };
 
-    private static JsonWebToken CreateValidToken(string jwtId = "token_id_123")
+    private JsonWebToken CreateValidToken(string jwtId = "token_id_123")
     {
         var token = new JsonWebToken();
         token.Payload.JwtId = jwtId;
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        token.Payload.ExpiresAt = _clock.GetUtcNow().AddHours(1);
         return token;
     }
 
@@ -82,7 +83,6 @@ public class RevocationRequestProcessorTests
         var request = CreateRevocationRequest();
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -90,8 +90,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -117,9 +115,7 @@ public class RevocationRequestProcessorTests
         // Arrange
         var request = CreateRevocationRequest();
         var validRequest = CreateValidRevocationRequest(request);
-        var now = DateTimeOffset.UtcNow;
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
+        var now = _clock.GetUtcNow();
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -144,6 +140,7 @@ public class RevocationRequestProcessorTests
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
         var now = new DateTimeOffset(2025, 11, 7, 12, 0, 0, TimeSpan.Zero);
+        _clock.SetUtcNow(now);
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -152,15 +149,12 @@ public class RevocationRequestProcessorTests
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
-
         // Act
         var result = await _processor.ProcessAsync(validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
         Assert.Equal(now, revoked.RevokedAt);
-        _clock.Verify(c => c.GetUtcNow(), Times.Once);
     }
 
     /// <summary>
@@ -174,7 +168,6 @@ public class RevocationRequestProcessorTests
         var request = CreateRevocationRequest();
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -182,8 +175,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -208,7 +199,6 @@ public class RevocationRequestProcessorTests
         var request = CreateRevocationRequest();
         var token = CreateValidToken("custom_jwt_id_456");
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -216,8 +206,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -242,7 +230,6 @@ public class RevocationRequestProcessorTests
         };
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -250,8 +237,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -271,10 +256,9 @@ public class RevocationRequestProcessorTests
         // Arrange
         var request = CreateRevocationRequest();
         var token = CreateValidToken();
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = _clock.GetUtcNow().AddHours(2);
         token.Payload.ExpiresAt = expiresAt;
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
         DateTimeOffset? capturedExpiresAt = null;
 
         _tokenRegistry
@@ -284,8 +268,6 @@ public class RevocationRequestProcessorTests
                 It.IsAny<DateTimeOffset>()))
             .Callback<string, JsonWebTokenStatus, DateTimeOffset>((_, _, exp) => capturedExpiresAt = exp)
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -318,11 +300,8 @@ public class RevocationRequestProcessorTests
         var request = CreateRevocationRequest();
         var token = new JsonWebToken();
         token.Payload.JwtId = null;
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        token.Payload.ExpiresAt = _clock.GetUtcNow().AddHours(1);
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -346,9 +325,6 @@ public class RevocationRequestProcessorTests
         token.Payload.JwtId = "token_id_123";
         token.Payload.ExpiresAt = null;
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -370,9 +346,6 @@ public class RevocationRequestProcessorTests
         // Arrange
         var request = CreateRevocationRequest();
         var validRequest = CreateValidRevocationRequest(request);
-        var now = DateTimeOffset.UtcNow;
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -392,7 +365,6 @@ public class RevocationRequestProcessorTests
         var request = CreateRevocationRequest();
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
-        var now = DateTimeOffset.UtcNow;
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
@@ -400,8 +372,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -431,8 +401,6 @@ public class RevocationRequestProcessorTests
         var token2 = CreateValidToken("token_2");
         var validRequest2 = CreateValidRevocationRequest(request2, token2);
 
-        var now = DateTimeOffset.UtcNow;
-
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
                 "token_1",
@@ -446,8 +414,6 @@ public class RevocationRequestProcessorTests
                 JsonWebTokenStatus.Revoked,
                 token2.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
-
-        _clock.Setup(c => c.GetUtcNow()).Returns(now);
 
         // Act
         var result1 = await _processor.ProcessAsync(validRequest1);

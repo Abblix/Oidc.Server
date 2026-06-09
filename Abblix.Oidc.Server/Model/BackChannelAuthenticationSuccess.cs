@@ -62,8 +62,16 @@ public record BackChannelAuthenticationSuccess
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>auth_req_id</c> response parameter identifying the backchannel authentication
+        /// request (CIBA Core §10.1.1).</summary>
         public const string AuthenticationRequestId = "auth_req_id";
+
+        /// <summary>The <c>expires_in</c> response parameter giving the lifetime of the request, in
+        /// seconds.</summary>
         public const string ExpiresIn = "expires_in";
+
+        /// <summary>The <c>interval</c> response parameter giving the minimum polling interval the client
+        /// should observe, in seconds.</summary>
         public const string Interval = "interval";
     }
 }

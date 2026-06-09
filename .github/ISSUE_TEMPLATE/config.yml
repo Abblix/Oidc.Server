@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / how-to (OIDC, OAuth 2.0, .NET integration)
+    url: https://github.com/Abblix/Oidc.Server/discussions/categories/q-a
+    about: Ask usage and integration questions in Discussions — maintainers and the community answer there.
+  - name: Ideas & feedback
+    url: https://github.com/Abblix/Oidc.Server/discussions/categories/ideas
+    about: Share an idea or vote on what to build next.
+  - name: Licensing & commercial inquiries
+    url: mailto:info@abblix.com
+    about: Pricing, licensing, redistribution, and commercial support.
+  - name: Security vulnerability (do not open a public issue)
+    url: mailto:info@abblix.com
+    about: Report security issues privately by email.

@@ -23,17 +23,19 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Represents options for creating a new client.
+/// Defaults used by the dynamic client registration endpoint when minting credentials for a newly
+/// registered client: how its client identifier and client secret are generated and how long the
+/// secret stays valid.
 /// </summary>
 public record NewClientOptions
 {
     /// <summary>
-    /// The options for generating a client ID.
+    /// Generation parameters for the client identifier issued to a newly registered client.
     /// </summary>
     public ClientIdOptions ClientId { get; init; } = new();
 
     /// <summary>
-    /// The options for generating a client secret.
+    /// Generation parameters and lifetime policy for the client secret issued to a newly registered client.
     /// </summary>
     public ClientSecretOptions ClientSecret { get; init; } = new();
 }

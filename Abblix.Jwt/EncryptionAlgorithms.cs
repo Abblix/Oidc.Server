@@ -23,35 +23,38 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Provides constants for various encryption algorithms used in JWE (JSON Web Encryption) operations.
-/// These algorithms are defined in RFC 7516 (JWE) and RFC 7518 (JWA).
+/// JWE algorithm identifiers ("alg" and "enc" header values) defined in RFC 7516 (JWE) and
+/// RFC 7518 Sections 4 (key management) and 5 (content encryption).
+/// Constants on this class are recognized by the library; some are listed but not yet supported
+/// because their underlying primitives are not provided by .NET (see remarks on each member).
 /// </summary>
 public static class EncryptionAlgorithms
 {
 	/// <summary>
-	/// Key Management Algorithms (alg parameter in JWE).
-	/// These algorithms are used to encrypt the Content Encryption Key (CEK).
+	/// Key management algorithms ("alg" parameter in the JWE header). These wrap or derive
+	/// the Content Encryption Key (CEK) that is then used by a content encryption algorithm.
 	/// </summary>
 	public static class KeyManagement
 	{
 		/// <summary>
-		/// RSA-PKCS1-v1_5 key encryption algorithm.
-		/// This algorithm uses RSAES-PKCS1-v1_5 for key encryption.
-		/// Note: RSA1_5 is deprecated in favor of RSA-OAEP due to security concerns.
+		/// RSAES-PKCS1-v1_5 key encryption (RFC 7518 Section 4.2). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.Pkcs1</c>.
+		/// Kept for interoperability with legacy peers; OAEP variants should be preferred
+		/// because PKCS#1 v1.5 padding is vulnerable to chosen-ciphertext attacks (Bleichenbacher).
 		/// </summary>
 		public const string Rsa1_5 = "RSA1_5";
 
 		/// <summary>
-		/// RSA-OAEP key encryption algorithm with default parameters.
-		/// This algorithm uses RSAES OAEP with SHA-1 and MGF1 with SHA-1.
-		/// Recommended for most RSA-based key encryption scenarios.
+		/// RSAES-OAEP with SHA-1 and MGF1-SHA-1 (RFC 7518 Section 4.3). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.OaepSHA1</c>.
+		/// Use when interoperating with peers that have not adopted RSA-OAEP-256;
+		/// otherwise prefer <see cref="RsaOaep256"/>.
 		/// </summary>
 		public const string RsaOaep = "RSA-OAEP";
 
 		/// <summary>
-		/// RSA-OAEP key encryption algorithm with SHA-256.
-		/// This algorithm uses RSAES OAEP with SHA-256 and MGF1 with SHA-256.
-		/// Provides enhanced security compared to RSA-OAEP with SHA-1.
+		/// RSAES-OAEP with SHA-256 and MGF1-SHA-256 (RFC 7518 Section 4.3). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.OaepSHA256</c>. Recommended choice for new RSA-based JWE deployments.
 		/// </summary>
 		public const string RsaOaep256 = "RSA-OAEP-256";
 
@@ -86,8 +89,9 @@ public static class EncryptionAlgorithms
 		public const string Aes256KW = "A256KW";
 
 		/// <summary>
-		/// Direct use of a shared symmetric key as the Content Encryption Key (CEK).
-		/// No key wrapping is performed; the symmetric key is used directly for content encryption.
+		/// Direct use of a shared symmetric key as the Content Encryption Key (RFC 7518 Section 4.5).
+		/// No key wrap is performed and the JWE "encrypted_key" is the empty octet sequence.
+		/// The shared key length must match the key size required by the chosen content encryption algorithm.
 		/// </summary>
 		public const string Dir = "dir";
 
@@ -138,89 +142,89 @@ public static class EncryptionAlgorithms
 		public const string EcdhEsAes256KW = "ECDH-ES+A256KW";
 
 		/// <summary>
-		/// AES GCM Key Wrap with 128-bit key.
-		/// This algorithm uses AES GCM for key wrapping with a 128-bit key.
+		/// AES-GCM Key Wrap with a 128-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
+		/// Output is laid out as <c>IV (96 bits) || Ciphertext || Authentication Tag (128 bits)</c>.
 		/// </summary>
 		public const string Aes128Gcmkw = "A128GCMKW";
 
 		/// <summary>
-		/// AES GCM Key Wrap with 192-bit key.
-		/// This algorithm uses AES GCM for key wrapping with a 192-bit key.
+		/// AES-GCM Key Wrap with a 192-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
 		/// </summary>
 		public const string Aes192Gcmkw = "A192GCMKW";
 
 		/// <summary>
-		/// AES GCM Key Wrap with 256-bit key.
-		/// This algorithm uses AES GCM for key wrapping with a 256-bit key.
+		/// AES-GCM Key Wrap with a 256-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
+		/// Recommended choice when both peers can share a symmetric key.
 		/// </summary>
 		public const string Aes256Gcmkw = "A256GCMKW";
 
 		/// <summary>
-		/// PBES2 with HMAC SHA-256 and AES Key Wrap with 128-bit key.
-		/// Password-Based Encryption Scheme 2 using HMAC SHA-256 and AES-128 Key Wrap.
+		/// PBES2 with HMAC SHA-256 and AES-128 Key Wrap (RFC 7518 Section 4.8).
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED: requires PBKDF2 plus AES Key Wrap (RFC 3394), neither of which
+		/// is exposed natively by .NET in the form RFC 7518 mandates.
+		/// </remarks>
 		public const string Pbes2HmacSha256Aes128KW = "PBES2-HS256+A128KW";
 
 		/// <summary>
-		/// PBES2 with HMAC SHA-384 and AES Key Wrap with 192-bit key.
-		/// Password-Based Encryption Scheme 2 using HMAC SHA-384 and AES-192 Key Wrap.
+		/// PBES2 with HMAC SHA-384 and AES-192 Key Wrap (RFC 7518 Section 4.8).
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED. See <see cref="Pbes2HmacSha256Aes128KW"/>.
+		/// </remarks>
 		public const string Pbes2HmacSha384Aes192KW = "PBES2-HS384+A192KW";
 
 		/// <summary>
-		/// PBES2 with HMAC SHA-512 and AES Key Wrap with 256-bit key.
-		/// Password-Based Encryption Scheme 2 using HMAC SHA-512 and AES-256 Key Wrap.
+		/// PBES2 with HMAC SHA-512 and AES-256 Key Wrap (RFC 7518 Section 4.8).
 		/// </summary>
+		/// <remarks>
+		/// NOT CURRENTLY SUPPORTED. See <see cref="Pbes2HmacSha256Aes128KW"/>.
+		/// </remarks>
 		public const string Pbes2HmacSha512Aes256KW = "PBES2-HS512+A256KW";
 	}
 
 	/// <summary>
-	/// Content Encryption Algorithms (enc parameter in JWE).
-	/// These algorithms are used to encrypt the actual content/payload.
+	/// Content encryption algorithms ("enc" parameter in the JWE header). These encrypt the
+	/// JWE payload using the Content Encryption Key produced by the key management algorithm.
 	/// </summary>
 	public static class ContentEncryption
 	{
 		/// <summary>
-		/// AES_128_CBC_HMAC_SHA_256 authenticated encryption algorithm.
-		/// This algorithm uses AES-128 in CBC mode with HMAC SHA-256 for authentication.
-		/// Combines AES-CBC-128 encryption with HMAC-SHA-256 authentication.
+		/// AES-128-CBC with HMAC-SHA-256 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA256</c>; the 256-bit CEK is split into a
+		/// 128-bit MAC key and a 128-bit AES key.
 		/// </summary>
 		public const string Aes128CbcHmacSha256 = "A128CBC-HS256";
 
 		/// <summary>
-		/// AES_192_CBC_HMAC_SHA_384 authenticated encryption algorithm.
-		/// This algorithm uses AES-192 in CBC mode with HMAC SHA-384 for authentication.
-		/// Combines AES-CBC-192 encryption with HMAC-SHA-384 authentication.
+		/// AES-192-CBC with HMAC-SHA-384 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA384</c>; uses a 384-bit CEK.
 		/// </summary>
 		public const string Aes192CbcHmacSha384 = "A192CBC-HS384";
 
 		/// <summary>
-		/// AES_256_CBC_HMAC_SHA_512 authenticated encryption algorithm.
-		/// This algorithm uses AES-256 in CBC mode with HMAC SHA-512 for authentication.
-		/// Combines AES-CBC-256 encryption with HMAC-SHA-512 authentication.
+		/// AES-256-CBC with HMAC-SHA-512 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA512</c>; uses a 512-bit CEK.
+		/// Default content encryption used by this library when issuing encrypted tokens.
 		/// </summary>
 		public const string Aes256CbcHmacSha512 = "A256CBC-HS512";
 
 		/// <summary>
-		/// AES GCM with 128-bit key.
-		/// This algorithm uses AES in Galois/Counter Mode (GCM) with a 128-bit key.
-		/// Provides both encryption and authentication in a single operation.
-		/// Recommended for modern applications due to performance and security.
+		/// AES-128 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag. Single-pass authenticated encryption.
 		/// </summary>
 		public const string Aes128Gcm = "A128GCM";
 
 		/// <summary>
-		/// AES GCM with 192-bit key.
-		/// This algorithm uses AES in Galois/Counter Mode (GCM) with a 192-bit key.
-		/// Provides both encryption and authentication in a single operation.
+		/// AES-192 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag.
 		/// </summary>
 		public const string Aes192Gcm = "A192GCM";
 
 		/// <summary>
-		/// AES GCM with 256-bit key.
-		/// This algorithm uses AES in Galois/Counter Mode (GCM) with a 256-bit key.
-		/// Provides both encryption and authentication in a single operation.
-		/// Offers the highest security level among AES GCM variants.
+		/// AES-256 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag. Recommended where peers support GCM.
 		/// </summary>
 		public const string Aes256Gcm = "A256GCM";
 	}

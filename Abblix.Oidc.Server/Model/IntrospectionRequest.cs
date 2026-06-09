@@ -27,30 +27,37 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a request for OAuth 2.0 token introspection, allowing clients to query the authorization server
-/// about the state and details of a token.
-/// Inherits from <see cref="ClientRequest"/>.
+/// Parameters of an OAuth 2.0 token introspection request (RFC 7662 §2.1) sent to the
+/// <c>introspection_endpoint</c>, used by protected resources to determine the active state and metadata
+/// of a token. Client authentication is required and is supplied alongside this payload.
 /// </summary>
 public record IntrospectionRequest
 {
+	/// <summary>
+	/// Wire-level parameter names accepted at the OAuth 2.0 introspection endpoint (RFC 7662 §2.1).
+	/// </summary>
 	public static class Parameters
 	{
+		/// <summary>The <c>token</c> introspection request parameter carrying the token to be inspected.
+		/// </summary>
 		public const string Token = "token";
+
+		/// <summary>The <c>token_type_hint</c> introspection request parameter advising which token type
+		/// the server should try first.</summary>
 		public const string TokenTypeHint = "token_type_hint";
 	}
 
 	/// <summary>
-	/// The token that the client wants to introspect.
-	/// This property is and should contain the string value of the token.
+	/// The <c>token</c> parameter (RFC 7662 §2.1): the token string for which the client is requesting
+	/// introspection metadata. Required.
 	/// </summary>
 	[JsonPropertyName(Parameters.Token)]
 	[Required]
 	public string Token { get; set; } = null!;
 
 	/// <summary>
-	/// A hint about the type of the token submitted for introspection.
-	/// This property is optional and can be used to optimize the introspection process.
-	/// The value can be standardized token type values such as "access_token" or "refresh_token".
+	/// The optional <c>token_type_hint</c> (RFC 7662 §2.1) telling the server which token type to try first,
+	/// for example <c>access_token</c> or <c>refresh_token</c>. The server may still inspect other token types.
 	/// </summary>
 	[JsonPropertyName(Parameters.TokenTypeHint)]
 	public string? TokenTypeHint { get; set; }

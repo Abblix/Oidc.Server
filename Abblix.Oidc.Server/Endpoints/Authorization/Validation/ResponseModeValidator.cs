@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -31,18 +32,16 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// This class is responsible for validating the response mode specified in the authorization request
-/// as part of the SyncAuthorizationRequestValidationStep process.
+/// Verifies that an explicit <c>response_mode</c> is compatible with the OAuth 2.0 flow
+/// derived from <c>response_type</c> (OAuth 2.0 Multiple Response Types §2.1, OAuth 2.0
+/// Form Post Response Mode). For the authorization-code flow any of <c>query</c>,
+/// <c>fragment</c>, <c>form_post</c> is allowed; flows that issue tokens at the
+/// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
+/// must not appear in the URL query string.
 /// </summary>
-/// <param name="logger">The logger to be used for logging purposes.</param>
-public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
+public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
-	/// <summary>
-	/// Validates the response mode specified in the authorization request against the allowed
-	/// response modes for the detected flow type.
-	/// </summary>
-	/// <param name="context">The validation context containing client information.</param>
-	/// <returns>An AuthorizationRequestValidationError if the validation fails, or null if the request is valid.</returns>
+	/// <inheritdoc />
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
 		var responseMode = context.Request.ResponseMode;
@@ -50,9 +49,7 @@ public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : Sync
 		{
 			if (!IsResponseModeAllowed(responseMode, context.FlowType))
 			{
-				logger.LogWarning("The response mode {ResponseMode} is not compatible with response type {ResponseType}",
-					responseMode,
-					context.Request.ResponseType);
+				LogIncompatibleResponseMode(responseMode, context.Request.ResponseType);
 
 				return context.InvalidRequest("The response mode is not supported");
 			}
@@ -69,10 +66,29 @@ public class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : Sync
 	/// <param name="responseMode">The response mode to validate.</param>
 	/// <param name="flowType">The flow type associated with the authorization request.</param>
 	/// <returns>A boolean value indicating whether the response mode is allowed for the specified flow type.</returns>
-	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType) => flowType switch
+	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType)
 	{
-		FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
-		FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
-		_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
-	};
+		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
+		// is then subject to the same flow-compatibility rules as its plaintext counterpart — so query.jwt
+		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
+		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
+		if (responseMode.IsJwtMode())
+		{
+			responseMode = responseMode switch
+			{
+				ResponseModes.QueryJwt => ResponseModes.Query,
+				ResponseModes.FragmentJwt => ResponseModes.Fragment,
+				ResponseModes.FormPostJwt => ResponseModes.FormPost,
+				ResponseModes.Jwt => flowType == FlowTypes.AuthorizationCode ? ResponseModes.Query : ResponseModes.Fragment,
+				_ => responseMode,
+			};
+		}
+
+		return flowType switch
+		{
+			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
+			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
+			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
+		};
+	}
 }

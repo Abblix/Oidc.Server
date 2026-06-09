@@ -21,27 +21,36 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Represents a successful introspection response, indicating whether the token is active and providing its claims.
+/// Server-side model of the introspection response defined by RFC 7662 §2.2: a Boolean
+/// <c>active</c> flag and, when active, the token's metadata claims. Hosts may extend the
+/// JSON via additional top-level members; cross-domain extensions should be listed in the
+/// IANA "OAuth Token Introspection Response" registry (RFC 7662 §3.1).
 /// </summary>
-/// <remarks>
-/// Specific implementations may extend this structure with their own service-specific response names as
-/// top-level members of this JSON object. Response names intended for use across domains must be registered
-/// in the "OAuth Token Introspection Response" registry as defined in Section 3.1.
-/// </remarks>
-public record IntrospectionSuccess(bool Active, JsonObject? Claims)
+public record IntrospectionSuccess(bool Active, JsonObject? Claims, ClientInfo ClientInfo)
 {
     /// <summary>
-    /// Gets or sets whether the token is active.
+    /// RFC 7662 <c>active</c> field: <c>true</c> only if the token is currently valid and the
+    /// caller is permitted to introspect it. <c>false</c> covers all other cases (expired,
+    /// revoked, unknown, or not allowed) and per §2.2 is returned without disclosing why.
     /// </summary>
     public bool Active { get; } = Active;
 
     /// <summary>
-    /// The claims associated with the token.
+    /// Token metadata claims (e.g. <c>scope</c>, <c>sub</c>, <c>aud</c>, <c>exp</c>) when
+    /// <see cref="Active"/> is <c>true</c>; otherwise <c>null</c>, in line with RFC 7662's
+    /// guidance not to leak information about inactive tokens.
     /// </summary>
     public JsonObject? Claims { get; } = Claims;
+
+    /// <summary>
+    /// The authenticated client that requested the introspection. Not serialized into the response body; it selects
+    /// the response format (plain JSON vs. a signed/encrypted JWT per RFC 9701).
+    /// </summary>
+    public ClientInfo ClientInfo { get; } = ClientInfo;
 }

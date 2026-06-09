@@ -21,10 +21,12 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
@@ -48,7 +50,9 @@ public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClient
     /// This method is used to format the response for reading a client.
     /// Depending on the response type, it creates different types of ActionResult to be returned to the client.
     /// </remarks>
-    public Task<ActionResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response)
+    public Task<ActionResult> FormatResponseAsync(
+        ClientRequest request,
+        Result<ReadClientSuccessfulResponse, OidcError> response)
     {
         return Task.FromResult(response.Match<ActionResult>(
             success => new OkObjectResult(success with
@@ -63,6 +67,6 @@ public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClient
                         })
                     : null
             }),
-            error => new NotFoundObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            error => error.Format(StatusCodes.Status404NotFound)));
     }
 }

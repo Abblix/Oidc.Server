@@ -59,5 +59,9 @@ public record JwtValidationError(JwtError Error, string ErrorDescription)
         return char.ToLowerInvariant(ErrorDescription[0]) + ErrorDescription[1..];
     }
 
+    /// <summary>
+    /// Returns the error description as the textual representation of this validation error,
+    /// preserving the original capitalization of <see cref="ErrorDescription"/>.
+    /// </summary>
     public override string ToString() => ToString(forceLowercaseFirst: false);
 }

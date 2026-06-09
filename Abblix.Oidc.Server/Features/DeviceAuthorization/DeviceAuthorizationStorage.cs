@@ -124,7 +124,7 @@ public class DeviceAuthorizationStorage(
     /// token requests cannot both claim the same device code.
     /// </para>
     /// <para>
-    /// <strong>Atomicity:</strong> Uses <see cref="DistributedCacheExtensions.TryRemoveAsync"/>
+    /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
     /// which implements a lock-based protocol ensuring exactly one thread successfully removes the value
     /// even in concurrent scenarios. After successful removal, cleans up the user code mapping.
     /// </para>

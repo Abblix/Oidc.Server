@@ -32,6 +32,7 @@ using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
+[Collection("License")]
 public class LicenseManagerTests
 {
     private static License CreateLicense(int? notBefore, int? expiresAt, int? gracePeriod = null)
@@ -176,7 +177,7 @@ public class LicenseManagerTests
         manager.AddLicense(activeLicense);
 
         var exceptions = new List<Exception>();
-        var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         // Act - Concurrent reads and writes
         var readTask = Task.Run(() =>
@@ -196,9 +197,9 @@ public class LicenseManagerTests
                     exceptions.Add(ex);
                 }
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
-        var writeTask = Task.Run(() =>
+        var writeTask = Task.Run(async () =>
         {
             try
             {
@@ -207,7 +208,14 @@ public class LicenseManagerTests
                 {
                     manager.AddLicense(CreateLicense(-1 - counter, 10 + counter));
                     counter++;
-                    Thread.Sleep(10);
+                    try
+                    {
+                        await Task.Delay(10, cancellationSource.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }
             catch (Exception ex)
@@ -217,7 +225,7 @@ public class LicenseManagerTests
                     exceptions.Add(ex);
                 }
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         await Task.WhenAll(readTask, writeTask);
 

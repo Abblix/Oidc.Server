@@ -49,20 +49,17 @@ public static class TestConstants
     /// </summary>
     public const string InvalidClientSecret = "wrong_secret";
 
-    /// <summary>
-    /// Default redirect URI for authorization flows.
-    /// </summary>
-    public const string DefaultRedirectUri = "https://example.com/callback";
+    public static readonly Uri DefaultRedirectUri = new Uri("https://example.com/callback");
 
     /// <summary>
     /// Alternative redirect URI for multi-URI scenarios.
     /// </summary>
-    public const string AlternativeRedirectUri = "https://example.com/callback2";
+    public static readonly Uri AlternativeRedirectUri = new Uri("https://example.com/callback2");
 
     /// <summary>
     /// Invalid redirect URI for negative testing.
     /// </summary>
-    public const string InvalidRedirectUri = "https://evil.com/steal-tokens";
+    public static readonly Uri InvalidRedirectUri = new Uri("https://evil.com/steal-tokens");
 
     /// <summary>
     /// Default scope value (OpenID Connect mandatory scope).
@@ -157,12 +154,12 @@ public static class TestConstants
     /// <summary>
     /// Default issuer URI for token generation.
     /// </summary>
-    public const string DefaultIssuer = "https://auth.example.com";
+    public static readonly Uri DefaultIssuer = new Uri("https://auth.example.com");
 
     /// <summary>
     /// Default audience for token validation.
     /// </summary>
-    public const string DefaultAudience = "https://api.example.com";
+    public static readonly Uri DefaultAudience = new Uri("https://api.example.com");
 
     /// <summary>
     /// Default username for resource owner password credentials flow.

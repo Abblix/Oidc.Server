@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Security.Cryptography;
-using System.Text.Json.Nodes;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -438,8 +436,8 @@ public class SymmetricKeyEncryptionTests
 		{
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
-			ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
-			ResolveIssuerSigningKeys = _ => new[] { signingKey }.ToAsyncEnumerable(),
+			ResolveTokenDecryptionKeys = _ => encryptionKey.ToAsync(),
+			ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
 		};
 	}
 }

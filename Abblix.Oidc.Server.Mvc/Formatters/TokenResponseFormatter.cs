@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -61,11 +62,27 @@ public class TokenResponseFormatter : ITokenResponseFormatter
                     RefreshToken = success.RefreshToken?.EncodedJwt,
                     Scope = success.Scope.ToArray(),
                     IdToken = success.IdToken?.EncodedJwt,
+                    AuthorizationDetails = success.AuthorizationDetails,
                 };
 
                 return new ActionResult<TokenResponse>(
                     new OkObjectResult(tokenResponse).WithNoCacheHeaders());
             },
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: FormatError));
+    }
+
+    private static ActionResult<TokenResponse> FormatError(OidcError error)
+    {
+        ActionResult result = new BadRequestObjectResult(
+            new ErrorResponse(error.Error, error.ErrorDescription));
+
+        // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
+        // DPoP-Nonce response header alongside the standard error JSON envelope.
+        // §8.2 also asks responses bearing DPoP-Nonce to be uncacheable so an
+        // intermediate proxy does not stale-serve the nonce on a follow-up retry.
+        if (error is UseDPoPNonceError { Nonce: var nonce })
+            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce).WithNoCacheHeaders();
+
+        return new ActionResult<TokenResponse>(result);
     }
 }

@@ -45,8 +45,9 @@ public class AuthorizationRequestValidator(IAuthorizationContextValidator valida
 	/// </summary>
 	/// <param name="request">The authorization request to validate.</param>
 	/// <returns>
-	/// An <see cref="AuthorizationRequestValidationResult"/> representing the outcome of the validation process,
-	/// which may be the result of processing by one or more validators in the chain.
+	/// A <see cref="Result{TSuccess,TFailure}"/> of <see cref="ValidAuthorizationRequest"/> on success
+	/// or <see cref="AuthorizationRequestValidationError"/> on failure, representing the outcome of
+	/// the validation process, which may be the result of processing by one or more validators in the chain.
 	/// </returns>
 	public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request)
 	{

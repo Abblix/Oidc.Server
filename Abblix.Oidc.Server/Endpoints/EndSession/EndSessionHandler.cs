@@ -26,10 +26,17 @@ using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
 
+/// <summary>
+/// Default <see cref="IEndSessionHandler"/> implementation. Delegates validation to
+/// <see cref="IEndSessionRequestValidator"/>, then forwards a successful
+/// <see cref="Interfaces.ValidEndSessionRequest"/> to <see cref="IEndSessionRequestProcessor"/>;
+/// validation failures short-circuit and are returned as-is.
+/// </summary>
 public class EndSessionHandler(
     IEndSessionRequestValidator validator,
     IEndSessionRequestProcessor processor) : IEndSessionHandler
 {
+    /// <inheritdoc />
     public async Task<Result<EndSessionSuccess, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
         var validationResult = await validator.ValidateAsync(endSessionRequest);

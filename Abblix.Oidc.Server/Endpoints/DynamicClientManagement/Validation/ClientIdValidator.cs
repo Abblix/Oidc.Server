@@ -29,20 +29,18 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class validates the client ID specified in a client registration request by checking if it exists and is authorized.
+/// Cross-checks the supplied <c>client_id</c> against the operation type:
+/// for <see cref="DynamicClientOperation.Update"/> (RFC 7592 §2.2) the client must already exist,
+/// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 §3) it must not.
+/// A missing <c>client_id</c> is treated as new-registration with server-assigned id.
 /// </summary>
-/// <param name="clientInfoProvider">The client info provider to retrieve client information.</param>
-/// <param name="logger">The logger to be used for logging purposes.</param>
-public class ClientIdValidator(
-    IClientInfoProvider clientInfoProvider,
-    ILogger<ClientIdValidator> logger) : IClientRegistrationContextValidator
+/// <param name="logger">Logger used for warnings about register/update conflicts.</param>
+/// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
+public partial class ClientIdValidator(
+    ILogger<ClientIdValidator> logger,
+    IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Validates the client specified in the client registration request by checking if it already exists and is registered.
-    /// For update operations, ensures the client exists. For new registrations, ensures it doesn't exist.
-    /// </summary>
-    /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A AuthError if the validation fails, or null if the request is valid.</returns>
+    /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
@@ -60,11 +58,11 @@ public class ClientIdValidator(
                 break;
 
             case DynamicClientOperation.Update:
-                logger.LogWarning("The client with id {ClientId} does not exist", Sanitized.Value(clientId));
+                LogClientNotFound(clientId);
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} does not exist");
 
             case DynamicClientOperation.Register:
-                logger.LogWarning("The client with id {ClientId} is already registered", Sanitized.Value(clientId));
+                LogClientAlreadyRegistered(clientId);
                 return ErrorFactory.InvalidClientMetadata($"The client with id={clientId} is already registered");
 
             default:

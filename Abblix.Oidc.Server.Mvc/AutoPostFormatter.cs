@@ -29,9 +29,12 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 namespace Abblix.Oidc.Server.Mvc;
 
 /// <summary>
-/// A custom text output formatter that generates an HTML form with auto-submit functionality.
-/// This formatter is designed to output HTML content that automatically submits a POST request to a specified URI
-/// with given parameters when loaded in a browser.
+/// Output formatter that produces a self-submitting HTML form, used to deliver authorization-response
+/// parameters to a client redirect URI as POST body fields.
+/// Implements the OAuth 2.0 Form Post Response Mode
+/// (see https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html), where the user agent
+/// auto-submits the form on load via JavaScript and falls back to a manual submit button when scripting is disabled.
+/// Produces text/html (UTF-8); each public field/property of the response object becomes a hidden input.
 /// </summary>
 public class AutoPostFormatter : TextOutputFormatter
 {

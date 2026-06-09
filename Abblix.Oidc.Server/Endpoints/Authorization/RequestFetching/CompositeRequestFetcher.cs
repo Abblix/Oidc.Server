@@ -41,8 +41,10 @@ public class CompositeRequestFetcher(IAuthorizationRequestFetcher[] fetchers) : 
     /// the fault is returned. If all fetchers succeed, the method returns the final successful result.
     /// </summary>
     /// <param name="request">The authorization request to be processed.</param>
-    /// <returns>A <see cref="FetchResult"/> that represents the outcome of the fetching process. It could be a success,
-    /// fault, or an unexpected type error if the result is not handled correctly.</returns>
+    /// <returns>A <see cref="Result{TSuccess,TFailure}"/> of <see cref="AuthorizationRequest"/> on success or
+    /// <see cref="AuthorizationRequestValidationError"/> on failure, representing the outcome of the fetching
+    /// process. If a fetcher returns a fault, that fault is propagated; otherwise the final successful request is
+    /// returned.</returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
     {
         foreach (var fetcher in fetchers)

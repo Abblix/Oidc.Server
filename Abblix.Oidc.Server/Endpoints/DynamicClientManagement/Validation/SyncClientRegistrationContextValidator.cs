@@ -25,20 +25,19 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This abstract class provides a base for synchronous client registration context validators.
-/// It implements the ValidateAsync method from the IClientRegistrationContextValidator interface
-/// by calling the abstract Validate method and wrapping the result in a Task.
+/// Convenience base for validation steps whose checks are purely in-memory: implements the
+/// async contract by wrapping the synchronous <see cref="Validate"/> result in a completed task.
 /// </summary>
 public abstract class SyncClientRegistrationContextValidator : IClientRegistrationContextValidator
 {
+    /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
-    /// Validates the client registration context synchronously and returns a AuthError if validation fails,
-    /// or null if the context is valid. Derived classes must implement this method.
+    /// Validates the slice of registration metadata this implementation owns.
     /// </summary>
-    /// <param name="context">The validation context containing client registration information.</param>
-    /// <returns>A AuthError if validation fails, or null if the context is valid.</returns>
+    /// <param name="context">The shared validation context.</param>
+    /// <returns>An <see cref="OidcError"/> describing the rejection, or <c>null</c> when valid.</returns>
     protected abstract OidcError? Validate(ClientRegistrationValidationContext context);
 }

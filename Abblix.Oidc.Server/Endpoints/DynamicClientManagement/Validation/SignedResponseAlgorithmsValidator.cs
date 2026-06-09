@@ -28,15 +28,16 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the signing algorithms specified for ID tokens and user info responses in a client registration request.
-/// This class checks if the requested signing algorithms are supported by the JWT creator, ensuring compliance
-/// with security standards.
+/// Validates the algorithms a client requests for tokens this server signs:
+/// <c>id_token_signed_response_alg</c> and <c>userinfo_signed_response_alg</c> (OIDC DCR 1.0 §2), and
+/// <c>authorization_signed_response_alg</c> (JARM §3). Each must appear in the server's set of supported
+/// signing algorithms; in addition, JARM §3 forbids <c>none</c> for the authorization response.
 /// </summary>
-/// <param name="jwtCreator">The service responsible for creating signed JWTs.</param>
+/// <param name="jwtCreator">Source of supported signing algorithms for outbound tokens.</param>
 public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates the signing algorithms specified for ID tokens and user info responses.
+    /// Validates the signing algorithms specified for ID tokens, user info and JARM authorization responses.
     /// This method ensures that the JWT creator supports the requested algorithms.
     /// </summary>
     /// <param name="context">The validation context containing the client registration data.</param>
@@ -47,8 +48,26 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        return Validate( request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg) ??
-               Validate(request.UserInfoSignedResponseAlg, Parameters.UserInfoSignedResponseAlg);
+        return Validate(request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg) ??
+               Validate(request.UserInfoSignedResponseAlg, Parameters.UserInfoSignedResponseAlg) ??
+               Validate(request.IntrospectionSignedResponseAlg, Parameters.IntrospectionSignedResponseAlg) ??
+               ValidateAuthorizationSignedResponseAlg(request.AuthorizationSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// Validates <c>authorization_signed_response_alg</c> for JARM. In addition to the supported-algorithm
+    /// check, JARM §3 explicitly forbids the <c>none</c> algorithm for the authorization response.
+    /// </summary>
+    private OidcError? ValidateAuthorizationSignedResponseAlg(string? alg)
+    {
+        if (string.Equals(alg, SigningAlgorithms.None, StringComparison.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                $"The algorithm '{SigningAlgorithms.None}' is not allowed for {Parameters.AuthorizationSignedResponseAlg}");
+        }
+
+        return Validate(alg, Parameters.AuthorizationSignedResponseAlg);
     }
 
     /// <summary>

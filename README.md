@@ -7,12 +7,13 @@
 [![security rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
+[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
 [![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
+[![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
 
 ⭐ Star us on GitHub — your support motivates us a lot! 🙏😊
@@ -24,6 +25,12 @@
 [![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
 
 🔥 Why OIDC Server is the best choice for authentication — find out in our [presentation](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf) 📑
+
+## Abblix Account
+
+💎 [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications — everything your users need, integrated into your website in minutes.
+
+👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service — all delivered by Abblix Account — fit into a client website.
 
 ## Table of Contents
 - [About](#-about)
@@ -47,24 +54,46 @@ The library also supports Dependency Injection through the standard .NET DI cont
 
 ## ✨ What's New
 
-### Version 2.2 (Latest)
+### Version 2.3 (Latest)
 
 🚀 **Features**
-- **Custom JWT Implementation**: Complete JWT signing/encryption infrastructure replacing `Microsoft.IdentityModel.Tokens` — uses `System.Text.Json.Nodes` and .NET crypto primitives directly
-- **Enhanced JWE Algorithms**: `RSA-OAEP-256`, AES-GCM key wrapping (`A128GCMKW`/`A192GCMKW`/`A256GCMKW`), and direct key agreement (`dir`)
-- **ACR/AMR Compliance (RFC 8176)**: Authentication Context Class Reference values in discovery and RFC 8176 Authentication Method References
-- **CSP Nonce Support**: Template-based front-channel logout and check session iframe compatible with strict Content Security Policies
+- **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
+- **Token Exchange (RFC 8693)**: impersonation and delegation with multiple subject- and actor-token formats and a per-client allow-list of subject-token types
+- **DPoP sender-constrained tokens (RFC 9449)**: signature-based proof of possession for public clients that cannot use mTLS, binding access and refresh tokens to the client key
+- **Certificate-bound access tokens (RFC 8705 §3)**: resource-server verification that a presented token matches the client certificate on the TLS connection
+- **JARM**: the authorization response returned as a signed, optionally encrypted JWT, protecting it against tampering, mix-up, and parameter injection
+- **JWT-secured token introspection (RFC 9701)**: signed, optionally encrypted introspection responses via content negotiation
+- **JWE-encrypted request objects (RFC 9101)**: confidential request parameters in the front channel and by reference
+- **Signed authorization server metadata (RFC 8414)**: opt-in, integrity-protected discovery document
+
+🔒 **Security hardening**
+- Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token (RFC 7591)
+- JOSE critical-header handling (RFC 7515): well-formed critical parameters are rejected until a host registers a handler bound to each parameter name
+- Token-class confusion defense via opt-in token-type pinning (RFC 8725)
+- JWS verification key pinned to its declared algorithm (RFC 7517) and enforced HMAC key length (RFC 7518)
+- Pairwise subject identifier (PPID) derivation reimplemented as HMAC-based and key-rotatable, replacing the prior string-concatenation scheme (configurable hash and salt)
+- Authorization-response issuer parameter (RFC 9207) now advertised in discovery, so clients can require and verify the mix-up defense
 
 ✏️ **Improvements**
-- Configurable session cookie path in OIDC Session Management
-- Operation capability validation for `JsonWebKey` classes
-- Bidirectional interoperability tests with `Microsoft.IdentityModel.Tokens`
+- Structured logging via a source generator across the whole server: named events with stable numeric identifiers, ready for audit pipelines
+- Unified client-addressed JWT signing and encryption across UserInfo, identity-token, JARM, and introspection responses
+- JWT validation returns errors instead of throwing on unsupported algorithm or key combinations
+- Dependency-injection registrations normalized so host pre-registrations win the resolution race
 
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.2) for full details.
+> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for full details.
+
+### ⚠️ Breaking Changes (upgrading from 2.2)
+
+Most deployments need only the first two; the rest apply if you use the named feature.
+
+- **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed — success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
+- **Implicit Flow is opt-in.** Implicit and hybrid response types are rejected at client registration unless you call `EnableImplicitFlow()` on the OIDC builder. Authorization Code Flow is the default; no action otherwise.
+- **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 §3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
+- **Back-channel logout endpoint validated at registration.** A `backchannel_logout_uri` with a non-`https` scheme, internal hostname, or private/loopback address is rejected with `invalid_client_metadata` under the secure default. Register public `https` endpoints, or relax `SecureHttpFetchOptions` (`AllowedSchemes`, `BlockPrivateNetworks`) for trusted internal deployments.
 
 ## 🎓 Certification
 
-[![OpenID_Foundation_Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
+[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
 We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All **634** tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). We are extremely proud of this achievement. It reflects our overall approach to any endeavor. For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
@@ -137,6 +166,17 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
 
 We appreciate your support and look forward to making our product even better with your help!
+
+### Pre-commit hooks (one-time setup per clone)
+
+If you plan to send a pull request, set up local hooks once:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+After this, `git commit` automatically runs `actionlint` and a custom secrets-interpolation check on any change to `.github/workflows/`. The same checks run in CI as a backstop, so the worst case is a 1–2 minute round-trip; pre-commit just makes it faster.
 
 ## 📃 License
 

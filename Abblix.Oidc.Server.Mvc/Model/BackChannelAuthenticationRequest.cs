@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -114,6 +115,14 @@ public record BackChannelAuthenticationRequest
     public Uri[]? Resources { get; set; }
 
     /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array. Bound as the raw <see cref="JsonArray"/>
+    /// so member order and type-specific payload survive into the CIBA pipeline byte-exact.
+    /// </summary>
+    [BindProperty(Name = Parameters.AuthorizationDetails)]
+    [ModelBinder(typeof(JsonSerializerModelBinder))]
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
     /// Maps the properties of this back-channel authentication request to a corresponding
     /// <see cref="Server.Model.BackChannelAuthenticationRequest"/> object. This mapping facilitates
     /// the processing of the request in the core layers of the authentication framework.
@@ -136,20 +145,57 @@ public record BackChannelAuthenticationRequest
             UserCode = UserCode,
             RequestedExpiry = RequestedExpiry,
             Resources = Resources,
+            AuthorizationDetails = AuthorizationDetails,
         };
     }
 
+    /// <summary>
+    /// Wire-level names of the OpenID Connect Client-Initiated Backchannel Authentication
+    /// (CIBA) request parameters (CIBA Core §7.1).
+    /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>scope</c> parameter naming the requested scopes.</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>client_notification_token</c> parameter carrying the bearer token
+        /// the AS uses to authenticate the back-channel notification to the client.</summary>
         public const string ClientNotificationToken = "client_notification_token";
+
+        /// <summary>The <c>acr_values</c> parameter listing requested authentication context
+        /// class reference values.</summary>
         public const string AcrValues = "acr_values";
+
+        /// <summary>The <c>login_hint_token</c> parameter carrying a signed hint identifying
+        /// the end user.</summary>
         public const string LoginHintToken = "login_hint_token";
+
+        /// <summary>The <c>id_token_hint</c> parameter carrying a previously-issued ID token
+        /// that identifies the end user.</summary>
         public const string IdTokenHint = "id_token_hint";
+
+        /// <summary>The <c>login_hint</c> parameter carrying a free-form hint identifying the
+        /// end user.</summary>
         public const string LoginHint = "login_hint";
+
+        /// <summary>The <c>binding_message</c> parameter the AS shows on the end-user device
+        /// to bind the authentication ceremony to the originating client.</summary>
         public const string BindingMessage = "binding_message";
+
+        /// <summary>The <c>user_code</c> parameter carrying the secret the user must enter on
+        /// the authentication device.</summary>
         public const string UserCode = "user_code";
+
+        /// <summary>The <c>requested_expiry</c> parameter naming the lifetime the client wants
+        /// for the <c>auth_req_id</c>.</summary>
         public const string RequestedExpiry = "requested_expiry";
+
+        /// <summary>The <c>resource</c> parameter naming the resource indicators the client
+        /// wants the issued token to be valid for (RFC 8707).</summary>
         public const string Resource = "resource";
+
+        /// <summary>The <c>authorization_details</c> parameter (RFC 9396 §3) carrying a JSON
+        /// array of Rich Authorization Requests.</summary>
+        public const string AuthorizationDetails = "authorization_details";
     }
 }

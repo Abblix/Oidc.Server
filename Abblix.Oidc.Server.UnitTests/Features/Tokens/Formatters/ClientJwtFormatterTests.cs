@@ -25,6 +25,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -33,6 +34,10 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+
+// These tests deliberately exercise the obsolete type-dispatch FormatAsync(token, clientInfo) overload to lock its
+// back-compat behavior (it now delegates to the policy overload via the token's header type).
+#pragma warning disable CS0618
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
@@ -121,7 +126,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "id+jwt" },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -157,7 +162,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "id+jwt" },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -227,7 +232,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "id+jwt" },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -272,7 +277,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "logout+jwt" },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -301,6 +306,64 @@ public class ClientJwtFormatterTests
 
         // Assert
         Assert.Equal(EncodedJwt, result);
+    }
+
+    /// <summary>
+    /// Verifies that the formatter selects the client's encryption metadata by JWT class: an
+    /// id_token uses id_token_encrypted_response_alg, while a UserInfo response (which carries no
+    /// id_token/logout type) uses userinfo_encrypted_response_alg. The encryption key here has no
+    /// algorithm of its own, so the registered value is what reaches the JWT creator.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_SelectsEncryptionAlgorithmByTokenType()
+    {
+        // Arrange — distinct registered key-management AND content-encryption per token class.
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            IdentityTokenEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+            UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
+            UserInfoEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
+        };
+        var keyWithoutAlgorithm = new RsaJsonWebKey { KeyId = "enc" };
+
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(clientInfo))
+            .Returns(new[] { (JsonWebKey)keyWithoutAlgorithm }.ToAsyncEnumerable());
+
+        string? capturedKeyAlgorithm = null;
+        string? capturedContentEncryption = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, keyAlg, contentEnc) =>
+            {
+                capturedKeyAlgorithm = keyAlg;
+                capturedContentEncryption = contentEnc;
+            })
+            .ReturnsAsync(EncodedJwt);
+
+        // Act & Assert — id_token uses the id_token encryption metadata (both alg and enc).
+        var idToken = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
+            Payload = { Audiences = [ClientId] },
+        };
+        await _formatter.FormatAsync(idToken, clientInfo);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedKeyAlgorithm);
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capturedContentEncryption);
+
+        // A UserInfo response carries no id_token/logout type and uses the userinfo metadata.
+        var userInfoToken = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Audiences = [ClientId] },
+        };
+        await _formatter.FormatAsync(userInfoToken, clientInfo);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capturedKeyAlgorithm);
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512, capturedContentEncryption);
     }
 
     /// <summary>

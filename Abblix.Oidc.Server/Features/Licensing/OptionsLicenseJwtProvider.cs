@@ -25,6 +25,15 @@ using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
 
+/// <summary>
+/// An <see cref="ILicenseJwtProvider"/> backed by the <see cref="OidcOptions.LicenseJwt"/> value
+/// resolved through the options pattern.
+/// </summary>
+/// <remarks>
+/// Returns a single-element async sequence containing the configured license JWT, or null when no
+/// license JWT has been configured. Used as the default provider when the host configures the
+/// license through standard configuration sources (appsettings, environment variables, etc.).
+/// </remarks>
 public class OptionsLicenseJwtProvider(IOptions<OidcOptions> options) : ILicenseJwtProvider
 {
     /// <summary>

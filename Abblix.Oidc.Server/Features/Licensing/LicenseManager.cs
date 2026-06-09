@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
 
 [assembly:InternalsVisibleTo("Abblix.Oidc.Server.UnitTests")]
 
@@ -36,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// validity periods. It uses a thread-safe approach to manage concurrent access to the licenses list,
 /// allowing for efficient reads and safe updates.
 /// </remarks>
-public class LicenseManager
+public partial class LicenseManager
 {
     private volatile License? _currentLicense;
     private readonly List<License> _licenses = new();
@@ -220,26 +219,22 @@ public class LicenseManager
                 when license is { ExpiresAt: {} expiresAt } && expiresAt < utcNow.AddMonths(1) &&
                      LicenseLogger.Instance.IsAllowed(new { license, status }, utcNow, TimeSpan.FromDays(1)):
 
-                LicenseLogger.Instance.LogWarning(
-                    "License expiring soon: {ExpiresAt:R}. Please renew promptly to avoid service interruption",
-                    expiresAt);
+                LogLicenseExpiringSoon(LicenseLogger.Instance, expiresAt);
                 break;
 
             case LicenseStatus.GracePeriod
                 when license is { ExpiresAt: {} expiresAt } &&
                      LicenseLogger.Instance.IsAllowed(new { license, status }, utcNow, TimeSpan.FromDays(1)):
 
-                LicenseLogger.Instance.LogError(
-                    "License expired on {ExpiresAt:R}. Renew immediately to maintain service access",
-                    expiresAt);
+                LogLicenseInGracePeriod(LicenseLogger.Instance, expiresAt);
                 break;
 
             case LicenseStatus.Expired
                 when license is { ExpiresAt: {} expiresAt } &&
                      LicenseLogger.Instance.IsAllowed(new { license, status }, utcNow, TimeSpan.FromDays(1)):
 
-                LicenseLogger.Instance.LogCritical(
-                    "License expired on {ExpiresAt:R}, {ExpiredDaysAgo} days ago. Service access will be affected. Renewal is required as soon as possible!",
+                LogLicenseExpired(
+                    LicenseLogger.Instance,
                     expiresAt,
                     (int)(utcNow - expiresAt).TotalDays);
                 break;

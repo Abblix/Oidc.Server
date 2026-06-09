@@ -61,7 +61,7 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	/// <summary>
 	/// Asynchronously retrieves an object from the distributed cache.
 	/// When removeOnRetrieval is true, uses atomic get-and-remove operation via
-	/// <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
 	/// </summary>
 	/// <typeparam name="T">The type of the object to retrieve.</typeparam>
 	/// <param name="key">The key associated with the object to retrieve.</param>
@@ -86,7 +86,7 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	/// </summary>
 	/// <param name="key">The key of the object to remove.</param>
 	/// <param name="token">An optional cancellation token to cancel the operation.</param>
-	/// <returns>A task that completes when the operation finishes.of removing the object.</returns>
+	/// <returns>A task that completes when the removal has been issued to the cache.</returns>
 	public Task RemoveAsync(string key, CancellationToken? token = null)
 		=> cache.RemoveAsync(key, token ?? CancellationToken.None);
 }

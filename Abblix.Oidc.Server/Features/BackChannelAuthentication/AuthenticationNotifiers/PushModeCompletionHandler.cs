@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
-public class PushModeCompletionHandler(
+public partial class PushModeCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     INotificationDeliveryService notificationService,
@@ -73,9 +73,7 @@ public class PushModeCompletionHandler(
             return;
         }
 
-        _logger.LogInformation(
-            "Generating and delivering tokens via CIBA push mode for auth_req_id: {AuthReqId}",
-            authenticationRequestId);
+        LogGeneratingTokens(authenticationRequestId);
 
         var tokenRequest = new TokenRequest
         {
@@ -105,27 +103,31 @@ public class PushModeCompletionHandler(
                     RefreshToken = tokens.RefreshToken?.EncodedJwt,
                 };
 
-                await notificationService.SendAsync(
+                var delivered = await notificationService.SendAsync(
                     request.ClientNotificationEndpoint,
                     request.ClientNotificationToken,
                     payload,
                     BackchannelTokenDeliveryModes.Push);
 
-                // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes)
-                await _storage.TryRemoveAsync(authenticationRequestId);
-
-                _logger.LogInformation(
-                    "Tokens delivered via CIBA push mode for auth_req_id: {AuthReqId}",
-                    authenticationRequestId);
+                if (delivered)
+                {
+                    // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes).
+                    await _storage.TryRemoveAsync(authenticationRequestId);
+                    LogTokensDelivered(authenticationRequestId);
+                }
+                else
+                {
+                    // Delivery failed: keep the request so the tokens are not silently lost. Push
+                    // clients cannot poll, so removing here would orphan an authenticated grant the
+                    // client never received; instead it is retained until it expires.
+                    LogPushDeliveryFailed(authenticationRequestId);
+                }
 
                 return null;
             },
             async error =>
             {
-                _logger.LogError(
-                    "Failed to generate tokens for CIBA push mode, auth_req_id: {AuthReqId}, Error: {ErrorCode}",
-                    authenticationRequestId,
-                    error.Error);
+                LogTokenGenerationFailed(authenticationRequestId, error.Error);
 
                 // Per CIBA spec 10.3.1, remove from storage after push attempt (success or failure)
                 // Push mode clients cannot poll, so storing denied status would orphan the request

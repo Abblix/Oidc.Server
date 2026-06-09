@@ -20,14 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -45,10 +45,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
-	IAuthorizationCodeService authorizationCodeService,
-	IAccessTokenService accessTokenService,
-	IIdentityTokenService identityTokenService,
-	TimeProvider clock) : IAuthorizationRequestProcessor
+	TimeProvider clock,
+	IEnumerable<IAuthorizationResponseBuilder> responseProcessors) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -68,7 +66,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(model);
+		var authSessions = await GetAvailableAuthSessionsAsync(model, request.ClientInfo);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
@@ -113,12 +111,14 @@ public class AuthorizationRequestProcessor(
 					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {model.Prompt}");
 		}
 
-		// Retrieve user consents (i.e., permissions granted for requested scopes/resources).
+		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
-		// If consent for required scopes or resources is still pending, handle consent requirements.
-		if (userConsents.Pending is { Scopes.Length: > 0 } or { Resources.Length: > 0 })
+		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
+		if (userConsents.Pending is { Scopes.Length: > 0 }
+			or { Resources.Length: > 0 }
+			or { AuthorizationDetails.Count: > 0 })
 		{
 			// If user interaction is disallowed but consent is necessary, return an error.
 			if (model.Prompt == Prompts.None)
@@ -135,6 +135,34 @@ public class AuthorizationRequestProcessor(
 			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
 
+		// RFC 9396 §5: a consent provider may narrow or deny authorization_details entries.
+		//   Granted.AuthorizationDetails == null    -> legacy provider, no AD opinion; pass through what the
+		//                                              validator pipeline produced (backward compat with PR #135).
+		//   Granted.AuthorizationDetails is { Count: 0 } AND the request carried AD entries
+		//                                           -> user denied every entry; fail with access_denied.
+		//   Granted.AuthorizationDetails is non-empty -> explicit consent (possibly narrowed); emit as-is.
+		if (userConsents.Granted.AuthorizationDetails is { Count: 0 }
+			&& request.AuthorizationDetails is { Count: > 0 })
+		{
+			return new AuthorizationError(
+				model,
+				ErrorCodes.AccessDenied,
+				"The end-user denied consent for all requested authorization_details entries.",
+				request.ResponseMode,
+				model.RedirectUri);
+		}
+
+		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
+		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
+		// issued JWT. If a host's IUserConsentsProvider impl parents the borrowed array as a
+		// child of its own DTO, the second serialise will throw because the JsonNode is parented
+		// twice. DeepClone defensively on the boundary so the two consumers each see independent
+		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
+		var sourceAd = userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
+		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
+			? (JsonArray?)sourceAd.DeepClone()
+			: null;
+
 		var clientId = request.ClientInfo.ClientId;
 
 		// Build an authorization context containing necessary data like client ID, scopes, and claims.
@@ -150,6 +178,8 @@ public class AuthorizationRequestProcessor(
 			Nonce = model.Nonce,
 			CodeChallenge = model.CodeChallenge,
 			CodeChallengeMethod = model.CodeChallengeMethod,
+			ProofKeyThumbprint = model.ProofKeyThumbprint,
+			AuthorizationDetails = emittedAuthorizationDetails,
 		};
 
 		// Mark the client as affected by this session and update the session's state.
@@ -167,37 +197,22 @@ public class AuthorizationRequestProcessor(
 			authSession.SessionId,
 			authSession.AffectedClientIds);
 
-		// Check if the response type requires an authorization code, and generate it if needed.
-		var codeRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Code);
-		if (codeRequired)
-		{
-			result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
-				new AuthorizedGrant(authSession, authContext),
-				request.ClientInfo.AuthorizationCodeExpiresIn);
-		}
+		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
-		// Check if an access token is required, and generate it if needed.
-		var tokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.Token);
-		if (tokenRequired)
+		// Dispatch each requested response-type part to its registered builder. The DI
+		// registration order — AuthorizationCodeBuilder in the core registration, then
+		// TokenResponseBuilder and IdTokenResponseBuilder added by EnableImplicitFlow —
+		// preserves the dependency IdTokenResponseBuilder has on the code and access-token
+		// fields populated by earlier builders (used to compute c_hash / at_hash). Parts
+		// whose builders are not registered (e.g. token / id_token when Implicit Flow is not
+		// enabled) cannot reach this point: FlowTypeValidator rejects the request earlier
+		// with unsupported_response_type.
+		foreach (var processor in responseProcessors)
 		{
-			result.TokenType = TokenTypes.Bearer;
-			result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
-				authSession,
-				authContext,
-				request.ClientInfo);
-		}
+			if (!request.Model.ResponseType.HasFlag(processor.ResponseType))
+				continue;
 
-		// Check if an ID token is required, and generate it if needed.
-		var idTokenRequired = request.Model.ResponseType.HasFlag(ResponseTypes.IdToken);
-		if (idTokenRequired)
-		{
-			result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-				authSession,
-				authContext,
-				request.ClientInfo,
-				!codeRequired && !tokenRequired,
-				result.Code,
-				result.AccessToken?.EncodedJwt);
+			await processor.BuildResponseAsync(request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.
@@ -209,22 +224,27 @@ public class AuthorizationRequestProcessor(
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
 	/// </summary>
 	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
+	/// <param name="clientInfo">The client, supplying default_max_age / default_acr_values fallbacks.</param>
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model, ClientInfo clientInfo)
 	{
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
-		// Filter sessions based on the maximum allowable authentication age, if specified.
-		if (model.MaxAge.HasValue)
+		// Filter by maximum authentication age. When the request omits max_age, fall back to the
+		// client's registered default_max_age (OIDC Core §2 / §3.1.2.1).
+		var maxAge = model.MaxAge ?? clientInfo.DefaultMaxAge;
+		if (maxAge.HasValue)
 		{
-			// skip all sessions older than max_age value
-			var minAuthenticationTime = clock.GetUtcNow() - model.MaxAge;
-			authSessions = authSessions
-				.Where(session => minAuthenticationTime < session.AuthenticationTime);
+			// skip all sessions older than the effective max_age value
+			var minAuthenticationTime = clock.GetUtcNow() - maxAge;
+			authSessions = authSessions.Where(session => minAuthenticationTime < session.AuthenticationTime);
 		}
 
-		// Filter sessions based on the required ACR (Authentication Context Class Reference) values, if specified.
-		var acrValues = model.AcrValues;
+		// Filter by required ACR values. When the request omits acr_values, fall back to the client's
+		// registered default_acr_values (OIDC Core §2).
+		var acrValues = model.AcrValues is { Length: > 0 } requestedAcrValues
+			? requestedAcrValues
+			: clientInfo.DefaultAcrValues;
 		if (acrValues is { Length: > 0 })
 		{
 			authSessions = authSessions.Where(

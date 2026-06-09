@@ -294,4 +294,77 @@ public class AddAliasTests
 		Assert.NotSame(aliasService1, aliasService2);
 		Assert.NotSame(primaryService1, aliasService1);
 	}
+
+	/// <summary>
+	/// Regression for the .NET 10 lookup-by-typed-factory case. <c>AddSingleton&lt;TService,
+	/// TImpl&gt;()</c> in .NET 10 produces a descriptor whose <c>ImplementationType</c>
+	/// property is null and whose <c>ImplementationFactory</c> is a
+	/// <c>Func&lt;IServiceProvider, TImpl&gt;</c>. Looking up the source by
+	/// <c>ImplementationType</c> alone misses such registrations; the helper must derive the
+	/// implementation type from the factory's generic argument too. Without that fix
+	/// AddAlias would throw «No registration found» for any host that used the typed-factory
+	/// shape — a silent breakage on .NET 10.
+	/// </summary>
+	[Fact]
+	public void AddAlias_AfterAddSingletonByInterface_FindsSourceViaFactoryGenericArg()
+	{
+		var services = new ServiceCollection();
+		services.AddSingleton<IBaseService, ServiceA>();
+		services.AddAlias<IPrimaryService, ServiceA>();
+
+		var provider = services.BuildServiceProvider();
+
+		var asBase = provider.GetRequiredService<IBaseService>();
+		var asPrimary = provider.GetRequiredService<IPrimaryService>();
+
+		Assert.IsType<ServiceA>(asBase);
+		Assert.IsType<ServiceA>(asPrimary);
+	}
+
+	/// <summary>
+	/// Same regression but exercising the Scoped lifetime: AddAlias preserves the source's
+	/// lifetime through the typed-factory clone, and within a single scope the alias resolves
+	/// to the same instance the source returns.
+	/// </summary>
+	[Fact]
+	public void AddAlias_AfterAddScopedByInterface_PreservesScopedSemantics()
+	{
+		var services = new ServiceCollection();
+		services.AddScoped<IBaseService, ServiceA>();
+		services.AddAlias<IPrimaryService, ServiceA>();
+
+		var provider = services.BuildServiceProvider();
+
+		using var scope = provider.CreateScope();
+		var asBase = scope.ServiceProvider.GetRequiredService<IBaseService>();
+		var asPrimary = scope.ServiceProvider.GetRequiredService<IPrimaryService>();
+
+		Assert.Same(asBase, asPrimary);
+	}
+
+	/// <summary>
+	/// Sister regression to <c>TryAddEnumerableAlias_PreferConcreteSource_OverPreviousAlias</c>:
+	/// when AddAlias is called twice for the same TImpl pointing at different TService
+	/// interfaces, the second call must resolve through the original concrete registration,
+	/// not through the first call's freshly added alias. Without that priority, the second
+	/// alias's factory captures the first alias's ServiceType and breaks under any later
+	/// Compose-style replacement of that interface.
+	/// </summary>
+	[Fact]
+	public void AddAlias_PreferConcreteSource_OverPreviousAlias()
+	{
+		var services = new ServiceCollection();
+		services.AddSingleton<ServiceA>();
+		services.AddAlias<IPrimaryService, ServiceA>();
+		services.AddAlias<IAliasService, ServiceA>();
+
+		var provider = services.BuildServiceProvider();
+
+		var asPrimary = provider.GetRequiredService<IPrimaryService>();
+		var asAlias = provider.GetRequiredService<IAliasService>();
+		var concrete = provider.GetRequiredService<ServiceA>();
+
+		Assert.Same(concrete, asPrimary);
+		Assert.Same(concrete, asAlias);
+	}
 }

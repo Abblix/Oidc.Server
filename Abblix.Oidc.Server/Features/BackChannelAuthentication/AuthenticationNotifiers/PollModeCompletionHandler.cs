@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes. Null when long-polling is disabled.</param>
-public class PollModeCompletionHandler(
+public partial class PollModeCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     IBackChannelLongPollingService? statusNotifier)
@@ -60,7 +60,7 @@ public class PollModeCompletionHandler(
     {
         await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
 
-        _logger.LogDebug("Poll mode - tokens stored for auth_req_id: {AuthReqId}", authenticationRequestId);
+        LogTokensStored(authenticationRequestId);
 
         if (statusNotifier != null)
         {
