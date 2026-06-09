@@ -31,6 +31,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.set_version.outputs.version }}
+      version_full: ${{ steps.set_version.outputs.version_full }}
       previous_version: ${{ steps.set_version.outputs.previous_version }}
     steps:
       # harden-runner in audit mode: capture baseline egress without blocking.
@@ -58,14 +59,31 @@ jobs:
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the
+          # X.Y release input to a full X.Y.0 SemVer for the build/pack override. The tag
+          # and GitHub Release keep the X.Y form; NuGet normalizes X.Y to X.Y.0 anyway, so
+          # the published package version is identical. A -prerelease suffix is preserved.
+          CORE="${VERSION%%-*}"
+          PRERELEASE=""
+          [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
+          if [[ "$CORE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            VERSION_FULL="${CORE}.0${PRERELEASE}"
+          else
+            VERSION_FULL="$VERSION"
+          fi
+          echo "MinVer override version: $VERSION_FULL"
+
           PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$PREVIOUS_VERSION" ]; then
             PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
             echo "Previous version: $PREVIOUS_VERSION"
           fi
 
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$VERSION"
+            echo "version_full=$VERSION_FULL"
+            echo "previous_version=$PREVIOUS_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
         timeout-minutes: 3
     timeout-minutes: 5
@@ -80,6 +98,7 @@ jobs:
       attestations: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -111,7 +130,7 @@ jobs:
       # in lock-step.
         timeout-minutes: 3
       - name: Build
-        run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION"
+        run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
         timeout-minutes: 3
       - name: Test
         run: |
@@ -128,7 +147,7 @@ jobs:
           retention-days: 7
         timeout-minutes: 3
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION"
+        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL"
         timeout-minutes: 3
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
