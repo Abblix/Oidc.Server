@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// <param name="logger">The logger for recording fallback warnings.</param>
 /// <param name="protobufSerializer">The Protocol Buffers serializer.</param>
 /// <param name="jsonSerializer">The JSON serializer fallback.</param>
-public class CompositeBinarySerializer(
+public partial class CompositeBinarySerializer(
     ILogger<CompositeBinarySerializer> logger,
     [FromKeyedServices(nameof(ProtobufSerializer))] IBinarySerializer protobufSerializer,
     [FromKeyedServices(nameof(JsonBinarySerializer))] IBinarySerializer jsonSerializer) : IBinarySerializer
@@ -50,11 +50,9 @@ public class CompositeBinarySerializer(
         {
             return protobufSerializer.Serialize(obj);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            logger.LogWarning(
-                "Type {TypeName} is not supported for protobuf serialization, falling back to JSON",
-                typeof(T).FullName);
+            LogProtobufSerializeFallback(ex, typeof(T).FullName);
             return jsonSerializer.Serialize(obj);
         }
     }
@@ -71,11 +69,9 @@ public class CompositeBinarySerializer(
         {
             return protobufSerializer.Deserialize<T>(bytes);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            logger.LogWarning(
-                "Type {TypeName} is not supported for protobuf deserialization, falling back to JSON",
-                typeof(T).FullName);
+            LogProtobufDeserializeFallback(ex, typeof(T).FullName);
             return jsonSerializer.Deserialize<T>(bytes);
         }
     }

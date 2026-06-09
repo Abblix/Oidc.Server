@@ -25,6 +25,8 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
 /// <summary>
@@ -40,7 +42,7 @@ public class AuthenticationRequestIdGenerator(IOptions<OidcOptions> options) : I
     /// </summary>
     /// <returns>A URL-safe, base64-encoded authentication request ID.</returns>
     public string GenerateAuthenticationRequestId()
-        => HttpServerUtility.UrlTokenEncode(
+        => Base64Url.EncodeToString(
             CryptoRandom.GetRandomBytes(
                 options.Value.BackChannelAuthentication.RequestIdLength));
 }

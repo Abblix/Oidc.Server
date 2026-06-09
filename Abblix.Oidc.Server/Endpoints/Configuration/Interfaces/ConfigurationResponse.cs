@@ -125,9 +125,69 @@ public record ConfigurationResponse
 	public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
+	/// Specifies the JWS signing algorithms accepted on inbound DPoP proofs per
+	/// RFC 9449 §5.1 (<c>dpop_signing_alg_values_supported</c>): the intersection of
+	/// the algorithms the AS validator can verify with the static DPoP-compatible
+	/// whitelist.
+	/// </summary>
+	public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Indicates support for mutual-TLS client certificate-bound access tokens
+	/// (<c>tls_client_certificate_bound_access_tokens</c>, RFC 8705 §3.3). <c>true</c> when
+	/// the provider both issues such tokens and enforces the binding at its protected
+	/// resources; <c>null</c> (omitted) otherwise.
+	/// </summary>
+	public bool? TlsClientCertificateBoundAccessTokens { init; get; }
+
+	/// <summary>
 	/// Specifies the signing algorithms supported for request objects.
 	/// </summary>
 	public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypted request objects.
+	/// </summary>
+	public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypted request objects.
+	/// </summary>
+	public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWS algorithms supported for signing JARM authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JARM
+	/// authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JARM
+	/// authorization responses (JARM §4).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWS algorithms supported for signing JWT introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JWT
+	/// introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
+
+	/// <summary>
+	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JWT
+	/// introspection responses (RFC 9701 §7).
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
 
 	/// <summary>
 	/// Indicates whether the OpenID Provider requires clients to use Pushed Authorization Requests (PAR) only.
@@ -158,4 +218,17 @@ public record ConfigurationResponse
 	/// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.
 	/// </summary>
 	public IEnumerable<string>? AcrValuesSupported { get; init; }
+
+	/// <summary>
+	/// Indicates whether the server includes the <c>iss</c> parameter in authorization responses per RFC 9207.
+	/// </summary>
+	public bool? AuthorizationResponseIssParameterSupported { get; init; }
+
+	/// <summary>
+	/// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+	/// registered validators for. Sourced from the same keyed-DI registry that request-time
+	/// dispatch uses; emitted as <c>authorization_details_types_supported</c> on the wire,
+	/// or omitted when null (no per-type validators registered).
+	/// </summary>
+	public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
 }

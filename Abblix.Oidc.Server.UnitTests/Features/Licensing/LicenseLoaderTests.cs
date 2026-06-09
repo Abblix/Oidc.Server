@@ -45,6 +45,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 ///
 /// Successful license loading is tested through integration tests with actual licenses.
 /// </remarks>
+[Collection("License")]
 public class LicenseLoaderTests
 {
     #region Invalid JWT Tests

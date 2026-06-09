@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest a capability or standard for Abblix OIDC Server
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea but not a concrete request yet? Start in
+        [Discussions → Ideas](https://github.com/Abblix/Oidc.Server/discussions/categories/ideas).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do that you can't today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: input
+    id: spec
+    attributes:
+      label: Related RFC / OpenID specification (if any)
+      placeholder: e.g. RFC 9396, OpenID4VCI, FAPI 2.0

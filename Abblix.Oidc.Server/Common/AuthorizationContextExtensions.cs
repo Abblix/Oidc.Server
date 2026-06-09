@@ -55,18 +55,48 @@ public static class AuthorizationContextExtensions
         payload.ClientId = context.ClientId;
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
-        payload.Audiences = context.Resources is { Length: > 0 }
-            ? Array.ConvertAll(context.Resources, res => res.OriginalString)
-            : [context.ClientId];
-        payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(context.RequestedClaims, JsonSerializerOptions);
 
-        // Add certificate-bound token confirmation if available
-        if (!string.IsNullOrWhiteSpace(context.X509CertificateSha256Thumbprint))
+        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names)
+        // both feed into the JWT aud claim. Resources take precedence in ordering for legacy
+        // compat; when neither is set we fall back to the client_id (OIDC convention).
+        var audienceParts = new List<string>();
+        if (context.Resources is { Length: > 0 })
+            audienceParts.AddRange(Array.ConvertAll(context.Resources, res => res.OriginalString));
+        if (context.Audiences is { Length: > 0 })
+            audienceParts.AddRange(context.Audiences);
+        payload.Audiences = audienceParts.Count > 0 ? audienceParts.ToArray() : [context.ClientId];
+
+        payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
+            context.RequestedClaims,
+            JsonSerializerOptions);
+
+        // mTLS (RFC 8705) and DPoP (RFC 9449) can coexist on a single token; when both
+        // bindings are present the cnf object carries x5t#S256 and jkt side by side.
+        // When neither binding is present, no cnf claim is emitted.
+        if (!string.IsNullOrWhiteSpace(context.CertificateSha256Thumbprint) ||
+            !string.IsNullOrWhiteSpace(context.ProofKeyThumbprint))
         {
-            payload[IanaClaimTypes.Cnf] = new JsonObject
+            payload.Confirmation = new JsonWebTokenConfirmation
             {
-                ["x5t#S256"] = context.X509CertificateSha256Thumbprint,
+                CertificateSha256Thumbprint = context.CertificateSha256Thumbprint,
+                JwkThumbprint = context.ProofKeyThumbprint,
             };
+        }
+
+        // RFC 9396 §7: the AS MAY include the authorized authorization_details in the access
+        // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
+        // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
+        // the payload's JsonNode tree independent of the source AuthorizationContext.
+        if (context.AuthorizationDetails is { Count: > 0 })
+        {
+            payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetails.DeepClone();
+        }
+
+        // RFC 8693 §4.1: emit the act claim for delegation tokens. Nested act chains live in
+        // the JsonObject's act member -- preserved byte-exact via DeepClone.
+        if (context.Actor is not null)
+        {
+            payload.Json[IanaClaimTypes.Act] = context.Actor.DeepClone();
         }
     }
 
@@ -94,13 +124,23 @@ public static class AuthorizationContextExtensions
                 .ToArray();
         }
 
+        var cnf = payload.Confirmation;
+
         return new AuthorizationContext(
             payload.ClientId.NotNull(nameof(payload.ClientId)),
             payload.Scope.NotNull(nameof(payload.Scope)).ToArray(),
-            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions))
+            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions),
+            resources)
         {
             Nonce = payload.Nonce,
-            Resources = resources,
+            CertificateSha256Thumbprint = cnf?.CertificateSha256Thumbprint,
+            ProofKeyThumbprint = cnf?.JwkThumbprint,
+            AuthorizationDetails = payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray raw
+                ? (JsonArray)raw.DeepClone()
+                : null,
+            Actor = payload.Json[IanaClaimTypes.Act] is JsonObject act
+                ? (JsonObject)act.DeepClone()
+                : null,
         };
     }
 }

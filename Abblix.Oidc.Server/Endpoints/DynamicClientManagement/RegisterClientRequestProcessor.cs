@@ -20,8 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -76,6 +76,40 @@ public class RegisterClientRequestProcessor(
         {
             ClientSecret = credentials.ClientSecret,
             ClientSecretExpiresAt = credentials.ExpiresAt,
+            // RFC 7591 §3.2.1: echo registered metadata so the client can confirm what was
+            // registered (including server-assigned defaults) without a follow-up read.
+            TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
+            ApplicationType = clientInfo.ApplicationType,
+            RedirectUris = clientInfo.RedirectUris,
+            ClientName = clientInfo.ClientName,
+            LogoUri = clientInfo.LogoUri,
+            SubjectType = clientInfo.SubjectType,
+            SectorIdentifierUri = Uri.TryCreate(clientInfo.SectorIdentifier, UriKind.Absolute, out var sectorUri) ? sectorUri : null,
+            JwksUri = clientInfo.JwksUri,
+            UserInfoEncryptedResponseAlg = clientInfo.UserInfoEncryptedResponseAlgorithm,
+            UserInfoEncryptedResponseEnc = clientInfo.UserInfoEncryptedResponseEncryption,
+
+            // RFC 9701: echo the registered introspection response algorithms. The signed algorithm is omitted
+            // when it is the implicit "none" default so the response only advertises an explicit opt-in.
+            IntrospectionSignedResponseAlg = clientInfo.IntrospectionSignedResponseAlgorithm switch
+            {
+                SigningAlgorithms.None => null,
+                _ => clientInfo.IntrospectionSignedResponseAlgorithm,
+            },
+            IntrospectionEncryptedResponseAlg = clientInfo.IntrospectionEncryptedResponseAlgorithm,
+            IntrospectionEncryptedResponseEnc = clientInfo.IntrospectionEncryptedResponseEncryption,
+
+            Contacts = clientInfo.Contacts,
+            RequestUris = clientInfo.RequestUris,
+            InitiateLoginUri = clientInfo.InitiateLoginUri,
+            TlsClientAuthSubjectDn = clientInfo.TlsClientAuth?.SubjectDn,
+            TlsClientAuthSanDns = clientInfo.TlsClientAuth?.SanDns,
+            TlsClientAuthSanUri = clientInfo.TlsClientAuth?.SanUris,
+            TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
+            TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
+            DpopBoundAccessTokens = clientInfo.RequireDPoP,
+            AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
         };
 
         return response;
@@ -99,6 +133,12 @@ public class RegisterClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
+            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9396 §5.1: authorization_details_types per-client allowlist.
+            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
+            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -110,6 +150,9 @@ public class RegisterClientRequestProcessor(
             BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
             BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
             BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
+            AllowedScopes = model.Scope,
+            SoftwareId = model.SoftwareId,
+            SoftwareVersion = model.SoftwareVersion,
             ApplicationType = model.ApplicationType,
             Contacts = model.Contacts,
             ClientName = model.ClientName,
@@ -121,6 +164,10 @@ public class RegisterClientRequestProcessor(
             IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
             UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
+            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
             RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
             RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
             RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
@@ -128,7 +175,7 @@ public class RegisterClientRequestProcessor(
         };
 
         // Map tls_client_auth metadata if selected
-        if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
         {
             clientInfo.TlsClientAuth = new ()
             {
@@ -167,9 +214,19 @@ public class RegisterClientRequestProcessor(
             clientInfo.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
         }
 
+        if (model.IntrospectionSignedResponseAlg.HasValue())
+        {
+            clientInfo.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
+        }
+
         if (model.IdTokenSignedResponseAlg.HasValue())
         {
             clientInfo.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
+        }
+
+        if (model.AuthorizationSignedResponseAlg.HasValue())
+        {
+            clientInfo.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
         }
 
         if (model.BackChannelLogoutUri != null)

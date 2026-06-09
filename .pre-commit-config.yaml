@@ -1,0 +1,30 @@
+# Pre-commit hooks for GitHub Actions workflow safety.
+#
+# One-time setup per clone:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually on all files:
+#   pre-commit run --all-files
+#
+# Bypass once (NOT recommended; CI re-runs the same checks):
+#   git commit --no-verify
+#
+# Rules and rationale: ../Docs/wiki/github-actions-security-checklist.md
+
+repos:
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.10
+    hooks:
+      - id: actionlint
+        files: ^\.github/workflows/.*\.(yml|yaml)$
+
+  - repo: local
+    hooks:
+      - id: no-inline-secrets
+        name: "Block inline untrusted-input interpolation in run: blocks"
+        entry: python .github/scripts/lint-no-inline-secrets.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
+        pass_filenames: false

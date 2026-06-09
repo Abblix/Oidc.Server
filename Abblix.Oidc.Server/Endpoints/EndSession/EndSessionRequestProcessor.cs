@@ -46,7 +46,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <param name="issuerProvider">The issuer provider.</param>
 /// <param name="clientInfoProvider">The client info provider.</param>
 /// <param name="logoutNotifier">The logout notifier.</param>
-public class EndSessionRequestProcessor(
+public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
 	IIssuerProvider issuerProvider,
@@ -57,7 +57,8 @@ public class EndSessionRequestProcessor(
 	/// Processes the end-session request and returns the corresponding response.
 	/// </summary>
 	/// <param name="request">The valid end-session request to be processed.</param>
-	/// <returns>A task representing the asynchronous operation, which upon completion will yield the <see cref="EndSessionResponse"/>.</returns>
+	/// <returns>A task representing the asynchronous operation, which upon completion will yield an
+	/// <see cref="EndSessionSuccess"/> or an <see cref="OidcError"/>.</returns>
 	public async Task<Result<EndSessionSuccess, OidcError>> ProcessAsync(ValidEndSessionRequest request)
 	{
 		var postLogoutRedirectUri = request.Model.PostLogoutRedirectUri;
@@ -88,10 +89,15 @@ public class EndSessionRequestProcessor(
 		}
 
 		await authSessionService.SignOutAsync();
-		logger.LogDebug("The user with subject={Subject} was logged out from session {Session}", subjectId, sessionId);
+		LogUserLoggedOut(subjectId, sessionId);
 
 		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));
 
+		// Await every logout notification so the back-channel POST is actually sent. An earlier
+		// `task.Status == Running` filter silently dropped these tasks (an async notifier's task is
+		// WaitingForActivation, not Running), leaving the POST detached and abandoned at request end.
+		// Notification is best-effort: NotifyClientSafelyAsync isolates per-client failures so an
+		// unreachable client endpoint cannot fail the end-user's logout.
 		var tasks = new List<Task>();
 		foreach (var clientId in authSession.AffectedClientIds)
 		{
@@ -99,14 +105,29 @@ public class EndSessionRequestProcessor(
 			if (clientInfo == null)
 				continue;
 
-			var task = logoutNotifier.NotifyClientAsync(clientInfo, context);
-			if (task.Status == TaskStatus.Running)
-				tasks.Add(task);
+			tasks.Add(NotifyClientSafelyAsync(clientInfo, context));
 		}
 		await Task.WhenAll(tasks);
 
 		var response = new EndSessionSuccess(postLogoutRedirectUri, context.FrontChannelLogoutRequestUris);
 		return response;
+	}
+
+	/// <summary>
+	/// Notifies a single client of the logout, isolating any failure. Back-channel and front-channel
+	/// logout are best-effort: a client whose endpoint is unreachable (down, TLS failure, blocked) is
+	/// logged for operator attention but must not fail the end-user's logout.
+	/// </summary>
+	private async Task NotifyClientSafelyAsync(ClientInfo clientInfo, LogoutContext context)
+	{
+		try
+		{
+			await logoutNotifier.NotifyClientAsync(clientInfo, context);
+		}
+		catch (Exception exception)
+		{
+			LogClientLogoutNotificationFailed(exception, clientInfo.ClientId);
+		}
 	}
 
 	private static class Parameters

@@ -49,6 +49,7 @@ public class ResponseModeValidatorTests
     public ResponseModeValidatorTests()
     {
         _logger = new Mock<ILogger<ResponseModeValidator>>();
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
         _validator = new ResponseModeValidator(_logger.Object);
     }
 
@@ -452,23 +453,62 @@ public class ResponseModeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts jwt response_mode for authorization code flow.
-    /// Per OAuth 2.0 JWT Secured Authorization Response Mode (JARM), jwt mode is valid.
-    /// Tests support for JWT-secured response mode.
+    /// Verifies that ValidateAsync accepts JARM response modes (JWT Secured Authorization Response Mode).
+    /// <c>query.jwt</c>, <c>fragment.jwt</c>, <c>form_post.jwt</c> and the <c>jwt</c> shortcut are valid for
+    /// the authorization code flow; the requested mode is preserved on the context for the formatter to encode.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_AuthorizationCodeFlowWithJwt_ShouldReturnError()
+    [Theory]
+    [InlineData(ResponseModes.QueryJwt)]
+    [InlineData(ResponseModes.FragmentJwt)]
+    [InlineData(ResponseModes.FormPostJwt)]
+    [InlineData(ResponseModes.Jwt)]
+    public async Task ValidateAsync_AuthorizationCodeFlowWithJarmMode_ShouldSucceed(string responseMode)
     {
         // Arrange
-        var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: "jwt");
+        var context = CreateContext(FlowTypes.AuthorizationCode, responseMode);
 
         // Act
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        // JWT mode is not in the explicitly allowed list, so it should fail
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Null(result);
+        Assert.Equal(responseMode, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// Verifies that <c>query.jwt</c> inherits <c>query</c>'s prohibition for token-bearing flows (JARM §2.3.1):
+    /// the JWT does not exempt the response from the rule that credentials must not appear in the URL query.
+    /// The <c>jwt</c> shortcut, by contrast, resolves to fragment for these flows and is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.Implicit, ResponseModes.QueryJwt, false)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.FragmentJwt, true)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.FormPostJwt, true)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.Jwt, true)]
+    [InlineData(FlowTypes.Hybrid, ResponseModes.QueryJwt, false)]
+    [InlineData(FlowTypes.Hybrid, ResponseModes.Jwt, true)]
+    public async Task ValidateAsync_TokenBearingFlowWithJarmMode_ShouldRespectQueryProhibition(
+        FlowTypes flowType,
+        string responseMode,
+        bool shouldSucceed)
+    {
+        // Arrange
+        var context = CreateContext(flowType, responseMode);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        if (shouldSucceed)
+        {
+            Assert.Null(result);
+            Assert.Equal(responseMode, context.ResponseMode);
+        }
+        else
+        {
+            Assert.NotNull(result);
+            Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        }
     }
 
     /// <summary>

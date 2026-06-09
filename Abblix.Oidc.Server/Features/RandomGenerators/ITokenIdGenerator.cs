@@ -23,15 +23,14 @@
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Defines an interface for generating unique identifiers for JSON Web Tokens (JWTs).
-/// This interface abstracts the details of how JWT IDs are generated, allowing for different
-/// implementations that can provide various methods of generating unique and secure token identifiers.
+/// Produces unique identifiers for JSON Web Tokens, used as the <c>jti</c> claim defined in RFC 7519 §4.1.7.
+/// A unique <c>jti</c> per token is required to support replay detection and one-time token semantics, so
+/// implementations must generate values with sufficient entropy to make collisions and guessing impractical.
 /// </summary>
 public interface ITokenIdGenerator
 {
 	/// <summary>
-	/// Generates a new unique identifier for a JWT. The specific implementation determines the format
-	/// and characteristics of the generated ID, such as its length, randomness, and URL-safety.
+	/// Generates a new unique identifier suitable for the <c>jti</c> claim of a JWT.
 	/// </summary>
 	/// <returns>A unique identifier suitable for use as a JWT ID.</returns>
 	string GenerateTokenId();

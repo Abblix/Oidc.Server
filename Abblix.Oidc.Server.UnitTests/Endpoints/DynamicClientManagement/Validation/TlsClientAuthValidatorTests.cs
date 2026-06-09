@@ -38,7 +38,7 @@ public class TlsClientAuthValidatorTests
 {
     private readonly TlsClientAuthValidator _validator = new();
 
-    private ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
+    private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
         => new(request);
 
     /// <summary>
@@ -51,7 +51,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
@@ -72,8 +72,33 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+        });
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert — pin the error code (the stable contract), not the description wording.
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies validation fails when more than one subject identifier is specified.
+    /// RFC 8705 §2.1.2 requires a tls_client_auth client to register exactly one of the
+    /// subject-identifier parameters; supplying both a Subject DN and a SAN must be rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithMultipleSubjectIdentifiers_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp,C=US",
+            TlsClientAuthSanDns = ["client.example.com"],
         });
 
         // Act
@@ -81,7 +106,7 @@ public class TlsClientAuthValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("at least one", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -94,7 +119,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp,C=US",
         });
@@ -116,7 +141,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "not a valid DN format!@#",
         });
@@ -142,7 +167,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [dnsName],
         });
@@ -164,7 +189,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [""],
         });
@@ -190,7 +215,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = [dnsName],
         });
@@ -216,7 +241,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanUri = [new Uri(uri)],
         });
@@ -241,7 +266,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -261,12 +286,14 @@ public class TlsClientAuthValidatorTests
     [InlineData("2001:0db8:85a3:0000:0000:8a2e:0370:7334")]
     [InlineData("::1")]
     [InlineData("fe80::1")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("SonarAnalyzer", "S4144",
+        Justification = "IPv6 variant of the IPv4 validation test; implementations are structurally identical but cover distinct address families per RFC 8705.")]
     public async Task ValidateAsync_WithValidIPv6_ShouldReturnNull(string ip)
     {
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -290,7 +317,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanIp = [ip],
         });
@@ -316,7 +343,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanEmail = [email],
         });
@@ -340,7 +367,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanEmail = [email],
         });
@@ -354,16 +381,17 @@ public class TlsClientAuthValidatorTests
     }
 
     /// <summary>
-    /// Verifies validation succeeds with multiple metadata types.
-    /// Combination of DN, DNS, URI, IP, and email should all be validated.
+    /// Verifies validation fails when several subject-identifier metadata types are combined.
+    /// RFC 8705 §2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
+    /// be rejected rather than accepted.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithMultipleValidMetadata_ShouldReturnNull()
+    public async Task ValidateAsync_WithMultipleMetadataTypes_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSubjectDn = "CN=client.example.com,O=Example Corp",
             TlsClientAuthSanDns = ["client.example.com", "*.example.com"],
@@ -376,7 +404,8 @@ public class TlsClientAuthValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -389,7 +418,7 @@ public class TlsClientAuthValidatorTests
         // Arrange
         var context = CreateContext(new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
             TlsClientAuthSanDns = ["valid.example.com", "invalid dns name"],
         });

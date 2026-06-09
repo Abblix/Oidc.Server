@@ -27,7 +27,9 @@ using System.Security.Cryptography.X509Certificates;
 namespace Abblix.Utils;
 
 /// <summary>
-/// Defines an interface for providing X.509 certificates.
+/// Resolves an <see cref="X509Certificate2"/> from a logical <see cref="CertificateId"/>, abstracting away the
+/// physical source (file system, certificate store, secret manager, etc.). Implementations are expected to be
+/// thread-safe and to surface format or access errors as <see cref="InvalidOperationException"/>.
 /// </summary>
 public interface ICertificateProvider
 {

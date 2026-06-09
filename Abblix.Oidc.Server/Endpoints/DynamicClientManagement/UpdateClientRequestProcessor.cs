@@ -70,6 +70,12 @@ public class UpdateClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
+            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9396 §5.1: authorization_details_types per-client allowlist.
+            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
+            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -92,12 +98,25 @@ public class UpdateClientRequestProcessor(
             IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
             UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
             RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
             RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
             RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
             TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
             RequestUris = model.RequestUris ?? [],
+            // RFC 7592 update is a full replacement: these must be re-applied or the update silently
+            // drops them. Omitting AllowedScopes in particular reverted the client to "any scope"
+            // (null = unrestricted), defeating the per-client scope enforcement on the update path.
+            AllowedScopes = model.Scope,
+            SoftwareId = model.SoftwareId,
+            SoftwareVersion = model.SoftwareVersion,
         };
+
+        if (model.AuthorizationSignedResponseAlg.HasValue())
+        {
+            updatedClient.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
+        }
 
         // Update logout configuration using wrapper objects
         if (model.BackChannelLogoutUri != null)
@@ -115,7 +134,7 @@ public class UpdateClientRequestProcessor(
         }
 
         // Map tls_client_auth metadata if selected
-        if (string.Equals(model.TokenEndpointAuthMethod, ClientAuthenticationMethods.TlsClientAuth, StringComparison.Ordinal))
+        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
         {
             updatedClient.TlsClientAuth = new()
             {
@@ -162,6 +181,13 @@ public class UpdateClientRequestProcessor(
             TlsClientAuthSanUri = updatedClient.TlsClientAuth?.SanUris,
             TlsClientAuthSanIp = updatedClient.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = updatedClient.TlsClientAuth?.SanEmails,
+            // RFC 9449 §5.2: echo dpop_bound_access_tokens so the client can confirm the
+            // current binding state.
+            DpopBoundAccessTokens = updatedClient.RequireDPoP,
+            // RFC 9396 §5.1: echo authorization_details_types so the client confirms its allowlist.
+            AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
+            // Non-standard extension: echo token_exchange_subject_token_types.
+            TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
         };
     }
 

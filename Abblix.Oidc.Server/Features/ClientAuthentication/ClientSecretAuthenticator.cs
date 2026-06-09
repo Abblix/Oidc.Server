@@ -20,13 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Constants;
+using CryptographicOperations = System.Security.Cryptography.CryptographicOperations;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -36,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// process matches the stored secret for the client. This class supports various hash algorithms for
 /// secure secret comparison and handles client secret expiration.
 /// </summary>
-public abstract class ClientSecretAuthenticator(
+public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
@@ -62,18 +61,18 @@ public abstract class ClientSecretAuthenticator(
 		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (client == null)
 		{
-			logger.LogDebug("Client authentication failed: client information for id {ClientId} is missing", Value(clientId));
+			LogClientNotFound(clientId);
 			return null;
 		}
 
 		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
-			logger.LogDebug("Client authentication failed: client {ClientId} uses another authentication method", Value(clientId));
+			LogWrongAuthMethod(clientId);
 			return null;
 		}
 
 		if (client is not { ClientSecrets.Length: > 0 })
 		{
-			logger.LogDebug("Client authentication failed: no secrets are configured for client {ClientId}", Value(clientId));
+			LogNoSecretsConfigured(clientId);
 			return null;
 		}
 
@@ -108,20 +107,17 @@ public abstract class ClientSecretAuthenticator(
 
 		if (matchingSecret == null)
 		{
-			logger.LogWarning("Client authentication failed: No matching secret found for client {ClientId}",
-				client.ClientId);
+			LogNoMatchingSecret(client.ClientId);
 			return false; // Invalid secret
 		}
 
 		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < clock.GetUtcNow())
 		{
-			logger.LogWarning("Client authentication failed: Secret has expired for client {ClientId}",
-				client.ClientId);
+			LogSecretExpired(client.ClientId);
 			return false; // Secret is expired
 		}
 
-		logger.LogInformation("Client authenticated successfully with client ID {ClientId}",
-			client.ClientId);
+		LogAuthenticated(client.ClientId);
 		return true;
 	}
 
@@ -153,7 +149,9 @@ public abstract class ClientSecretAuthenticator(
 		{
 			hash ??= hashService.Sha(hashAlgorithm, secretValue);
 
-			if (validSecretHash.SequenceEqual(hash))
+			// Constant-time compare of the secret hashes (both are fixed-length digests of the
+			// same algorithm) so the token endpoint does not leak a timing oracle on the hash.
+			if (CryptographicOperations.FixedTimeEquals(validSecretHash, hash))
 				yield return clientSecret;
 		}
 	}

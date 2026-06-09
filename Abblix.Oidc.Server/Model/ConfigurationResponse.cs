@@ -20,16 +20,26 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils.Json;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents the configuration response detailing the capabilities and endpoints of the OpenID Connect provider.
-/// This response includes information about the provider's issuer identifier, key sets, supported endpoints,
-/// supported features, and more, enabling clients to dynamically configure themselves to utilize the provider's
-/// services.
+/// The OpenID Provider discovery document returned by the <c>/.well-known/openid-configuration</c> endpoint,
+/// as defined by OpenID Connect Discovery 1.0 §3 and OAuth 2.0 Authorization Server Metadata (RFC 8414).
+/// Its content lists the provider's endpoints, supported algorithms, response types, scopes, and feature flags
+/// so that relying parties can configure themselves dynamically.
 /// </summary>
+/// <remarks>
+/// Decorated with <see cref="JsonIgnoreNullsAttribute"/> so that all nullable optional properties are omitted
+/// from the serialized JSON when <c>null</c>, rather than emitted as <c>"field": null</c>.
+/// RFC 8414 §2 requires that optional metadata fields be absent when not applicable — some OIDC client libraries
+/// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
+/// fields they do not expect to be present.
+/// </remarks>
+[JsonIgnoreNulls]
 public record ConfigurationResponse
 {
     /// <summary>
@@ -39,47 +49,215 @@ public record ConfigurationResponse
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>issuer</c> metadata field carrying the OpenID Provider's issuer identifier.
+        /// </summary>
         public const string Issuer = "issuer";
+
+        /// <summary>The <c>jwks_uri</c> metadata field pointing to the provider's JSON Web Key Set.
+        /// </summary>
         public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>authorization_endpoint</c> metadata field pointing to the authorization endpoint.
+        /// </summary>
         public const string AuthorizationEndpoint = "authorization_endpoint";
+
+        /// <summary>The <c>token_endpoint</c> metadata field pointing to the token endpoint.</summary>
         public const string TokenEndpoint = "token_endpoint";
+
+        /// <summary>The <c>userinfo_endpoint</c> metadata field pointing to the UserInfo endpoint.
+        /// </summary>
         public const string UserInfoEndpoint = "userinfo_endpoint";
+
+        /// <summary>The <c>end_session_endpoint</c> metadata field pointing to the RP-initiated logout
+        /// endpoint.</summary>
         public const string EndSessionEndpoint = "end_session_endpoint";
+
+        /// <summary>The <c>check_session_iframe</c> metadata field pointing to the OP iframe used for
+        /// OpenID Connect Session Management 1.0.</summary>
         public const string CheckSessionIframe = "check_session_iframe";
+
+        /// <summary>The <c>introspection_endpoint</c> metadata field pointing to the token introspection
+        /// endpoint (RFC 7662).</summary>
         public const string IntrospectionEndpoint = "introspection_endpoint";
+
+        /// <summary>The <c>revocation_endpoint</c> metadata field pointing to the token revocation
+        /// endpoint (RFC 7009).</summary>
         public const string RevocationEndpoint = "revocation_endpoint";
+
+        /// <summary>The <c>registration_endpoint</c> metadata field pointing to the dynamic client
+        /// registration endpoint (RFC 7591).</summary>
         public const string RegistrationEndpoint = "registration_endpoint";
+
+        /// <summary>The <c>frontchannel_logout_supported</c> metadata flag advertising front-channel
+        /// logout support (OIDC Front-Channel Logout 1.0).</summary>
         public const string FrontChannelLogoutSupported = "frontchannel_logout_supported";
+
+        /// <summary>The <c>frontchannel_logout_session_supported</c> metadata flag advertising
+        /// front-channel logout session identifier support.</summary>
         public const string FrontChannelLogoutSessionSupported = "frontchannel_logout_session_supported";
+
+        /// <summary>The <c>backchannel_logout_supported</c> metadata flag advertising back-channel
+        /// logout support (OIDC Back-Channel Logout 1.0).</summary>
         public const string BackChannelLogoutSupported = "backchannel_logout_supported";
+
+        /// <summary>The <c>backchannel_logout_session_supported</c> metadata flag advertising
+        /// back-channel logout session identifier support.</summary>
         public const string BackChannelLogoutSessionSupported = "backchannel_logout_session_supported";
+
+        /// <summary>The <c>claims_parameter_supported</c> metadata flag advertising support for the
+        /// <c>claims</c> request parameter.</summary>
         public const string ClaimsParameterSupported = "claims_parameter_supported";
+
+        /// <summary>The <c>scopes_supported</c> metadata field listing scope values the provider
+        /// recognises.</summary>
         public const string ScopesSupported = "scopes_supported";
+
+        /// <summary>The <c>claims_supported</c> metadata field listing claim names the provider may
+        /// emit.</summary>
         public const string ClaimsSupported = "claims_supported";
+
+        /// <summary>The <c>grant_types_supported</c> metadata field listing grant types the provider
+        /// accepts at the token endpoint.</summary>
         public const string GrantTypesSupported = "grant_types_supported";
+
+        /// <summary>The <c>response_types_supported</c> metadata field listing response type combinations
+        /// the authorization endpoint accepts.</summary>
         public const string ResponseTypesSupported = "response_types_supported";
+
+        /// <summary>The <c>response_modes_supported</c> metadata field listing response modes the
+        /// authorization endpoint supports.</summary>
         public const string ResponseModesSupported = "response_modes_supported";
+
+        /// <summary>The <c>token_endpoint_auth_methods_supported</c> metadata field listing client
+        /// authentication methods accepted at the token endpoint.</summary>
         public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
+
+        /// <summary>The <c>token_endpoint_auth_signing_alg_values_supported</c> metadata field listing
+        /// JWS algorithms accepted on client authentication assertions.</summary>
         public const string TokenEndpointAuthSigningAlgValuesSupported = "token_endpoint_auth_signing_alg_values_supported";
+
+        /// <summary>The <c>id_token_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign ID Tokens.</summary>
         public const string IdTokenSigningAlgValuesSupported = "id_token_signing_alg_values_supported";
+
+        /// <summary>The <c>subject_types_supported</c> metadata field listing subject identifier types
+        /// the provider can issue (<c>public</c>, <c>pairwise</c>).</summary>
         public const string SubjectTypesSupported = "subject_types_supported";
+
+        /// <summary>The <c>code_challenge_methods_supported</c> metadata field listing PKCE code-challenge
+        /// methods the provider accepts (RFC 7636).</summary>
         public const string CodeChallengeMethodsSupported = "code_challenge_methods_supported";
+
+        /// <summary>The <c>prompt_values_supported</c> metadata field listing valid <c>prompt</c> parameter
+        /// values.</summary>
         public const string PromptValuesSupported = "prompt_values_supported";
+
+        /// <summary>The <c>request_parameter_supported</c> metadata flag advertising support for the
+        /// <c>request</c> request object parameter.</summary>
         public const string RequestParameterSupported = "request_parameter_supported";
+
+        /// <summary>The <c>request_object_signing_alg_values_supported</c> metadata field listing JWS
+        /// algorithms accepted on Request Objects.</summary>
         public const string RequestObjectSigningAlgValuesSupported = "request_object_signing_alg_values_supported";
+
+        /// <summary>The <c>request_object_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms accepted on encrypted Request Objects.</summary>
+        public const string RequestObjectEncryptionAlgValuesSupported = "request_object_encryption_alg_values_supported";
+
+        /// <summary>The <c>request_object_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms accepted on encrypted Request Objects.</summary>
+        public const string RequestObjectEncryptionEncValuesSupported = "request_object_encryption_enc_values_supported";
+
+        /// <summary>The <c>authorization_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationSigningAlgValuesSupported = "authorization_signing_alg_values_supported";
+
+        /// <summary>The <c>authorization_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationEncryptionAlgValuesSupported = "authorization_encryption_alg_values_supported";
+
+        /// <summary>The <c>authorization_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        public const string AuthorizationEncryptionEncValuesSupported = "authorization_encryption_enc_values_supported";
+
+        /// <summary>The <c>userinfo_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider may use when signing UserInfo responses.</summary>
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
+
+        /// <summary>The <c>introspection_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// the provider uses to sign JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionSigningAlgValuesSupported = "introspection_signing_alg_values_supported";
+
+        /// <summary>The <c>introspection_encryption_alg_values_supported</c> metadata field listing JWE
+        /// key-management algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionEncryptionAlgValuesSupported = "introspection_encryption_alg_values_supported";
+
+        /// <summary>The <c>introspection_encryption_enc_values_supported</c> metadata field listing JWE
+        /// content-encryption algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        public const string IntrospectionEncryptionEncValuesSupported = "introspection_encryption_enc_values_supported";
+
+        /// <summary>The <c>dpop_signing_alg_values_supported</c> metadata field listing JWS algorithms
+        /// accepted on DPoP proofs (RFC 9449 §5.1).</summary>
+        public const string DpopSigningAlgValuesSupported = "dpop_signing_alg_values_supported";
+
+        /// <summary>The <c>pushed_authorization_request_endpoint</c> metadata field pointing to the PAR
+        /// endpoint (RFC 9126).</summary>
         public const string PushedAuthorizationRequestEndpoint = "pushed_authorization_request_endpoint";
+
+        /// <summary>The <c>require_pushed_authorization_requests</c> metadata flag indicating PAR is
+        /// mandatory at the authorization endpoint (RFC 9126).</summary>
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>The <c>require_signed_request_object</c> metadata flag indicating signed Request
+        /// Objects are mandatory.</summary>
         public const string RequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>The <c>backchannel_token_delivery_modes_supported</c> metadata field listing CIBA
+        /// token delivery modes (<c>poll</c>, <c>ping</c>, <c>push</c>).</summary>
         public const string BackchannelTokenDeliveryModesSupported = "backchannel_token_delivery_modes_supported";
+
+        /// <summary>The <c>backchannel_authentication_endpoint</c> metadata field pointing to the CIBA
+        /// backchannel authentication endpoint.</summary>
         public const string BackchannelAuthenticationEndpoint = "backchannel_authentication_endpoint";
+
+        /// <summary>The <c>backchannel_authentication_request_signing_alg_values_supported</c> metadata
+        /// field listing JWS algorithms accepted on signed CIBA requests.</summary>
         public const string BackchannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported";
+
+        /// <summary>The <c>backchannel_user_code_parameter_supported</c> metadata flag advertising the
+        /// CIBA <c>user_code</c> parameter.</summary>
         public const string BackchannelUserCodeParameterSupported = "backchannel_user_code_parameter_supported";
-        // RFC 8628 Device Authorization Grant
+
+        /// <summary>The <c>device_authorization_endpoint</c> metadata field pointing to the Device
+        /// Authorization Grant endpoint (RFC 8628).</summary>
         public const string DeviceAuthorizationEndpoint = "device_authorization_endpoint";
-        // RFC 8705 mTLS endpoint aliases
+
+        /// <summary>The <c>mtls_endpoint_aliases</c> metadata block carrying mTLS-bound alternative
+        /// endpoint URLs (RFC 8705 §5).</summary>
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
+
+        /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> metadata flag advertising
+        /// that the provider supports mutual-TLS client certificate-bound access tokens
+        /// (RFC 8705 §3.3).</summary>
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
+
+        /// <summary>The <c>acr_values_supported</c> metadata field listing Authentication Context Class
+        /// Reference values the provider can satisfy.</summary>
         public const string AcrValuesSupported = "acr_values_supported";
+
+        /// <summary>The <c>authorization_response_iss_parameter_supported</c> metadata flag advertising
+        /// inclusion of the <c>iss</c> parameter in authorization responses (RFC 9207).</summary>
+        public const string AuthorizationResponseIssParameterSupported = "authorization_response_iss_parameter_supported";
+
+        /// <summary>The <c>signed_metadata</c> field carrying a JWS whose claims duplicate this
+        /// metadata, signed by the provider so clients can verify its origin (RFC 8414 §2.1).
+        /// </summary>
+        public const string SignedMetadata = "signed_metadata";
+
+        /// <summary>The <c>authorization_details_types_supported</c> metadata field listing the
+        /// authorization-detail <c>type</c> values this server understands (RFC 9396 §13).
+        /// Absent when no per-type validators are registered.</summary>
+        public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
     }
 
     /// <summary>
@@ -285,12 +463,73 @@ public record ConfigurationResponse
     public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
     /// <summary>
+    /// JWS signing algorithms accepted on inbound DPoP proofs per RFC 9449 §5.1
+    /// (<c>dpop_signing_alg_values_supported</c>).
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopSigningAlgValuesSupported)]
+    public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for request objects.
     /// These algorithms are used to sign request objects sent to the OpenID Provider, providing
     /// security measures against tampering and ensuring the authenticity of the request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectSigningAlgValuesSupported)]
     public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider supports
+    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestObjectEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider supports
+    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestObjectEncryptionEncValuesSupported)]
+    public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationSigningAlgValuesSupported)]
+    public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
+    /// JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
+    /// encrypt JARM authorization responses (JARM §4).
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationEncryptionEncValuesSupported)]
+    public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSigningAlgValuesSupported)]
+    public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
+    /// JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptionAlgValuesSupported)]
+    public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
+
+    /// <summary>
+    /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
+    /// encrypt JWT introspection responses (RFC 9701 §7).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptionEncValuesSupported)]
+    public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider mandates that all request objects must be signed.
@@ -339,9 +578,46 @@ public record ConfigurationResponse
     public MtlsAliases? MtlsEndpointAliases { get; init; }
 
     /// <summary>
+    /// RFC 8705 §3.3: indicates that the provider supports mutual-TLS client certificate-bound
+    /// access tokens. Emitted as <c>true</c> when the provider both issues such tokens and
+    /// enforces the binding at its protected resources; omitted otherwise.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// Lists the ACR (Authentication Context Class Reference) values supported by the OpenID Provider.
     /// These values represent authentication assurance levels that can be requested and achieved.
     /// </summary>
     [JsonPropertyName(Parameters.AcrValuesSupported)]
     public IEnumerable<string>? AcrValuesSupported { get; init; }
+
+    /// <summary>
+    /// Indicates that the server includes the <c>iss</c> parameter in every authorization response per RFC 9207.
+    /// Clients that inspect this flag activate mix-up attack defenses.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationResponseIssParameterSupported)]
+    public bool? AuthorizationResponseIssParameterSupported { get; init; }
+
+    /// <summary>
+    /// RFC 8414 §2.1: a JWS whose payload restates this entire metadata set, signed with the
+    /// provider's signing key. When present, a client that verifies the signature against the
+    /// keys at <see cref="JwksUri"/> may trust the configuration's origin beyond the TLS layer;
+    /// signed values take precedence over the corresponding plain-JSON fields. Emitted only
+    /// when <c>DiscoveryOptions.SignedMetadata</c> is enabled, and computed last so the signed
+    /// payload never contains this field itself.
+    /// </summary>
+    [JsonPropertyName(Parameters.SignedMetadata)]
+    public string? SignedMetadata { get; init; }
+
+    /// <summary>
+    /// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+    /// registered validators for. The list is projected from the keyed-DI registry of
+    /// <see cref="IAuthorizationDetailValidator"/> so it always
+    /// matches what request-time dispatch will accept. Omitted from the emitted discovery
+    /// JSON when the list is empty (no per-type validators registered) so the document
+    /// follows the OIDC discovery convention: absent = unsupported, not the empty array.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
+    public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
 }

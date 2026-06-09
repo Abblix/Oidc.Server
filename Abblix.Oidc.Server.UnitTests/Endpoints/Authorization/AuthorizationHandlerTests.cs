@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -46,6 +45,7 @@ public class AuthorizationHandlerTests
     private readonly Mock<IAuthorizationRequestFetcher> _fetcher;
     private readonly Mock<IAuthorizationRequestValidator> _validator;
     private readonly Mock<IAuthorizationRequestProcessor> _processor;
+    private readonly Mock<IAuthorizationResponseEncoder> _encoder;
     private readonly AuthorizationHandler _handler;
 
     public AuthorizationHandlerTests()
@@ -53,7 +53,13 @@ public class AuthorizationHandlerTests
         _fetcher = new Mock<IAuthorizationRequestFetcher>(MockBehavior.Strict);
         _validator = new Mock<IAuthorizationRequestValidator>(MockBehavior.Strict);
         _processor = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
-        _handler = new AuthorizationHandler(_fetcher.Object, _validator.Object, _processor.Object);
+        _encoder = new Mock<IAuthorizationResponseEncoder>(MockBehavior.Strict);
+        _encoder.Setup(e => e.EncodeAsync(It.IsAny<AuthorizationResponse>())).Returns(Task.CompletedTask);
+        _handler = new AuthorizationHandler(
+            _fetcher.Object,
+            _validator.Object,
+            _processor.Object,
+            _encoder.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()
@@ -222,48 +228,6 @@ public class AuthorizationHandlerTests
         // Assert
         _validator.Verify(v => v.ValidateAsync(
             It.Is<AuthorizationRequest>(r => r.State == "modified_state")), Times.Once);
-    }
-
-    /// <summary>
-    /// Verifies metadata indicates request parameter support.
-    /// Per JAR (RFC 9101), request parameter should be advertised.
-    /// </summary>
-    [Fact]
-    public void Metadata_ShouldIndicateRequestParameterSupported()
-    {
-        // Act
-        var metadata = _handler.Metadata;
-
-        // Assert
-        Assert.True(metadata.RequestParameterSupported);
-    }
-
-    /// <summary>
-    /// Verifies metadata indicates claims parameter support.
-    /// Per OIDC Core Section 5.5, claims parameter support should be advertised.
-    /// </summary>
-    [Fact]
-    public void Metadata_ShouldIndicateClaimsParameterSupported()
-    {
-        // Act
-        var metadata = _handler.Metadata;
-
-        // Assert
-        Assert.True(metadata.ClaimsParameterSupported);
-    }
-
-    /// <summary>
-    /// Verifies grant types supported includes implicit.
-    /// Per OIDC Core, authorization endpoint supports implicit grant.
-    /// </summary>
-    [Fact]
-    public void GrantTypesSupported_ShouldIncludeImplicit()
-    {
-        // Act
-        var grantTypes = _handler.GrantTypesSupported.ToArray();
-
-        // Assert
-        Assert.Contains(GrantTypes.Implicit, grantTypes);
     }
 
     /// <summary>

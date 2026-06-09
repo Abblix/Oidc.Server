@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
@@ -37,4 +38,32 @@ public sealed class JwtAlgorithmsProvider(
 
 	/// <inheritdoc />
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> DpopSigningAlgorithmsSupported
+		=> jwtValidator.SigningAlgorithmsSupported.Where(DPoPAlgorithms.Allowed.Contains);
+
+	/// <inheritdoc />
+	public IEnumerable<string> RequestObjectEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> RequestObjectEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
 }

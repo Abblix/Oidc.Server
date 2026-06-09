@@ -33,6 +33,8 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
@@ -49,7 +51,7 @@ public class LogoutTokenServiceTests
     private const string ClientId = TestConstants.DefaultClientId;
     private const string SubjectId = "user_456";
     private const string SessionId = "session_789";
-    private const string Issuer = "https://auth.example.com";
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string EncodedJwt = "encoded.logout.token";
 
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter;
@@ -64,8 +66,7 @@ public class LogoutTokenServiceTests
         var logger = new Mock<ILogger<LogoutTokenService>>();
         _currentTime = new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         _subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         _jwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
@@ -78,10 +79,11 @@ public class LogoutTokenServiceTests
 
         _service = new LogoutTokenService(
             logger.Object,
-            timeProvider.Object,
+            timeProvider,
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object);
+            _tokenIdGenerator.Object,
+            Options.Create(new OidcOptions()));
     }
 
     #region JWT Structure Tests
@@ -468,8 +470,8 @@ public class LogoutTokenServiceTests
             .Returns(string.Empty);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo))
-            .Callback<JsonWebToken, ClientInfo>((token, _) => capturedToken = token)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => capturedToken = token)
             .ReturnsAsync(EncodedJwt);
 
         // Act
@@ -507,7 +509,7 @@ public class LogoutTokenServiceTests
         Assert.Same(capturedToken, result.Token);
         Assert.Equal(EncodedJwt, result.EncodedJwt);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     /// <summary>
@@ -529,8 +531,8 @@ public class LogoutTokenServiceTests
             .Returns(SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>()))
-            .Callback<JsonWebToken, ClientInfo>((token, client) =>
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, client, _) =>
             {
                 formattedToken = token;
                 formattedClient = client;
@@ -544,7 +546,7 @@ public class LogoutTokenServiceTests
         Assert.NotNull(formattedToken);
         Assert.Same(clientInfo, formattedClient);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     #endregion
@@ -588,8 +590,8 @@ public class LogoutTokenServiceTests
             .Returns(logoutContext.SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo))
-            .Callback<JsonWebToken, ClientInfo>((token, _) => captureToken(token))
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => captureToken(token))
             .ReturnsAsync(EncodedJwt);
     }
 

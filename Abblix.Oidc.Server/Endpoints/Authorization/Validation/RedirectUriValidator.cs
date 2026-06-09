@@ -23,8 +23,6 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
-using static Abblix.Utils.Sanitized;
-
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -36,7 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// only occur to pre-approved locations, enhancing security in the OAuth 2.0 flow.
 /// </summary>
 /// <param name="logger">The logger to be used for logging validation process and outcomes.</param>
-public class RedirectUriValidator(ILogger<RedirectUriValidator> logger) : SyncAuthorizationContextValidatorBase
+public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) : SyncAuthorizationContextValidatorBase
 {
     /// <summary>
     /// Validates the redirect URI specified in the authorization request against the registered redirect URIs
@@ -55,9 +53,7 @@ public class RedirectUriValidator(ILogger<RedirectUriValidator> logger) : SyncAu
         var redirectUri = context.Request.RedirectUri;
         if (redirectUri == null || !uriValidator.IsValid(redirectUri))
         {
-            logger.LogWarning("The redirect URI {RedirectUri} is invalid for client with id {ClientId}",
-                Value(redirectUri),
-                context.ClientInfo.ClientId);
+            LogInvalidRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
             return context.InvalidRequest("The redirect URI is not valid for specified client");
         }

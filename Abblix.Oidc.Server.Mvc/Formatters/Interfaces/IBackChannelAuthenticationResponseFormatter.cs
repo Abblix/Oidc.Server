@@ -36,11 +36,14 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// Formats a back-channel authentication response asynchronously.
     /// </summary>
     /// <param name="request">The back-channel authentication request.</param>
+    /// <param name="clientRequest">The client request containing authentication details
+    /// (needed to determine the correct <c>WWW-Authenticate</c> scheme per RFC 6749 Section 5.2).</param>
     /// <param name="response">The back-channel authentication response result to be formatted.</param>
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.
     /// </returns>
     Task<ActionResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
+        ClientRequest clientRequest,
         Result<BackChannelAuthenticationSuccess, OidcError> response);
 }

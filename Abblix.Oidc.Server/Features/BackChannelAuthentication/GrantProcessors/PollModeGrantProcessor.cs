@@ -38,9 +38,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     : IBackChannelGrantProcessor
 {
-    // Poll mode clients are allowed to poll the token endpoint
+    /// <summary>
+    /// Poll mode clients are expected to poll the token endpoint, so this always returns <c>null</c> (no error).
+    /// </summary>
     public OidcError? ValidateTokenEndpointAccess() => null;
 
+    /// <summary>
+    /// Atomically removes the authentication request from storage and returns its authorized grant.
+    /// If a concurrent request already consumed the entry, returns an <c>invalid_grant</c> error
+    /// to prevent duplicate token issuance.
+    /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)

@@ -67,7 +67,7 @@ public class ProtobufSerializerTests
     public void Serialize_TokenInfo_RoundTrip()
     {
         // Arrange
-        var tokenInfo = new TokenInfo("jwt-123", DateTimeOffset.Parse("2025-12-31T23:59:59Z"));
+        var tokenInfo = new TokenInfo("jwt-123", DateTimeOffset.Parse("2025-12-31T23:59:59Z", CultureInfo.InvariantCulture));
 
         // Act
         var bytes = _serializer.Serialize(tokenInfo);
@@ -118,7 +118,7 @@ public class ProtobufSerializerTests
         var session = new AuthSession(
             "user-123",
             "session-456",
-            DateTimeOffset.Parse("2025-01-15T10:30:00Z"),
+            DateTimeOffset.Parse("2025-01-15T10:30:00Z", CultureInfo.InvariantCulture),
             "local")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
@@ -164,8 +164,8 @@ public class ProtobufSerializerTests
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
             })
         {
-            X509CertificateSha256Thumbprint = "abc123def456",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            CertificateSha256Thumbprint = "abc123def456",
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = "S256",
@@ -180,7 +180,7 @@ public class ProtobufSerializerTests
         Assert.NotNull(result);
         Assert.Equal(context.ClientId, result.ClientId);
         Assert.Equal(context.Scope, result.Scope);
-        Assert.Equal(context.X509CertificateSha256Thumbprint, result.X509CertificateSha256Thumbprint);
+        Assert.Equal(context.CertificateSha256Thumbprint, result.CertificateSha256Thumbprint);
         Assert.Equal(context.RedirectUri, result.RedirectUri);
         Assert.Equal(context.Nonce, result.Nonce);
         Assert.Equal(context.CodeChallenge, result.CodeChallenge);
@@ -227,7 +227,7 @@ public class ProtobufSerializerTests
             Scope = [TestConstants.DefaultScope, "profile", "email"],
             ResponseType = ["code"],
             ClientId = "client-123",
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
             ResponseMode = "query",
             Nonce = "nonce-abc",

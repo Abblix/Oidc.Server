@@ -112,12 +112,31 @@ public class JwtEncryptionTests
         var address = result.Payload.Json["address"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
         Assert.Equal("{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"state\":\"IL\",\"zip\":\"62701\"}", address);
 
-        await Task.Delay(expiresIn);
+        await Task.Delay(expiresIn, TestContext.Current.CancellationToken);
 
         var result2 = await validator.ValidateAsync(jwt, parameters);
         Assert.True(result2.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("Token has expired", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Verifies the self-reporting discovery contract: registering the encryptors via
+    /// <c>AddJsonWebTokens</c> not only wires up decryption but also surfaces the supported
+    /// JWE algorithms through the validator, so adding an encryptor automatically advertises
+    /// its algorithm without a separate registration step.
+    /// </summary>
+    [Fact]
+    public void RegisteredEncryptors_SelfReportSupportedAlgorithms()
+    {
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep256, validator.EncryptionAlgorithmsSupported);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw, validator.EncryptionAlgorithmsSupported);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Dir, validator.EncryptionAlgorithmsSupported);
+
+        Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, validator.EncryptionMethodsSupported);
+        Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, validator.EncryptionMethodsSupported);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

@@ -23,6 +23,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -33,11 +34,13 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -54,7 +57,7 @@ public class AuthorizationRequestProcessorTests
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
-    private readonly Mock<TimeProvider> _timeProvider;
+    private readonly FakeTimeProvider _timeProvider;
     private readonly AuthorizationRequestProcessor _processor;
 
     public AuthorizationRequestProcessorTests()
@@ -64,15 +67,18 @@ public class AuthorizationRequestProcessorTests
         _authorizationCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
-        _timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
+
+        _timeProvider = new FakeTimeProvider();
 
         _processor = new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _consentsProvider.Object,
-            _authorizationCodeService.Object,
-            _accessTokenService.Object,
-            _identityTokenService.Object,
-            _timeProvider.Object);
+            _timeProvider,
+            [
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object),
+                new TokenResponseBuilder(_accessTokenService.Object),
+                new IdTokenResponseBuilder(_identityTokenService.Object),
+            ]);
     }
 
     private static ValidAuthorizationRequest CreateRequest(
@@ -80,22 +86,28 @@ public class AuthorizationRequestProcessorTests
         string? prompt = null,
         TimeSpan? maxAge = null,
         string[]? acrValues = null,
-        string[]? scope = null)
+        string[]? scope = null,
+        JsonArray? authorizationDetails = null,
+        TimeSpan? defaultMaxAge = null,
+        string[]? defaultAcrValues = null)
     {
         var authRequest = new AuthorizationRequest
         {
             ClientId = TestConstants.DefaultClientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,
             AcrValues = acrValues,
+            AuthorizationDetails = authorizationDetails,
         };
 
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
+            DefaultMaxAge = defaultMaxAge,
+            DefaultAcrValues = defaultAcrValues,
         };
 
         var context = new AuthorizationValidationContext(authRequest)
@@ -104,6 +116,7 @@ public class AuthorizationRequestProcessorTests
             ResponseMode = ResponseModes.Query,
             Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
             Resources = [],
+            AuthorizationDetails = authorizationDetails,
         };
 
         return new ValidAuthorizationRequest(context);
@@ -129,16 +142,24 @@ public class AuthorizationRequestProcessorTests
         ScopeDefinition[]? grantedScopes = null,
         ResourceDefinition[]? grantedResources = null,
         ScopeDefinition[]? pendingScopes = null,
-        ResourceDefinition[]? pendingResources = null)
+        ResourceDefinition[]? pendingResources = null,
+        JsonArray? grantedAuthorizationDetails = null,
+        JsonArray? pendingAuthorizationDetails = null)
     {
         return new UserConsents
         {
             Granted = new ConsentDefinition(
                 Scopes: grantedScopes ?? [new ScopeDefinition(Scopes.OpenId)],
-                Resources: grantedResources ?? []),
+                Resources: grantedResources ?? [])
+            {
+                AuthorizationDetails = grantedAuthorizationDetails,
+            },
             Pending = new ConsentDefinition(
                 Scopes: pendingScopes ?? [],
-                Resources: pendingResources ?? []),
+                Resources: pendingResources ?? [])
+            {
+                AuthorizationDetails = pendingAuthorizationDetails,
+            },
         };
     }
 
@@ -162,7 +183,54 @@ public class AuthorizationRequestProcessorTests
         // Assert
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.LoginRequired, error.Error);
-        Assert.Contains("authentication", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that when the request omits max_age, the client's registered default_max_age is
+    /// applied (OIDC Core §2 / §3.1.2.1): a session older than default_max_age is filtered out.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithoutMaxAge_AppliesClientDefaultMaxAge()
+    {
+        // Arrange — request has no max_age; the client registered default_max_age = 5 minutes.
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        _timeProvider.SetUtcNow(now);
+        var request = CreateRequest(prompt: Prompts.None, defaultMaxAge: TimeSpan.FromMinutes(5));
+        var staleSession = CreateAuthSession("stale", authTime: now - TimeSpan.FromHours(1));
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { staleSession }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert — the stale session is filtered by the default_max_age fallback, leaving none.
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.LoginRequired, error.Error);
+    }
+
+    /// <summary>
+    /// Verifies that when the request omits acr_values, the client's registered default_acr_values
+    /// is applied (OIDC Core §2): a session whose ACR is not among them is filtered out.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithoutAcrValues_AppliesClientDefaultAcrValues()
+    {
+        // Arrange — request has no acr_values; the client registered default_acr_values = ["high"].
+        var request = CreateRequest(prompt: Prompts.None, defaultAcrValues: ["high"]);
+        var session = CreateAuthSession("s1", acr: "low");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert — the session's ACR does not match the default, so it is filtered, leaving none.
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.LoginRequired, error.Error);
     }
 
     /// <summary>
@@ -186,7 +254,6 @@ public class AuthorizationRequestProcessorTests
         // Assert
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.AccountSelectionRequired, error.Error);
-        Assert.Contains("select a session", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -306,7 +373,6 @@ public class AuthorizationRequestProcessorTests
         // Assert
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.ConsentRequired, error.Error);
-        Assert.Contains("consent", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -550,14 +616,12 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithMaxAge_ShouldFilterOldSessions()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var maxAge = TimeSpan.FromMinutes(30);
         var request = CreateRequest(maxAge: maxAge);
 
         var oldSession = CreateAuthSession("old", authTime: now - TimeSpan.FromHours(1));
         var recentSession = CreateAuthSession("recent", authTime: now - TimeSpan.FromMinutes(10));
-
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -717,7 +781,7 @@ public class AuthorizationRequestProcessorTests
         {
             ClientId = TestConstants.DefaultClientId,
             ResponseType = [ResponseTypes.Code],
-            RedirectUri = new Uri(TestConstants.DefaultRedirectUri),
+            RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = [Scopes.OpenId, "email"],
             Nonce = nonce,
             CodeChallenge = codeChallenge,
@@ -1034,14 +1098,12 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithMaxAgeExcludingAllSessions_ShouldReturnLoginRequired()
     {
         // Arrange
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var maxAge = TimeSpan.FromMinutes(30);
         var request = CreateRequest(maxAge: maxAge);
 
         var oldSession1 = CreateAuthSession("old1", authTime: now - TimeSpan.FromHours(2));
         var oldSession2 = CreateAuthSession("old2", authTime: now - TimeSpan.FromHours(1));
-
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -1166,5 +1228,203 @@ public class AuthorizationRequestProcessorTests
                 null,
                 null),
             Times.Once);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // RFC 9396 — consent capture for authorization_details (#142).
+    // The Pending bucket surfaces AD entries to the consent UI; the Granted
+    // bucket carries the user's decision (which may narrow or deny the
+    // request); token emission reads from Granted, with null → request
+    // fallback for backward compatibility with PR #135 hosts.
+    // ───────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Captures the <see cref="AuthorizedGrant"/> passed to
+    /// <see cref="IAuthorizationCodeService.GenerateAuthorizationCodeAsync"/>. Tests
+    /// inspect the captured grant's <see cref="AuthorizationContext"/> to assert what
+    /// the processor emitted into the token-issuance path.
+    /// </summary>
+    private sealed class GrantCapture
+    {
+        public AuthorizedGrant? Grant { get; set; }
+    }
+
+    /// <summary>
+    /// Wires up the strict Mocks for a successful authorization-code flow and returns a
+    /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
+    /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from
+    /// each consent-side test.
+    /// </summary>
+    private GrantCapture SetupSuccessfulAuthCodeFlow(
+        ValidAuthorizationRequest request,
+        AuthSession session,
+        UserConsents consents)
+    {
+        var capture = new GrantCapture();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capture.Grant = grant)
+            .ReturnsAsync("code");
+
+        return capture;
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsPendingForConsent_ReturnsConsentRequired()
+    {
+        var pendingAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: pendingAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(pendingAuthorizationDetails: pendingAd);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var consentRequired = Assert.IsType<ConsentRequired>(result);
+        Assert.Same(pendingAd, consentRequired.RequiredUserConsents.AuthorizationDetails);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsAllDenied_ReturnsAccessDenied()
+    {
+        // Provider returned Granted.AuthorizationDetails = [] (empty, not null) while the
+        // request carried AD entries -- the canonical "user denied every entry" signal.
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: new JsonArray());
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AuthorizationDetailsNarrowedByProvider_PropagatesNarrowToContext()
+    {
+        // Provider returns a narrower Granted.AuthorizationDetails than the request carried
+        // -- the AuthorizationContext (and downstream token emission) reflects the narrow set.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500.00" });
+        var narrowedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200.00" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: narrowedAd);
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        // Defensive DeepClone at the boundary (C2): the AuthorizationContext receives a clone,
+        // not the same reference -- assert value-equality through the wire JSON instead.
+        Assert.Equal(narrowedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ConsentDropsOneEntryFromMultiSet_TokenReflectsRemaining()
+    {
+        // RFC 9396 §5 partial-consent drop-entry. Client requested two entries, user
+        // agreed to one. Consent layer is the right surface for this -- per-type
+        // validators only see a single entry and cannot reason cross-entry.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
+        var partialAd = new JsonArray(
+            new JsonObject { ["type"] = "account_information" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: partialAd);
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        // Defensive DeepClone at the boundary (C2): value-equality, not reference.
+        Assert.Equal(partialAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
+        Assert.Single(capture.Grant.Context.AuthorizationDetails!);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ConsentAppliesCrossDetailCapAcrossEntries_TokenReflectsCappedSet()
+    {
+        // RFC 9396 §5 cross-detail policy. Client requested three payment_initiation
+        // entries of 500 each (total 1500); host policy caps total at 1000; consent
+        // provider sees the entire list and returns the cross-cut narrow with the
+        // last entry zeroed out. Per-type validators have no signal that the third
+        // entry tips over the cap; consent layer does.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" });
+        var cappedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "500" },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "0" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: cappedAd);
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        var emitted = capture.Grant.Context.AuthorizationDetails!;
+        Assert.Equal(3, emitted.Count);
+        Assert.Equal("0", emitted[2]!["amount"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LegacyProviderReturnsNullGrantedAd_FallsBackToRequestValue()
+    {
+        // Backward compat: a provider that has not been updated for #142 leaves
+        // Granted.AuthorizationDetails as null. Emission falls back to the request's
+        // (post-validator) AuthorizationDetails so PR #135 behaviour is preserved.
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        // Defensive DeepClone at the boundary (C2): value-equality, not reference.
+        Assert.Equal(requestedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
     }
 }

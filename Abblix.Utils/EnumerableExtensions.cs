@@ -37,6 +37,24 @@ public static class EnumerableExtensions
 		=> value ?? [];
 
 	/// <summary>
+	/// Forces a sequence to be evaluated once and returns the result as a non-lazy
+	/// <see cref="IReadOnlyCollection{T}"/> that callers can iterate any number of times.
+	/// Use at any site that needs to enumerate the same <see cref="IEnumerable{T}"/> more than once
+	/// (cost estimate + actual call, log + record, etc.) — a lazy LINQ pipeline or an iterator
+	/// method passed by an upstream caller would otherwise re-execute its source per enumeration.
+	/// </summary>
+	/// <remarks>
+	/// Skips the allocation when <paramref name="source"/> is already a concrete collection
+	/// (<c>T[]</c>, <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, etc.) — only lazy /
+	/// iterator-method sources pay for a one-shot copy.
+	/// </remarks>
+	/// <typeparam name="T">The type of elements in the sequence.</typeparam>
+	/// <param name="source">The sequence to materialize.</param>
+	/// <returns>A non-lazy collection holding all elements of <paramref name="source"/>.</returns>
+	public static IReadOnlyCollection<T> Materialize<T>(this IEnumerable<T> source)
+		=> source as IReadOnlyCollection<T> ?? [..source];
+
+	/// <summary>
 	/// Traverses a hierarchy upwards, starting from a specific item and moving to its parent, grandparent, etc.,
 	/// as determined by a parent selector function.
 	/// </summary>
@@ -115,5 +133,36 @@ public static class EnumerableExtensions
 		{
 			queue.Enqueue(item);
 		}
+	}
+
+	/// <summary>
+	/// Projects each element of <paramref name="source"/> through an async
+	/// <paramref name="selector"/> and returns the first non-null projection, or <c>null</c>
+	/// when every projection is null. Short-circuits at the first non-null result -- subsequent
+	/// elements are not awaited.
+	/// </summary>
+	/// <remarks>
+	/// Designed for short-circuiting pipelines where each step returns either a payload (e.g.
+	/// an error object) or <c>null</c> meaning "passed; keep going".
+	/// </remarks>
+	/// <typeparam name="TSource">The element type of the sequence.</typeparam>
+	/// <typeparam name="TResult">The projection result type; constrained to reference so
+	/// "no result" can be expressed as <c>null</c>.</typeparam>
+	/// <param name="source">The sequence of items to iterate.</param>
+	/// <param name="selector">Async projection invoked per element until one returns non-null.</param>
+	/// <returns>The first non-null projection, or <c>null</c> when none produced a value.</returns>
+	public static async Task<TResult?> FirstOrDefaultAsync<TSource, TResult>(
+		this IEnumerable<TSource> source,
+		Func<TSource, Task<TResult?>> selector)
+		where TResult : class
+	{
+		foreach (var item in source)
+		{
+			var result = await selector(item);
+			if (result != null)
+				return result;
+		}
+
+		return null;
 	}
 }

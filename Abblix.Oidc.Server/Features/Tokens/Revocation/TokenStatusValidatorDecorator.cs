@@ -38,7 +38,24 @@ public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
+	/// <summary>
+	/// Forwards the set of JWS signing algorithms accepted by the inner validator (RFC 7518 §3.1
+	/// names such as <c>RS256</c>, <c>PS256</c>, <c>ES256</c>); revocation checking does not
+	/// influence which algorithms are supported.
+	/// </summary>
 	public IEnumerable<string> SigningAlgorithmsSupported => innerValidator.SigningAlgorithmsSupported;
+
+	/// <summary>
+	/// Forwards the JWE key-management algorithms accepted by the inner validator; revocation checking
+	/// does not influence which encryption algorithms are supported.
+	/// </summary>
+	public IEnumerable<string> EncryptionAlgorithmsSupported => innerValidator.EncryptionAlgorithmsSupported;
+
+	/// <summary>
+	/// Forwards the JWE content-encryption algorithms accepted by the inner validator; revocation checking
+	/// does not influence which encryption algorithms are supported.
+	/// </summary>
+	public IEnumerable<string> EncryptionMethodsSupported => innerValidator.EncryptionMethodsSupported;
 
 	/// <summary>
 	/// Validates a JSON Web Token (JWT) and checks its revocation status.

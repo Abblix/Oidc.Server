@@ -36,6 +36,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -63,8 +64,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
         {
@@ -79,7 +79,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _handler = new BackChannelAuthenticationGrantHandler(
             _storage.Object,
             _parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider);
     }
@@ -92,7 +92,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     private class TestServiceProvider(IBackChannelRequestStorage storage) : IKeyedServiceProvider
     {
         private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
-        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor();
+        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage);
         private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
@@ -273,8 +273,9 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
+        // slow_down (polled too fast, CIBA Core §11) is the stable wire contract; the human-readable
+        // description is free to change, so the test pins the error code only.
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
-        Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -600,12 +601,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that in ping mode, authenticated requests are NOT removed from storage
-    /// after token retrieval. This allows clients to retrieve tokens after receiving the ping notification,
-    /// and supports potential retry scenarios.
+    /// Verifies that in ping mode, the authenticated request is removed from storage on retrieval.
+    /// The auth_req_id is single-use (CIBA Core 1.0 Section 7.3), so a notified client cannot replay
+    /// it to mint fresh tokens; ping consumes the entry exactly like poll.
     /// </summary>
     [Fact]
-    public async Task AuthenticatedRequest_PingMode_DoesNotRemoveFromStorage()
+    public async Task AuthenticatedRequest_PingMode_RemovesFromStorage()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId)
@@ -621,12 +622,13 @@ public class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
+        var authRequest = new BackChannelAuthenticationRequest(expectedGrant, _currentTime.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -634,7 +636,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -672,7 +674,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -686,8 +687,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -705,7 +705,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);
@@ -780,8 +780,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -799,7 +798,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);
@@ -889,8 +888,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
         {
@@ -906,7 +904,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider); // Status notifier is null
 
@@ -948,8 +946,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
         var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
-        var timeProvider = new Mock<TimeProvider>(MockBehavior.Strict);
-        timeProvider.Setup(tp => tp.GetUtcNow()).Returns(_currentTime);
+        var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
 
@@ -968,7 +965,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
             parameterValidator.Object,
-            timeProvider.Object,
+            timeProvider,
             options,
             serviceProvider,
             statusNotifier.Object);

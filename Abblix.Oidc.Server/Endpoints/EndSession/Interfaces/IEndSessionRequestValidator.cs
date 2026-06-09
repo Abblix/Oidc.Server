@@ -29,14 +29,20 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Represents the interface for validating end-session requests.
+/// Validates incoming RP-initiated logout requests against the rules of
+/// OpenID Connect RP-Initiated Logout 1.0 §2 (e.g. <c>id_token_hint</c> integrity,
+/// <c>post_logout_redirect_uri</c> against the client's registered list, end-user
+/// confirmation when no <c>id_token_hint</c> is provided).
 /// </summary>
 public interface IEndSessionRequestValidator
 {
 	/// <summary>
-	/// Validates the specified end-session request.
+	/// Runs the configured validation pipeline over the raw end-session request.
 	/// </summary>
-	/// <param name="request">The end-session request to validate.</param>
-	/// <returns>A task representing the asynchronous operation, returning the validation result.</returns>
+	/// <param name="request">The wire-level request to validate.</param>
+	/// <returns>
+	/// A <see cref="ValidEndSessionRequest"/> on success, or an <see cref="OidcError"/>
+	/// identifying the first failed step.
+	/// </returns>
 	Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(EndSessionRequest request);
 }

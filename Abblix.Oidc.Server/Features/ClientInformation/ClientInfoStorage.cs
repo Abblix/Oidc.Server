@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -32,8 +33,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="options">The OIDC options containing client configurations.</param>
 internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoProvider, IClientInfoManager
 {
-    private readonly Dictionary<string, ClientInfo> _clients = options.Value.Clients.ToDictionary(
-        client => client.ClientId,
+    private readonly ConcurrentDictionary<string, ClientInfo> _clients = new(
+        options.Value.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
         StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -56,7 +57,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// <returns>A task that completes when the client is added.</returns>
     public Task AddClientAsync(ClientInfo clientInfo)
     {
-        _clients.Add(clientInfo.ClientId, clientInfo);
+        _clients.TryAdd(clientInfo.ClientId, clientInfo);
         return Task.CompletedTask;
     }
 
@@ -78,7 +79,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// <returns>A task that completes when the client is removed.</returns>
     public Task RemoveClientAsync(string clientId)
     {
-        _clients.Remove(clientId);
+        _clients.TryRemove(clientId, out _);
         return Task.CompletedTask;
     }
 }

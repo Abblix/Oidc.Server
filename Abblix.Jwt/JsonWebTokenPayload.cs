@@ -35,7 +35,8 @@ namespace Abblix.Jwt;
 public class JsonWebTokenPayload(JsonObject json)
 {
 	/// <summary>
-	/// The underlying JSON object representing the JWT payload.
+	/// The underlying mutable JSON object backing the strongly-typed accessors on this payload.
+	/// Use this for custom claims that are not exposed as named properties on this class.
 	/// </summary>
 	public JsonObject Json { get; } = json;
 
@@ -139,6 +140,17 @@ public class JsonWebTokenPayload(JsonObject json)
 	{
 		get => Json.GetProperty<string>(JwtClaimTypes.ClientId);
 		set => Json.SetProperty(JwtClaimTypes.ClientId, value);
+	}
+
+	/// <summary>
+	/// The authorized party (azp) the JWT was issued to. OpenID Connect Core mandates this claim
+	/// in an id_token when there is a single audience that differs from the issuer, and whenever
+	/// the token has more than one audience, naming the party the token was minted for.
+	/// </summary>
+	public string? AuthorizedParty
+	{
+		get => Json.GetProperty<string>(IanaClaimTypes.Azp);
+		set => Json.SetProperty(IanaClaimTypes.Azp, value);
 	}
 
 	/// <summary>
@@ -259,5 +271,66 @@ public class JsonWebTokenPayload(JsonObject json)
 	{
 		get => Json.GetProperty<bool?>(JwtClaimTypes.EmailVerified);
 		set => Json.SetProperty(JwtClaimTypes.EmailVerified, value);
+	}
+
+	/// <summary>
+	/// The HTTP method bound by a DPoP proof (RFC 9449 §4.2 <c>htm</c>). Compared
+	/// byte-exact against the current request method on the server side.
+	/// </summary>
+	public string? DPoPHttpMethod
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPHttpMethod);
+		set => Json.SetProperty(JwtClaimTypes.DPoPHttpMethod, value);
+	}
+
+	/// <summary>
+	/// The HTTP URI bound by a DPoP proof (RFC 9449 §4.2 <c>htu</c>). Returned as the
+	/// raw claim string so callers keep the three-way "missing / unparseable / mismatched"
+	/// distinction; parsing into a <see cref="Uri"/> belongs to the comparison step.
+	/// </summary>
+	public string? DPoPHttpUri
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPHttpUri);
+		set => Json.SetProperty(JwtClaimTypes.DPoPHttpUri, value);
+	}
+
+	/// <summary>
+	/// The access-token hash bound by a DPoP proof when one accompanies an access token
+	/// (RFC 9449 §4.2 <c>ath</c>): <c>Base64Url(SHA-256(access_token))</c>.
+	/// </summary>
+	public string? DPoPAccessTokenHash
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.DPoPAccessTokenHash);
+		set => Json.SetProperty(JwtClaimTypes.DPoPAccessTokenHash, value);
+	}
+
+	/// <summary>
+	/// The proof-of-possession confirmation object (RFC 7800 §3.1 <c>cnf</c>) bound to this
+	/// JWT. Carries each binding the token holds — <c>cnf.x5t#S256</c> for mTLS-bound
+	/// tokens (RFC 8705 §3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 §6.1) —
+	/// behind typed accessors. Assignment writes the wrapped <see cref="JsonObject"/> as
+	/// the <c>cnf</c> claim; assigning <c>null</c> removes the claim.
+	/// </summary>
+	public JsonWebTokenConfirmation? Confirmation
+	{
+		get => Json[IanaClaimTypes.Cnf] is JsonObject obj ? new JsonWebTokenConfirmation(obj) : null;
+		set => Json.SetProperty(IanaClaimTypes.Cnf, value?.Json);
+	}
+
+	/// <summary>
+	/// The RFC 9396 <c>authorization_details</c> claim as a sequence of typed wrappers over
+	/// the underlying <see cref="JsonArray"/> stored at <see cref="Json"/>[<c>authorization_details</c>].
+	/// Each wrapper shares its <see cref="JsonNode"/> reference with the corresponding array
+	/// element — read-through is byte-exact, and property setters on a wrapper mutate the
+	/// underlying claim in place. Assigning a new sequence rebuilds the raw array via
+	/// <see cref="JsonArrayExtensions.ToRawJsonArray"/>, deep-cloning each entry's
+	/// <see cref="AuthorizationDetail.Json"/> to detach parent ownership; assigning <c>null</c>
+	/// removes the claim. For direct raw access bypass this accessor and use the
+	/// <see cref="Json"/> indexer at <c>IanaClaimTypes.AuthorizationDetails</c>.
+	/// </summary>
+	public IEnumerable<AuthorizationDetail>? AuthorizationDetails
+	{
+		get => Json[IanaClaimTypes.AuthorizationDetails] is JsonArray arr ? arr.ToTypedArray() : null;
+		set => Json.SetProperty(IanaClaimTypes.AuthorizationDetails, value.ToRawJsonArray());
 	}
 }

@@ -33,17 +33,15 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// Responsible for processing requests that use the refresh token grant type within the OAuth 2.0 framework.
-/// This handler validates the provided refresh token and issues a new access token when valid.
-/// It ensures that clients can obtain fresh access tokens without re-authenticating the user,
-/// enhancing user experience while maintaining security.
+/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=refresh_token</c> (RFC 6749 §6).
+/// Verifies the refresh token's signature and lifetime, requires the JWT <c>typ</c> header to be
+/// <c>rt+jwt</c>, recovers the original <see cref="AuthorizedGrant"/>, and rejects the request with
+/// <c>invalid_grant</c> when the refreshing client differs from the client that received the token.
 /// </summary>
-/// <param name="parameterValidator">
-/// Validates the presence and format of required parameters in the request. </param>
-/// <param name="jwtValidator">
-/// Validates the JWT structure of the refresh token to ensure its authenticity and integrity.</param>
-/// <param name="refreshTokenService">
-/// Handles the logic of authorizing clients and issuing new tokens based on refresh tokens.</param>
+/// <param name="parameterValidator">Asserts that the <c>refresh_token</c> parameter is present.</param>
+/// <param name="jwtValidator">Validates the refresh-token JWT issued by this server.</param>
+/// <param name="refreshTokenService">Resolves the refresh-token JWT to an <see cref="AuthorizedGrant"/>
+/// and enforces single-use / rotation semantics.</param>
 public class RefreshTokenGrantHandler(
 	IParameterValidator parameterValidator,
 	IAuthServiceJwtValidator jwtValidator,

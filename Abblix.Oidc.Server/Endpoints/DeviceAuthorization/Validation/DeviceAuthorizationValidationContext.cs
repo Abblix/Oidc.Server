@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -52,4 +53,11 @@ public record DeviceAuthorizationValidationContext(
     /// The validated resource definitions for the request.
     /// </summary>
     public ResourceDefinition[] Resources { get; set; } = [];
+
+    /// <summary>
+    /// RFC 9396 §3 Rich Authorization Requests array, populated after per-client allowlist
+    /// and per-type validator dispatch by <see cref="DeviceAuthorizationDetailsValidator"/>.
+    /// <c>null</c> when the request did not include <c>authorization_details</c>.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; set; }
 }

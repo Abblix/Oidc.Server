@@ -43,7 +43,7 @@ public interface ITokenRequestProcessor
 	/// Asynchronously processes a validated and authorized token request, generating a token response.
 	/// </summary>
 	/// <param name="request">The validated token request from the client.</param>
-	/// <returns>A task that resolves to a <see cref="TokenResponse"/>, encapsulating the tokens to be issued to
-	/// the client.</returns>
+	/// <returns>A task that resolves to a <see cref="TokenIssued"/>, encapsulating the tokens to be issued to
+	/// the client, or an <see cref="OidcError"/> if processing fails.</returns>
 	Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request);
 }

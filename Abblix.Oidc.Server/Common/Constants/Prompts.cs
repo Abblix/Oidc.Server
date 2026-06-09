@@ -22,6 +22,10 @@
 
 namespace Abblix.Oidc.Server.Common.Constants;
 
+/// <summary>
+/// Values accepted in the OpenID Connect <c>prompt</c> authorization request parameter, instructing the
+/// authorization server how to interact with the end user before issuing a response.
+/// </summary>
 public static class Prompts
 {
 	/// <summary>

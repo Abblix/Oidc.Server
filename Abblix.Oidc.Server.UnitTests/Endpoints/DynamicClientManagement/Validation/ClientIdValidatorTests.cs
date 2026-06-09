@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -48,14 +47,14 @@ public class ClientIdValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logger = new Mock<ILogger<ClientIdValidator>>();
-        _validator = new ClientIdValidator(_clientInfoProvider.Object, _logger.Object);
+        _validator = new ClientIdValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
     private ClientRegistrationValidationContext CreateContext(string? clientId = null)
     {
         var request = new ClientRegistrationRequest
         {
-            RedirectUris = [new Uri(TestConstants.DefaultRedirectUri)],
+            RedirectUris = [TestConstants.DefaultRedirectUri],
             ClientId = clientId
         };
 

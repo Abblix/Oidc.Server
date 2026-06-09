@@ -34,13 +34,13 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// Securely fetches content from external URIs with SSRF protection.
 /// This class should be registered with AddHttpClient for proper HTTP client configuration.
 /// </summary>
+/// <param name="logger">The logger for recording fetch operations and errors.</param>
 /// <param name="httpClient">The HTTP client for making secure requests.</param>
 /// <param name="options">Configuration options for secure HTTP fetching.</param>
-/// <param name="logger">The logger for recording fetch operations and errors.</param>
-public class SecureHttpFetcher(
+public partial class SecureHttpFetcher(
+    ILogger<SecureHttpFetcher> logger,
     HttpClient httpClient,
-    IOptions<SecureHttpFetchOptions> options,
-    ILogger<SecureHttpFetcher> logger) : ISecureHttpFetcher
+    IOptions<SecureHttpFetchOptions> options) : ISecureHttpFetcher
 {
     /// <summary>
     /// Fetches content from a URI with SSRF protection and response validation.
@@ -78,11 +78,7 @@ public class SecureHttpFetcher(
                 var contentLength = response.Content.Headers.ContentLength.Value;
                 if (contentLength > options.Value.MaxResponseSizeBytes)
                 {
-                    logger.LogWarning(
-                        "Response from {Uri} exceeds maximum allowed size. Content-Length: {ContentLength} bytes, Max: {MaxSize} bytes",
-                        Sanitized.Value(uri),
-                        contentLength,
-                        options.Value.MaxResponseSizeBytes);
+                    LogResponseTooLarge(uri, contentLength, options.Value.MaxResponseSizeBytes);
 
                     return ErrorFactory.InvalidClientMetadata(
                         $"Response too large. Maximum allowed size is {options.Value.MaxResponseSizeBytes >> 10} KB");
@@ -104,10 +100,7 @@ public class SecureHttpFetcher(
                     !contentType.Equals(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) &&
                     !contentType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
                 {
-                    logger.LogWarning(
-                        "Response from {Uri} has unexpected Content-Type: {ContentType}, expected application/json",
-                        Sanitized.Value(uri),
-                        contentType);
+                    LogUnexpectedContentType(uri, contentType);
 
                     return ErrorFactory.InvalidClientMetadata(
                         $"Invalid content type. Expected application/json, got {contentType}");
@@ -120,18 +113,18 @@ public class SecureHttpFetcher(
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            logger.LogWarning(ex, "Timeout while fetching content from {Uri}", Sanitized.Value(uri));
+            LogTimeout(ex, uri);
             return ErrorFactory.InvalidClientMetadata("Request timeout");
         }
         catch (HttpRequestException ex) when (ex.Message.Contains("SSRF protection"))
         {
             // SSRF validation failed (from SsrfValidatingHttpMessageHandler)
-            logger.LogWarning(ex, "SSRF protection blocked request to {Uri}", Sanitized.Value(uri));
+            LogSsrfProtectionBlocked(ex, uri);
             return ErrorFactory.InvalidClientMetadata("URI validation failed: Access to this resource is not allowed");
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Unable to fetch content from {Uri}", Sanitized.Value(uri));
+            LogFetchFailed(ex, uri);
             return ErrorFactory.InvalidClientMetadata("Unable to fetch content");
         }
 

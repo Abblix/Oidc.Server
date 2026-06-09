@@ -6,6 +6,8 @@ using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Buffers.Text;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -80,7 +82,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     {
         var options = new JsonSerializerOptions { WriteIndented = false };
         var bytes = Encoding.UTF8.GetBytes(json.ToJsonString(options));
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     /// <summary>
@@ -89,7 +91,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     private static string EncodeJwe(string header, params byte[][] parts)
     {
         return string.Join(".", parts
-            .Select(p => HttpServerUtility.UrlTokenEncode(p))
+            .Select(p => Base64Url.EncodeToString(p))
             .Prepend(header));
     }
 
@@ -125,7 +127,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         byte[][] decodedParts;
         try
         {
-            decodedParts = Array.ConvertAll(jwtParts, HttpServerUtility.UrlTokenDecode);
+            decodedParts = Array.ConvertAll(jwtParts, static s => Base64Url.DecodeFromChars(s));
         }
         catch (FormatException)
         {
@@ -210,7 +212,12 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         bool TryDecryptBy<TJsonWebKey>(TJsonWebKey jwk, [NotNullWhen(true)] out byte[]? decryptedKey)
             where TJsonWebKey : JsonWebKey
         {
-            var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            var keyEncryptor = serviceProvider.GetKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            if (keyEncryptor == null)
+            {
+                decryptedKey = null;
+                return false;
+            }
             return keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out decryptedKey);
         }
     }
@@ -227,7 +234,9 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         byte[] ciphertext,
         byte[] authTag)
     {
-        var contentDecryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(encAlgorithm);
+        var contentDecryptor = serviceProvider.GetKeyedService<IDataEncryptor>(encAlgorithm);
+        if (contentDecryptor == null)
+            return null;
 
         var aad = Encoding.ASCII.GetBytes(headerPart);
 

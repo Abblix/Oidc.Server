@@ -4,6 +4,9 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt.Signing;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+using System.Buffers.Text;
 
 namespace Abblix.Jwt;
 
@@ -11,7 +14,12 @@ namespace Abblix.Jwt;
 /// Handles signing and signature verification of JSON Web Signature (JWS) tokens.
 /// </summary>
 /// <param name="serviceProvider">The service provider for resolving signers by algorithm.</param>
-internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTokenSigner
+/// <param name="logger">Records signature-verification outcomes as structured events. The
+/// caller-facing <see cref="JwtValidationError"/> carries a human-readable description, but
+/// FAPI 2.0 audit-logging requires a granular event-type on every key-resolution failure
+/// (kid mismatch vs. empty issuer JWKS) so a SOC operator can tell a key-rotation incident
+/// from a misconfigured issuer without parsing free-form text.</param>
+internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IServiceProvider serviceProvider) : IJsonWebTokenSigner
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
 
@@ -78,7 +86,7 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
             _ => throw new InvalidOperationException($"No signer registered for key type: {signingKey.GetType().Name}")
         };
 
-        return $"{signingInput}.{HttpServerUtility.UrlTokenEncode(signature)}";
+        return $"{signingInput}.{Base64Url.EncodeToString(signature)}";
 
         byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
@@ -93,7 +101,7 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
     private static string EncodeJson(JsonObject json)
     {
         var bytes = Encoding.UTF8.GetBytes(json.ToJsonString(Options));
-        return HttpServerUtility.UrlTokenEncode(bytes);
+        return Base64Url.EncodeToString(bytes);
     }
 
     /// <summary>
@@ -107,13 +115,46 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         // Per RFC 7515 Section 4.1.1, 'alg' parameter in JWT header is REQUIRED
         var algorithm = header.Algorithm;
         if (algorithm == null)
-            return new JwtValidationError(JwtError.InvalidToken, "Missing algorithm in JWT header");
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "Missing algorithm in JWT header");
 
-        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
-        // Filter only by kid when present - algorithm compatibility is validated during signature verification
+        // Materialize once: we need to distinguish 'issuer returned zero keys' (configuration
+        // problem) from 'returned keys but none survived alg/kid filters' (kid-rotation /
+        // mis-cached-JWKS). Streaming the IAsyncEnumerable conflates the two cases at the
+        // foreach level. JWKS responses are bounded (typically 1-3 keys), so materializing
+        // is cheap; lazy-streaming would only matter for hosts that fan out per-issuer to
+        // unbounded sources, which is not a supported pattern.
+        var allKeys = await signingKeys.ToArrayAsync();
+
         var keyId = header.KeyId;
-        if (keyId.HasValue())
-            signingKeys = signingKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
+        if (allKeys.Length == 0)
+        {
+            LogNoSigningKeys(algorithm, keyId);
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "No signing keys configured for issuer (RFC 7515 §6: cannot verify signature without keys)");
+        }
+
+        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL but binding when present:
+        // a key declaring its alg MUST NOT be used with any other algorithm. Filter such keys out
+        // before reaching crypto so a key registered for (say) RS256 cannot be misused to verify
+        // PS256 or RS384 tokens, closing within-family algorithm-confusion alongside the
+        // cross-family protection already provided by the generic keyed-DI dispatch.
+        // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key.
+        var candidates = allKeys
+            .Where(key =>
+                (key.Algorithm == null || key.Algorithm == algorithm) &&
+                (!keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal)))
+            .ToArray();
+
+        if (candidates.Length == 0)
+        {
+            LogNoMatchingKey(algorithm, keyId, allKeys.Length);
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                keyId.HasValue()
+                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)"
+                    : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)");
+        }
 
         // Signing input is BASE64URL(header) + '.' + BASE64URL(payload)
         var signingInput = Encoding.UTF8.GetBytes($"{jwt[0]}.{jwt[1]}");
@@ -122,24 +163,18 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
         byte[] signature;
         try
         {
-            signature = HttpServerUtility.UrlTokenDecode(jwt[2]);
+            signature = Base64Url.DecodeFromChars(jwt[2]);
         }
         catch (FormatException)
         {
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid signature encoding");
+            return new JwtValidationError(JwtError.MalformedToken, "Invalid signature encoding");
         }
 
-        var keyFound = false;
-        await foreach (var key in signingKeys)
-        {
-            keyFound = true;
-            if (VerifySignature(key, algorithm, signingInput, signature))
-                return null;
-        }
+        if (!candidates.Any(key => VerifySignature(key, algorithm, signingInput, signature)))
+            return new JwtValidationError(JwtError.InvalidSignature, "Invalid signature");
 
-        return new JwtValidationError(
-            JwtError.InvalidToken,
-            keyFound ? "Invalid signature" : "No signing keys found");
+        return null;
+
     }
 
     /// <summary>
@@ -170,8 +205,8 @@ internal class JsonWebTokenSigner(IServiceProvider serviceProvider) : IJsonWebTo
 
         bool ValidateBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var dataSigner = serviceProvider.GetRequiredKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
-            return dataSigner.Verify(jwk, data, signature);
+            var dataSigner = serviceProvider.GetKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
+            return dataSigner != null && dataSigner.Verify(jwk, data, signature);
         }
     }
 }

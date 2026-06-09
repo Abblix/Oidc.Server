@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -29,36 +28,21 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
-/// Handles the processing of authorization requests by validating and then processing these requests based
-/// on defined business logic. It also includes the fetching of authorization requests when necessary.
+/// Handles authorization requests by fetching, validating, processing and encoding the response.
 /// </summary>
-/// <param name="fetcher">The service responsible for fetching external authorization requests when
-/// specified by a request or request_uri parameter.</param>
-/// <param name="validator">The service responsible for validating authorization requests.</param>
-/// <param name="processor">The service responsible for processing validated authorization requests.</param>
+/// <param name="fetcher">Resolves the effective authorization request, including dereferencing pushed
+/// (RFC 9126) or request-object (OIDC Core §6) variants.</param>
+/// <param name="validator">Performs protocol-level validation of the resolved request prior to processing.</param>
+/// <param name="processor">Produces the validated authorization result projected onto the wire.</param>
+/// <param name="responseEncoder">Applies iss/scope gating and, for a JARM request, packs the response
+/// parameters into the response JWT, at the single convergence point for success and every error variant.</param>
 public class AuthorizationHandler(
     IAuthorizationRequestFetcher fetcher,
     IAuthorizationRequestValidator validator,
-    IAuthorizationRequestProcessor processor) : IAuthorizationHandler
+    IAuthorizationRequestProcessor processor,
+    IAuthorizationResponseEncoder responseEncoder)
+    : IAuthorizationHandler
 {
-    public AuthorizationEndpointMetadata Metadata => new()
-    {
-        RequestParameterSupported = true,
-        ClaimsParameterSupported = true,
-    };
-
-    /// <summary>
-    /// The grant types supported by the authorization endpoint.
-    /// Returns "implicit" if the endpoint supports implicit response types (token, id_token, or token id_token).
-    /// </summary>
-    public IEnumerable<string> GrantTypesSupported
-    {
-        get
-        {
-            yield return GrantTypes.Implicit;
-        }
-    }
-
     /// <summary>
     /// Asynchronously handles an authorization request by first fetching the request if necessary,
     /// validating the request and then processing it to generate an authorization response.
@@ -80,6 +64,17 @@ public class AuthorizationHandler(
     /// maintaining the integrity and security of the authorization flow.
     /// </remarks>
     public async Task<AuthorizationResponse> HandleAsync(AuthorizationRequest request)
+    {
+        // Produce the response through the full processing chain (including the session-management
+        // decorator that sets session_state), then let the encoder apply iss/scope gating and — for a
+        // JARM request — pack the parameters into the response JWT. Encoding happens here, at the single
+        // convergence point for success and every error variant, after session_state is finalised.
+        var response = await ProduceResponseAsync(request);
+        await responseEncoder.EncodeAsync(response);
+        return response;
+    }
+
+    private async Task<AuthorizationResponse> ProduceResponseAsync(AuthorizationRequest request)
     {
         var fetchResult = await fetcher.FetchAsync(request);
 

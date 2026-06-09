@@ -119,12 +119,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   </item>
 ///   <item>
 ///     <strong>Ping Mode:</strong> Stores tokens and sends HTTP POST notification via
-///     <see cref="IBackChannelNotificationService"/> to the client's <c>client_notification_endpoint</c>
+///     <see cref="INotificationDeliveryService"/> to the client's <c>client_notification_endpoint</c>
 ///     with the <c>auth_req_id</c>. Client then retrieves tokens from the token endpoint.
 ///   </item>
 ///   <item>
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
-///     them directly via <see cref="IBackChannelPushService"/> to the client's
+///     them directly via <see cref="INotificationDeliveryService"/> to the client's
 ///     <c>client_notification_endpoint</c>. Tokens are removed from storage after successful delivery
 ///     per CIBA specification section 10.3.1.
 ///   </item>
@@ -136,6 +136,19 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   <item><strong>User Code:</strong> If request.Model.UserCode is present, require user to confirm it</item>
 ///   <item><strong>Authentication:</strong> All notifications use Bearer token from <c>client_notification_token</c></item>
 /// </list>
+///
+/// <para><strong>Security contract — user_code verification (CIBA Core 1.0 §7.1):</strong></para>
+/// <para>
+/// The library validates only the <em>presence</em> of <c>user_code</c> when the provider and client
+/// require it (see <see cref="Endpoints.BackChannelAuthentication.Validation.UserCodeValidator"/>); it
+/// deliberately does not — and cannot — verify the code's <em>value</em>, because the secret is known
+/// only to the end-user and the user's authentication device, which this handler owns. Your
+/// implementation therefore <strong>MUST</strong> verify <c>request.Model.UserCode</c> against the
+/// user's actual code as part of the device interaction, and <strong>MUST NOT</strong> return a
+/// successful <see cref="AuthSession"/> unless that check passed. A wrong or absent code MUST resolve
+/// to a failed <see cref="Result{TValue,TError}"/> (typically <c>access_denied</c>).
+/// Treating presence-validation as sufficient leaves the code unenforced and defeats its purpose.
+/// </para>
 /// </remarks>
 public interface IUserDeviceAuthenticationHandler
 {

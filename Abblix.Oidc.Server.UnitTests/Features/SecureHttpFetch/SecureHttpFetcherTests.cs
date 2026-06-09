@@ -57,7 +57,7 @@ public class SecureHttpFetcherTests
     private SecureHttpFetcher CreateFetcher()
     {
         var options = Options.Create(new SecureHttpFetchOptions());
-        return new SecureHttpFetcher(_httpClient, options, _logger.Object);
+        return new SecureHttpFetcher(_logger.Object, _httpClient, options);
     }
 
     private void SetupHttpResponse(HttpStatusCode statusCode, string content, string contentType = "application/json")

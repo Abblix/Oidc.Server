@@ -51,7 +51,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
         AuthorizationRequest request)
     {
-        var fetchResult = await requestObjectFetcher.FetchAsync(request, request.Request);
+        var fetchResult = await requestObjectFetcher.FetchAsync(
+            request, request.Request, client => client.RequestObjectSigningAlgorithm);
         return fetchResult.MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
 }

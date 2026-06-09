@@ -76,6 +76,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 		if (!scopeManager.Validate(
 			    context.Request.Scope,
 			    context.Resources,
+			    context.ClientInfo.AllowedScopes,
 			    out var scopeDefinitions,
 			    out var errorDescription))
 		{

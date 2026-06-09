@@ -30,29 +30,17 @@ using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeader
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Handles the validation of registration access tokens, ensuring they adhere to JWT standards and
-/// are authorized for use by specific clients.
+/// Default implementation of <see cref="IRegistrationAccessTokenValidator"/>. Requires a
+/// <c>Bearer</c> scheme, validates the JWT signature and lifetime via
+/// <see cref="IAuthServiceJwtValidator"/>, then enforces that the token's <c>typ</c> is
+/// <c>registration_access_token</c> and that its <c>sub</c> and <c>aud</c> both equal the
+/// requested <c>client_id</c>.
 /// </summary>
-/// <param name="jwtValidator">An implementation of <see cref="IAuthServiceJwtValidator"/> responsible for the
-/// JWT validation logic.</param>
+/// <param name="jwtValidator">JWT validator used for signature and lifetime checks.</param>
 public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
     : IRegistrationAccessTokenValidator
 {
-    /// <summary>
-    /// Asynchronously validates a registration access token, verifying its format, type, and authorization for
-    /// the intended client.
-    /// </summary>
-    /// <param name="header">The HTTP Authorization header containing the bearer token to be validated.</param>
-    /// <param name="clientId">The unique identifier of the client that the token is supposed to authorize.</param>
-    /// <returns>
-    /// A task that results in a nullable string; returns null if the token is valid and authorized for the specified
-    /// client, or an error message detailing the reason for validation failure.
-    /// </returns>
-    /// <remarks>
-    /// This method is crucial for securing client registration and management endpoints by ensuring that only valid
-    /// and authorized registration access tokens can perform operations. It checks the token's type, audience
-    /// and subject against the expected values, employing JWT validation to ascertain its integrity and applicability.
-    /// </remarks>
+    /// <inheritdoc />
     public async Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId)
     {
         if (header?.Parameter == null)

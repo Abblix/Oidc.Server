@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
@@ -59,7 +60,7 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
     {
         return Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
     }
 
     private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
@@ -78,8 +79,40 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 ? GetClientReadUrl(success.ClientId)
                 : null,
 
-            InitiateLoginUri = request.InitiateLoginUri,
-            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod
+            // Prefer the resolved server-side value from `success` (which reflects defaults
+            // applied by the registration pipeline) over the raw request — RFC 7591 §3.2.1
+            // requires the response to echo registered values, not the literal request input.
+            InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
+            TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
+
+            Scope = request.Scope,
+            SoftwareId = request.SoftwareId,
+            SoftwareVersion = request.SoftwareVersion,
+            SoftwareStatement = request.SoftwareStatement,
+
+            // RFC 7591 §3.2.1: echo registered metadata so clients can confirm what was stored.
+            ApplicationType = success.ApplicationType,
+            RedirectUris = success.RedirectUris,
+            ClientName = success.ClientName,
+            LogoUri = success.LogoUri,
+            SubjectType = success.SubjectType,
+            SectorIdentifierUri = success.SectorIdentifierUri,
+            JwksUri = success.JwksUri,
+            UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
+            UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
+            Contacts = success.Contacts,
+            RequestUris = success.RequestUris,
+            TlsClientAuthSubjectDn = success.TlsClientAuthSubjectDn,
+            TlsClientAuthSanDns = success.TlsClientAuthSanDns,
+            TlsClientAuthSanUri = success.TlsClientAuthSanUri,
+            TlsClientAuthSanIp = success.TlsClientAuthSanIp,
+            TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
+            // RFC 9449 §5.2: dpop_bound_access_tokens echo.
+            DpopBoundAccessTokens = success.DpopBoundAccessTokens,
+            // RFC 9396 §5.1: authorization_details_types echo.
+            AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
+            // Non-standard extension: token_exchange_subject_token_types echo.
+            TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

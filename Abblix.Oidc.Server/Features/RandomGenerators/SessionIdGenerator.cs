@@ -24,6 +24,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
@@ -42,5 +44,5 @@ public class SessionIdGenerator(IOptions<OidcOptions> options) : ISessionIdGener
 	/// <returns>A string representing a URL-safe, cryptographically strong random session identifier. The identifier
 	/// is encoded in a way that makes it suitable for use in HTTP URLs, cookies, or any other URL-based contexts.</returns>
 	public string GenerateSessionId()
-		=> HttpServerUtility.UrlTokenEncode(CryptoRandom.GetRandomBytes(options.Value.SessionIdLength));
+		=> Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(options.Value.SessionIdLength));
 }

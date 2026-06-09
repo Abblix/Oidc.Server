@@ -25,6 +25,8 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
@@ -36,7 +38,7 @@ public class DeviceCodeGenerator(IOptions<OidcOptions> options) : IDeviceCodeGen
 {
     /// <inheritdoc />
     public string GenerateDeviceCode()
-        => HttpServerUtility.UrlTokenEncode(
+        => Base64Url.EncodeToString(
             CryptoRandom.GetRandomBytes(
                 options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization)).DeviceCodeLength));
 }

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -43,16 +44,6 @@ public class BackChannelAuthenticationValidatorComposite(IBackChannelAuthenticat
     /// The task result contains a <see cref="OidcError"/>
     /// if a validation error is found, or null if validation succeeds.
     /// </returns>
-    public async Task<OidcError?> ValidateAsync(
-        BackChannelAuthenticationValidationContext context)
-    {
-        foreach (var validator in validators)
-        {
-            var error = await validator.ValidateAsync(context);
-            if (error != null)
-                return error;
-        }
-
-        return null;
-    }
+    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
 }

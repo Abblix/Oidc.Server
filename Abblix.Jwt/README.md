@@ -2,12 +2,13 @@
 
 **Abblix.JWT** provides complete JWT signing, encryption, validation, and management built entirely on .NET cryptographic primitives and `System.Text.Json.Nodes`. It implements [RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515) (JWS), [RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516) (JWE), and [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518) (JWA) with a JWT-optimized architecture that eliminates the `Microsoft.IdentityModel.Tokens` dependency.
 
-## What's New in Version 2.2
+## What's New in Version 2.3
 
-- **Custom JWT Implementation**: Complete signing/encryption infrastructure using `System.Text.Json.Nodes` and .NET crypto primitives (`RSA`, `ECDsa`, `AES`) directly — no `Microsoft.IdentityModel.Tokens` dependency
-- **Enhanced JWE Algorithms**: `RSA-OAEP-256` (SHA-256), AES-GCM key wrapping (`A128GCMKW`/`A192GCMKW`/`A256GCMKW`), and direct key agreement (`dir`) per [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)
-- **Operation Capability Validation**: `JsonWebKey` classes now validate key operations (sign, verify, encrypt, decrypt) before use
-- **Interoperability Verified**: Bidirectional tests with `Microsoft.IdentityModel.Tokens` confirm full compatibility across unsigned JWTs, all signing algorithms, and JWE encryption combinations
+- **JOSE critical-header processing ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515) §4.1.11)**: an extension point binds each critical parameter name to its handling logic; an unhandled critical parameter is rejected
+- **Algorithm-pinned verification keys ([RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517) §4.4)**: a key that declares an algorithm is filtered out for any other, closing within-family algorithm confusion
+- **Enforced HMAC key length ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518) §3.2)**: an HMAC key shorter than its hash output is rejected
+- **Typed JWS header accessors ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515) §4.1.2 to §4.1.8)**: strongly-typed access to the key-locator and key-material header parameters
+- **Granular key-resolution diagnostics**: an issuer with no signing keys is distinguished from one whose keys matched neither the key identifier nor the algorithm
 
 ## Key Features
 
@@ -23,6 +24,7 @@
 - **JSON Web Signature (JWS)**: [RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)
 - **JSON Web Encryption (JWE)**: [RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)
 - **JSON Web Key (JWK)**: [RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517)
+- **JWK Thumbprint**: [RFC 7638](https://datatracker.ietf.org/doc/html/rfc7638)
 - **JSON Web Algorithms (JWA)**: [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)
 - **JSON Web Token (JWT)**: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)
 

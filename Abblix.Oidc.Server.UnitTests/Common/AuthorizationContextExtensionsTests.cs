@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -50,5 +52,41 @@ public class AuthorizationContextExtensionsTests
         Assert.NotNull(ac2.RequestedClaims);
         Assert.NotNull(ac2.RequestedClaims.UserInfo);
         Assert.True(ac2.RequestedClaims.UserInfo["abc"].Essential);
+    }
+
+    [Fact]
+    public void Resources_RoundTrip_Through_AudienceClaim()
+    {
+        // RFC 8707 resource indicators are emitted into the aud claim and reconstructed back into
+        // Resources when the token is re-read (e.g. on refresh). This pins both ApplyTo and
+        // ToAuthorizationContext, which are the two halves of the resource <-> aud mapping.
+        var resources = new[] { new Uri("https://api1.example.com/"), new Uri("https://api2.example.com/") };
+        var ac = new AuthorizationContext("clientId", ["scope1"], null, resources);
+
+        var payload = new JsonWebTokenPayload(new JsonObject());
+        ac.ApplyTo(payload);
+
+        Assert.Equal(
+            new[] { "https://api1.example.com/", "https://api2.example.com/" },
+            payload.Audiences.ToArray());
+
+        var ac2 = payload.ToAuthorizationContext();
+        Assert.Equal(resources, ac2.Resources);
+    }
+
+    [Fact]
+    public void NoResources_AudienceFallsBackToClientId()
+    {
+        // With no resource indicator the OIDC convention puts the client id in aud; re-reading such
+        // a token yields no resources (a single client-id audience is not treated as a resource).
+        var ac = new AuthorizationContext("clientId", ["scope1"], null);
+
+        var payload = new JsonWebTokenPayload(new JsonObject());
+        ac.ApplyTo(payload);
+
+        Assert.Equal(["clientId"], payload.Audiences.ToArray());
+
+        var ac2 = payload.ToAuthorizationContext();
+        Assert.Null(ac2.Resources);
     }
 }

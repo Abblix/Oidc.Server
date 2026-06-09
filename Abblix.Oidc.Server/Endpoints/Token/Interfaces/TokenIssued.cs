@@ -20,17 +20,19 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Represents a successful response from the token endpoint, containing the issued access token and related information.
+/// Successful token endpoint response per RFC 6749 §5.1, optionally extended with the OIDC Core 1.0
+/// §3.1.3.3 <c>id_token</c>.
 /// </summary>
-/// <param name="AccessToken">The access token issued by the authorization server.</param>
-/// <param name="TokenType">The type of the token issued.</param>
-/// <param name="ExpiresIn">The lifetime in seconds of the access token.</param>
-/// <param name="IssuedTokenType">The URI identifying the type of the issued token.</param>
+/// <param name="AccessToken">The issued access token (<c>access_token</c>).</param>
+/// <param name="TokenType">The <c>token_type</c>, typically <c>Bearer</c> (RFC 6750).</param>
+/// <param name="ExpiresIn">Lifetime returned as <c>expires_in</c>.</param>
+/// <param name="IssuedTokenType">URI identifying the type of the issued token, used by RFC 8693 token exchange.</param>
 public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, TimeSpan ExpiresIn, Uri IssuedTokenType)
 {
 	/// <summary>
@@ -47,4 +49,11 @@ public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, Tim
 	/// The scopes associated with the access token issued. Scopes indicate the permissions granted to the access token.
 	/// </summary>
 	public IEnumerable<string> Scope => AccessToken.Token.Payload.Scope;
+
+	/// <summary>
+	/// The RFC 9396 <c>authorization_details</c> assigned to the access token as the raw
+	/// <see cref="JsonArray"/>, surfaced byte-exact in the JSON token response per RFC 9396 §7
+	/// (MUST). <c>null</c> when no RAR was used.
+	/// </summary>
+	public JsonArray? AuthorizationDetails { get; init; }
 }

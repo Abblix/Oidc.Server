@@ -47,9 +47,9 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// <param name="clientRequest">Additional information about the client making the request, used for contextual
     /// validation.</param>
     /// <returns>
-    /// A <see cref="Task"/> that resolves to a <see cref="Interfaces.TokenResponse"/>, indicating the outcome of
-    /// the request handling. This response can include the issued tokens in case of success, or an error response
-    /// detailing the reason for failure if the request does not pass validation or cannot be processed.
+    /// A <see cref="Task"/> that resolves to a <see cref="TokenIssued"/>, indicating the outcome of
+    /// the request handling. The success response includes the issued tokens, while an <see cref="OidcError"/>
+    /// details the reason for failure if the request does not pass validation or cannot be processed.
     /// </returns>
     /// <remarks>
     /// This method is integral to the security and functionality of the OAuth 2.0 and OpenID Connect framework,

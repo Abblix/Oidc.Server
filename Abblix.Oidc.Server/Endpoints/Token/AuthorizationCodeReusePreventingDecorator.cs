@@ -55,7 +55,7 @@ public class AuthorizationCodeReusePreventingDecorator(
     /// </summary>
     /// <param name="request">The valid token request to process.</param>
     /// <returns>
-    /// A task that returns a <see cref="TokenResponse"/>.
+    /// A task that returns a <see cref="TokenIssued"/> on success or an <see cref="OidcError"/> on failure.
     /// </returns>
     public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
     {

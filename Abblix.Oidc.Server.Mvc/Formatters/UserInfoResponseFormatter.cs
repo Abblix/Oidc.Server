@@ -22,13 +22,19 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -37,7 +43,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class UserInfoResponseFormatter(
     TimeProvider clock,
-    IClientJwtFormatter clientJwtFormatter) : IUserInfoResponseFormatter
+    IClientJwtFormatter clientJwtFormatter,
+    IIssuerProvider issuerProvider,
+    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -57,8 +65,12 @@ public class UserInfoResponseFormatter(
     {
         return await response.MatchAsync(
             onSuccess: FormatSuccessAsync,
-            onFailure: error => Task.FromResult<ActionResult>(
-                new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            onFailure: error => Task.FromResult(
+                error.Format(
+                    StatusCodes.Status401Unauthorized,
+                    issuerProvider.GetIssuer(),
+                    DPoPAlgorithms.Allowed,
+                    advertiseBearer: true)));
     }
 
     private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)
@@ -79,10 +91,16 @@ public class UserInfoResponseFormatter(
             }
         };
 
+        // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
+        var jwt = await clientJwtFormatter.FormatAsync(
+            token,
+            found.ClientInfo,
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+
         return new ContentResult
         {
             ContentType = MediaTypes.Jwt,
-            Content = await clientJwtFormatter.FormatAsync(token, found.ClientInfo),
+            Content = jwt,
         };
     }
 }

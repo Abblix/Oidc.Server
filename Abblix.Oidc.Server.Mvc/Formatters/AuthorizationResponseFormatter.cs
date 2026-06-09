@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -24,11 +24,11 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
+using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -39,16 +39,24 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
 /// Handles the formatting of authorization responses in compliance with OpenID Connect and OAuth 2.0 protocols.
-/// This formatter is responsible for transforming internal authorization response models into appropriate
-/// HTTP responses that can be understood by clients and end-users.
+/// Protocol-level decisions (parameter assembly, iss/scope gating, JARM packing) are made upstream by the core
+/// response encoder; this formatter maps the encoded response onto the MVC wire DTO and delivers it to the
+/// client's redirect URI via query, fragment or form_post — for both successful and error responses.
 /// </summary>
+/// <param name="options">Provides the configured interaction URIs (login, consent, …) and request-uri
+/// parameter name used when redirecting the user agent to the authorization server's own UI.</param>
+/// <param name="authorizationRequestStorage">Stores the pending authorization request when redirecting to an
+/// interaction page, returning the request_uri that links back to it.</param>
+/// <param name="sessionManagementService">Supplies the OIDC Session Management cookie appended to a successful
+/// authentication response.</param>
+/// <param name="uriResolver">Resolves relative interaction URIs to absolute ones for redirection.</param>
+/// <param name="parametersProvider">Flattens the MVC wire DTO into name/value pairs for delivery.</param>
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IUriResolver uriResolver,
-    IIssuerProvider issuerProvider,
-    IAuthorizationErrorFormatter errorFormatter) : IAuthorizationResponseFormatter
+    IParametersProvider parametersProvider) : IAuthorizationResponseFormatter
 {
     /// <summary>
     /// Formats an authorization response based on the specified request and response model asynchronously.
@@ -82,42 +90,116 @@ public class AuthorizationResponseFormatter(
                 return await RedirectAsync(
                     options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
-            case SuccessfullyAuthenticated { Model.RedirectUri: { } redirectUri } success:
+            // iss/scope gating and JARM packing are applied upstream by the core response encoder (run from
+            // the handler); here we only map the encoded response onto the MVC wire DTO and deliver it.
 
-                var modelResponse = new AuthorizationResponse
-                {
-                    State = response.Model.State,
-                    Issuer = issuerProvider.GetIssuer(),
-                    Scope = string.Join(' ', response.Model.Scope),
-                    Code = success.Code,
-                    TokenType = success.TokenType,
-                    AccessToken = success.AccessToken?.EncodedJwt,
-                    IdToken = success.IdToken?.EncodedJwt,
-                    SessionState = success.SessionState,
-                };
+            // JARM (*.jwt): success and error alike deliver an identical wire shape — the single `response`
+            // JWT packed by the encoder. Matched before the plaintext branches so any JWT-bearing response
+            // (of either type) takes this path.
+            case ClientDeliveredResponse { ResponseJwt: { } responseJwt } jarm:
+                return Deliver(jarm, new AuthorizationResponse { Response = responseJwt });
 
-                var actionResult = await errorFormatter.FormatResponseAsync(modelResponse, success.ResponseMode, redirectUri);
-
-                if (sessionManagementService.Enabled &&
-                    success.SessionId.HasValue() &&
-                    response.Model.Scope.Contains(Scopes.OpenId))
-                {
-                    var cookie = sessionManagementService.GetSessionCookie();
-                    actionResult = actionResult.WithAppendCookie(
-                        cookie.Name,
-                        success.SessionId,
-                        cookie.Options.ConvertOptions());
-                }
-
-                return actionResult;
+            case SuccessfullyAuthenticated success:
+                return Deliver(success, MapSuccess(success));
 
             case AuthorizationError error:
-                return await errorFormatter.FormatResponseAsync(response.Model, error);
+                return Deliver(error, MapError(error));
 
             default:
                 throw new UnexpectedTypeException(nameof(response), response.GetType());
         }
     }
+
+    /// <summary>
+    /// Delivers an encoded client-bound response (success or error) to its redirect URI through the resolved
+    /// response mode, appending the OIDC Session Management cookie for successful authentications. An error
+    /// with no redirect URI (e.g. an invalid redirect_uri) is surfaced directly as a bad request.
+    /// </summary>
+    private ActionResult Deliver(ClientDeliveredResponse response, AuthorizationResponse dto)
+    {
+        Uri redirectUri;
+
+        switch (response)
+        {
+            case SuccessfullyAuthenticated { Model.RedirectUri: {} successUri }:
+                redirectUri = successUri;
+                break;
+
+            case AuthorizationError { RedirectUri: {} errorUri }:
+                redirectUri = errorUri;
+                break;
+
+            case AuthorizationError { RedirectUri: null, Error: var error, ErrorDescription: var description }:
+                return new BadRequestObjectResult(new ErrorResponse(error, description));
+
+            default:
+                throw new UnexpectedTypeException(nameof(response), response.GetType());
+        }
+
+        ActionResult actionResult = response.ResponseMode switch
+        {
+            ResponseModes.FormPost => new OkObjectResult(dto)
+            {
+                Formatters = { new AutoPostFormatter(parametersProvider, redirectUri) },
+            },
+
+            ResponseModes.Query => new RedirectResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
+            ResponseModes.Fragment => new RedirectResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
+
+            _ => throw new InvalidOperationException($"Response mode '{response.ResponseMode}' is not supported"),
+        };
+
+        // The session_state cookie is set for a successful authentication independent of JARM/plaintext —
+        // keyed on the runtime type, so a JARM success (matched by the *.jwt branch above) still receives it.
+        if (response is SuccessfullyAuthenticated authenticated &&
+            sessionManagementService.Enabled &&
+            authenticated.SessionId.HasValue() &&
+            authenticated.Model.Scope.Contains(Scopes.OpenId))
+        {
+            var cookie = sessionManagementService.GetSessionCookie();
+
+            actionResult = actionResult.WithAppendCookie(
+                cookie.Name,
+                authenticated.SessionId,
+                cookie.Options.ConvertOptions());
+        }
+
+        return actionResult;
+    }
+
+    /// <summary>
+    /// Maps a plaintext successful authentication onto the MVC wire DTO. JARM responses are mapped by the
+    /// caller to the single <c>response</c> JWT parameter instead.
+    /// </summary>
+    private static AuthorizationResponse MapSuccess(SuccessfullyAuthenticated success) => new()
+    {
+        State = success.Model.State,
+        Issuer = success.Issuer,
+        Scope = success.Scope,
+        Code = success.Code,
+        TokenType = success.TokenType,
+        AccessToken = success.AccessToken?.EncodedJwt,
+        IdToken = success.IdToken?.EncodedJwt,
+        SessionState = success.SessionState,
+    };
+
+    /// <summary>
+    /// Maps a plaintext authorization error onto the MVC wire DTO.
+    /// </summary>
+    private static AuthorizationResponse MapError(AuthorizationError error) => new()
+    {
+        State = error.Model.State,
+        Issuer = error.Issuer,
+        Error = error.Error,
+        ErrorDescription = error.ErrorDescription,
+        ErrorUri = error.ErrorUri,
+    };
+
+    /// <summary>
+    /// Extracts and formats response parameters from the MVC wire DTO.
+    /// </summary>
+    private (string name, string? value)[] GetParametersFrom(AuthorizationResponse response)
+        => parametersProvider.GetParameters(response).ToArray();
 
     /// <summary>
     /// Helper method to redirect the user agent to a specified URI while attaching an authorization request.

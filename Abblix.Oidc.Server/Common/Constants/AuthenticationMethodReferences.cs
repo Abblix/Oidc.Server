@@ -29,33 +29,70 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// </summary>
 public static class AuthenticationMethodReferences
 {
-    public const string Face = "face"; // Facial recognition
-    public const string Fingerprint = "fpt"; // Fingerprint biometric
-    public const string Geolocation = "geo"; // Geolocation
-    public const string HardwareKey = "hwk"; // Hardware-secured key
-    public const string IrisScan = "iris"; // Iris scan biometric
-    public const string KnowledgeBased = "kba"; // Knowledge-based authentication
-    public const string MultiChannel = "mca"; // Multiple-channel authentication
-    public const string MultiFactor = "mfa"; // Multiple-factor authentication
+    /// <summary>Facial recognition biometric (RFC 8176 <c>face</c>).</summary>
+    public const string Face = "face";
 
+    /// <summary>Fingerprint biometric (RFC 8176 <c>fpt</c>).</summary>
+    public const string Fingerprint = "fpt";
+
+    /// <summary>Geolocation as a factor (RFC 8176 <c>geo</c>).</summary>
+    public const string Geolocation = "geo";
+
+    /// <summary>Proof of possession of a hardware-secured key (RFC 8176 <c>hwk</c>).</summary>
+    public const string HardwareKey = "hwk";
+
+    /// <summary>Iris scan biometric (RFC 8176 <c>iris</c>).</summary>
+    public const string IrisScan = "iris";
+
+    /// <summary>Knowledge-based authentication, e.g. challenge questions (RFC 8176 <c>kba</c>).</summary>
+    public const string KnowledgeBased = "kba";
+
+    /// <summary>Multiple-channel authentication where parts of the flow run on different channels (RFC 8176 <c>mca</c>).</summary>
+    public const string MultiChannel = "mca";
+
+    /// <summary>Multiple-factor authentication, asserting that two or more independent factors were used (RFC 8176 <c>mfa</c>).</summary>
+    public const string MultiFactor = "mfa";
+
+    /// <summary>One-time password (RFC 8176 <c>otp</c>), e.g. TOTP/HOTP code or emailed code.</summary>
     [SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
-    public const string OneTimePassword = "otp"; // One-time password
+    public const string OneTimePassword = "otp";
 
-    public const string Pin = "pin"; // PIN or pattern
-    public const string ProofOfPossession = "pop"; // Proof-of-possession of a key
+    /// <summary>Personal identification number or unlock pattern (RFC 8176 <c>pin</c>).</summary>
+    public const string Pin = "pin";
 
+    /// <summary>Proof of possession of a cryptographic key (RFC 8176 <c>pop</c>).</summary>
+    public const string ProofOfPossession = "pop";
+
+    /// <summary>Password-based authentication (RFC 8176 <c>pwd</c>).</summary>
     [SuppressMessage("Sonar Code Smell", "S2068:Credentials should not be hard-coded", Justification = "This is a standardized AMR value per RFC 8176, not a credential")]
-    public const string Password = "pwd"; // Password-based authentication
+    public const string Password = "pwd";
 
-    public const string RiskBased = "rba"; // Risk-based authentication
-    public const string RetinaScan = "retina"; // Retina scan biometric
-    public const string SmartCard = "sc"; // Smart card
-    public const string Sms = "sms"; // SMS confirmation
-    public const string SoftwareKey = "swk"; // Software-secured key
-    public const string Telephone = "tel"; // Telephone call confirmation
-    public const string UserPresence = "user"; // User presence test
-    public const string VoiceBiometric = "vbm"; // Voice biometric
-    public const string WindowsIntegratedAuth = "wia"; // Windows Integrated Authentication
+    /// <summary>Risk-based authentication that adapts factors to a computed risk score (RFC 8176 <c>rba</c>).</summary>
+    public const string RiskBased = "rba";
+
+    /// <summary>Retina scan biometric (RFC 8176 <c>retina</c>).</summary>
+    public const string RetinaScan = "retina";
+
+    /// <summary>Smart-card-based authentication, typically with a client certificate (RFC 8176 <c>sc</c>).</summary>
+    public const string SmartCard = "sc";
+
+    /// <summary>SMS-delivered confirmation code (RFC 8176 <c>sms</c>).</summary>
+    public const string Sms = "sms";
+
+    /// <summary>Proof of possession of a software-secured key (RFC 8176 <c>swk</c>).</summary>
+    public const string SoftwareKey = "swk";
+
+    /// <summary>Telephone call confirmation (RFC 8176 <c>tel</c>).</summary>
+    public const string Telephone = "tel";
+
+    /// <summary>User presence test, asserting the user was actively present at authentication (RFC 8176 <c>user</c>).</summary>
+    public const string UserPresence = "user";
+
+    /// <summary>Voice biometric (RFC 8176 <c>vbm</c>).</summary>
+    public const string VoiceBiometric = "vbm";
+
+    /// <summary>Windows Integrated Authentication via Kerberos or NTLM (RFC 8176 <c>wia</c>).</summary>
+    public const string WindowsIntegratedAuth = "wia";
 
     // Non-standard values (not in IANA registry or RFC 8176):
     // These custom values should be replaced with standard alternatives in production code.

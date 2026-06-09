@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
 /// <summary>
@@ -42,8 +44,11 @@ internal static class AuthorizationContextMapper
         if (source.RequestedClaims != null)
             proto.RequestedClaims = source.RequestedClaims.ToProto();
 
-        if (source.X509CertificateSha256Thumbprint != null)
-            proto.X509CertificateSha256Thumbprint = source.X509CertificateSha256Thumbprint;
+        if (source.CertificateSha256Thumbprint != null)
+            proto.CertificateSha256Thumbprint = source.CertificateSha256Thumbprint;
+
+        if (source.ProofKeyThumbprint != null)
+            proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
 
         if (source.RedirectUri != null)
             proto.RedirectUri = source.RedirectUri.ToString();
@@ -59,6 +64,16 @@ internal static class AuthorizationContextMapper
 
         proto.Resources.AddIfNotNull(source.Resources, r => r.OriginalString);
 
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // byte-exact (member order, type-specific payload) survives storage round-trip.
+        if (source.AuthorizationDetails is { Count: > 0 })
+            proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
+
+        // RFC 8693 act claim chain persisted as opaque JSON for the same byte-exact reason --
+        // nested act.act delegation paths and per-actor metadata round-trip without loss.
+        if (source.Actor is not null)
+            proto.ActorJson = source.Actor.ToJsonString();
+
         return proto;
     }
 
@@ -72,12 +87,19 @@ internal static class AuthorizationContextMapper
             source.Scope.ToArray(),
             source.RequestedClaims.FromProto())
         {
-            X509CertificateSha256Thumbprint = ProtoMapper.GetString(source.X509CertificateSha256Thumbprint, source.HasX509CertificateSha256Thumbprint),
+            CertificateSha256Thumbprint = ProtoMapper.GetString(source.CertificateSha256Thumbprint, source.HasCertificateSha256Thumbprint),
+            ProofKeyThumbprint = ProtoMapper.GetString(source.ProofKeyThumbprint, source.HasProofKeyThumbprint),
             RedirectUri = ProtoMapper.GetUri(source.RedirectUri, source.HasRedirectUri),
             Nonce = ProtoMapper.GetString(source.Nonce, source.HasNonce),
             CodeChallenge = ProtoMapper.GetString(source.CodeChallenge, source.HasCodeChallenge),
             CodeChallengeMethod = ProtoMapper.GetString(source.CodeChallengeMethod, source.HasCodeChallengeMethod),
             Resources = source.Resources.GetArray(r => new Uri(r)),
+            AuthorizationDetails = source.HasAuthorizationDetailsJson
+                ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
+                : null,
+            Actor = source.HasActorJson
+                ? JsonNode.Parse(source.ActorJson) as JsonObject
+                : null,
         };
     }
 }

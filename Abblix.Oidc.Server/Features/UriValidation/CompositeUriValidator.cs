@@ -23,29 +23,26 @@
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// Represents a composite URI validator that combines multiple URI validation strategies.
-/// This class allows the integration of various URI validation rules and abstracts the complexity of individual
-/// validations, providing a unified interface for URI validation.
+/// Aggregates several <see cref="IUriValidator"/> instances under OR semantics: a URI is
+/// accepted as soon as any of the wrapped validators accepts it. Used to back a client whose
+/// configuration registers multiple equally-valid URIs (for example, several registered redirect
+/// URIs for the same client).
 /// </summary>
-/// <remarks>
-/// The CompositeUriValidator class follows the Composite Design Pattern, enabling the combination of different
-/// URI validation strategies into a single cohesive unit. This class is particularly useful in scenarios where
-/// URIs need to be validated against multiple criteria before being deemed valid.
-/// </remarks>
-/// <param name="validators">A collection of URI validators to be combined.</param>
+/// <param name="validators">The validators to combine; evaluation short-circuits on the first match.</param>
 public sealed class CompositeUriValidator(IEnumerable<IUriValidator> validators) : IUriValidator
 {
+	/// <summary>
+	/// Convenience constructor for a fixed-arity validator list.
+	/// </summary>
 	public CompositeUriValidator(params IUriValidator[] validators)
 		: this((IEnumerable<IUriValidator>)validators)
 	{
 	}
 
 	/// <summary>
-	/// Determines whether the specified URI is valid based on the criteria of all validators in the composite.
+	/// Returns <c>true</c> as soon as any wrapped validator accepts <paramref name="uri"/>;
+	/// returns <c>false</c> only when every validator rejects it.
 	/// </summary>
 	/// <param name="uri">The URI to validate.</param>
-	/// <returns>
-	/// <c>true</c> if the URI passes the validation rules of all included validators; otherwise, <c>false</c>.
-	/// </returns>
 	public bool IsValid(Uri uri) => validators.Any(validator => validator.IsValid(uri));
 }

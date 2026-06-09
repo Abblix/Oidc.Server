@@ -58,6 +58,37 @@ public record ValidationParameters
 	public TimeSpan ClockSkew { get; set; } = TimeSpan.Zero;
 
 	/// <summary>
+	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.
+	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 §3.11 to
+	/// prevent token-class confusion: a JWS signed for one class (id_token, logout_token,
+	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
+	/// as another by relying parties that trust the same issuer for several classes.
+	/// </summary>
+	/// <remarks>
+	/// Comparison follows the spec rules: case-sensitive (RFC 7515 §5.3), with the
+	/// <c>application/</c>-prefix-stripping convention from §4.1.9 applied before lookup
+	/// — <c>typ=at+jwt</c> and <c>typ=application/at+jwt</c> are accepted equivalently.
+	/// When this property is null or empty the validator skips the check, preserving
+	/// historical behaviour for callers that have not opted in.
+	/// </remarks>
+	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
+
+	/// <summary>
+	/// JWS signing algorithms (per RFC 7518) that the validator MUST accept; any other
+	/// <c>alg</c> in the JOSE header causes rejection. When <c>null</c> or empty the
+	/// check is skipped — the validator only enforces the basic
+	/// <see cref="ValidationOptions.RequireSignedTokens"/> rule (which forbids
+	/// <c>none</c>) and lets any registered signer match.
+	/// </summary>
+	/// <remarks>
+	/// Use this to express policy beyond "signed-or-not" without writing per-algorithm
+	/// matchers in callers: pass the asymmetric-only set to enforce DPoP RFC 9449 §4.2,
+	/// pass {RS256, ES256} to require small-footprint algorithms only, and so on.
+	/// Comparison is byte-exact per RFC 7515 §5.3.
+	/// </remarks>
+	public IReadOnlySet<string>? AllowedSigningAlgorithms { get; init; }
+
+	/// <summary>
 	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.
 	/// </summary>
 	/// <param name="issuer">Issuer whose signing keys are to be resolved.</param>

@@ -22,6 +22,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
@@ -30,6 +31,7 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -43,12 +45,15 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="jwtFormatter">Formatter for encoding the generated logout token into a compact serialized format.
 /// </param>
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
-public class LogoutTokenService(
+/// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
+/// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
+public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
     IClientJwtFormatter jwtFormatter,
-    ITokenIdGenerator tokenIdGenerator) : ILogoutTokenService
+    ITokenIdGenerator tokenIdGenerator,
+    IOptions<OidcOptions> options) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
@@ -108,8 +113,13 @@ public class LogoutTokenService(
             },
         };
 
-        logger.LogDebug("The logout token was prepared {@LogoutToken}", logoutToken);
+        LogTokenPrepared(logoutToken);
 
-        return new EncodedJsonWebToken(logoutToken, await jwtFormatter.FormatAsync(logoutToken, clientInfo));
+        var jwt = await jwtFormatter.FormatAsync(
+            logoutToken,
+            clientInfo,
+            ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
+
+        return new EncodedJsonWebToken(logoutToken, jwt);
     }
 }

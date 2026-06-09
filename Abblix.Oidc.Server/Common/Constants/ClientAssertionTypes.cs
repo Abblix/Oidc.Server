@@ -28,7 +28,10 @@ namespace Abblix.Oidc.Server.Common.Constants;
 public static class ClientAssertionTypes
 {
     /// <summary>
-    /// Represents the JWT Bearer client assertion type.
+    /// URN identifying a JWT bearer token as the client authentication assertion at the token endpoint,
+    /// per RFC 7523 (JSON Web Token Profile for OAuth 2.0 Client Authentication and Authorization Grants).
+    /// Submitted as the <c>client_assertion_type</c> parameter together with the signed JWT in
+    /// <c>client_assertion</c>.
     /// </summary>
     public const string JwtBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 }

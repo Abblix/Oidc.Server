@@ -44,11 +44,9 @@ public record ClientInfo(string ClientId)
     public string ClientId { get; set; } = ClientId;
 
     /// <summary>
-    /// Classifies the client based on its ability to securely maintain a client secret.
-    /// This classification is derived from the TokenEndpointAuthMethod:
-    /// - Public: when TokenEndpointAuthMethod is 'none' (no client authentication)
-    /// - Confidential: for all other authentication methods (secrets, keys, certificates)
-    /// Setting this property validates consistency with TokenEndpointAuthMethod.
+    /// Classifies the client based on its ability to securely maintain a client secret. Derived from
+    /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
+    /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.
     /// </summary>
     public ClientType ClientType
         => ClientAuthenticationMethods.None.Equals(TokenEndpointAuthMethod, StringComparison.Ordinal)
@@ -160,9 +158,66 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// Describes how the client authenticates to the token endpoint.
-    /// Common methods include client_secret_basic and client_secret_post.
-    /// Changing this value invalidates the cached ClientType.
+    /// RFC 9396 §5.1: the client's per-client allowlist of authorization-detail <c>type</c>
+    /// values it may use in <c>authorization_details</c> requests. DCR-exposed
+    /// (<c>authorization_details_types</c>). Semantics:
+    /// <list type="bullet">
+    /// <item><description><c>null</c> — no per-client constraint; the client may use any
+    /// <c>type</c> the server understands.</description></item>
+    /// <item><description>Empty array — the client cannot use RAR; every
+    /// <c>authorization_details</c> entry is rejected at request time regardless of
+    /// <c>type</c>.</description></item>
+    /// <item><description>Non-empty array — only the listed <c>type</c> values are accepted
+    /// for this client; entries with other types are rejected with
+    /// <c>invalid_authorization_details</c>.</description></item>
+    /// </list>
+    /// </summary>
+    public string[]? AuthorizationDetailsTypes { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the <c>authorization_details</c> claim is emitted on the ID token
+    /// for this client in addition to the access token and introspection response. Default
+    /// <c>false</c>. RFC 9396 is silent on id_token; default-off preserves role separation
+    /// between identity assertion (id_token) and authorization payload (access token +
+    /// introspection). Host-controlled behavioural extension — NOT exposed via DCR (no
+    /// OIDC wire metadata for this), mirroring the
+    /// <see cref="ForceUserClaimsInIdentityToken"/> precedent.
+    /// </summary>
+    public bool ForceAuthorizationDetailsInIdentityToken { get; set; } = false;
+
+    /// <summary>
+    /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
+    /// to the Token Exchange grant. Independent of <see cref="AllowedGrantTypes"/> -- a client must
+    /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
+    /// <see cref="AllowedGrantTypes"/> to invoke the grant, and the requested
+    /// <c>subject_token_type</c> must additionally satisfy this allowlist.
+    /// <list type="bullet">
+    /// <item><description><c>null</c>: no constraint (any of <see cref="TokenExchangeTokenTypes"/> the
+    /// AS can validate is accepted).</description></item>
+    /// <item><description>Empty array: forbidden -- every Token Exchange request from this client is
+    /// rejected with <c>invalid_request</c> regardless of <c>subject_token_type</c>.</description></item>
+    /// <item><description>Non-empty array: allowlist -- only the listed type URIs are accepted; any other
+    /// is rejected.</description></item>
+    /// </list>
+    /// Mirrors the <see cref="AuthorizationDetailsTypes"/> tri-state pattern.
+    /// </summary>
+    public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
+
+    /// <summary>
+    /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
+    /// <c>subject_token</c> was originally issued to a different client than the one presenting
+    /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
+    /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
+    /// to <c>true</c> to opt out of the default check. Has no effect when no subject_token
+    /// origin can be determined.
+    /// </summary>
+    public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
+
+    /// <summary>
+    /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
+    /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
+    /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
+    /// Drives the value of <see cref="ClientType"/>.
     /// </summary>
     public string TokenEndpointAuthMethod { get; set; } = ClientAuthenticationMethods.ClientSecretBasic;
 
@@ -170,6 +225,15 @@ public record ClientInfo(string ClientId)
     /// TLS client authentication metadata (RFC 8705) for tls_client_auth method.
     /// </summary>
     public TlsClientAuthOptions? TlsClientAuth { get; set; }
+
+    /// <summary>
+    /// RFC 9449 §5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
+    /// the client MUST present a valid DPoP proof on the token endpoint and the issued
+    /// access token will be DPoP-bound (<c>cnf.jkt</c>). When <c>false</c>, DPoP is
+    /// opportunistic — a valid proof still binds the token, otherwise a Bearer token is
+    /// issued.
+    /// </summary>
+    public bool RequireDPoP { get; set; } = false;
 
     /// <summary>
     /// Determines the algorithm used for signing responses from the UserInfo endpoint.
@@ -318,6 +382,46 @@ public record ClientInfo(string ClientId)
     public string? UserInfoEncryptedResponseEncryption { get; set; }
 
     /// <summary>
+    /// RFC 9701 (<c>introspection_signed_response_alg</c>): the JWS algorithm used to sign introspection responses
+    /// returned to this client as a JWT. <see cref="SigningAlgorithms.None"/> (the default) means the client receives
+    /// a plain JSON introspection response; any other value opts the client into a signed JWT response.
+    /// </summary>
+    public string IntrospectionSignedResponseAlgorithm { get; set; } = SigningAlgorithms.None;
+
+    /// <summary>
+    /// RFC 9701 (<c>introspection_encrypted_response_alg</c>): the key-management algorithm used to encrypt
+    /// introspection-response JWTs returned to the client.
+    /// </summary>
+    public string? IntrospectionEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// RFC 9701 (<c>introspection_encrypted_response_enc</c>): the content-encryption algorithm used to encrypt
+    /// introspection-response JWTs returned to the client.
+    /// </summary>
+    public string? IntrospectionEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
+    /// JARM (<c>authorization_signed_response_alg</c>): the JWS algorithm used to sign authorization responses
+    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM §3; the
+    /// algorithm <c>none</c> is not permitted. Only consulted when the client requests a JWT response mode.
+    /// </summary>
+    public string AuthorizationSignedResponseAlgorithm { get; set; } = SigningAlgorithms.RS256;
+
+    /// <summary>
+    /// JARM (<c>authorization_encrypted_response_alg</c>): the JWE key-management algorithm used to encrypt
+    /// authorization responses for this client. When set, the signed response JWT is additionally encrypted
+    /// (a Nested JWT). <c>null</c> means no encryption is performed.
+    /// </summary>
+    public string? AuthorizationEncryptedResponseAlgorithm { get; set; }
+
+    /// <summary>
+    /// JARM (<c>authorization_encrypted_response_enc</c>): the JWE content-encryption algorithm used to encrypt
+    /// authorization responses for this client. Only meaningful when
+    /// <see cref="AuthorizationEncryptedResponseAlgorithm"/> is set.
+    /// </summary>
+    public string? AuthorizationEncryptedResponseEncryption { get; set; }
+
+    /// <summary>
     /// Specifies the algorithm required for signing request objects sent to the authorization server.
     /// </summary>
     public string? RequestObjectSigningAlgorithm { get; set; }
@@ -336,6 +440,21 @@ public record ClientInfo(string ClientId)
     /// Specifies the algorithm used to sign client authentication requests at the token endpoint.
     /// </summary>
     public string? TokenEndpointAuthSigningAlgorithm { get; set; }
+
+    /// <summary>
+    /// The scope values the client is allowed to request per RFC 7591 Section 2.
+    /// </summary>
+    public string[]? AllowedScopes { get; set; }
+
+    /// <summary>
+    /// A unique identifier for the client software per RFC 7591 Section 2.
+    /// </summary>
+    public string? SoftwareId { get; set; }
+
+    /// <summary>
+    /// A version identifier for the client software per RFC 7591 Section 2.
+    /// </summary>
+    public string? SoftwareVersion { get; set; }
 
     /// <summary>
     /// Expiration time for this dynamically registered client in distributed cache.

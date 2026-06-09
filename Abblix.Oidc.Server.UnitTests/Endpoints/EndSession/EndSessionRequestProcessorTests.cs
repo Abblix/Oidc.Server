@@ -22,7 +22,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -45,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 [Collection("License")]
 public class EndSessionRequestProcessorTests
 {
-    private const string Issuer = "https://auth.example.com";
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private readonly Mock<ILogger<EndSessionRequestProcessor>> _logger;
     private readonly Mock<IAuthSessionService> _authSessionService;
@@ -401,7 +400,7 @@ public class EndSessionRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Single(response.FrontChannelLogoutRequestUris);
-        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris.First().ToString());
+        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
     }
 
     /// <summary>
@@ -513,4 +512,89 @@ public class EndSessionRequestProcessorTests
         Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri!.ToString());
     }
 
+    /// <summary>
+    /// Regression: the processor must await in-flight client notifications before completing. A faulty
+    /// <c>task.Status == TaskStatus.Running</c> filter previously excluded async notification tasks
+    /// (which are <see cref="TaskStatus.WaitingForActivation"/>, not <see cref="TaskStatus.Running"/>),
+    /// so the back-channel logout POST ran detached and was abandoned when the request scope and its
+    /// HttpClient were disposed. With the fix the processor stays pending until notifications finish.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ShouldAwaitInFlightClientNotifications()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
+        var client1 = new ClientInfo("client_1");
+        var notificationGate = new TaskCompletionSource();
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .ReturnsAsync(client1);
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Returns(notificationGate.Task);
+
+        // Act
+        var processTask = _processor.ProcessAsync(request);
+
+        // Assert — the processor must still be awaiting the pending notification, not done.
+        Assert.False(processTask.IsCompleted);
+
+        notificationGate.SetResult();
+        var result = await processTask;
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A failing client notification (unreachable endpoint, blocked scheme, etc.) is isolated: the
+    /// end-user's logout still completes successfully rather than surfacing the exception.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenClientNotificationThrows_StillCompletesLogout()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
+        var client1 = new ClientInfo("client_1");
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .ReturnsAsync(client1);
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .ThrowsAsync(new InvalidOperationException("client endpoint unreachable"));
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert — logout succeeds despite the notification failure.
+        Assert.True(result.TryGetSuccess(out _));
+    }
 }

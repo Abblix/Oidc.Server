@@ -15,8 +15,10 @@ message AuthorizationContext {
   // Optional claims requested by the client
   optional RequestedClaims requested_claims = 3;
 
-  // Base64url-encoded SHA-256 thumbprint of the client X.509 certificate (RFC 8705)
-  optional string x509_certificate_sha256_thumbprint = 4;
+  // Base64url-encoded SHA-256 thumbprint of the client X.509 certificate (RFC 8705 §3.1).
+  // Tag 4 retained for wire-compat; field renamed from x509_certificate_sha256_thumbprint
+  // to align with the canonical C# domain property and the cnf-member naming.
+  optional string certificate_sha256_thumbprint = 4;
 
   // The URI where the authorization response should be sent
   optional string redirect_uri = 5;
@@ -32,4 +34,20 @@ message AuthorizationContext {
 
   // Resources for which authorization is granted
   repeated string resources = 9;
+
+  // RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
+  // bound to this authorization (RFC 9449 §6.1). Carried into cnf.jkt on the issued
+  // access token so the binding survives auth-code / refresh-token persistence.
+  optional string proof_key_thumbprint = 10;
+
+  // RFC 9396 Rich Authorization Requests array, serialised as a JSON string. Stored
+  // as opaque JSON because each entry's type-specific payload (RFC 9396 §2.2 extension
+  // data) is structurally unbounded; round-trip preserves exact wire shape including
+  // unknown members the per-type validator did not strip.
+  optional string authorization_details_json = 11;
+
+  // RFC 8693 Section 4.1 act claim chain, serialised as a JSON string. Stored as
+  // opaque JSON because the act object may carry arbitrary actor metadata and nested
+  // act.act delegation chains; round-trip preserves byte-exact shape.
+  optional string actor_json = 12;
 }

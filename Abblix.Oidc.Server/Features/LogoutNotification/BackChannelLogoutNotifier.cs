@@ -61,11 +61,15 @@ public class BackChannelLogoutNotifier(
         await logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
     }
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSupported => false;
 
+    /// <inheritdoc />
     public bool FrontChannelLogoutSessionSupported => false;
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSupported => true;
 
+    /// <inheritdoc />
     public bool BackChannelLogoutSessionSupported => true;
 }

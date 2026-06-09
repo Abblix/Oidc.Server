@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -41,15 +42,6 @@ public class AuthorizationContextValidatorComposite(IAuthorizationContextValidat
     /// A task that represents the asynchronous validation operation. The task result contains
     /// an <see cref="AuthorizationRequestValidationError"/> if a validation error is found, or null if validation succeeds.
     /// </returns>
-    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
-    {
-        foreach (var validator in validators)
-        {
-            var error = await validator.ValidateAsync(context);
-            if (error != null)
-                return error;
-        }
-
-        return null;
-    }
+    public Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
 }

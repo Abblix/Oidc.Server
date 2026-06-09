@@ -1,0 +1,80 @@
+name: PR tests
+
+on:
+  pull_request:
+    branches: ["master", "develop"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # harden-runner in audit mode: this workflow restores/builds/tests
+      # untrusted fork-PR code, so capture baseline egress for later review.
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer (referenced in Directory.Build.props) reads the latest tag
+          # plus commit height from git to derive the version. fetch-depth: 0
+          # disables the shallow clone so all tags and commits are visible.
+          fetch-depth: 0
+          # No git push here, and the workflow runs untrusted fork-PR code, so
+          # strip the GITHUB_TOKEN from the runner git config after checkout.
+          persist-credentials: false
+
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.x'
+
+        timeout-minutes: 3
+      - name: Cache NuGet packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+        timeout-minutes: 3
+      - name: Restore
+        run: dotnet restore Abblix.Oidc.slnx
+
+        timeout-minutes: 3
+      - name: Build
+        run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
+
+        timeout-minutes: 3
+      - name: Test
+        run: |
+          dotnet test Abblix.Oidc.slnx --configuration Release --no-build -- \
+            --report-trx --report-trx-filename test-results.trx \
+            --coverage --coverage-output-format cobertura \
+            --results-directory ./TestResults
+
+      # `dotnet test Abblix.Oidc.slnx -- --results-directory ./TestResults` resolves
+      # the relative path PER TEST PROJECT (each MTP runner uses its own working
+      # directory), not at solution root. Files land at <Project>/TestResults/.
+        timeout-minutes: 3
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: |
+            **/TestResults/*.trx
+            **/TestResults/**/*.cobertura.xml
+          retention-days: 7
+        timeout-minutes: 3

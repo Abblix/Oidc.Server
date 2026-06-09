@@ -20,10 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -203,6 +205,25 @@ public record ClientRegistrationRequest
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// JWS algorithm required for signing introspection responses sent to this client (RFC 9701).
+    /// When omitted, introspection is returned as plain JSON.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE key-management algorithm required for encrypting introspection responses sent to this client (RFC 9701).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE content-encryption method required for encrypting introspection responses sent to this client (RFC 9701).
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// JSON Web Signature (JWS) algorithm that MUST be used for Request Objects sent to the OP.
     /// Specifies the client's preferred algorithm for signing Request Objects.
     /// </summary>
@@ -290,6 +311,31 @@ public record ClientRegistrationRequest
     public bool OfflineAccessAllowed { get; set; } = true;
 
     /// <summary>
+    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
+    /// access tokens issued to this client must be sender-constrained via DPoP. Maps to
+    /// <c>ClientInfo.RequireDPoP</c> via <see cref="Map"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1:
+    /// per-client allowlist of authorization-detail <c>type</c> values this client
+    /// may use in Rich Authorization Requests. <c>null</c> means no per-client
+    /// constraint; empty array forbids RAR entirely for this client.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this client
+    /// may submit to the Token Exchange grant. Maps to
+    /// <see cref="ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -360,11 +406,14 @@ public record ClientRegistrationRequest
     /// object. This method is used to translate the request data into a format that can be processed by the core
     /// registration logic.
     /// </summary>
+    /// <param name="authorizationHeader"></param>
     /// <returns>A <see cref="Core.ClientRegistrationRequest"/> object populated with data from this request.</returns>
-    public Core.ClientRegistrationRequest Map()
+    public Core.ClientRegistrationRequest Map(AuthenticationHeaderValue? authorizationHeader)
     {
         return new Core.ClientRegistrationRequest
         {
+            AuthorizationHeader = authorizationHeader,
+
             Contacts = Contacts,
             ClientId = ClientId,
             Jwks = Jwks,
@@ -385,6 +434,9 @@ public record ClientRegistrationRequest
             DefaultMaxAge = DefaultMaxAge,
             InitiateLoginUri = InitiateLoginUri,
             OfflineAccessAllowed = OfflineAccessAllowed,
+            DpopBoundAccessTokens = DpopBoundAccessTokens,
+            AuthorizationDetailsTypes = AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = TokenExchangeSubjectTokenTypes,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 
@@ -402,6 +454,10 @@ public record ClientRegistrationRequest
             UserInfoEncryptedResponseAlg = UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = UserInfoEncryptedResponseEnc,
             UserInfoSignedResponseAlg = UserInfoSignedResponseAlg,
+
+            IntrospectionSignedResponseAlg = IntrospectionSignedResponseAlg,
+            IntrospectionEncryptedResponseAlg = IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEnc = IntrospectionEncryptedResponseEnc,
 
             BackChannelLogoutUri = BackChannelLogoutUri,
             BackChannelLogoutSessionRequired = BackChannelLogoutSessionRequired,

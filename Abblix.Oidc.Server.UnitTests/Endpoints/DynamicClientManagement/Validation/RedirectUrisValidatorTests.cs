@@ -71,7 +71,7 @@ public class RedirectUrisValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             grantTypes: [GrantTypes.AuthorizationCode],
             applicationType: ApplicationTypes.Web);
 
@@ -304,7 +304,7 @@ public class RedirectUrisValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             grantTypes: [GrantTypes.AuthorizationCode],
             applicationType: ApplicationTypes.Native);
 
@@ -477,7 +477,7 @@ public class RedirectUrisValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            redirectUris: [new Uri(TestConstants.DefaultRedirectUri)],
+            redirectUris: [TestConstants.DefaultRedirectUri],
             grantTypes: [GrantTypes.RefreshToken],
             applicationType: ApplicationTypes.Web);
 

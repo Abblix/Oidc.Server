@@ -23,7 +23,9 @@
 namespace Abblix.Oidc.Server.DeclarativeValidation;
 
 /// <summary>
-/// An attribute indicating that elements of array (properties, fields, or parameters) are required.
+/// Applied to an array, collection, or otherwise enumerable property, field, or parameter to declare that
+/// the collection itself must be non-null and contain at least one element, and that no element inside it
+/// may be null. Useful for protocol metadata such as <c>redirect_uris</c> where an empty array is invalid.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public class ElementsRequiredAttribute : Attribute;

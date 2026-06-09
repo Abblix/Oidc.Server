@@ -26,21 +26,17 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// This class is responsible for validating grant types in the context of client registration.
-/// It checks that the grant types, based on the specified response types,
-/// are present in the client's registration request. If any grant types are missing,
-/// it generates a validation error indicating which grant types are required.
-/// This validation ensures that clients are registered with appropriate grant types for OAuth 2.0 flows.
+/// Enforces the consistency rule from OIDC DCR 1.0 §2 between <c>response_types</c> and
+/// <c>grant_types</c>: a client requesting <c>code</c> must register the
+/// <c>authorization_code</c> grant, and one requesting <c>token</c> or <c>id_token</c>
+/// must register the <c>implicit</c> grant.
 /// </summary>
 public class GrantTypeValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates grant types based on response types in the client registration request.
+    /// Returns an <c>invalid_client_metadata</c> error listing the grant types the client must
+    /// register to support its declared response types, or <c>null</c> when the sets agree.
     /// </summary>
-    /// <param name="context">The validation context containing client registration data.</param>
-    /// <returns>
-    /// A AuthError if grant types are missing, or null if the request is valid.
-    /// </returns>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;

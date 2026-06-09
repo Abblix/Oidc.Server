@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -65,13 +66,13 @@ public class IntrospectionHandlerTests
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(IntrospectionRequest request)
     {
         var token = new Jwt.JsonWebToken();
-        return new ValidIntrospectionRequest(request, token);
+        return new ValidIntrospectionRequest(request, new ClientInfo(TestConstants.DefaultClientId), token);
     }
 
     private static IntrospectionSuccess CreateIntrospectionSuccess(bool active)
     {
         var claims = active ? new JsonObject { ["sub"] = "user_123" } : null;
-        return new IntrospectionSuccess(active, claims);
+        return new IntrospectionSuccess(active, claims, new ClientInfo(TestConstants.DefaultClientId));
     }
 
     /// <summary>

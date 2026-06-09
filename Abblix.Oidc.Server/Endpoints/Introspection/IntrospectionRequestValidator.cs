@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
 /// <param name="jwtValidator">The JWT validator to validate the token.</param>
-public class IntrospectionRequestValidator(
+public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
@@ -76,16 +76,16 @@ public class IntrospectionRequestValidator(
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
 					// The token was issued to another client
-					return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 				}
 
-				return new ValidIntrospectionRequest(introspectionRequest, token);
+				return new ValidIntrospectionRequest(introspectionRequest, clientInfo, token);
 
 			},
 			error =>
 			{
-				logger.LogWarning("The incoming JWT token is invalid: {@JwtValidationError}", error);
-				return ValidIntrospectionRequest.InvalidToken(introspectionRequest);
+				LogInvalidJwt(error);
+				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
 }

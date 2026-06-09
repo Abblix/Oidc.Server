@@ -68,9 +68,20 @@ public record DeviceAuthorizationResponse
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>device_code</c> response parameter the device polls the token endpoint with
+        /// (RFC 8628 §3.2).</summary>
         public const string DeviceCode = "device_code";
+
+        /// <summary>The <c>user_code</c> response parameter displayed to the end-user for entry on the
+        /// verification page (RFC 8628 §3.2).</summary>
         public const string UserCode = "user_code";
+
+        /// <summary>The <c>expires_in</c> response parameter giving the lifetime of <c>device_code</c>
+        /// and <c>user_code</c> in seconds.</summary>
         public const string ExpiresIn = "expires_in";
+
+        /// <summary>The <c>interval</c> response parameter giving the minimum polling interval the device
+        /// should observe, in seconds.</summary>
         public const string Interval = "interval";
     }
 }

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -55,12 +56,21 @@ public record AuthorizationContext
     /// Optional claims that the client is requesting as part of the authorization process,
     /// providing additional information about the user's identity.
     /// </param>
+    /// <param name="resources">
+    /// Optional RFC 8707 resource indicators (absolute URIs) the issued token is bound to. This is
+    /// the single construction point every path funnels the resource set through: the direct grants
+    /// (client_credentials, password, jwt-bearer, token-exchange), the authorize/CIBA/device path
+    /// (via the <see cref="ScopeDefinition"/>/<see cref="ResourceDefinition"/> overload below), and
+    /// the JWT round-trip. An empty set is canonicalized to <c>null</c> (no audience restriction).
+    /// </param>
     [JsonConstructor]
-    public AuthorizationContext(string clientId, string[] scope, RequestedClaims? requestedClaims)
+    public AuthorizationContext(
+        string clientId, string[] scope, RequestedClaims? requestedClaims, Uri[]? resources = null)
     {
         ClientId = clientId;
         Scope = scope;
         RequestedClaims = requestedClaims;
+        Resources = resources is { Length: > 0 } ? resources : null;
     }
 
     /// <summary>
@@ -76,9 +86,12 @@ public record AuthorizationContext
         ScopeDefinition[] scopes,
         ResourceDefinition[] resources,
         RequestedClaims? requestedClaims)
-        : this(clientId, GetScopeNames(scopes, resources), requestedClaims)
+        : this(
+            clientId,
+            GetScopeNames(scopes, resources),
+            requestedClaims,
+            Array.ConvertAll(resources, resource => resource.Resource))
     {
-        Resources = Array.ConvertAll(resources, resource => resource.Resource);
     }
 
     /// <summary>
@@ -123,10 +136,34 @@ public record AuthorizationContext
 
     /// <summary>
     /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
-    /// for mutual TLS client authentication. When present, access tokens should include a confirmation claim
-    /// (cnf) containing "x5t#S256" equal to this value (RFC 8705).
+    /// for mutual TLS client authentication. When present, access tokens carry a confirmation
+    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 §3.1).
     /// </summary>
-    public string? X509CertificateSha256Thumbprint { get; init; }
+    public string? CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
+    /// Legacy alias for <see cref="CertificateSha256Thumbprint"/>: forwards to the same backing
+    /// storage so existing JSON blobs and downstream callers initialising this property still
+    /// resolve correctly, while the deprecation warning steers new code to the canonical name.
+    /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
+    /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
+    /// </summary>
+    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+        Justification = "Permanent backward-compat alias; removal is a major-version concern.")]
+    public string? X509CertificateSha256Thumbprint
+    {
+        get => CertificateSha256Thumbprint;
+        init => CertificateSha256Thumbprint = value;
+    }
+
+    /// <summary>
+    /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
+    /// bound to this authorization (RFC 9449 §6.1). When present, access tokens carry a
+    /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the
+    /// specific key the client demonstrated control of at the token endpoint.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
 
     /// <summary>
     /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI
@@ -161,6 +198,37 @@ public record AuthorizationContext
     /// </summary>
     public Uri[]? Resources { get; init; }
 
+    /// <summary>
+    /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
+    /// This is the source of truth — preserved byte-exact (member order, type-specific payload)
+    /// through the authorize → code → token round-trip and protobuf persistence, without lossy
+    /// typed deserialise / re-serialise cycles.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
+    /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
+    /// non-Token-Exchange grants.
+    /// </summary>
+    public JsonObject? Actor { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// names of the relying party for which the requested token is intended. Distinct from
+    /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
+    /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
+    /// </summary>
+    public string[]? Audiences { get; init; }
+
+    /// <summary>
+    /// Splits the authorization context into its constructor triple, enabling pattern-style
+    /// destructuring at the call site.
+    /// </summary>
+    /// <param name="clientId">Receives the <see cref="ClientId"/>.</param>
+    /// <param name="scope">Receives the <see cref="Scope"/> array.</param>
+    /// <param name="requestedClaims">Receives the optional <see cref="RequestedClaims"/>.</param>
     public void Deconstruct(out string clientId, out string[] scope, out RequestedClaims? requestedClaims)
     {
         clientId = ClientId;

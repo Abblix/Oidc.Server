@@ -41,8 +41,8 @@ public interface ITokenHandler
     /// <param name="clientRequest">Supplementary information about the client making the request, necessary
     /// for performing contextual validation and ensuring the request complies with security policies.</param>
     /// <returns>
-    /// A <see cref="Task"/> resulting in a <see cref="TokenResponse"/>, which either contains the issued tokens
-    /// (access token, refresh token, ID token, etc.) in case of a successful request or details the reasons
+    /// A <see cref="Task"/> resulting in a <see cref="TokenIssued"/> on success — which contains the issued tokens
+    /// (access token, refresh token, ID token, etc.) — or an <see cref="OidcError"/> describing the reason
     /// for request failure.
     /// </returns>
     /// <remarks>

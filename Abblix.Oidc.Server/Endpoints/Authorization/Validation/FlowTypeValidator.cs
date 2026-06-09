@@ -34,8 +34,18 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// expected patterns for authorization requests, as part of the validation process.
 /// </summary>
 /// <param name="logger">The logger to be used for logging purposes.</param>
-public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthorizationContextValidatorBase
+/// <param name="processors">The set of registered authorization response processors. The
+/// validator rejects requests whose <c>response_type</c> contains a part with no matching
+/// registered processor — this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
+/// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
+/// and any request asking for them gets <c>unsupported_response_type</c>).</param>
+public partial class FlowTypeValidator(
+    ILogger<FlowTypeValidator> logger,
+    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
+    private readonly IReadOnlySet<string> _supportedResponseTypeParts =
+        processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
+
     /// <summary>
     /// Validates the flow type specified in the authorization request.
     /// This method checks if the flow type is supported and aligns with the OAuth 2.0 specifications.
@@ -49,16 +59,29 @@ public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthoriz
     {
         var responseType = context.Request.ResponseType;
 
+        // Server-level support: every part of response_type must have a registered processor. This
+        // is the gate that turns Implicit Flow opt-in: when EnableImplicitFlow() is not called,
+        // the token / id_token processors are absent from DI and the corresponding parts get
+        // rejected here regardless of client-level AllowedResponseTypes configuration.
+        if (responseType != null)
+        {
+            var unsupportedPart = responseType.FirstOrDefault(part => !_supportedResponseTypeParts.Contains(part));
+            if (unsupportedPart != null)
+            {
+                LogResponseTypePartUnsupported(unsupportedPart);
+                return UnsupportedResponseType($"The response type '{unsupportedPart}' is not supported by this server");
+            }
+        }
+
         if (!ResponseTypeAllowed(context))
         {
-            logger.LogWarning("The response type {@ResponseType} is not allowed for the client",
-                [responseType]);
+            LogResponseTypeNotAllowed(responseType);
             return UnsupportedResponseType("The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            logger.LogWarning("The response type {@ResponseType} is not valid", [responseType]);
+            LogResponseTypeInvalid(responseType);
             return UnsupportedResponseType("The response type is not supported");
         }
 
@@ -69,10 +92,7 @@ public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthoriz
         AuthorizationRequestValidationError UnsupportedResponseType(string message)
         {
             context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
-
-            return context.Error(
-                ErrorCodes.UnsupportedResponseType,
-                message);
+            return context.Error(ErrorCodes.UnsupportedResponseType, message);
         }
     }
 
@@ -109,7 +129,9 @@ public class FlowTypeValidator(ILogger<FlowTypeValidator> logger) : SyncAuthoriz
     /// <param name="flowType">The detected flow type, if successful.</param>
     /// <param name="responseMode">The default response mode for the detected flow type, if successful.</param>
     /// <returns>A boolean value indicating whether the detection was successful.</returns>
-    private static bool TryDetectFlowType([NotNullWhen(true)] string[]? responseType, out FlowTypes flowType,
+    private static bool TryDetectFlowType(
+        [NotNullWhen(true)] string[]? responseType,
+        out FlowTypes flowType,
         out string responseMode)
     {
         var code = responseType.HasFlag(ResponseTypes.Code);

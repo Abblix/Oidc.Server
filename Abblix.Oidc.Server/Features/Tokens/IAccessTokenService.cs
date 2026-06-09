@@ -28,7 +28,9 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Defines operations related to access tokens, including their creation and authentication.
+/// Issues OAuth 2.0 access tokens as signed JWTs (RFC 9068 access-token format) and reverses
+/// the mapping by reconstructing the originating <see cref="AuthSession"/> and
+/// <see cref="AuthorizationContext"/> from the token's claims.
 /// </summary>
 public interface IAccessTokenService
 {

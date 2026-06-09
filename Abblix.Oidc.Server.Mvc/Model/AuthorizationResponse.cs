@@ -52,6 +52,8 @@ public record AuthorizationResponse
 		public const string SessionState = "session_state";
 
 		public const string Issuer = "iss";
+
+		public const string Response = "response";
 	}
 
 	/// <summary>
@@ -137,4 +139,11 @@ public record AuthorizationResponse
 	/// </summary>
 	[JsonPropertyName(Parameters.Issuer)]
 	public string? Issuer { get; set; }
+
+	/// <summary>
+	/// The JARM (JWT Secured Authorization Response Mode) response JWT. When set, it is the sole wire
+	/// parameter — all other authorization response parameters are carried as claims inside this JWT.
+	/// </summary>
+	[JsonPropertyName(Parameters.Response)]
+	public string? Response { get; set; }
 }

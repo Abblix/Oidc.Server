@@ -25,11 +25,15 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
+using System.Buffers.Text;
+
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Generates unique request URIs for authorization requests based on configured options.
-/// This implementation uses cryptographic randomness to ensure that each URI is unique and secure.
+/// Default <see cref="IAuthorizationRequestUriGenerator"/> implementation. Appends a URL-safe Base64 encoded
+/// block of cryptographically secure random bytes (length governed by <see cref="OidcOptions.RequestUriLength"/>)
+/// to <see cref="RequestUrn.Prefix"/>, producing the <c>urn:</c>-style <c>request_uri</c> values used by
+/// Pushed Authorization Requests (RFC 9126).
 /// </summary>
 public class AuthorizationRequestUriGenerator(IOptions<OidcOptions> options) : IAuthorizationRequestUriGenerator
 {
@@ -40,6 +44,6 @@ public class AuthorizationRequestUriGenerator(IOptions<OidcOptions> options) : I
     public Uri GenerateRequestUri()
     {
         var randomBytes = CryptoRandom.GetRandomBytes(options.Value.RequestUriLength);
-        return new(RequestUrn.Prefix + HttpServerUtility.UrlTokenEncode(randomBytes));
+        return new(RequestUrn.Prefix + Base64Url.EncodeToString(randomBytes));
     }
 }
