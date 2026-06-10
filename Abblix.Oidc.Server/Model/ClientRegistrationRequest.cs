@@ -405,6 +405,18 @@ public record ClientRegistrationRequest
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>
+    /// Non-standard extension: the per-client allowlist of RFC 8693 <c>audience</c> values this
+    /// client may request when exchanging a token. RFC 8693 does not standardise a registration
+    /// parameter for this, so the property is exposed under the non-standard
+    /// <c>token_exchange_audiences</c> name. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// Default-deny: <c>null</c> or empty means the client may not request any <c>audience</c>;
+    /// a non-empty array is the allowlist of accepted values.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
     /// that the OP calls server-to-server with a logout token to terminate the user's session at the client.
     /// </summary>
@@ -698,6 +710,11 @@ public record ClientRegistrationRequest
         /// (non-standard extension; RFC 8693 does not standardise it): per-client allowlist of
         /// <c>subject_token_type</c> URIs this client may submit to the Token Exchange grant.</summary>
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+
+        /// <summary>The <c>token_exchange_audiences</c> registration parameter
+        /// (non-standard extension; RFC 8693 does not standardise it): default-deny per-client
+        /// allowlist of <c>audience</c> values this client may request when exchanging a token.</summary>
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
 
         /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
         /// back-channel logout endpoint.</summary>

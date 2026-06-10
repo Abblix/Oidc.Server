@@ -79,6 +79,8 @@ public class UpdateClientRequestProcessor(
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
+            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -198,6 +200,8 @@ public class UpdateClientRequestProcessor(
             AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
             // Non-standard extension: echo token_exchange_subject_token_types.
             TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
+            // Non-standard extension: echo token_exchange_audiences.
+            TokenExchangeAudiences = updatedClient.TokenExchangeAllowedAudiences,
         };
     }
 

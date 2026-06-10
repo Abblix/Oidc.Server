@@ -96,6 +96,7 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ResolveActorTokenAsync)
             .Bind(ValidateActorTokenOriginAndType)
+            .Bind(ValidateAudiences)
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
     }
 
@@ -318,6 +319,41 @@ public class TokenExchangeGrantHandler(
         return CheckTokenOriginAndType(actor, ctx.Request.ActorTokenType, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
+    }
+
+    /// <summary>
+    /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 §2.1). The requested audience is
+    /// written into the issued token's <c>aud</c> claim, so it must be constrained — otherwise a
+    /// client could mint a token for any target service it names. The allowlist is default-deny: an
+    /// <c>audience</c> is accepted only when the client declares a non-empty
+    /// <see cref="ClientInfo.TokenExchangeAllowedAudiences"/> that contains every requested value.
+    /// A request without <c>audience</c> passes through. Rejections use <c>invalid_target</c>
+    /// (RFC 8693 §2.2.1: the AS is unwilling to issue a token for the requested target service).
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateAudiences(ValidationContext ctx)
+    {
+        if (ctx.Request.Audiences is not { Length: > 0 } audiences)
+            return ctx;
+
+        if (ctx.ClientInfo.TokenExchangeAllowedAudiences is not { Length: > 0 } allowlist)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidTarget,
+                "The client is not permitted to request an audience for token exchange.");
+        }
+
+        var allowed = new HashSet<string>(allowlist, StringComparer.Ordinal);
+        foreach (var audience in audiences)
+        {
+            if (!allowed.Contains(audience))
+            {
+                return new OidcError(
+                    ErrorCodes.InvalidTarget,
+                    $"audience '{audience}' is not in the client's allow list.");
+            }
+        }
+
+        return ctx;
     }
 
     /// <summary>

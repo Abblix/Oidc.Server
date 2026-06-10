@@ -245,6 +245,15 @@ public record ReadClientSuccessfulResponse
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyOrder(27)]
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
     /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
     /// </summary>
     private static class Parameters
@@ -276,5 +285,6 @@ public record ReadClientSuccessfulResponse
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
     }
 }

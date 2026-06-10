@@ -336,6 +336,14 @@ public record ClientRegistrationRequest
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Maps to
+    /// <see cref="ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
     /// This is relevant for scenarios where the client needs to be notified when the user logs out.
     /// </summary>
@@ -437,6 +445,7 @@ public record ClientRegistrationRequest
             DpopBoundAccessTokens = DpopBoundAccessTokens,
             AuthorizationDetailsTypes = AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = TokenExchangeSubjectTokenTypes,
+            TokenExchangeAudiences = TokenExchangeAudiences,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 

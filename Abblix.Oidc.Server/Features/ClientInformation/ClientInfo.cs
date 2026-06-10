@@ -204,6 +204,22 @@ public record ClientInfo(string ClientId)
     public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
+    /// RFC 8693 §2.1 per-client allowlist of <c>audience</c> values this client may request when
+    /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
+    /// claim, so without a constraint a client could mint a token for any target service it names.
+    /// This allowlist is therefore <b>default-deny</b>, unlike the unconstrained-by-default
+    /// <see cref="TokenExchangeAllowedSubjectTokenTypes"/>:
+    /// <list type="bullet">
+    /// <item><description><c>null</c> or empty array: the client may not request any <c>audience</c>
+    /// -- a Token Exchange request carrying one is rejected with <c>invalid_target</c>.</description></item>
+    /// <item><description>Non-empty array: allowlist -- only the listed audience values are accepted;
+    /// any other is rejected with <c>invalid_target</c>.</description></item>
+    /// </list>
+    /// A request that omits <c>audience</c> is unaffected.
+    /// </summary>
+    public string[]? TokenExchangeAllowedAudiences { get; set; }
+
+    /// <summary>
     /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
     /// <c>subject_token</c> was originally issued to a different client than the one presenting
     /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
