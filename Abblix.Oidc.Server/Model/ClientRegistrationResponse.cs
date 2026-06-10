@@ -245,6 +245,14 @@ public record ClientRegistrationResponse
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
 
+    /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
+
     private static class Parameters
     {
         public const string ClientId = "client_id";
@@ -277,5 +285,6 @@ public record ClientRegistrationResponse
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
     }
 }

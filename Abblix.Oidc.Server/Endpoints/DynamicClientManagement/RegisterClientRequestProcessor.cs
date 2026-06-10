@@ -119,6 +119,7 @@ public class RegisterClientRequestProcessor(
             DpopBoundAccessTokens = clientInfo.RequireDPoP,
             AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
+            TokenExchangeAudiences = clientInfo.TokenExchangeAllowedAudiences,
         };
 
         return response;
@@ -148,6 +149,8 @@ public class RegisterClientRequestProcessor(
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
+            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,

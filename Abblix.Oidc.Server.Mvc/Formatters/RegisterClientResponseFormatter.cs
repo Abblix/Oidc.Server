@@ -113,6 +113,8 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
             // Non-standard extension: token_exchange_subject_token_types echo.
             TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
+            // Non-standard extension: token_exchange_audiences echo.
+            TokenExchangeAudiences = success.TokenExchangeAudiences,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
