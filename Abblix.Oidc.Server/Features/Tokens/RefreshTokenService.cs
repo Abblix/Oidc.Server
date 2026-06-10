@@ -85,7 +85,7 @@ public class RefreshTokenService(
 
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
-		expiresAt = CalculateExpiresAt(issuedAt, clientInfo.RefreshToken);
+		expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 		if (expiresAt < now)
 			return null;
 
@@ -112,18 +112,27 @@ public class RefreshTokenService(
 		return new EncodedJsonWebToken(newToken, await jwtFormatter.FormatAsync(newToken));
 	}
 
-	private static DateTimeOffset CalculateExpiresAt(DateTimeOffset issuedAt, RefreshTokenOptions options)
+	private static DateTimeOffset CalculateExpiresAt(
+		DateTimeOffset issuedAt,
+		DateTimeOffset now,
+		RefreshTokenOptions options)
 	{
-		var expiresAt = issuedAt + options.AbsoluteExpiresIn;
+		// The absolute ceiling is anchored to the original issuance (the first login), so the
+		// session can never outlive AbsoluteExpiresIn no matter how often it is refreshed.
+		var absoluteExpiresAt = issuedAt + options.AbsoluteExpiresIn;
 
-		if (options.SlidingExpiresIn.HasValue)
+		if (options.SlidingExpiresIn is { } slidingExpiresIn)
 		{
-			var sliding = issuedAt + options.SlidingExpiresIn.Value;
-			if (sliding < expiresAt)
-				return sliding;
+			// The sliding window is anchored to NOW (the moment of this refresh), so each use
+			// extends the lifetime — that is what makes it "sliding". Anchoring it to issuedAt (as
+			// before) produced a fixed value that never moved, making the window a hard limit. The
+			// extended expiry is still capped by the absolute ceiling.
+			var slidingExpiresAt = now + slidingExpiresIn;
+			if (slidingExpiresAt < absoluteExpiresAt)
+				return slidingExpiresAt;
 		}
 
-		return expiresAt;
+		return absoluteExpiresAt;
 	}
 
 	/// <summary>
