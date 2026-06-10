@@ -23,8 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -37,10 +36,10 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// for both private_key_jwt and client_secret_jwt authentication methods.
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
-/// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
+/// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
-    ITokenRegistry tokenRegistry) : IClientAuthenticator
+    IJwtReplayCache replayCache) : IClientAuthenticator
 {
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
@@ -124,16 +123,30 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,
         // and accepting it would leave the assertion replayable within its expiry window (the
-        // replay registry below, and the validation decorator, both key off jti).
+        // replay cache below keys off jti).
         if (token.Payload.JwtId is not { } jwtId)
         {
             LogMissingJti(clientInfo.ClientId);
             return null;
         }
 
-        if (token.Payload.ExpiresAt is { } expiresAt)
+        // RFC 7523 §3: the assertion MUST contain an 'exp' claim that limits the window during
+        // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
+        // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
+        // the replay-cache entry's TTL.
+        if (token.Payload.ExpiresAt is not { } expiresAt)
         {
-            await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
+            LogMissingExpiration(clientInfo.ClientId);
+            return null;
+        }
+
+        // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
+        // One call avoids the read-then-write race a separate status check + mark step would leave
+        // between two concurrent presenters of the same assertion.
+        if (!await replayCache.TryAddAsync(jwtId, expiresAt))
+        {
+            LogReplayDetected(jwtId, clientInfo.ClientId);
+            return null;
         }
 
         return clientInfo;
