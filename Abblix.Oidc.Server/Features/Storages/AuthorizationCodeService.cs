@@ -80,13 +80,22 @@ public class AuthorizationCodeService(
 		return result;
 	}
 
-	/// <summary>
-	/// Removes an authorization code from storage, ensuring that it cannot be reused.
-	/// </summary>
-	/// <param name="authorizationCode">The authorization code to remove.</param>
-	/// <returns>A task representing the asynchronous operation to remove the code.</returns>
-	public Task RemoveAuthorizationCodeAsync(string authorizationCode)
-		=> storage.RemoveAsync(keyFactory.AuthorizedGrantKey(authorizationCode));
+	/// <inheritdoc />
+	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode)
+	{
+		// removeOnRetrieval: true performs an atomic get-and-remove, so two concurrent redemptions
+		// of the same code cannot both observe the grant — exactly one wins the claim; every other
+		// caller finds the code already gone and is rejected.
+		var grant = await storage.GetAsync<AuthorizedGrant>(
+			keyFactory.AuthorizedGrantKey(authorizationCode), removeOnRetrieval: true);
+
+		if (grant == null)
+		{
+			return new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid");
+		}
+
+		return grant;
+	}
 
 	/// <summary>
 	/// Updates the authorization grant result based on a specific authorization code and client information.
