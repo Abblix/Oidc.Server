@@ -142,6 +142,35 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
+    /// Verifies that a public client (token_endpoint_auth_method = none) is rejected. The revocation
+    /// endpoint must authenticate the client (RFC 7009 §2.1); a client_id alone is not a credential,
+    /// so the token is never even validated.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithPublicClient_ShouldReturnInvalidClientError()
+    {
+        // Arrange
+        var revocationRequest = CreateRevocationRequest();
+        var clientRequest = CreateClientRequest();
+        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(publicClient));
+
+        // Act
+        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// Verifies JWT validation error handling.
     /// Per RFC 7009 section 2.2, invalid tokens should return success with null token.
     /// Invalid tokens do not cause error response since purpose is already achieved.
