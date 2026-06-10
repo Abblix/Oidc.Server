@@ -104,6 +104,14 @@ public static class ServiceCollectionExtensions
             // mTLS metadata-driven subject/SAN matching (tls_client_auth)
             ServiceDescriptor.Singleton<IClientAuthenticator, TlsMetadataClientAuthenticator>()
         ]);
+
+        // JWT assertion authenticators (client_secret_jwt / private_key_jwt) record assertion jti
+        // values in the replay cache; defensive TryAdd so deployments that never call AddDPoP or
+        // enable JWT Bearer still resolve the dependency.
+        services.TryAddSingleton<
+            ReplayPrevention.IJwtReplayCache,
+            ReplayPrevention.DistributedJwtReplayCache>();
+
         return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
 

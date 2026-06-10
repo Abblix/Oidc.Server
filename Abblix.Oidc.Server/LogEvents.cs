@@ -205,6 +205,8 @@ internal static class LogEvents
             public const int IssuerSubjectMismatch = Base + 6;
             public const int MissingJti = Base + 7;
             public const int SigningAlgorithmNotAllowed = Base + 8;
+            public const int MissingExpiration = Base + 9;
+            public const int ReplayDetected = Base + 10;
         }
 
         /// <summary>

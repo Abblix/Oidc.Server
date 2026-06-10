@@ -74,4 +74,16 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} uses algorithm {Algorithm}, but the client registered token_endpoint_auth_signing_alg {RequiredAlgorithm}")]
     private partial void LogSigningAlgorithmNotAllowed(string ClientId, string? Algorithm, string RequiredAlgorithm);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingExpiration,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} has no exp claim, which RFC 7523 §3 requires to bound the assertion's usage window")]
+    private partial void LogMissingExpiration(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.ReplayDetected,
+        Level = LogLevel.Warning,
+        Message = "The client assertion jti {Jti} for {ClientId} has already been used; possible replay attack")]
+    private partial void LogReplayDetected(string Jti, string ClientId);
 }
