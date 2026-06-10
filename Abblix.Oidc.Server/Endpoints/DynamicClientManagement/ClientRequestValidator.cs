@@ -38,21 +38,30 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="clientInfoProvider">Store consulted for the addressed client.</param>
 /// <param name="registrationAccessTokenValidator">Validator for the bearer registration access token.</param>
+/// <param name="registrationAccessTokenStore">Store holding the jti of each client's current token.</param>
 public class ClientRequestValidator(
     IClientInfoProvider clientInfoProvider,
-    IRegistrationAccessTokenValidator registrationAccessTokenValidator) : IClientRequestValidator
+    IRegistrationAccessTokenValidator registrationAccessTokenValidator,
+    IRegistrationAccessTokenStore registrationAccessTokenStore) : IClientRequestValidator
 {
     /// <inheritdoc />
     public async Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request)
     {
+        var clientId = request.ClientId.NotNull(nameof(request.ClientId));
+
+        // The expected jti is the value recorded when this client's current registration access
+        // token was issued; it binds the token so a rotated token invalidates its predecessors.
+        var expectedTokenId = await registrationAccessTokenStore.GetTokenIdAsync(clientId);
+
         var headerErrorDescription = await registrationAccessTokenValidator.ValidateAsync(
             request.AuthorizationHeader,
-            request.ClientId.NotNull(nameof(request.ClientId)));
+            clientId,
+            expectedTokenId);
 
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(request.ClientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
             return new OidcError(ErrorCodes.InvalidClient, "Client does not exist on this server");
 

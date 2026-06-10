@@ -42,8 +42,9 @@ public class RegistrationAccessTokenService(
     /// <param name="clientId">The unique identifier of the registered client.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
     /// <param name="expiresIn">The optional duration after which the token expires.</param>
+    /// <param name="tokenId">The identifier (jti) embedded in the token and bound to the client.</param>
     /// <returns>A task that results in the encoded registration access token.</returns>
-    public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn)
+    public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
         var token = new JsonWebToken
         {
@@ -54,6 +55,10 @@ public class RegistrationAccessTokenService(
             },
             Payload =
             {
+                // The jti binds the token to the client: the validator accepts only the token whose
+                // jti matches the value stored on the client, so a rotated token invalidates its
+                // predecessors (RFC 7592 §5).
+                JwtId = tokenId,
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt + expiresIn,

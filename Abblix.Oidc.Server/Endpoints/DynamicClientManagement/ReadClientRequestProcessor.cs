@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -31,11 +32,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <summary>
 /// Builds the RFC 7592 §2.1 read-client response from stored client metadata. The
 /// <c>client_secret</c> is intentionally omitted because secrets are persisted only as
-/// hashes; a fresh <c>registration_access_token</c> is issued so the client can keep using
-/// the management endpoint after the read.
+/// hashes; a registration access token bearing the client's current jti is re-issued so the
+/// client can keep using the management endpoint after the read, without invalidating the token
+/// it presented (read stays idempotent — only update rotates the jti).
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
+    IRegistrationAccessTokenStore registrationAccessTokenStore,
+    ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <inheritdoc />
@@ -44,7 +48,13 @@ public class ReadClientRequestProcessor(
         var client = request.ClientInfo;
 
         var issuedAt = clock.GetUtcNow();
-        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(client.ClientId, issuedAt, null);
+        // Reuse the stored jti so the token the client just presented stays valid; only update
+        // rotates it (read is idempotent). A legacy client with no recorded jti gets a transient
+        // one — it is not persisted here, so the binding stays unenforced for that client.
+        var registrationAccessTokenId =
+            await registrationAccessTokenStore.GetTokenIdAsync(client.ClientId) ?? tokenIdGenerator.GenerateTokenId();
+        var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            client.ClientId, issuedAt, null, registrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {

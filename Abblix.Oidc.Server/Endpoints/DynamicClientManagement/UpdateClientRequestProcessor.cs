@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -36,6 +37,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
+    IRegistrationAccessTokenStore registrationAccessTokenStore,
+    ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IUpdateClientRequestProcessor
 {
     /// <summary>
@@ -149,12 +152,19 @@ public class UpdateClientRequestProcessor(
         // Update client in storage
         await clientInfoManager.UpdateClientAsync(updatedClient);
 
-        // Generate response with new registration_access_token
+        // RFC 7592 §5: rotate the registration access token on update. Recording a fresh jti
+        // invalidates every token issued before this update, limiting the exposure window of a
+        // leaked token to the period between rotations.
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        await registrationAccessTokenStore.SetTokenIdAsync(updatedClient.ClientId, registrationAccessTokenId);
+
+        // Generate response with new registration_access_token, embedding the freshly rotated jti.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             updatedClient.ClientId,
             issuedAt,
-            null);
+            null,
+            registrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {

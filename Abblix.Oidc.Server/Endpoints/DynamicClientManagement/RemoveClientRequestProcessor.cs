@@ -32,9 +32,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <see cref="IClientInfoManager"/> per RFC 7592 §2.3.
 /// </summary>
 /// <param name="clientInfoManager">Store used to remove the client record.</param>
+/// <param name="registrationAccessTokenStore">Store holding the client's registration-token binding.</param>
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
+    IRegistrationAccessTokenStore registrationAccessTokenStore,
     TimeProvider clock) : IRemoveClientRequestProcessor
 {
     /// <summary>
@@ -45,6 +47,9 @@ public class RemoveClientRequestProcessor(
     {
         var clientId = request.ClientInfo.ClientId;
         await clientInfoManager.RemoveClientAsync(clientId);
+
+        // Drop the registration access token binding so it does not outlive the client.
+        await registrationAccessTokenStore.RemoveAsync(clientId);
 
         return new RemoveClientSuccessfulResponse(
             ClientId: clientId,

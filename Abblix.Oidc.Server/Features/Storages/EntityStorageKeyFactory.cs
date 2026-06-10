@@ -91,4 +91,12 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <returns>A formatted storage key for the IP rate limit state.</returns>
     public string IpRateLimitKey(string clientIdentifier)
         => $"Abblix.Oidc.Server:RateLimit:IP:{clientIdentifier}";
+
+    /// <summary>
+    /// Generates a storage key for the registration access token binding of a client (RFC 7592).
+    /// </summary>
+    /// <param name="clientId">The identifier of the registered client.</param>
+    /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
+    public string RegistrationAccessTokenKey(string clientId)
+        => $"Abblix.Oidc.Server:RegistrationAccessToken:{clientId}";
 }
