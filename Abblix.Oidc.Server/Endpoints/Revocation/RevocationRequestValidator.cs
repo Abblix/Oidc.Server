@@ -77,11 +77,22 @@ public partial class RevocationRequestValidator(
 	{
 		// Authenticate the client making the revocation request.
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
-		if (clientInfo == null)
+		switch (clientInfo)
 		{
-			return new OidcError(
-				ErrorCodes.InvalidClient,
-				"The client is not authorized");
+			case null:
+				return new OidcError(
+					ErrorCodes.InvalidClient,
+					"The client is not authorized");
+
+			// RFC 7009 §2.1 (referencing the OAuth 2.0 client-authentication requirements): the
+			// revocation endpoint must authenticate the client. A public client (auth method "none")
+			// presents only its client_id, which is not a credential — reject it even though "none" is
+			// valid at the token endpoint.
+			case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None}:
+				LogPublicClientRejected(clientInfo.ClientId);
+				return new OidcError(
+					ErrorCodes.InvalidClient,
+					"The client is not authorized");
 		}
 
 		var result = await jwtValidator.ValidateAsync(revocationRequest.Token);

@@ -68,6 +68,15 @@ public partial class IntrospectionRequestValidator(
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
+		// RFC 7662 §2.1: the introspection endpoint MUST require some form of authorization to
+		// prevent token scanning. A public client (auth method "none") presents only its client_id,
+		// which is not a credential — reject it even though "none" is valid at the token endpoint.
+		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+		{
+			LogPublicClientRejected(clientInfo.ClientId);
+			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+		}
+
 		var result = await jwtValidator.ValidateAsync(introspectionRequest.Token);
 
 		return result.Match(
