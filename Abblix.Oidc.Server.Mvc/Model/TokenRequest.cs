@@ -39,7 +39,7 @@ public record TokenRequest
     /// Specifies the OAuth 2.0 grant type of the token request.
     /// This property defines the mechanism used to obtain the access token, such as authorization code, client credentials, or refresh token.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.GrantType)]
+    [BindProperty(Name = Parameters.GrantType)]
     [Required]
     [AllowedValues(
         GrantTypes.AuthorizationCode,
@@ -56,35 +56,35 @@ public record TokenRequest
     /// The authorization code received from the authorization server.
     /// This is used in the authorization code grant type to exchange the code for an access token.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.Code)]
+    [BindProperty(Name = Parameters.Code)]
     public string? Code { get; set; }
 
     /// <summary>
     /// The URI where the client will be redirected after authorization.
     /// This is used in conjunction with the authorization code grant type.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.RedirectUri)]
+    [BindProperty(Name = Parameters.RedirectUri)]
     public Uri? RedirectUri { get; set; }
 
     /// <summary>
     /// Specifies the resource for which the access token is requested.
     /// As defined in RFC 8707, this parameter is used to request access tokens with a specific scope for a particular resource.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.Resource)]
+    [BindProperty(Name = Parameters.Resource)]
     public Uri[]? Resource { get; set; }
 
     /// <summary>
     /// The refresh token used to obtain a new access token.
     /// This is applicable in scenarios where the client already holds a refresh token and requires a new access token.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.RefreshToken)]
+    [BindProperty(Name = Parameters.RefreshToken)]
     public string? RefreshToken { get; set; }
 
     /// <summary>
     /// Array of scope values indicating the permissions the client is requesting.
     /// Scopes specify the level of access required and the associated permissions.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.Scope)]
+    [BindProperty(Name = Parameters.Scope)]
     [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
     public string[] Scope { get; set; } = [];
 
@@ -106,14 +106,14 @@ public record TokenRequest
     /// The code verifier for Proof Key for Code Exchange (PKCE) used in the authorization code grant type.
     /// This is used to mitigate authorization code interception attacks.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.CodeVerifier)]
+    [BindProperty(Name = Parameters.CodeVerifier)]
     public string? CodeVerifier { get; set; }
 
     /// <summary>
     /// The authentication request identifier for Client Initiated Backchannel Authentication (CIBA).
     /// This is used in the CIBA grant type to reference a previously initiated authentication request.
     /// </summary>
-    [BindProperty(SupportsGet = true, Name = Parameters.AuthenticationRequestId)]
+    [BindProperty(Name = Parameters.AuthenticationRequestId)]
     public string? AuthenticationRequestId { get; set; }
 
     /// <summary>RFC 8693 §2.1 <c>subject_token</c> -- the security token being exchanged.</summary>
