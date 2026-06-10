@@ -41,7 +41,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
     : IRegistrationAccessTokenValidator
 {
     /// <inheritdoc />
-    public async Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId)
+    public async Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string? expectedTokenId)
     {
         if (header?.Parameter == null)
             return $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header";
@@ -66,6 +66,12 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
             return $"Invalid token type: {tokenType}";
 
         if (subject != clientId || !audiences.Contains(clientId))
+            return "The access token unauthorized";
+
+        // RFC 7592 §5: bind the token to the client so a rotated token invalidates its
+        // predecessors. Enforced only when the client records the current jti — a null expectation
+        // keeps statically configured clients and pre-existing records working unchanged.
+        if (expectedTokenId != null && token.Payload.JwtId != expectedTokenId)
             return "The access token unauthorized";
 
         return null;

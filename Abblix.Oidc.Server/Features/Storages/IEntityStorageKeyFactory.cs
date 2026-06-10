@@ -83,4 +83,11 @@ public interface IEntityStorageKeyFactory
     /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
     /// <returns>A formatted storage key for the IP rate limit state.</returns>
     string IpRateLimitKey(string clientIdentifier);
+
+    /// <summary>
+    /// Generates a storage key for the registration access token binding of a client (RFC 7592).
+    /// </summary>
+    /// <param name="clientId">The identifier of the registered client.</param>
+    /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
+    string RegistrationAccessTokenKey(string clientId);
 }

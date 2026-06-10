@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -38,7 +39,9 @@ public class RegisterClientRequestProcessor(
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
+    ITokenIdGenerator tokenIdGenerator,
+    IRegistrationAccessTokenService registrationAccessTokenService,
+    IRegistrationAccessTokenStore registrationAccessTokenStore) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -64,10 +67,16 @@ public class RegisterClientRequestProcessor(
 
         await clientInfoManager.AddClientAsync(clientInfo);
 
+        // Record the jti of the issued registration access token so the management endpoint can
+        // bind the token to this client (RFC 7592 §5).
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        await registrationAccessTokenStore.SetTokenIdAsync(credentials.ClientId, registrationAccessTokenId);
+
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
             issuedAt,
-            clientInfo.ExpiresAfter);
+            clientInfo.ExpiresAfter,
+            registrationAccessTokenId);
 
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,
