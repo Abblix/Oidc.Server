@@ -31,6 +31,12 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 /// Identifies the client and provides authentication credentials without dictating the management action.
 /// The actual operation (read, update, or delete) is determined by the HTTP verb.
 /// </summary>
+/// <remarks>
+/// Deliberately hand-written rather than generated: it is not a transport mirror of the core
+/// client request but a narrow projection of it specific to the management endpoints, where the
+/// client identifier travels in the URL path — a routing concept the core deliberately
+/// does not know about.
+/// </remarks>
 public record ClientAuthorizationRequest
 {
     /// <summary>
@@ -47,11 +53,11 @@ public record ClientAuthorizationRequest
     public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
 
     /// <summary>
-    /// Maps this request to the core ClientRequest model.
+    /// Implicitly projects the management authorization onto the core client request model.
     /// </summary>
-    public Server.Model.ClientRequest ToClientRequest() => new()
+    public static implicit operator Server.Model.ClientRequest(ClientAuthorizationRequest request) => new()
     {
-        ClientId = ClientId,
-        AuthorizationHeader = AuthorizationHeader,
+        ClientId = request.ClientId,
+        AuthorizationHeader = request.AuthorizationHeader,
     };
 }

@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
+using Core = Abblix.Oidc.Server.Model;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -73,10 +74,12 @@ public class ClientManagementController : ControllerBase
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
         [FromServices] IRegisterClientResponseFormatter formatter,
-        [FromBody] ClientRegistrationRequest request,
+        [FromBody] Core.ClientRegistrationRequest request,
         [FromHeader(Name = HttpRequestHeaders.Authorization)] AuthenticationHeaderValue? authorizationHeader)
     {
-        var clientRegistrationRequest = request.Map(authorizationHeader);
+        // The core model deserializes straight from the JSON payload; the transport-level
+        // Authorization header is the only value the body cannot carry.
+        var clientRegistrationRequest = request with { AuthorizationHeader = authorizationHeader };
 
         var response = await handler.HandleAsync(clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
@@ -102,7 +105,7 @@ public class ClientManagementController : ControllerBase
         [FromServices] IReadClientResponseFormatter formatter,
         ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = authorizationRequest.ToClientRequest();
+        Core.ClientRequest clientRequest = authorizationRequest;
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }
@@ -129,11 +132,11 @@ public class ClientManagementController : ControllerBase
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter formatter,
         ClientAuthorizationRequest authorizationRequest,
-        [FromBody] ClientRegistrationRequest registrationRequest)
+        [FromBody] Core.ClientRegistrationRequest registrationRequest)
     {
         var updateRequest = new UpdateClientRequest(
-            authorizationRequest.ToClientRequest(),
-            registrationRequest.Map(null));
+            authorizationRequest,
+            registrationRequest);
         var response = await handler.HandleAsync(updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
     }
@@ -159,7 +162,7 @@ public class ClientManagementController : ControllerBase
         [FromServices] IRemoveClientResponseFormatter formatter,
         ClientAuthorizationRequest authorizationRequest)
     {
-        var clientRequest = authorizationRequest.ToClientRequest();
+        Core.ClientRequest clientRequest = authorizationRequest;
         var response = await handler.HandleAsync(clientRequest);
         return await formatter.FormatResponseAsync(clientRequest, response);
     }
