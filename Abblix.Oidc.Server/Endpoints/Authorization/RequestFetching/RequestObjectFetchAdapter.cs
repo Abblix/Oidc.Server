@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.RequestObject;
@@ -53,6 +55,40 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     {
         var fetchResult = await requestObjectFetcher.FetchAsync(
             request, request.Request, client => client.RequestObjectSigningAlgorithm);
-        return fetchResult.MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
+
+        return fetchResult
+            .Bind(merged => ValidateMergedParameters(request, merged))
+            .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
+    }
+
+    /// <summary>
+    /// OIDC Core §6.1: the response_type and client_id values passed in the OAuth request syntax
+    /// MUST match the ones inside the request object when the object carries them. The merge gives
+    /// the request object's values precedence, so a mismatch surfaces as the merged value differing
+    /// from the outer one — without this check an attacker-supplied object could silently swap the
+    /// flow or the client identity relative to what the plain OAuth parameters declared.
+    /// </summary>
+    private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
+        AuthorizationRequest outer,
+        AuthorizationRequest merged)
+    {
+        if (outer.ClientId != null && merged.ClientId != outer.ClientId)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequestObject,
+                $"The {AuthorizationRequest.Parameters.ClientId} inside the request object " +
+                "does not match the one outside of it");
+        }
+
+        if (outer.ResponseType != null && merged.ResponseType != null &&
+            !outer.ResponseType.ToHashSet(StringComparer.Ordinal).SetEquals(merged.ResponseType))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequestObject,
+                $"The {AuthorizationRequest.Parameters.ResponseType} inside the request object " +
+                "does not match the one outside of it");
+        }
+
+        return merged;
     }
 }
