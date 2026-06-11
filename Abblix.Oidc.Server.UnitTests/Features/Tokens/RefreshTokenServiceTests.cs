@@ -412,9 +412,9 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// Verifies sliding expiration calculation when shorter than absolute expiration.
-    /// Sliding expiration resets on each token use, but is capped by absolute expiration.
-    /// When SlidingExpiresIn results in earlier expiry, it takes precedence.
-    /// This limits token lifetime based on inactivity while respecting the absolute maximum.
+    /// The sliding window is anchored to the moment of the refresh (now), not the original issuance,
+    /// so each use extends the lifetime; it is capped by the absolute ceiling from the original
+    /// issuance. When the sliding window yields the earlier expiry, it takes precedence.
     /// </summary>
     [Fact]
     public async Task CreateRefreshToken_WithSlidingExpirationShorter_ShouldUseSlidingExpiry()
@@ -422,14 +422,14 @@ public class RefreshTokenServiceTests
         // Arrange
         var authSession = CreateAuthSession();
         var authContext = CreateAuthorizationContext();
-        var originalIssuedAt = _currentTime.AddMinutes(-30);  // Only 30 mins ago
-        var slidingExpiry = TimeSpan.FromHours(2);  // 2 hours from IssuedAt = 1.5h from now
+        var originalIssuedAt = _currentTime.AddMinutes(-30);  // First login, 30 mins ago
+        var slidingExpiry = TimeSpan.FromHours(2);
         var absoluteExpiry = TimeSpan.FromDays(30);  // 30 days from IssuedAt
 
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AbsoluteExpiresIn = absoluteExpiry, // 30 days from IssuedAt
-            SlidingExpiresIn = slidingExpiry,   // 2 hours from IssuedAt
+            AbsoluteExpiresIn = absoluteExpiry,
+            SlidingExpiresIn = slidingExpiry,
         });
 
         var oldToken = new JsonWebToken
@@ -454,11 +454,12 @@ public class RefreshTokenServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.NotNull(capturedToken);
-        // Sliding: originalIssuedAt + 2h = -30min + 2h = +1.5h from now
-        // Absolute: originalIssuedAt + 30days = -30min + 30days
-        // Since +1.5h < +30days, sliding wins
-        var expectedExpiry = originalIssuedAt + slidingExpiry;
+        // Sliding window slides to now: now + 2h. Absolute ceiling: originalIssuedAt + 30days.
+        // now + 2h < originalIssuedAt + 30days, so the slid window wins — and it is LATER than the
+        // old token's expiry (originalIssuedAt + 2h), proving the window actually extended.
+        var expectedExpiry = _currentTime + slidingExpiry;
         Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.True(capturedToken.Payload.ExpiresAt > oldToken.Payload.ExpiresAt);
     }
 
     /// <summary>

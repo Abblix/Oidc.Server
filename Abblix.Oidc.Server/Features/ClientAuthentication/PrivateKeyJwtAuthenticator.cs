@@ -22,7 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,12 +35,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// that the client provides. This method is suitable for clients that can securely store and use private keys.
 /// </summary>
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
-/// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
+/// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
-    ITokenRegistry tokenRegistry,
-    IServiceProvider serviceProvider) : JwtAssertionAuthenticatorBase(logger, tokenRegistry)
+    IJwtReplayCache replayCache,
+    IServiceProvider serviceProvider) : JwtAssertionAuthenticatorBase(logger, replayCache)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.

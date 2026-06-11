@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
@@ -137,6 +139,84 @@ public class JwtEncryptionTests
 
         Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, validator.EncryptionMethodsSupported);
         Assert.Contains(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, validator.EncryptionMethodsSupported);
+    }
+
+    /// <summary>
+    /// Verifies RSA1_5 (RSAES-PKCS1-v1_5) round-trips: it is kept for backward compatibility, and a
+    /// JWE encrypted with it decrypts correctly. The Bleichenbacher oracle that PKCS1-v1.5 would
+    /// otherwise expose is closed by the RFC 7516 §11.5 random-CEK mitigation (see
+    /// <see cref="TamperedEncryptedKey_IsRejected_Uniformly"/>).
+    /// </summary>
+    [Fact]
+    public async Task Rsa1_5_RoundTrips()
+    {
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Rsa1_5, validator.EncryptionAlgorithmsSupported);
+
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Issuer = "abblix.com", Audiences = [nameof(Rsa1_5_RoundTrips)], ["test"] = "value" },
+        };
+
+        var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
+        var jwe = await creator.IssueAsync(
+            token, SigningKey, encryptionKey,
+            keyEncryptionAlgorithm: EncryptionAlgorithms.KeyManagement.Rsa1_5);
+
+        var parameters = new ValidationParameters
+        {
+            ValidateAudience = _ => Task.FromResult(true),
+            ValidateIssuer = _ => Task.FromResult(true),
+            ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
+        };
+
+        var result = await validator.ValidateAsync(jwe, parameters);
+
+        Assert.True(result.TryGetSuccess(out var validated));
+        Assert.Equal("value", validated.Payload.Json["test"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Verifies the RFC 7516 §11.5 mitigation: when the encrypted Content Encryption Key cannot be
+    /// decrypted (here the encrypted-key segment is replaced with random bytes), the decryptor
+    /// substitutes a random CEK and still runs the AEAD step, which fails the authentication tag.
+    /// The outcome is a uniform invalid_token result — no exception and no distinct error that
+    /// could serve as a padding oracle.
+    /// </summary>
+    [Fact]
+    public async Task TamperedEncryptedKey_IsRejected_Uniformly()
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Issuer = "abblix.com", Audiences = [nameof(TamperedEncryptedKey_IsRejected_Uniformly)] },
+        };
+
+        var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
+        var jwe = await creator.IssueAsync(token, SigningKey, encryptionKey);
+
+        // Replace the encrypted-key segment (index 1) with random bytes of the same length so the
+        // CEK decryption fails while the JWE stays structurally valid.
+        var parts = jwe.Split('.');
+        var originalKeyLength = Base64Url.DecodeFromChars(parts[1]).Length;
+        parts[1] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(originalKeyLength));
+        var tampered = string.Join('.', parts);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = new ValidationParameters
+        {
+            ValidateAudience = _ => Task.FromResult(true),
+            ValidateIssuer = _ => Task.FromResult(true),
+            ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
+            ResolveIssuerSigningKeys = _ => new[] { SigningKey }.ToAsyncEnumerable(),
+        };
+
+        var result = await validator.ValidateAsync(tampered, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)

@@ -28,8 +28,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -303,18 +302,19 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies that the JWT ID (jti) and expiration time (exp) are registered in the token registry.
+    /// Verifies that the JWT ID (jti) and expiration time (exp) are recorded in the replay cache.
     /// This prevents replay attacks by ensuring tokens can only be used once.
     /// </summary>
     [Fact]
-    public async Task ValidJwtWithJtiAndExp_ShouldRegisterInTokenRegistry()
+    public async Task ValidJwtWithJtiAndExp_ShouldRecordInReplayCache()
     {
         // Arrange
         var (authenticator, mocks) = CreateAuthenticator();
 
         var clientInfo = CreateClientInfo(ClientId);
         var jti = "unique_jwt_id_123";
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        var expiresAt = DateTimeOffset.Parse(
+            "2027-01-01T00:05:00Z", System.Globalization.CultureInfo.InvariantCulture);
 
         var validToken = CreateValidJwtTokenWithJtiAndExp(ClientId, ClientId, jti, expiresAt);
 
@@ -333,12 +333,49 @@ public class PrivateKeyJwtAuthenticatorTests
 
         // Assert
         Assert.NotNull(result);
-        mocks.TokenRegistry.Verify(
-            r => r.SetStatusAsync(
+        mocks.ReplayCache.Verify(
+            r => r.TryAddAsync(
                 It.Is<string>(id => id == jti),
-                It.Is<JsonWebTokenStatus>(s => s == JsonWebTokenStatus.Used),
-                It.Is<DateTimeOffset>(exp => Math.Abs((exp - expiresAt).TotalSeconds) < 1)),
+                It.Is<DateTimeOffset?>(exp =>
+                    exp.HasValue && Math.Abs((exp.Value - expiresAt).TotalSeconds) < 1)),
             Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that a replayed assertion is rejected: the replay cache reports the jti as
+    /// already present, and the single TryAddAsync call makes the reserve-and-check atomic —
+    /// two concurrent presenters of the same assertion cannot both pass.
+    /// </summary>
+    [Fact]
+    public async Task ReplayedAssertion_ShouldReturnNull()
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var validToken = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "replayed-jti",
+            DateTimeOffset.Parse("2027-01-01T00:05:00Z", System.Globalization.CultureInfo.InvariantCulture));
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
+
+        mocks.ReplayCache
+            .Setup(r => r.TryAddAsync("replayed-jti", It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(false);
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.Null(result);
     }
 
     /// <summary>
@@ -371,10 +408,42 @@ public class PrivateKeyJwtAuthenticatorTests
 
         // Assert
         Assert.Null(result);
-        // A rejected assertion is never recorded in the replay registry.
-        mocks.TokenRegistry.Verify(
-            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+        // A rejected assertion is never recorded in the replay cache.
+        mocks.ReplayCache.Verify(
+            r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that an assertion without an exp claim is rejected. RFC 7523 §3 makes exp REQUIRED
+    /// ("The JWT MUST contain an 'exp' (expiration time) claim that limits the time window during
+    /// which the JWT can be used"); without it the replay-registry entry has no TTL to key off,
+    /// so the assertion would be replayable indefinitely.
+    /// </summary>
+    [Fact]
+    public async Task AssertionWithoutExp_ShouldReturnNull()
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var tokenWithoutExp = CreateValidJwtTokenWithJti(ClientId, ClientId, "jti-without-exp");
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(tokenWithoutExp, clientInfo));
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.Null(result);
     }
 
     /// <summary>
@@ -422,13 +491,13 @@ public class PrivateKeyJwtAuthenticatorTests
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
-        var tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
+        var replayCache = new Mock<IJwtReplayCache>(MockBehavior.Strict);
         var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
 
-        // Setup default behavior for token registry
-        tokenRegistry
-            .Setup(r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()))
-            .Returns(Task.CompletedTask);
+        // Setup default behavior for the replay cache: every jti is fresh
+        replayCache
+            .Setup(r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(true);
 
         // Create service provider with scoped services
         var services = new ServiceCollection();
@@ -437,13 +506,13 @@ public class PrivateKeyJwtAuthenticatorTests
 
         var authenticator = new PrivateKeyJwtAuthenticator(
             logger.Object,
-            tokenRegistry.Object,
+            replayCache.Object,
             serviceProvider);
 
         var mocks = new Mocks
         {
             Logger = logger,
-            TokenRegistry = tokenRegistry,
+            ReplayCache = replayCache,
             ClientJwtValidator = clientJwtValidator,
         };
 
@@ -477,6 +546,36 @@ public class PrivateKeyJwtAuthenticatorTests
             payloadJson[JwtClaimTypes.Issuer] = issuer;
         if (subject != null)
             payloadJson[JwtClaimTypes.Subject] = subject;
+
+        var headerJson = new JsonObject
+        {
+            [JwtClaimTypes.Algorithm] = "RS256",
+            [JwtClaimTypes.Type] = "JWT"
+        };
+
+        return new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(headerJson),
+            Payload = new JsonWebTokenPayload(payloadJson)
+        };
+    }
+
+    /// <summary>
+    /// Creates a JWT token with a jti claim but no exp claim, for testing the RFC 7523 §3
+    /// expiration requirement. Uses real JsonObject instances for JWT payload - NOT mocked!
+    /// </summary>
+    /// <param name="issuer">The issuer claim (iss).</param>
+    /// <param name="subject">The subject claim (sub).</param>
+    /// <param name="jwtId">The JWT ID claim (jti).</param>
+    /// <returns>A JsonWebToken with the specified claims and no expiration.</returns>
+    private JsonWebToken CreateValidJwtTokenWithJti(string issuer, string subject, string jwtId)
+    {
+        var payloadJson = new JsonObject
+        {
+            [JwtClaimTypes.Issuer] = issuer,
+            [JwtClaimTypes.Subject] = subject,
+            [JwtClaimTypes.JwtId] = jwtId
+        };
 
         var headerJson = new JsonObject
         {
@@ -533,7 +632,7 @@ public class PrivateKeyJwtAuthenticatorTests
     private sealed class Mocks
     {
         public Mock<ILogger<PrivateKeyJwtAuthenticator>> Logger { get; init; } = null!;
-        public Mock<ITokenRegistry> TokenRegistry { get; init; } = null!;
+        public Mock<IJwtReplayCache> ReplayCache { get; init; } = null!;
         public Mock<IClientJwtValidator> ClientJwtValidator { get; init; } = null!;
     }
 }

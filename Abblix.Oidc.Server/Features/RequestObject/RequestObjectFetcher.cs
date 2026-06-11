@@ -77,7 +77,17 @@ public partial class RequestObjectFetcher(
         return await validationResult.BindAsync<T>(
             async payload =>
             {
-                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, request);
+                // RFC 9101 §5 strict mode: the authorization request is exactly the request object,
+                // so the payload binds onto a fresh model and parameters passed outside the object
+                // are ignored (the OAuth-syntax client_id/response_type duplicates are still
+                // cross-checked against the result by the authorization-endpoint adapter). The
+                // default keeps the OIDC Core §6.1 merge semantics, binding the payload over the
+                // outer request.
+                var target = options.Value.IgnoreParametersOutsideRequestObject
+                    ? Activator.CreateInstance<T>()
+                    : request;
+
+                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
                 if (updatedRequest == null)
                     return InvalidRequestObject("Unable to bind request object");
 
@@ -106,10 +116,14 @@ public partial class RequestObjectFetcher(
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
         // Always validate lifetime (exp/nbf claims) if present
+        // RFC 9101 §4 / OIDC Core §6.1: the aud of a request object SHOULD be the OP — when the
+        // object carries an audience, reject values addressed to another server (a request object
+        // minted for a different OP must not be replayable here); an absent aud stays accepted.
         // Only require signed tokens when RequireSignedRequestObject is true
         var validationOptions = ValidationOptions.ValidateIssuer |
                                 ValidationOptions.ValidateIssuerSigningKey |
-                                ValidationOptions.ValidateLifetime;
+                                ValidationOptions.ValidateLifetime |
+                                ValidationOptions.ValidateAudience;
 
         if (options.Value.RequireSignedRequestObject)
             validationOptions |= ValidationOptions.RequireSignedTokens;
@@ -121,6 +135,17 @@ public partial class RequestObjectFetcher(
         return result.Match<Result<JsonObject, OidcError>>(
             validJwt =>
             {
+                // RFC 9101 §10.5: a client registered with require_signed_request_object committed
+                // to SIGNED request objects — an unsigned (alg=none) object satisfies the
+                // structural check but not the commitment.
+                if (validJwt.Client.RequireSignedRequestObject &&
+                    string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequestObject,
+                        "The client is required to sign its request objects");
+                }
+
                 // Pin the request object's alg to what the resolved client registered for this
                 // request-object kind. The signature is already verified; this rejects a request
                 // object signed with a different (e.g. weaker) algorithm than the client registered.

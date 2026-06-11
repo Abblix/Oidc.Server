@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Xunit;
@@ -102,8 +103,8 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            ["token"] = accessToken,
-            ["token_type_hint"] = UserInfoRequest.Parameters.AccessToken,
+            [IntrospectionRequest.Parameters.Token] = accessToken,
+            [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
         });
         var response = await client.SendAsync(introspectRequest, TestContext.Current.CancellationToken);
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -111,7 +112,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
 
         var body = JsonNode.Parse(raw)?.AsObject();
         Assert.NotNull(body);
-        Assert.Equal("true", body["active"]?.GetValue<string>());
+        Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
 
         var echoed = body[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);

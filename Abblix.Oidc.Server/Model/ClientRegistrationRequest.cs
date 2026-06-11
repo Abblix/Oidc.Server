@@ -384,6 +384,36 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>require_pushed_authorization_requests</c> client metadata per RFC 9126 §6: when
+    /// <c>true</c>, pushed authorization requests are the only way this client may start an
+    /// authorization flow. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.RequirePushedAuthorizationRequests"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// The <c>require_signed_request_object</c> client metadata per RFC 9101 §10.5: when
+    /// <c>true</c>, the client must deliver its authorization request parameters as a signed
+    /// request object. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.RequireSignedRequestObject"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The <c>tls_client_certificate_bound_access_tokens</c> client metadata per RFC 8705 §3.4:
+    /// when <c>true</c>, access tokens issued to this client are certificate-bound whenever the
+    /// token request arrives over mutual TLS, independently of the authentication method. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TlsClientCertificateBoundAccessTokens"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1: the per-client
     /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
     /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
@@ -403,6 +433,18 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: the per-client allowlist of RFC 8693 <c>audience</c> values this
+    /// client may request when exchanging a token. RFC 8693 does not standardise a registration
+    /// parameter for this, so the property is exposed under the non-standard
+    /// <c>token_exchange_audiences</c> name. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// Default-deny: <c>null</c> or empty means the client may not request any <c>audience</c>;
+    /// a non-empty array is the allowlist of accepted values.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
@@ -689,6 +731,19 @@ public record ClientRegistrationRequest
         /// DPoP-bound access tokens for this client.</summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
 
+        /// <summary>The <c>require_pushed_authorization_requests</c> registration parameter (RFC 9126 §6)
+        /// making PAR the only way this client may start an authorization flow.</summary>
+        public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>The <c>require_signed_request_object</c> registration parameter (RFC 9101 §10.5)
+        /// committing this client to signed request objects.</summary>
+        public const string RequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registration parameter
+        /// (RFC 8705 §3.4) requesting certificate-bound access tokens independently of the
+        /// authentication method.</summary>
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
+
         /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §5.1):
         /// per-client allowlist of authorization-detail <c>type</c> values this client may use in
         /// Rich Authorization Requests.</summary>
@@ -698,6 +753,11 @@ public record ClientRegistrationRequest
         /// (non-standard extension; RFC 8693 does not standardise it): per-client allowlist of
         /// <c>subject_token_type</c> URIs this client may submit to the Token Exchange grant.</summary>
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+
+        /// <summary>The <c>token_exchange_audiences</c> registration parameter
+        /// (non-standard extension; RFC 8693 does not standardise it): default-deny per-client
+        /// allowlist of <c>audience</c> values this client may request when exchanging a token.</summary>
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
 
         /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
         /// back-channel logout endpoint.</summary>

@@ -37,10 +37,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// The password grant type allows clients to directly exchange a user's credentials (username and password)
 /// for an access token, typically for trusted clients.
 /// </summary>
-/// <param name="parameterValidator">A service for validating required request parameters.</param>
 /// <param name="userCredentialsAuthenticator">A service for authenticating the user's credentials.</param>
 public class PasswordGrantHandler(
-    IParameterValidator parameterValidator,
     IUserCredentialsAuthenticator userCredentialsAuthenticator) : IAuthorizationGrantHandler
 {
     /// <summary>
@@ -66,9 +64,19 @@ public class PasswordGrantHandler(
     /// </returns>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
-        // Ensure that the request contains the required username and password parameters.
-        parameterValidator.Required(request.UserName, nameof(request.UserName));
-        parameterValidator.Required(request.Password, nameof(request.Password));
+        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        if (!request.UserName.HasValue())
+        {
+            return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+                ErrorFactory.MissingParameter(TokenRequest.Parameters.Username));
+        }
+
+        if (!request.Password.HasValue())
+        {
+            return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+                ErrorFactory.MissingParameter(TokenRequest.Parameters.Password));
+        }
 
         // Extract relevant details from the request and prepare the authorization context.
         var userName = request.UserName;

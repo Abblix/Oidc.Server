@@ -63,8 +63,13 @@ public static class ServiceCollectionExtensions
         // Tracks the registered JWE algorithms for discovery (request_object_encryption_*_values_supported).
         var encryptionAlgorithmsProvider = new EncryptionAlgorithmsProvider();
 
-        // Register key encryptors by algorithm
-        // RSA-based key encryption
+        // Register key encryptors by algorithm.
+        // RSA-OAEP and RSA-OAEP-256 are the recommended algorithms. RSA1_5 (RSAES-PKCS1-v1_5) is
+        // kept for backward compatibility despite RFC 8725 §3.2's advice to prefer RSAES-OAEP: its
+        // padding would otherwise make the decryption endpoint a Bleichenbacher oracle. That oracle
+        // is closed in JsonWebTokenEncryptor.DecryptAsync by the RFC 7516 §11.5 mitigation — a CEK
+        // that fails to decrypt is replaced with a random CEK and the AEAD step still runs, so a
+        // decryption failure is processed identically regardless of padding validity.
         services
             .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep, encryptionAlgorithmsProvider)
             .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256, encryptionAlgorithmsProvider)

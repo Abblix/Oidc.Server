@@ -30,8 +30,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -58,7 +57,7 @@ public class ClientSecretJwtAuthenticatorTests
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly FakeTimeProvider _clock;
-    private readonly Mock<ITokenRegistry> _tokenRegistry;
+    private readonly Mock<IJwtReplayCache> _replayCache;
     private readonly ClientSecretJwtAuthenticator _authenticator;
 
     public ClientSecretJwtAuthenticatorTests()
@@ -68,7 +67,7 @@ public class ClientSecretJwtAuthenticatorTests
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
+        _replayCache = new Mock<IJwtReplayCache>(MockBehavior.Strict);
 
         _requestInfoProvider
             .Setup(p => p.RequestUri)
@@ -80,7 +79,7 @@ public class ClientSecretJwtAuthenticatorTests
             _clientInfoProvider.Object,
             _requestInfoProvider.Object,
             _clock,
-            _tokenRegistry.Object);
+            _replayCache.Object);
     }
 
     /// <summary>
@@ -209,9 +208,9 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
 
-        _tokenRegistry
-            .Setup(r => r.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
-            .Returns(Task.CompletedTask);
+        _replayCache
+            .Setup(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(true);
 
         var request = new ClientRequest
         {
@@ -226,7 +225,7 @@ public class ClientSecretJwtAuthenticatorTests
         Assert.NotNull(result);
         Assert.Equal(ClientId, result.ClientId);
 
-        _tokenRegistry.Verify(r => r.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()), Times.Once);
+        _replayCache.Verify(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()), Times.Once);
     }
 
     /// <summary>
@@ -276,8 +275,8 @@ public class ClientSecretJwtAuthenticatorTests
 
         // Assert
         Assert.Null(result);
-        _tokenRegistry.Verify(
-            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+        _replayCache.Verify(
+            r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()),
             Times.Never);
     }
 
@@ -316,9 +315,9 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(p => p.TryFindClientAsync(ClientId))
             .ReturnsAsync(clientInfo);
 
-        _tokenRegistry
-            .Setup(r => r.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
-            .Returns(Task.CompletedTask);
+        _replayCache
+            .Setup(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(true);
 
         var request = new ClientRequest
         {
@@ -520,8 +519,8 @@ public class ClientSecretJwtAuthenticatorTests
         // Assert
         Assert.Null(result);
 
-        // A rejected assertion is never recorded in the replay registry.
-        _tokenRegistry.Verify(r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()), Times.Never);
+        // A rejected assertion is never recorded in the replay cache.
+        _replayCache.Verify(r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()), Times.Never);
     }
 
     /// <summary>

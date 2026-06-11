@@ -54,7 +54,6 @@ public class DeviceCodeGrantHandlerTests
     private const string UserId = "user_456";
 
     private readonly Mock<IDeviceAuthorizationStorage> _storage;
-    private readonly Mock<IParameterValidator> _parameterValidator;
     private readonly DeviceCodeGrantHandler _handler;
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(5);
@@ -62,7 +61,6 @@ public class DeviceCodeGrantHandlerTests
     public DeviceCodeGrantHandlerTests()
     {
         _storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Strict);
-        _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
@@ -79,9 +77,21 @@ public class DeviceCodeGrantHandlerTests
 
         _handler = new DeviceCodeGrantHandler(
             _storage.Object,
-            _parameterValidator.Object,
             timeProvider,
             options);
+    }
+
+    /// <summary>
+    /// RFC 6749 §5.2: a token request without the required device_code parameter is the caller's
+    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_MissingDeviceCode_ReturnsInvalidRequest()
+    {
+        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -107,9 +117,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "device"),
@@ -148,9 +155,6 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "device"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -186,9 +190,6 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
-
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
@@ -210,9 +211,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var wrongClientInfo = new ClientInfo("different_client_456");
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
@@ -240,9 +238,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var nextPollAt = _currentTime.AddSeconds(5);
 
@@ -279,9 +274,6 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
@@ -315,9 +307,6 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Denied
@@ -347,18 +336,12 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = null };
 
-        _parameterValidator
-            .Setup(v => v.Required<string>(null, nameof(tokenRequest.DeviceCode)));
-
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
-        _parameterValidator.Verify(
-            v => v.Required<string>(null, nameof(tokenRequest.DeviceCode)),
-            Times.Once);
     }
 
     /// <summary>
@@ -370,9 +353,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
@@ -399,9 +379,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var sessionId = "session_xyz";
         var authTime = _currentTime.AddMinutes(-5);
@@ -444,9 +421,6 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
-
         var nextPollAt = _currentTime;
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
@@ -476,9 +450,6 @@ public class DeviceCodeGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
-
-        _parameterValidator
-            .Setup(v => v.Required(DeviceCode, nameof(tokenRequest.DeviceCode)));
 
         var nextPollAt = _currentTime.AddSeconds(-1);
 

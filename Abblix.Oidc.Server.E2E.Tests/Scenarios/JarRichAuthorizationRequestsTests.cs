@@ -67,7 +67,9 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
 
         // 3. Build the request JWT containing every authorize parameter -- including the wire-shape
         // authorization_details JSON array attached as a custom claim. RFC 9101 §6: iss = client_id,
-        // aud = the AS issuer; iat / exp pin the request lifetime.
+        // aud = the AS issuer; iat / exp pin the request lifetime. The aud must be the issuer
+        // identifier byte-exact: AbsoluteUri appends a trailing slash to a root URL, which the
+        // server's exact-match audience validation rightly rejects.
         var now = TimeProvider.System.GetUtcNow();
         var requestJwt = new JsonWebToken
         {
@@ -75,7 +77,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
             Payload =
             {
                 Issuer = clientId,
-                Audiences = [discovery.Issuer.AbsoluteUri],
+                Audiences = [discovery.Issuer.OriginalString],
                 IssuedAt = now,
                 ExpiresAt = now.AddMinutes(5),
             },

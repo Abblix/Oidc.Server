@@ -144,9 +144,52 @@ public class TokenAuthorizationContextEvaluatorTests
             Array.ConvertAll(requestedResources, resource => new ResourceDefinition(resource)));
     }
 
+    /// <summary>
+    /// RFC 8705 §3.4: tls_client_certificate_bound_access_tokens binds the issued token to the
+    /// presented certificate even when the client authenticates with a non-mTLS method — the
+    /// metadata decouples binding from authentication.
+    /// </summary>
+    [Fact]
+    public void InitialIssuance_NonMtlsAuthWithBindingFlag_BindsToPresentedCertificate()
+    {
+        using var certificate = CreateCertificate();
+        var expectedThumbprint = Base64Url.EncodeToString(SHA256.HashData(certificate.RawData));
+        var request = CreateRefreshRequest(
+            boundThumbprint: null,
+            clientCertificate: certificate,
+            authMethod: ClientAuthenticationMethods.PrivateKeyJwt,
+            certificateBoundAccessTokens: true);
+
+        var result = Evaluator.EvaluateAuthorizationContext(request);
+
+        Assert.Equal(expectedThumbprint, result.CertificateSha256Thumbprint);
+    }
+
+    /// <summary>
+    /// Without the RFC 8705 §3.4 flag a non-mTLS-authenticated client gets no certificate binding
+    /// even when a certificate happens to be present on the connection — pins the pre-existing
+    /// behavior the new flag deliberately does not change.
+    /// </summary>
+    [Fact]
+    public void InitialIssuance_NonMtlsAuthWithoutBindingFlag_DoesNotBind()
+    {
+        using var certificate = CreateCertificate();
+        var request = CreateRefreshRequest(
+            boundThumbprint: null,
+            clientCertificate: certificate,
+            authMethod: ClientAuthenticationMethods.PrivateKeyJwt,
+            certificateBoundAccessTokens: false);
+
+        var result = Evaluator.EvaluateAuthorizationContext(request);
+
+        Assert.Null(result.CertificateSha256Thumbprint);
+    }
+
     private static ValidTokenRequest CreateRefreshRequest(
         string? boundThumbprint,
-        X509Certificate2? clientCertificate)
+        X509Certificate2? clientCertificate,
+        string authMethod = ClientAuthenticationMethods.TlsClientAuth,
+        bool certificateBoundAccessTokens = false)
     {
         var fixedTime = DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture);
         var session = new AuthSession("user-123", "session-456", fixedTime, "local");
@@ -157,7 +200,8 @@ public class TokenAuthorizationContextEvaluatorTests
         var grant = new AuthorizedGrant(session, context);
         var clientInfo = new ClientInfo("test-client")
         {
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            TokenEndpointAuthMethod = authMethod,
+            TlsClientCertificateBoundAccessTokens = certificateBoundAccessTokens,
         };
 
         return new ValidTokenRequest(

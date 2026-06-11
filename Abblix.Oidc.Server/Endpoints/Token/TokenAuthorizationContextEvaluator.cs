@@ -70,9 +70,14 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
         var thumbprint = authContext.CertificateSha256Thumbprint;
         if (thumbprint == null && request.ClientCertificate != null)
         {
+            // RFC 8705 §3.4: tls_client_certificate_bound_access_tokens decouples certificate
+            // binding from the authentication method — a client may authenticate with, say,
+            // private_key_jwt over a mutual-TLS connection and still receive certificate-bound
+            // tokens. The mTLS authentication methods keep their implicit binding.
             var authMethod = request.ClientInfo.TokenEndpointAuthMethod;
             if (authMethod == ClientAuthenticationMethods.SelfSignedTlsClientAuth
-                || authMethod == ClientAuthenticationMethods.TlsClientAuth)
+                || authMethod == ClientAuthenticationMethods.TlsClientAuth
+                || request.ClientInfo.TlsClientCertificateBoundAccessTokens)
             {
                 thumbprint = Base64Url.EncodeToString(SHA256.HashData(request.ClientCertificate.RawData));
             }

@@ -60,13 +60,24 @@ public interface IAuthorizationCodeService
     Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode);
 
     /// <summary>
-    /// Asynchronously removes an authorization code from the system. This method is typically called once
-    /// an authorization code has been exchanged for an access token, or when it expires, ensuring that the code
-    /// cannot be reused.
+    /// Atomically removes an authorization code from storage and returns the grant it held, in a
+    /// single get-and-remove operation. This is how a code is claimed for redemption: it enforces
+    /// the single-use guarantee against a race between two simultaneous redemptions of the same
+    /// code (RFC 6749 §4.1.2) — exactly one caller wins and receives the grant, every other caller
+    /// finds the code already gone and receives an <c>invalid_grant</c> failure.
     /// </summary>
-    /// <param name="authorizationCode">The authorization code to be removed.</param>
-    /// <returns>A task representing the asynchronous operation of removing the authorization code.</returns>
-    Task RemoveAuthorizationCodeAsync(string authorizationCode);
+    /// <param name="authorizationCode">The authorization code to remove and claim.</param>
+    /// <returns>
+    /// The grant on success when this caller won the claim; an <c>invalid_grant</c>
+    /// <see cref="OidcError"/> when the code is absent — already claimed by a concurrent request,
+    /// already consumed, expired, or never issued.
+    /// </returns>
+    /// <remarks>
+    /// A successfully claimed grant whose <c>IssuedTokens</c> is non-empty indicates the code was
+    /// already used to issue tokens (a sequential reuse), which the caller treats as a reuse to be
+    /// rejected and whose tokens are revoked.
+    /// </remarks>
+    Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode);
 
     /// <summary>
     /// Updates the authorization grant result based on a specific authorization code and expiration time.

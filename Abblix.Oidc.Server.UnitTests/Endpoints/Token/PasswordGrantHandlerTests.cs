@@ -47,18 +47,34 @@ public class PasswordGrantHandlerTests
     private const string UserName = "testuser";
     private const string Password = "testpassword123";
 
-    private readonly Mock<IParameterValidator> _parameterValidator;
     private readonly Mock<IUserCredentialsAuthenticator> _credentialsAuthenticator;
     private readonly PasswordGrantHandler _handler;
 
     public PasswordGrantHandlerTests()
     {
-        _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         _credentialsAuthenticator = new Mock<IUserCredentialsAuthenticator>(MockBehavior.Strict);
 
         _handler = new PasswordGrantHandler(
-            _parameterValidator.Object,
             _credentialsAuthenticator.Object);
+    }
+
+    /// <summary>
+    /// RFC 6749 §5.2: a token request without the required username or password parameter is the
+    /// caller's protocol error and yields invalid_request — previously it threw and surfaced as
+    /// HTTP 500.
+    /// </summary>
+    [Theory]
+    [InlineData(null, Password)]
+    [InlineData(UserName, null)]
+    public async Task AuthorizeAsync_MissingCredentialParameter_ReturnsInvalidRequest(
+        string? userName, string? password)
+    {
+        var tokenRequest = new TokenRequest { UserName = userName, Password = password };
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo(ClientId));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -77,9 +93,6 @@ public class PasswordGrantHandlerTests
             Password = Password,
             Scope = [Scopes.OpenId]
         };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
@@ -115,9 +128,6 @@ public class PasswordGrantHandlerTests
             Scope = [Scopes.OpenId]
         };
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
-
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Invalid username or password");
         _credentialsAuthenticator
             .Setup(a => a.ValidateAsync(UserName, "wrongpassword", It.IsAny<AuthorizationContext>()))
@@ -146,9 +156,6 @@ public class PasswordGrantHandlerTests
             Password = Password,
             Scope = [Scopes.OpenId]
         };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
 
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Account is locked");
         _credentialsAuthenticator
@@ -180,9 +187,6 @@ public class PasswordGrantHandlerTests
             Password = specialPassword,
             Scope = [Scopes.OpenId]
         };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
@@ -216,9 +220,6 @@ public class PasswordGrantHandlerTests
             Scope = scopes
         };
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, scopes, null));
@@ -250,9 +251,6 @@ public class PasswordGrantHandlerTests
             Password = Password,
             Scope = null!
         };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
@@ -300,9 +298,6 @@ public class PasswordGrantHandlerTests
             Scope = [Scopes.OpenId]
         };
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
@@ -341,9 +336,6 @@ public class PasswordGrantHandlerTests
             Scope = [Scopes.OpenId],
             Resources = resources,
         };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.UserName, nameof(tokenRequest.UserName)));
-        _parameterValidator.Setup(v => v.Required(tokenRequest.Password, nameof(tokenRequest.Password)));
 
         var fixedTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var expectedGrant = new AuthorizedGrant(

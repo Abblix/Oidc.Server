@@ -72,7 +72,16 @@ public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : IS
                 $"(client '{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType})");
         }
 
-        var sector = clientInfo.SectorIdentifier ?? clientInfo.ClientId;
+        // OIDC Core §8.1: when no sector_identifier_uri was provided, the sector identifier is the
+        // host component of the registered redirect_uri. The previous client_id fallback produced
+        // identifiers that silently change when the same application is re-registered under a new
+        // client id — defeating the stability pairwise identifiers are supposed to give a sector.
+        // Affects only statically configured clients: DCR-registered pairwise clients always get
+        // SectorIdentifier computed at registration time. client_id remains the last resort for
+        // clients with no redirect URIs at all (e.g. pure client_credentials configurations).
+        var sector = clientInfo.SectorIdentifier
+            ?? clientInfo.RedirectUris?.FirstOrDefault()?.Host
+            ?? clientInfo.ClientId;
         var data = Encoding.UTF8.GetBytes($"{HttpUtility.UrlEncode(sector)}&{HttpUtility.UrlEncode(subject)}");
         var algorithm = settings.HashAlgorithm;
         var salt = System.Convert.FromBase64String(settings.Salt);

@@ -554,7 +554,9 @@ public class InteropTests
 		{ EncryptionAlgorithms.KeyManagement.RsaOaep, SecurityAlgorithms.RsaOAEP,
 		  EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512, SecurityAlgorithms.Aes256CbcHmacSha512 },
 
-		// RSA1_5 with all AES-CBC-HMAC variants (Microsoft supports, but deprecated)
+		// RSA1_5 with all AES-CBC-HMAC variants (Microsoft supports, but deprecated). RSA1_5 stays
+		// supported for backward compatibility; the Bleichenbacher oracle on its decryption path is
+		// closed by the RFC 7516 §11.5 random-CEK mitigation in JsonWebTokenEncryptor.
 		{ EncryptionAlgorithms.KeyManagement.Rsa1_5, SecurityAlgorithms.RsaPKCS1,
 		  EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, SecurityAlgorithms.Aes128CbcHmacSha256 },
 		{ EncryptionAlgorithms.KeyManagement.Rsa1_5, SecurityAlgorithms.RsaPKCS1,

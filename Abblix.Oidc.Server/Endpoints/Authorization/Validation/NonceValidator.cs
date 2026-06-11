@@ -49,13 +49,20 @@ public class NonceValidator : SyncAuthorizationContextValidatorBase
     protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
     {
         var request = context.Request;
-        var responseType = request.ResponseType;
+        var responseType = request.ResponseType.NotNull(nameof(request.ResponseType));
 
-        // Validate nonce as per OpenID Connect Core 1.0 requirements
-        if (responseType.NotNull(nameof(responseType)).Contains(ResponseTypes.IdToken) &&
-            string.IsNullOrEmpty(request.Nonce))
+        // OIDC Core 1.0: the nonce is REQUIRED whenever an ID token is delivered from the
+        // authorization endpoint (§3.2.2.1, response_type contains id_token) and in EVERY Hybrid
+        // Flow combination (§3.3.2.11) — including "code token", where no id_token is returned
+        // directly but the one minted later from the code must still carry the nonce binding.
+        var idTokenRequested = responseType.Contains(ResponseTypes.IdToken);
+        var hybridCodeToken = responseType.Contains(ResponseTypes.Code) &&
+                              responseType.Contains(ResponseTypes.Token);
+
+        if ((idTokenRequested || hybridCodeToken) && string.IsNullOrEmpty(request.Nonce))
         {
-            return context.InvalidRequest($"Nonce is when {Parameters.ResponseType} includes '{ResponseTypes.IdToken}', as specified in OpenID Connect Core 1.0.");
+            return context.InvalidRequest(
+                $"Nonce is required for the requested {Parameters.ResponseType}, as specified in OpenID Connect Core 1.0.");
         }
 
         return null;

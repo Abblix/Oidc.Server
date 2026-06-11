@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -38,7 +39,9 @@ public class RegisterClientRequestProcessor(
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
+    ITokenIdGenerator tokenIdGenerator,
+    IRegistrationAccessTokenService registrationAccessTokenService,
+    IRegistrationAccessTokenStore registrationAccessTokenStore) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -64,10 +67,16 @@ public class RegisterClientRequestProcessor(
 
         await clientInfoManager.AddClientAsync(clientInfo);
 
+        // Record the jti of the issued registration access token so the management endpoint can
+        // bind the token to this client (RFC 7592 §5).
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        await registrationAccessTokenStore.SetTokenIdAsync(credentials.ClientId, registrationAccessTokenId);
+
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
             issuedAt,
-            clientInfo.ExpiresAfter);
+            clientInfo.ExpiresAfter,
+            registrationAccessTokenId);
 
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,
@@ -81,6 +90,12 @@ public class RegisterClientRequestProcessor(
             TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
             ApplicationType = clientInfo.ApplicationType,
             RedirectUris = clientInfo.RedirectUris,
+            // RFC 7591 §3.2.1: grant_types/response_types/scope are read back from the stored
+            // ClientInfo, not from the request — this is what makes server-assigned defaults
+            // (authorization_code / code when omitted) visible to the client.
+            GrantTypes = clientInfo.AllowedGrantTypes,
+            ResponseTypes = clientInfo.AllowedResponseTypes,
+            Scope = clientInfo.AllowedScopes,
             ClientName = clientInfo.ClientName,
             LogoUri = clientInfo.LogoUri,
             SubjectType = clientInfo.SubjectType,
@@ -108,8 +123,12 @@ public class RegisterClientRequestProcessor(
             TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
             DpopBoundAccessTokens = clientInfo.RequireDPoP,
+            RequirePushedAuthorizationRequests = clientInfo.RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = clientInfo.RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = clientInfo.TlsClientCertificateBoundAccessTokens,
             AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
+            TokenExchangeAudiences = clientInfo.TokenExchangeAllowedAudiences,
         };
 
         return response;
@@ -135,10 +154,17 @@ public class RegisterClientRequestProcessor(
             OfflineAccessAllowed = model.OfflineAccessAllowed,
             // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
+            // flags — when omitted, default to false.
+            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
+            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
+            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
+            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,

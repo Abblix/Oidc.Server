@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -36,6 +37,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
+    IRegistrationAccessTokenStore registrationAccessTokenStore,
+    ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IUpdateClientRequestProcessor
 {
     /// <summary>
@@ -72,10 +75,17 @@ public class UpdateClientRequestProcessor(
             OfflineAccessAllowed = model.OfflineAccessAllowed,
             // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
+            // flags — RFC 7592 update is a full replacement, so omission resets them to false.
+            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
+            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
+            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
+            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
+            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
             LogoUri = model.LogoUri,
             PolicyUri = model.PolicyUri,
             TermsOfServiceUri = model.TermsOfServiceUri,
@@ -149,12 +159,19 @@ public class UpdateClientRequestProcessor(
         // Update client in storage
         await clientInfoManager.UpdateClientAsync(updatedClient);
 
-        // Generate response with new registration_access_token
+        // RFC 7592 §5: rotate the registration access token on update. Recording a fresh jti
+        // invalidates every token issued before this update, limiting the exposure window of a
+        // leaked token to the period between rotations.
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        await registrationAccessTokenStore.SetTokenIdAsync(updatedClient.ClientId, registrationAccessTokenId);
+
+        // Generate response with new registration_access_token, embedding the freshly rotated jti.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             updatedClient.ClientId,
             issuedAt,
-            null);
+            null,
+            registrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {
@@ -165,6 +182,14 @@ public class UpdateClientRequestProcessor(
             TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,
             ApplicationType = updatedClient.ApplicationType,
             RedirectUris = updatedClient.RedirectUris,
+            // RFC 7592 §3: echo the post-update registered state so the client can verify the
+            // full replacement took effect (grant/response types and scope included).
+            GrantTypes = updatedClient.AllowedGrantTypes,
+            ResponseTypes = updatedClient.AllowedResponseTypes,
+            Scope = updatedClient.AllowedScopes,
+            RequirePushedAuthorizationRequests = updatedClient.RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = updatedClient.RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = updatedClient.TlsClientCertificateBoundAccessTokens,
             ClientName = updatedClient.ClientName,
             LogoUri = updatedClient.LogoUri,
             SubjectType = updatedClient.SubjectType,
@@ -188,6 +213,8 @@ public class UpdateClientRequestProcessor(
             AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
             // Non-standard extension: echo token_exchange_subject_token_types.
             TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
+            // Non-standard extension: echo token_exchange_audiences.
+            TokenExchangeAudiences = updatedClient.TokenExchangeAllowedAudiences,
         };
     }
 

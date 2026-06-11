@@ -25,6 +25,8 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
@@ -38,9 +40,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
 /// <param name="authorizationRequestStorage">
 /// The storage system used to retrieve pushed authorization request objects.</param>
+/// <param name="clientInfoProvider">
+/// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
-    IAuthorizationRequestStorage authorizationRequestStorage) : IAuthorizationRequestFetcher
+    IAuthorizationRequestStorage authorizationRequestStorage,
+    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously retrieves the pushed authorization request object associated with the specified URN.
@@ -90,6 +95,19 @@ public class PushedRequestFetcher(
         if (options.Value.RequirePushedAuthorizationRequests)
         {
             return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
+        }
+
+        // RFC 9126 §6: the per-client require_pushed_authorization_requests metadata makes PAR the
+        // only way for this client to start an authorization flow, independent of the server-wide
+        // flag. Enforced here (not in the shared context-validator pipeline) because this fetcher
+        // participates only in the authorization endpoint's chain — the PAR endpoint itself runs a
+        // different fetcher set and must not trip over the requirement it is there to satisfy.
+        if (request.ClientId is { } clientId &&
+            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is
+                { RequirePushedAuthorizationRequests: true })
+        {
+            return ErrorFactory.InvalidRequestObject(
+                "The client is required to use Pushed Authorization Requests (PAR)");
         }
 
         // If no URN is provided and PAR is not required, return the original request

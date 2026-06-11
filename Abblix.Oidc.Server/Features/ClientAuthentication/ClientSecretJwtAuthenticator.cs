@@ -26,7 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -43,14 +43,14 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
-/// <param name="tokenRegistry">Registry for managing the status of JWTs, such as marking them as used or invalid.</param>
+/// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
-    ITokenRegistry tokenRegistry) : JwtAssertionAuthenticatorBase(logger, tokenRegistry)
+    IJwtReplayCache replayCache) : JwtAssertionAuthenticatorBase(logger, replayCache)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -477,6 +478,49 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// Verifies c_hash/at_hash are produced for non-RS256 signing algorithms, using the hash
+    /// matching the algorithm's digest size (OIDC Core §3.1.3.6 / §3.3.2.11): SHA-256 for *256,
+    /// SHA-384 for *384, SHA-512 for *512. The claim is base64url of the left half of the digest,
+    /// so its decoded length is half the digest size (16 / 24 / 32 bytes). Before the fix only
+    /// RS256 was handled and these algorithms silently omitted the hashes, breaking hybrid flows.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256, 16)] // SHA-256: 32-byte digest, left half 16
+    [InlineData(SigningAlgorithms.PS384, 24)] // SHA-384: 48-byte digest, left half 24
+    [InlineData(SigningAlgorithms.ES512, 32)] // SHA-512: 64-byte digest, left half 32
+    public async Task CreateIdentityToken_NonRs256Algorithm_ProducesHashesOfCorrectSize(
+        string signingAlgorithm, int expectedHalfDigestBytes)
+    {
+        // Arrange
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo(signingAlgorithm: signingAlgorithm);
+        var userClaims = CreateUserClaims();
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(userClaims);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        // Act
+        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash]?.GetValue<string>();
+        var atHash = capturedToken.Payload[JwtClaimTypes.AccessTokenHash]?.GetValue<string>();
+        Assert.NotNull(cHash);
+        Assert.NotNull(atHash);
+        Assert.Equal(expectedHalfDigestBytes, Base64Url.DecodeFromChars(cHash).Length);
+        Assert.Equal(expectedHalfDigestBytes, Base64Url.DecodeFromChars(atHash).Length);
+    }
+
+    /// <summary>
     /// Verifies that when authorization code is null or empty, c_hash is not included.
     /// </summary>
     [Fact]
@@ -626,11 +670,13 @@ public class IdentityTokenServiceTests
     private static AuthorizationContext CreateAuthorizationContext() =>
         new(ClientId, [Scopes.OpenId, Scopes.Profile], null);
 
-    private static ClientInfo CreateClientInfo(TimeSpan? identityTokenExpiresIn = null)
+    private static ClientInfo CreateClientInfo(
+        TimeSpan? identityTokenExpiresIn = null,
+        string signingAlgorithm = SigningAlgorithms.RS256)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.RS256
+            IdentityTokenSignedResponseAlgorithm = signingAlgorithm
         };
 
         if (identityTokenExpiresIn.HasValue)

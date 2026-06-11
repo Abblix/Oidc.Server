@@ -155,10 +155,18 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         if (header.KeyId.HasValue())
             decryptionKeys = decryptionKeys.Where(key => string.Equals(key.KeyId, header.KeyId, StringComparison.Ordinal));
 
+        // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
+        // encryption algorithms for incoming JWE — an unregistered 'enc' yields no decryptor and is
+        // rejected outright.
+        var contentDecryptor = serviceProvider.GetKeyedService<IDataEncryptor>(encryptionAlgorithm);
+        if (contentDecryptor == null)
+            return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
+
         var encryptedKey = decodedParts[1];
         var iv = decodedParts[2];
         var ciphertext = decodedParts[3];
         var authTag = decodedParts[4];
+        var aad = Encoding.ASCII.GetBytes(jwtParts[0]);
 
         var keyFound = false;
         await foreach (var key in decryptionKeys)
@@ -172,14 +180,21 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
                     $"Decryption operation requires private key material, but key (kid={key.KeyId}) contains only public key data.");
             }
 
+            // RFC 7516 §11.5: if CEK decryption fails — wrong key, malformed padding, or an
+            // unregistered key-management 'alg' — substitute a randomly generated CEK of the
+            // correct size and still run the AEAD step. The authentication tag then fails exactly
+            // as it would for a successful-but-wrong CEK, so a decryption failure is processed
+            // identically regardless of its cause. This is what makes RSA1_5 (RSAES-PKCS1-v1_5)
+            // safe to support: it closes the Bleichenbacher/Manger padding oracle by removing the
+            // observable difference between valid and invalid padding.
             if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey))
-                continue;
+                contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
-            var plaintext = TryDecryptContent(jwtParts[0], encryptionAlgorithm, contentEncryptionKey, iv, ciphertext, authTag);
-            if (plaintext == null)
-                continue;
-
-            return Encoding.UTF8.GetString(plaintext);
+            if (contentDecryptor.TryDecrypt(
+                    contentEncryptionKey, new EncryptedData(iv, ciphertext, authTag), aad, out var plaintext))
+            {
+                return Encoding.UTF8.GetString(plaintext);
+            }
         }
 
         return new JwtValidationError(
@@ -220,32 +235,5 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             }
             return keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out decryptedKey);
         }
-    }
-
-    /// <summary>
-    /// Attempts to decrypt the JWE content using the Content Encryption Key.
-    /// Per RFC 7516, AAD is the ASCII encoding of the base64url-encoded JWE header.
-    /// </summary>
-    private byte[]? TryDecryptContent(
-        string headerPart,
-        string encAlgorithm,
-        byte[] contentEncryptionKey,
-        byte[] iv,
-        byte[] ciphertext,
-        byte[] authTag)
-    {
-        var contentDecryptor = serviceProvider.GetKeyedService<IDataEncryptor>(encAlgorithm);
-        if (contentDecryptor == null)
-            return null;
-
-        var aad = Encoding.ASCII.GetBytes(headerPart);
-
-        var encryptedData = new EncryptedData(iv, ciphertext, authTag);
-
-        return contentDecryptor.TryDecrypt(
-            contentEncryptionKey,
-            encryptedData,
-            aad,
-            out var plaintext) ? plaintext : null;
     }
 }
