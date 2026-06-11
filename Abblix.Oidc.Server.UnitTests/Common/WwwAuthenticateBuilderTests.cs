@@ -72,6 +72,41 @@ public class WwwAuthenticateBuilderTests
             challenge);
     }
 
+    /// <summary>
+    /// RFC 6750 §3.1: a request that carried no authentication information at all gets a bare
+    /// challenge — realm only, no error attributes — on both the Bearer and the DPoP lines.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_MissingAuthentication_EmitsBareChallenges()
+    {
+        var missingAuthentication = new MissingAuthenticationError("No access token provided");
+
+        Assert.Equal(
+            $"Bearer realm=\"{Realm}\"",
+            WwwAuthenticateBuilder.BuildBearerChallenge(missingAuthentication, Realm));
+        Assert.Equal(
+            $"DPoP realm=\"{Realm}\", algs=\"RS256 ES256\"",
+            WwwAuthenticateBuilder.BuildDPoPChallenge(missingAuthentication, Realm, DPoPAlgs));
+    }
+
+    [Fact]
+    public void BuildBasicChallenge_WithRealm_EmitsRealmOnly()
+    {
+        // RFC 7617 defines no error attributes for the Basic scheme, so the challenge carries
+        // only the realm — the error itself travels in the JSON body (RFC 6749 §5.2).
+        var challenge = WwwAuthenticateBuilder.BuildBasicChallenge(Realm);
+
+        Assert.Equal($"Basic realm=\"{Realm}\"", challenge);
+    }
+
+    [Fact]
+    public void BuildBasicChallenge_NullRealm_EmitsBareScheme()
+    {
+        var challenge = WwwAuthenticateBuilder.BuildBasicChallenge(realm: null);
+
+        Assert.Equal(TokenTypes.Basic, challenge);
+    }
+
     [Fact]
     public void BuildDPoPChallenge_EmitsAllAttributesIncludingSpaceSeparatedAlgs()
     {
