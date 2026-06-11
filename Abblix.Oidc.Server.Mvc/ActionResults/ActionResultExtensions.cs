@@ -135,6 +135,8 @@ public static class ActionResultExtensions
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
+	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
+	/// and the JSON error body per RFC 6749 Section 5.2.
 	/// All other errors use the specified fallback status code with a JSON body.
 	/// </summary>
 	/// <param name="error">The OIDC error to format.</param>
@@ -152,6 +154,15 @@ public static class ActionResultExtensions
 
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
 				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+
+			// RFC 6749 §5.2: a 401 is REQUIRED when the client authenticated via the Authorization
+			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
+			// only Authorization-header scheme the client-authenticating endpoints (token,
+			// introspection, revocation) support, hence the Basic challenge; the error itself stays
+			// in the JSON body because RFC 7617 defines no error attributes for the Basic scheme.
+			(ErrorCodes.InvalidClient, _)
+				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
 			(_, StatusCodes.Status400BadRequest)
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
@@ -181,13 +192,15 @@ public static class ActionResultExtensions
 
 		ActionResult result = error switch
 		{
-			InvalidDPoPProofError or UseDPoPNonceError => new UnauthorizedResult(),
-			_ when error.Error == ErrorCodes.InvalidToken => new UnauthorizedResult(),
-			_ when error.Error == ErrorCodes.InsufficientScope => new StatusCodeResult(StatusCodes.Status403Forbidden),
+			InvalidDPoPProofError or UseDPoPNonceError or { Error: ErrorCodes.InvalidToken } => new UnauthorizedResult(),
+			{ Error: ErrorCodes.InsufficientScope } => new StatusCodeResult(StatusCodes.Status403Forbidden),
+
 			_ when fallbackStatusCode == StatusCodes.Status400BadRequest
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+
 			_ when fallbackStatusCode == StatusCodes.Status401Unauthorized
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+
 			_ => new ObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
 				{ StatusCode = fallbackStatusCode },
 		};

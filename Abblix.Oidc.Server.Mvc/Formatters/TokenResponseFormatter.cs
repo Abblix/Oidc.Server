@@ -23,10 +23,12 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
 
@@ -35,7 +37,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for token responses.
 /// </summary>
-public class TokenResponseFormatter : ITokenResponseFormatter
+/// <param name="issuerProvider">Supplies the issuer identifier used as the realm value on
+/// <c>WWW-Authenticate</c> challenges for client-authentication failures.</param>
+public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a token request.
@@ -71,10 +75,11 @@ public class TokenResponseFormatter : ITokenResponseFormatter
             onFailure: FormatError));
     }
 
-    private static ActionResult<TokenResponse> FormatError(OidcError error)
+    private ActionResult<TokenResponse> FormatError(OidcError error)
     {
-        ActionResult result = new BadRequestObjectResult(
-            new ErrorResponse(error.Error, error.ErrorDescription));
+        // The shared formatter owns the status-code policy: invalid_client comes back as a 401
+        // with a Basic challenge (RFC 6749 §5.2), everything else as 400 with the JSON envelope.
+        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer());
 
         // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.

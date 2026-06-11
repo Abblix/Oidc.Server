@@ -52,12 +52,27 @@ public static class WwwAuthenticateBuilder
     {
         var challenge = new Challenge(TokenTypes.Bearer);
         challenge.Append("realm", realm);
-        if (includeError)
+
+        // RFC 6750 §3.1: when the request carried no authentication information at all, the
+        // challenge must stay bare — no error code or description, just the scheme (and realm).
+        if (includeError && error is not MissingAuthenticationError)
         {
             challenge.Append("error", error.Error);
             challenge.Append("error_description", error.ErrorDescription);
         }
 
+        return challenge.ToString();
+    }
+
+    /// <summary>
+    /// Builds a <c>WWW-Authenticate: Basic</c> challenge per RFC 7617 §2 for client-authentication
+    /// failures (RFC 6749 §5.2). Only the realm parameter is emitted: unlike Bearer (RFC 6750 §3),
+    /// the Basic scheme defines no error attributes, so the error itself stays in the JSON body.
+    /// </summary>
+    public static string BuildBasicChallenge(string? realm)
+    {
+        var challenge = new Challenge(TokenTypes.Basic);
+        challenge.Append("realm", realm);
         return challenge.ToString();
     }
 
@@ -69,8 +84,15 @@ public static class WwwAuthenticateBuilder
     {
         var challenge = new Challenge(TokenTypes.DPoP);
         challenge.Append("realm", realm);
-        challenge.Append("error", error.Error);
-        challenge.Append("error_description", error.ErrorDescription);
+
+        // RFC 6750 §3.1 applies to the DPoP line too: an unauthenticated request gets a bare
+        // challenge advertising the scheme, without error attributes.
+        if (error is not MissingAuthenticationError)
+        {
+            challenge.Append("error", error.Error);
+            challenge.Append("error_description", error.ErrorDescription);
+        }
+
         challenge.Append("algs", string.Join(' ', algs));
         return challenge.ToString();
     }
