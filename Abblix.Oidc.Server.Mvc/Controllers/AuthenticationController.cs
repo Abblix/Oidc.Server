@@ -38,6 +38,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
+using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 
@@ -86,7 +87,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] AuthorizationRequest authorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedAuthorizationRequest = authorizationRequest.Map();
+        Core.AuthorizationRequest mappedAuthorizationRequest = authorizationRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedAuthorizationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedAuthorizationRequest, response);
@@ -117,7 +118,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromServices] IAuthorizationResponseFormatter formatter,
         [FromQueryOrForm] AuthorizationRequest request)
     {
-        var authorizationRequest = request.Map();
+        Core.AuthorizationRequest authorizationRequest = request;
         var response = await handler.HandleAsync(authorizationRequest);
         return await formatter.FormatResponseAsync(authorizationRequest, response);
     }
@@ -147,7 +148,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
         [FromQueryOrForm] ClientRequest clientRequest)
     {
-        var mappedUserInfoRequest = userInfoRequest.Map();
+        Core.UserInfoRequest mappedUserInfoRequest = userInfoRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedUserInfoRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedUserInfoRequest, response);
@@ -179,7 +180,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromServices] IEndSessionResponseFormatter formatter,
         [FromQueryOrForm] EndSessionRequest request)
     {
-        var endSessionRequest = request.Map();
+        Core.EndSessionRequest endSessionRequest = request;
         var response = await handler.HandleAsync(endSessionRequest);
         return await formatter.FormatResponseAsync(endSessionRequest, response);
     }
@@ -249,7 +250,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] BackChannelAuthenticationRequest authenticationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedAuthenticationRequest = authenticationRequest.Map();
+        Core.BackChannelAuthenticationRequest mappedAuthenticationRequest = authenticationRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedAuthenticationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedAuthenticationRequest, mappedClientRequest, response);
@@ -272,7 +273,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedDeviceAuthorizationRequest = deviceAuthorizationRequest.Map();
+        Core.DeviceAuthorizationRequest mappedDeviceAuthorizationRequest = deviceAuthorizationRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedDeviceAuthorizationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedDeviceAuthorizationRequest, response);

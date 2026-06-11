@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Core = Abblix.Oidc.Server.Model;
 using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -110,7 +111,7 @@ public class TokenController : ControllerBase
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedRevocationRequest = revocationRequest.Map();
+        Core.RevocationRequest mappedRevocationRequest = revocationRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedRevocationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedRevocationRequest, response);
@@ -143,7 +144,7 @@ public class TokenController : ControllerBase
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedIntrospectionRequest = introspectionRequest.Map();
+        Core.IntrospectionRequest mappedIntrospectionRequest = introspectionRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedIntrospectionRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedIntrospectionRequest, response);
