@@ -23,6 +23,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -162,6 +163,7 @@ public record TokenRequest
 	/// This defines the permissions or resources the client is requesting access to.
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
+	[SpaceSeparatedString]
 	public string[] Scope { get; set; } = [];
 
 	/// <summary>

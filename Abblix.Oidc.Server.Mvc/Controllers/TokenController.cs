@@ -80,7 +80,7 @@ public class TokenController : ControllerBase
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedTokenRequest = tokenRequest.Map();
+        Core.TokenRequest mappedTokenRequest = tokenRequest;
         var mappedClientRequest = clientRequest.Map();
         var response = await handler.HandleAsync(mappedTokenRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedTokenRequest, response);
