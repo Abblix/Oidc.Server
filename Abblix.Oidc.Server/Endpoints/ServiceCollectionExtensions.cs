@@ -116,6 +116,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddScoped<AuthorizationHandler>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
+        services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
         // Single-use PAR (RFC 9126 §6): decorate the processor so a pushed request_uri is consumed once a

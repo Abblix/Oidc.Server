@@ -46,7 +46,8 @@ public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
 	TimeProvider clock,
-	IEnumerable<IAuthorizationResponseBuilder> responseProcessors) : IAuthorizationRequestProcessor
+	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
+	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -158,6 +159,14 @@ public class AuthorizationRequestProcessor(
 				request.ResponseMode,
 				model.RedirectUri);
 		}
+
+		// Defense-in-depth backstop: the IUserConsentsProvider contract permits a NARROWER grant
+		// than the request, never a broader one. Assert that invariant before the granted set
+		// reaches the issued token. A violation is a host-side defect (a buggy consent provider, or
+		// browser tampering it failed to intersect against the request), so it surfaces as an
+		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
+		// TokenAuthorizationContextEvaluator at the token endpoint.
+		await consentConstraintEnforcer.EnforceAsync(request, userConsents.Granted, CancellationToken.None);
 
 		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
 		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
