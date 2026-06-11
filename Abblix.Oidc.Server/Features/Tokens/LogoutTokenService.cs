@@ -87,7 +87,13 @@ public partial class LogoutTokenService(
             Header =
             {
                 Type = JwtTypes.LogoutToken,
-                Algorithm = SigningAlgorithms.RS256,
+                // Back-Channel Logout §2.4: the logout token is signed in the same manner as the
+                // ID Token, so the client's ID Token signing algorithm is the default; a host may
+                // diverge per client via the explicit LogoutTokenSignedResponseAlgorithm override.
+                // The previous hardcoded RS256 produced tokens an ES256/PS256-registered client
+                // would reject on signature-algorithm verification.
+                Algorithm = clientInfo.LogoutTokenSignedResponseAlgorithm
+                            ?? clientInfo.IdentityTokenSignedResponseAlgorithm,
             },
             Payload =
             {

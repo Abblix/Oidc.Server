@@ -102,8 +102,10 @@ public class UserInfoRequestValidator(
 		}
 		else if (userInfoRequest.AccessToken == null)
 		{
-			return new OidcError(
-				ErrorCodes.InvalidToken,
+			// RFC 6750 §3.1: a request with no authentication information at all gets a bare
+			// WWW-Authenticate challenge — the typed marker tells the challenge builder to omit
+			// the error attributes the other invalid_token cases carry.
+			return new MissingAuthenticationError(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
 		}

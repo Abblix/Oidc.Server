@@ -116,6 +116,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddScoped<AuthorizationHandler>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
+        services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
         // Single-use PAR (RFC 9126 §6): decorate the processor so a pushed request_uri is consumed once a
@@ -182,6 +183,9 @@ public static class ServiceCollectionExtensions
         // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>(),
+            // Right after ClientValidator: needs the resolved ClientInfo and must reject plain
+            // parameters from a require_signed_request_object client before further processing.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, SignedRequestObjectRequirementValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
             // Scoped: FlowTypeValidator consumes IEnumerable<IAuthorizationResponseBuilder>, which
             // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.
@@ -535,6 +539,7 @@ public static class ServiceCollectionExtensions
             .AddDefaultInitialAccessTokenRevocationProvider();
 
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
+        services.TryAddScoped<IRegistrationAccessTokenStore, RegistrationAccessTokenStore>();
         services.TryAddTransient(newClientOptionsFactory);
 
         services.TryAddScoped<IClientCredentialFactory, ClientCredentialFactory>();

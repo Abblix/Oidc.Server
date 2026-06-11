@@ -38,12 +38,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <c>rt+jwt</c>, recovers the original <see cref="AuthorizedGrant"/>, and rejects the request with
 /// <c>invalid_grant</c> when the refreshing client differs from the client that received the token.
 /// </summary>
-/// <param name="parameterValidator">Asserts that the <c>refresh_token</c> parameter is present.</param>
 /// <param name="jwtValidator">Validates the refresh-token JWT issued by this server.</param>
 /// <param name="refreshTokenService">Resolves the refresh-token JWT to an <see cref="AuthorizedGrant"/>
 /// and enforces single-use / rotation semantics.</param>
 public class RefreshTokenGrantHandler(
-	IParameterValidator parameterValidator,
 	IAuthServiceJwtValidator jwtValidator,
 	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
 {
@@ -70,8 +68,12 @@ public class RefreshTokenGrantHandler(
 	/// </returns>
 	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 	{
-		// Validate that the refresh token parameter is present in the request, throwing an error if missing.
-		parameterValidator.Required(request.RefreshToken, nameof(request.RefreshToken));
+		// RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+		// not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+		if (!request.RefreshToken.HasValue())
+		{
+			return ErrorFactory.MissingParameter(TokenRequest.Parameters.RefreshToken);
+		}
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);

@@ -22,6 +22,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
 namespace Abblix.Utils.UnitTests;
@@ -29,6 +30,42 @@ namespace Abblix.Utils.UnitTests;
 public class SingleOrArrayConverterTests
 {
     private readonly SingleOrArrayConverter<string> _converter = new();
+
+    /// <summary>
+    /// A DTO whose single-or-array value is a property inside an object, with another property
+    /// after it. This is the real-world shape (e.g. a "resource" array in a JWT request object) that
+    /// exposed the over-read bug: the top-level-array tests below cannot, because at end of stream
+    /// the stray read past EndArray simply returns false.
+    /// </summary>
+    private sealed class Dto
+    {
+        [JsonPropertyName("values")]
+        [JsonConverter(typeof(SingleOrArrayConverter<string>))]
+        public string[]? Values { get; set; }
+
+        [JsonPropertyName("other")]
+        public string? Other { get; set; }
+    }
+
+    [Theory]
+    // Array value followed by another property — the read past EndArray would land on the next
+    // property name and throw before the fix.
+    [InlineData("{\"values\":[\"a\",\"b\"],\"other\":\"x\"}", new[] { "a", "b" }, "x")]
+    // Array value as the last property — the read past EndArray would land on the object's EndObject.
+    [InlineData("{\"other\":\"x\",\"values\":[\"a\",\"b\"]}", new[] { "a", "b" }, "x")]
+    // Single scalar form inside an object still works.
+    [InlineData("{\"values\":\"a\",\"other\":\"x\"}", new[] { "a" }, "x")]
+    // Single-element array inside an object.
+    [InlineData("{\"values\":[\"a\"],\"other\":\"x\"}", new[] { "a" }, "x")]
+    public void Read_ArrayInsideObject_DeserializesWithoutOverReading(
+        string json, string[] expectedValues, string expectedOther)
+    {
+        var dto = JsonSerializer.Deserialize<Dto>(json);
+
+        Assert.NotNull(dto);
+        Assert.Equal(expectedValues, dto.Values);
+        Assert.Equal(expectedOther, dto.Other);
+    }
 
     [Theory]
     [InlineData("\"singleString\"", new[] { "singleString" })]

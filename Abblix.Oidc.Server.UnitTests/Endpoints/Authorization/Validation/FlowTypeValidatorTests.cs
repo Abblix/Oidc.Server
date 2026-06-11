@@ -237,8 +237,8 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects null response_type.
-    /// Per OAuth 2.0, response_type is REQUIRED parameter.
-    /// Critical for ensuring valid authorization requests.
+    /// Per RFC 6749 §4.1.2.1, response_type is REQUIRED and a missing required parameter
+    /// is invalid_request.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_NullResponseType_ShouldReturnError()
@@ -251,14 +251,13 @@ public class FlowTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Equal(ResponseModes.Query, context.ResponseMode); // Default fallback
     }
 
     /// <summary>
     /// Verifies that ValidateAsync rejects empty response_type array.
-    /// Empty response_type is invalid per OAuth 2.0 spec.
-    /// Tests defensive programming for malformed requests.
+    /// Per RFC 6749 §4.1.2.1, an absent required parameter is invalid_request.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_EmptyResponseType_ShouldReturnError()
@@ -271,7 +270,7 @@ public class FlowTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -296,8 +295,9 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects response_type not allowed by client.
-    /// Per OAuth 2.0, client must be registered for specific response types.
-    /// Critical security check preventing unauthorized flow usage.
+    /// Per RFC 6749 §4.1.2.1 / §4.2.2.1 this is unauthorized_client (the server supports the
+    /// method, this client is not registered for it), and per OAuth 2.0 Multiple Response Types §5
+    /// the error for a fragment-encoded response_type must travel in the fragment.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ResponseTypeNotAllowedForClient_ShouldReturnError()
@@ -310,8 +310,8 @@ public class FlowTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
-        Assert.Contains("not allowed", result.ErrorDescription);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Equal(ResponseModes.Fragment, context.ResponseMode);
     }
 
     /// <summary>
@@ -547,7 +547,8 @@ public class FlowTypeValidatorTests
     /// <summary>
     /// Verifies that ValidateAsync rejects response_type subset not matching client config.
     /// Client registered for [code id_token] should NOT accept [code] alone.
-    /// Tests strict response type matching - all components must match.
+    /// Tests strict response type matching - all components must match. The code-only request
+    /// carries no fragment-encoded value, so the error stays in the query.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ResponseTypeSubsetNotAllowed_ShouldReturnError()
@@ -562,7 +563,35 @@ public class FlowTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Equal(ResponseModes.Query, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// OAuth 2.0 Multiple Response Types §5: a rejected hybrid request (contains token) must get
+    /// its error in the fragment even when the rejection happens at the server-level support gate.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenBearingResponseTypeRejected_ShouldDefaultErrorModeToFragment()
+    {
+        // Arrange — only Code processor registered, request asks for code token
+        var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
+        IAuthorizationResponseBuilder[] codeOnlyProcessors =
+        [
+            Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
+        ];
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var context = CreateContext(
+            [ResponseTypes.Code, ResponseTypes.Token],
+            [[ResponseTypes.Code, ResponseTypes.Token]]);
+
+        // Act
+        var result = await validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+        Assert.Equal(ResponseModes.Fragment, context.ResponseMode);
     }
 
     /// <summary>
@@ -601,7 +630,7 @@ public class FlowTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         // Note: Cannot access context.FlowType - it throws when not set
     }
 }

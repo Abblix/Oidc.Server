@@ -319,6 +319,32 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>require_pushed_authorization_requests</c> client metadata per RFC 9126 §6: when
+    /// <c>true</c>, pushed authorization requests are the only way this client may start an
+    /// authorization flow. Maps to <c>ClientInfo.RequirePushedAuthorizationRequests</c> via
+    /// <see cref="Map"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// The <c>require_signed_request_object</c> client metadata per RFC 9101 §10.5: when
+    /// <c>true</c>, the client must deliver its authorization request parameters as a signed
+    /// request object. Maps to <c>ClientInfo.RequireSignedRequestObject</c> via <see cref="Map"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The <c>tls_client_certificate_bound_access_tokens</c> client metadata per RFC 8705 §3.4:
+    /// when <c>true</c>, access tokens are certificate-bound whenever the token request arrives
+    /// over mutual TLS, independently of the authentication method. Maps to
+    /// <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c> via <see cref="Map"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1:
     /// per-client allowlist of authorization-detail <c>type</c> values this client
     /// may use in Rich Authorization Requests. <c>null</c> means no per-client
@@ -334,6 +360,14 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Maps to
+    /// <see cref="ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
     /// Indicates whether a back-channel logout session is required for this client.
@@ -435,8 +469,12 @@ public record ClientRegistrationRequest
             InitiateLoginUri = InitiateLoginUri,
             OfflineAccessAllowed = OfflineAccessAllowed,
             DpopBoundAccessTokens = DpopBoundAccessTokens,
+            RequirePushedAuthorizationRequests = RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = TlsClientCertificateBoundAccessTokens,
             AuthorizationDetailsTypes = AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = TokenExchangeSubjectTokenTypes,
+            TokenExchangeAudiences = TokenExchangeAudiences,
             RequireAuthTime = RequireAuthTime,
             SectorIdentifierUri = SectorIdentifierUri,
 

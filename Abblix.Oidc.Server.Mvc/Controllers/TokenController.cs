@@ -65,16 +65,19 @@ public class TokenController : ControllerBase
     /// OpenID Connect Token Endpoint Documentation
     /// </see>
     /// </remarks>
-    [HttpGetOrPost(Path.Token)]
-    //[Consumes(MediaTypes.FormUrlEncoded)]
+    // RFC 6749 §3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
+    // GET is rejected so credentials (code, client_secret, refresh_token) never travel in the URL,
+    // where they would be logged by proxies, servers and browser history.
+    [HttpPost(Path.Token)]
+    [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
     [EnabledBy(OidcEndpoints.Token)]
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
         [FromServices] ITokenResponseFormatter formatter,
-        [FromQueryOrForm] TokenRequest tokenRequest,
-        [FromQueryOrForm] ClientRequest clientRequest)
+        [FromForm] TokenRequest tokenRequest,
+        [FromForm] ClientRequest clientRequest)
     {
         var mappedTokenRequest = tokenRequest.Map();
         var mappedClientRequest = clientRequest.Map();

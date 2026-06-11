@@ -130,6 +130,20 @@ public record ClientRegistrationResponse
     public Uri[]? RedirectUris { get; init; }
 
     /// <summary>
+    /// The registered grant types, including server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.GrantTypes)]
+    public string[]? GrantTypes { get; init; }
+
+    /// <summary>
+    /// The registered response type combinations (each entry space-separated), including
+    /// server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.ResponseTypes)]
+    [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
+    public string[][]? ResponseTypes { get; init; }
+
+    /// <summary>
     /// The human-readable name of the client. Optional client metadata. Per RFC 7591 §2.
     /// </summary>
     [JsonPropertyName(Parameters.ClientName)]
@@ -229,6 +243,27 @@ public record ClientRegistrationResponse
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Echoes <c>ClientInfo.RequirePushedAuthorizationRequests</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// Whether this client must deliver authorization parameters as a signed request object per
+    /// RFC 9101 §10.5. Echoes <c>ClientInfo.RequireSignedRequestObject</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
+    /// TLS per RFC 8705 §3.4. Echoes <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
     /// RFC 9396 §5.1). Echoes the registered value of
@@ -244,6 +279,14 @@ public record ClientRegistrationResponse
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
 
     private static class Parameters
     {
@@ -277,5 +320,6 @@ public record ClientRegistrationResponse
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
     }
 }

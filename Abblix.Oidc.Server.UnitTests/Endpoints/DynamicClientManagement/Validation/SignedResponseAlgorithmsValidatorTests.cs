@@ -23,6 +23,7 @@
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -37,13 +38,13 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SignedResponseAlgorithmsValidatorTests
 {
-    private readonly Mock<IJsonWebTokenCreator> _jwtCreator;
+    private readonly Mock<IJwtAlgorithmsProvider> _jwtAlgorithms;
     private readonly SignedResponseAlgorithmsValidator _validator;
 
     public SignedResponseAlgorithmsValidatorTests()
     {
-        _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
-        _validator = new SignedResponseAlgorithmsValidator(_jwtCreator.Object);
+        _jwtAlgorithms = new Mock<IJwtAlgorithmsProvider>(MockBehavior.Strict);
+        _validator = new SignedResponseAlgorithmsValidator(_jwtAlgorithms.Object);
     }
 
     private ClientRegistrationValidationContext CreateContext(
@@ -65,12 +66,60 @@ public class SignedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
+    /// OIDC Registration 1.0 §2: id_token_signed_response_alg=none is allowed only for response
+    /// types that return no ID Token from the authorization endpoint — an unsigned ID Token
+    /// delivered through the browser would be modifiable in transit.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoneIdTokenAlg_WithIdTokenResponseType_ShouldReturnError()
+    {
+        _jwtAlgorithms
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.None]);
+
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            IdTokenSignedResponseAlg = SigningAlgorithms.None,
+            ResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+        });
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// The same none algorithm stays acceptable for the pure Authorization Code Flow, where the
+    /// ID Token is delivered from the token endpoint over TLS instead of through the browser.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoneIdTokenAlg_WithCodeOnlyResponseType_ShouldReturnNull()
+    {
+        _jwtAlgorithms
+            .Setup(c => c.SignedResponseAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.None]);
+
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            IdTokenSignedResponseAlg = SigningAlgorithms.None,
+            ResponseTypes = [[ResponseTypes.Code]],
+        });
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
     /// Verifies validation succeeds with a supported introspection_signed_response_alg (RFC 9701).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithSupportedIntrospectionAlg_ShouldReturnNull()
     {
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
@@ -87,7 +136,7 @@ public class SignedResponseAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithUnsupportedIntrospectionAlg_ShouldReturnError()
     {
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -106,7 +155,7 @@ public class SignedResponseAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithSupportedAuthorizationAlg_ShouldReturnNull()
     {
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
@@ -123,7 +172,7 @@ public class SignedResponseAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithUnsupportedAuthorizationAlg_ShouldReturnError()
     {
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -143,7 +192,7 @@ public class SignedResponseAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNoneForAuthorizationAlg_ShouldReturnError()
     {
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.None, SigningAlgorithms.RS256]);
 
@@ -181,7 +230,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithSupportedIdTokenAlg_ShouldReturnNull()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
@@ -202,7 +251,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithUnsupportedIdTokenAlg_ShouldReturnError()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -226,7 +275,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithSupportedUserInfoAlg_ShouldReturnNull()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
@@ -247,7 +296,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithUnsupportedUserInfoAlg_ShouldReturnError()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -270,7 +319,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithBothSupportedAlgorithms_ShouldReturnNull()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
@@ -293,7 +342,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithIdTokenAlgUnsupported_ShouldReturnErrorForIdToken()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.ES256]);
 
@@ -317,7 +366,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithDifferentCase_ShouldReturnError()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns(["RS256"]);
 
@@ -339,7 +388,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithMultipleSupportedAlgs_ShouldValidateCorrectly()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([
                 SigningAlgorithms.RS256,
@@ -372,7 +421,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithCustomAlgorithm_ShouldReturnError()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -394,7 +443,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_ShouldCheckJwtCreatorAlgorithms()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -404,7 +453,7 @@ public class SignedResponseAlgorithmsValidatorTests
         await _validator.ValidateAsync(context);
 
         // Assert
-        _jwtCreator.Verify(c => c.SignedResponseAlgorithmsSupported, Times.Once);
+        _jwtAlgorithms.Verify(c => c.SignedResponseAlgorithmsSupported, Times.Once);
     }
 
     /// <summary>
@@ -415,7 +464,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithNoneAlgorithmForUserInfo_ShouldValidate()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.None, SigningAlgorithms.RS256]);
 
@@ -436,7 +485,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithNoneAlgNotSupported_ShouldReturnError()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
@@ -458,7 +507,7 @@ public class SignedResponseAlgorithmsValidatorTests
     public async Task ValidateAsync_WithSameAlgForBoth_ShouldReturnNull()
     {
         // Arrange
-        _jwtCreator
+        _jwtAlgorithms
             .Setup(c => c.SignedResponseAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 

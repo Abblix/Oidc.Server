@@ -161,11 +161,29 @@ internal class IdentityTokenService(
 		string? authorizationCode,
 		string? accessToken)
 	{
+		// OIDC Core §3.1.3.6 (at_hash) and §3.3.2.11 (c_hash): the hash is computed with the hash
+		// algorithm used in the id_token's signature 'alg'. Every JWS family encodes the digest size
+		// in the last three characters of the alg name, so the mapping is by size, not by family:
+		//   *256 (RS256/PS256/ES256/HS256) -> SHA-256
+		//   *384 (RS384/PS384/ES384/HS384) -> SHA-384
+		//   *512 (RS512/PS512/ES512/HS512) -> SHA-512   (ES512 signs with SHA-512)
+		// Previously only RS256 was handled, so an id_token signed with any other algorithm silently
+		// omitted c_hash/at_hash — breaking hybrid/implicit flows (c_hash is REQUIRED for
+		// response_type "code id_token", at_hash for "id_token token"). 'none' (unsigned) and any
+		// unrecognised alg have no associated hash, so no hash claim is produced.
 		Func<byte[], byte[]> hashFunc;
 		switch (identityToken.Header.Algorithm)
 		{
-			case SigningAlgorithms.RS256:
+			case SigningAlgorithms.RS256 or SigningAlgorithms.PS256 or SigningAlgorithms.ES256 or SigningAlgorithms.HS256:
 				hashFunc = SHA256.HashData;
+				break;
+
+			case SigningAlgorithms.RS384 or SigningAlgorithms.PS384 or SigningAlgorithms.ES384 or SigningAlgorithms.HS384:
+				hashFunc = SHA384.HashData;
+				break;
+
+			case SigningAlgorithms.RS512 or SigningAlgorithms.PS512 or SigningAlgorithms.ES512 or SigningAlgorithms.HS512:
+				hashFunc = SHA512.HashData;
 				break;
 
 			default:

@@ -53,13 +53,37 @@ public class TokenExchangeGrantHandlerTests
     private const string TestSubject = "user-7";
     private const string TestSessionId = "test-session";
 
-    private readonly Mock<IParameterValidator> _parameterValidator = new(MockBehavior.Strict);
     private readonly Mock<ISessionIdGenerator> _sessionIdGenerator = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
 
     public TokenExchangeGrantHandlerTests()
     {
         _sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns(TestSessionId);
+    }
+
+    /// <summary>
+    /// RFC 8693 §2.1 / RFC 6749 §5.2: a request without subject_token or subject_token_type is the
+    /// caller's protocol error and yields invalid_request — previously it threw and surfaced as
+    /// HTTP 500.
+    /// </summary>
+    [Theory]
+    [InlineData(null, TokenExchangeTokenTypes.AccessToken)]
+    [InlineData(SubjectTokenWire, null)]
+    public async Task AuthorizeAsync_MissingRequiredParameter_ReturnsInvalidRequest(
+        string? subjectToken, string? subjectTokenType)
+    {
+        var handler = CreateHandlerWithoutResolvers();
+        var request = new TokenRequest
+        {
+            GrantType = GrantTypes.TokenExchange,
+            SubjectToken = subjectToken,
+            SubjectTokenType = subjectTokenType,
+        };
+
+        var result = await handler.AuthorizeAsync(request, ClientWithAllowlist(null));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     [Fact]
@@ -70,8 +94,6 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -91,8 +113,6 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetSuccess(out var grant));
@@ -109,8 +129,6 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(null);
         var request = ExchangeRequest("urn:ietf:params:oauth:token-type:saml2");
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -126,8 +144,6 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist();  // empty -> deny-all
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -141,8 +157,6 @@ public class TokenExchangeGrantHandlerTests
         var handler = CreateHandlerWithoutResolvers();
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.IdToken);  // only id_token allowed
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -168,8 +182,6 @@ public class TokenExchangeGrantHandlerTests
             ActorToken = actorWire,
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,
         };
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -200,8 +212,6 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetSuccess(out var grant));
@@ -221,8 +231,6 @@ public class TokenExchangeGrantHandlerTests
             ActorToken = "actor.jwt",  // type missing
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -239,8 +247,6 @@ public class TokenExchangeGrantHandlerTests
         {
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,  // value missing
         };
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -268,8 +274,6 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -292,8 +296,6 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -309,8 +311,6 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, ctx);
         var clientInfo = ClientWithAllowlist(null);  // tri-state: no constraint
         var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken);
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -328,8 +328,6 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = requestScope };
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -361,8 +359,6 @@ public class TokenExchangeGrantHandlerTests
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, requestingClient);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -386,8 +382,6 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, brokerClient);
 
         Assert.True(result.TryGetSuccess(out var grant));
@@ -407,8 +401,6 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, requestingClient);
 
@@ -437,8 +429,6 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientWithDifferentAllowlist);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -447,7 +437,7 @@ public class TokenExchangeGrantHandlerTests
     }
 
     [Fact]
-    public async Task S2_Audience_parameter_propagates_to_AuthorizationContext()
+    public async Task S2_Audience_parameter_propagates_when_allowlisted()
     {
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
@@ -456,17 +446,68 @@ public class TokenExchangeGrantHandlerTests
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        // Default-deny: the requested audiences must be on the client's audience allowlist.
+        clientInfo.TokenExchangeAllowedAudiences = ["https://api1.example.com", "https://api2.example.com"];
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
         {
             Audiences = ["https://api1.example.com", "https://api2.example.com"],
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(request.Audiences, grant.Context.Audiences);
+    }
+
+    [Fact]
+    public async Task Audience_rejected_when_client_has_no_allowlist()
+    {
+        // Default-deny: a client that requests an audience without an explicit
+        // TokenExchangeAllowedAudiences allowlist is rejected with invalid_target. Otherwise the
+        // client could mint a token for any target service it names in the issued token's aud.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // no audience allowlist
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            Audiences = ["https://victim.example.com"],
+        };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+    }
+
+    [Fact]
+    public async Task Audience_rejected_when_not_in_allowlist()
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        clientInfo.TokenExchangeAllowedAudiences = ["https://api1.example.com"];
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            // One allowlisted, two not — the whole request must be rejected and EVERY disallowed
+            // audience reported, so the client can fix them all in one round-trip.
+            Audiences = ["https://api1.example.com", "https://api2.example.com", "https://api3.example.com"],
+        };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        Assert.Contains("api2.example.com", error.ErrorDescription);
+        Assert.Contains("api3.example.com", error.ErrorDescription);
+        Assert.DoesNotContain("api1.example.com", error.ErrorDescription);
     }
 
     [Fact]
@@ -483,8 +524,6 @@ public class TokenExchangeGrantHandlerTests
         {
             Resources = [new Uri("https://api.example.com")],
         };
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -512,8 +551,6 @@ public class TokenExchangeGrantHandlerTests
             RequestedTokenType = TokenExchangeTokenTypes.IdToken,
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -535,8 +572,6 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
-
-        SetupRequiredOnly(request);
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
@@ -578,8 +613,6 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,  // not in allowlist
         };
 
-        SetupRequiredOnly(request);
-
         var result = await handler.AuthorizeAsync(request, clientInfo);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -608,22 +641,14 @@ public class TokenExchangeGrantHandlerTests
         services.AddKeyedSingleton(tokenType, resolverMock.Object);
         var sp = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(
-            _parameterValidator.Object, sp, _sessionIdGenerator.Object, _timeProvider);
+        var handler = new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
         return (handler, resolverMock);
     }
 
     private TokenExchangeGrantHandler CreateHandlerWithoutResolvers()
     {
         var sp = new ServiceCollection().BuildServiceProvider();
-        return new TokenExchangeGrantHandler(
-            _parameterValidator.Object, sp, _sessionIdGenerator.Object, _timeProvider);
-    }
-
-    private void SetupRequiredOnly(TokenRequest request)
-    {
-        _parameterValidator.Setup(v => v.Required(request.SubjectToken, nameof(request.SubjectToken)));
-        _parameterValidator.Setup(v => v.Required(request.SubjectTokenType, nameof(request.SubjectTokenType)));
+        return new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
     }
 
     private static ClientInfo ClientWithAllowlist(params string[]? allowlist) =>

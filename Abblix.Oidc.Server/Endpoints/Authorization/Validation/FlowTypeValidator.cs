@@ -59,40 +59,63 @@ public partial class FlowTypeValidator(
     {
         var responseType = context.Request.ResponseType;
 
+        // RFC 6749 §4.1.2.1: response_type is REQUIRED, and a missing required parameter is
+        // invalid_request — not unsupported_response_type (no method was named at all) and not
+        // unauthorized_client (no client policy was consulted).
+        if (responseType is not { Length: > 0 })
+        {
+            LogResponseTypeInvalid(responseType);
+            return Error(ErrorCodes.InvalidRequest, "The response type is required");
+        }
+
         // Server-level support: every part of response_type must have a registered processor. This
         // is the gate that turns Implicit Flow opt-in: when EnableImplicitFlow() is not called,
         // the token / id_token processors are absent from DI and the corresponding parts get
         // rejected here regardless of client-level AllowedResponseTypes configuration.
-        if (responseType != null)
+        var unsupportedPart = responseType.FirstOrDefault(part => !_supportedResponseTypeParts.Contains(part));
+        if (unsupportedPart != null)
         {
-            var unsupportedPart = responseType.FirstOrDefault(part => !_supportedResponseTypeParts.Contains(part));
-            if (unsupportedPart != null)
-            {
-                LogResponseTypePartUnsupported(unsupportedPart);
-                return UnsupportedResponseType($"The response type '{unsupportedPart}' is not supported by this server");
-            }
+            LogResponseTypePartUnsupported(unsupportedPart);
+            return Error(
+                ErrorCodes.UnsupportedResponseType,
+                $"The response type '{unsupportedPart}' is not supported by this server");
         }
 
         if (!ResponseTypeAllowed(context))
         {
             LogResponseTypeNotAllowed(responseType);
-            return UnsupportedResponseType("The response type is not allowed for the client");
+            // RFC 6749 §4.1.2.1 / §4.2.2.1: the server supports this response_type (the gate above
+            // passed), but this particular client is not registered to use it — that is
+            // unauthorized_client. unsupported_response_type (returned before) is reserved for
+            // methods the server itself cannot produce.
+            return Error(ErrorCodes.UnauthorizedClient, "The response type is not allowed for the client");
         }
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
             LogResponseTypeInvalid(responseType);
-            return UnsupportedResponseType("The response type is not supported");
+            return Error(ErrorCodes.UnsupportedResponseType, "The response type is not supported");
         }
 
         context.FlowType = flowType;
         context.ResponseMode = responseMode;
         return null;
 
-        AuthorizationRequestValidationError UnsupportedResponseType(string message)
+        AuthorizationRequestValidationError Error(string errorCode, string message)
         {
-            context.ResponseMode = context.Request.ResponseMode ?? ResponseModes.Query;
-            return context.Error(ErrorCodes.UnsupportedResponseType, message);
+            // OAuth 2.0 Multiple Response Types §5: when the requested response_type contains a
+            // value that requires fragment encoding (token / id_token), the error response MUST be
+            // returned in the fragment as well. The previous unconditional query default delivered
+            // the error to a channel the client never reads and exposed it to the server hosting
+            // the redirect URI via the query string.
+            var defaultResponseMode =
+                responseType != null &&
+                (responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken))
+                    ? ResponseModes.Fragment
+                    : ResponseModes.Query;
+
+            context.ResponseMode = context.Request.ResponseMode ?? defaultResponseMode;
+            return context.Error(errorCode, message);
         }
     }
 

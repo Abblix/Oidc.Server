@@ -35,10 +35,16 @@ public interface IRegistrationAccessTokenService
     /// <param name="clientId">The unique identifier of the registered client.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
     /// <param name="expiresIn">The optional duration after which the token expires.</param>
+    /// <param name="tokenId">
+    /// The identifier (jti) to embed in the token. The caller records this value via the
+    /// registration-access-token store so the validator can bind the token to the client: issuing
+    /// with a fresh id invalidates earlier tokens, reusing the stored id keeps them valid
+    /// (idempotent read).
+    /// </param>
     /// <returns>A task that results in the encoded registration access token.</returns>
     /// <remarks>
     /// The registration access token is a bearer token that authenticates the client when
     /// performing read, update, or delete operations on its configuration.
     /// </remarks>
-    Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn);
+    Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId);
 }

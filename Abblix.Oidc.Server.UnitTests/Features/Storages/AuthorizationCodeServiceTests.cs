@@ -438,30 +438,58 @@ public class AuthorizationCodeServiceTests
     }
 
     /// <summary>
-    /// Verifies that RemoveAuthorizationCodeAsync calls storage.RemoveAsync.
-    /// Per OAuth 2.0, authorization codes should be removed after use to prevent replay.
+    /// Verifies that RemoveAuthorizationCodeAsync performs an atomic get-and-remove
+    /// (removeOnRetrieval: true) and returns the claimed grant. The atomic claim is what enforces
+    /// single-use against two concurrent redemptions of the same code — exactly one caller wins.
     /// </summary>
     [Fact]
-    public async Task RemoveAuthorizationCodeAsync_ShouldCallStorageRemove()
+    public async Task RemoveAuthorizationCodeAsync_ShouldGetAndRemoveAtomically()
     {
         // Arrange
         var code = "code_to_remove";
+        var grant = CreateGrant();
+        bool? capturedRemoveOnRetrieval = null;
 
         _storage
-            .Setup(s => s.RemoveAsync(
+            .Setup(s => s.GetAsync<AuthorizedGrant>(
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
-            .Returns(Task.CompletedTask);
+            .Callback<string, bool, System.Threading.CancellationToken?>(
+                (_, remove, _) => capturedRemoveOnRetrieval = remove)
+            .ReturnsAsync(grant);
 
         // Act
-        await _service.RemoveAuthorizationCodeAsync(code);
+        var result = await _service.RemoveAuthorizationCodeAsync(code);
 
         // Assert
-        _storage.Verify(
-            s => s.RemoveAsync(
-                $"Abblix.Oidc.Server:Grant:{code}",
-                It.IsAny<System.Threading.CancellationToken?>()),
-            Times.Once);
+        Assert.True(capturedRemoveOnRetrieval);
+        Assert.True(result.TryGetSuccess(out var claimed));
+        Assert.Same(grant, claimed);
+    }
+
+    /// <summary>
+    /// Verifies that RemoveAuthorizationCodeAsync returns an invalid_grant failure when the code is
+    /// absent — already claimed by a concurrent request, already consumed, or never issued.
+    /// </summary>
+    [Fact]
+    public async Task RemoveAuthorizationCodeAsync_WithAbsentCode_ReturnsFailure()
+    {
+        // Arrange
+        var code = "missing_code";
+        _storage
+            .Setup(s => s.GetAsync<AuthorizedGrant>(
+                It.IsAny<string>(),
+                It.IsAny<bool>(),
+                It.IsAny<System.Threading.CancellationToken?>()))
+            .ReturnsAsync((AuthorizedGrant?)null);
+
+        // Act
+        var result = await _service.RemoveAuthorizationCodeAsync(code);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>
@@ -476,12 +504,13 @@ public class AuthorizationCodeServiceTests
         string? capturedKey = null;
 
         _storage
-            .Setup(s => s.RemoveAsync(
+            .Setup(s => s.GetAsync<AuthorizedGrant>(
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
-            .Callback<string, System.Threading.CancellationToken?>(
-                (key, _) => capturedKey = key)
-            .Returns(Task.CompletedTask);
+            .Callback<string, bool, System.Threading.CancellationToken?>(
+                (key, _, _) => capturedKey = key)
+            .ReturnsAsync(CreateGrant());
 
         // Act
         await _service.RemoveAuthorizationCodeAsync(code);
@@ -640,29 +669,30 @@ public class AuthorizationCodeServiceTests
                 It.IsAny<System.Threading.CancellationToken?>()))
             .Returns(Task.CompletedTask);
 
+        // Both the read-only validation lookup (removeOnRetrieval: false) and the atomic claim
+        // (removeOnRetrieval: true) go through GetAsync; return the grant for either.
         _storage
             .Setup(s => s.GetAsync<AuthorizedGrant>(
                 $"Abblix.Oidc.Server:Grant:{code}",
-                false,
+                It.IsAny<bool>(),
                 It.IsAny<System.Threading.CancellationToken?>()))
             .ReturnsAsync(grant);
-
-        _storage
-            .Setup(s => s.RemoveAsync(
-                $"Abblix.Oidc.Server:Grant:{code}",
-                It.IsAny<System.Threading.CancellationToken?>()))
-            .Returns(Task.CompletedTask);
 
         // Act
         var generatedCode = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
         var authorizeResult = await _service.AuthorizeByCodeAsync(generatedCode);
-        await _service.RemoveAuthorizationCodeAsync(generatedCode);
+        var removeResult = await _service.RemoveAuthorizationCodeAsync(generatedCode);
 
         // Assert
         Assert.Equal(code, generatedCode);
         Assert.True(authorizeResult.TryGetSuccess(out var retrievedGrant));
         Assert.Same(grant, retrievedGrant);
-        _storage.Verify(s => s.RemoveAsync($"Abblix.Oidc.Server:Grant:{code}", It.IsAny<System.Threading.CancellationToken?>()), Times.Once);
+        Assert.True(removeResult.TryGetSuccess(out var claimedGrant));
+        Assert.Same(grant, claimedGrant);
+        _storage.Verify(
+            s => s.GetAsync<AuthorizedGrant>(
+                $"Abblix.Oidc.Server:Grant:{code}", true, It.IsAny<System.Threading.CancellationToken?>()),
+            Times.Once);
     }
 
     /// <summary>

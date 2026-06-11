@@ -35,6 +35,15 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 public record IntrospectionSuccess(bool Active, JsonObject? Claims, ClientInfo ClientInfo)
 {
     /// <summary>
+    /// Wire-level member names of the introspection response, as registered in the IANA
+    /// "OAuth Token Introspection Response" registry (RFC 7662 §3.1).
+    /// </summary>
+    public static class Parameters
+    {
+        public const string Active = "active";
+    }
+
+    /// <summary>
     /// RFC 7662 <c>active</c> field: <c>true</c> only if the token is currently valid and the
     /// caller is permitted to introspect it. <c>false</c> covers all other cases (expired,
     /// revoked, unknown, or not allowed) and per §2.2 is returned without disclosing why.

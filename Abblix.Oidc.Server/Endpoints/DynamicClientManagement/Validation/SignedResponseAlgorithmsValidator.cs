@@ -23,6 +23,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -33,8 +34,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>authorization_signed_response_alg</c> (JARM §3). Each must appear in the server's set of supported
 /// signing algorithms; in addition, JARM §3 forbids <c>none</c> for the authorization response.
 /// </summary>
-/// <param name="jwtCreator">Source of supported signing algorithms for outbound tokens.</param>
-public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) : SyncClientRegistrationContextValidator
+/// <param name="jwtAlgorithms">Source of supported signing algorithms for outbound tokens. The same
+/// provider feeds the discovery document, so DCR accepts exactly what the server advertises —
+/// in particular HS* stays rejected here for the same key-availability reason it is not
+/// advertised (client secrets are stored hashed and cannot serve as HMAC keys).</param>
+public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Validates the signing algorithms specified for ID tokens, user info and JARM authorization responses.
@@ -48,10 +52,30 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        return Validate(request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg) ??
+        return ValidateIdTokenSignedResponseAlg(request) ??
                Validate(request.UserInfoSignedResponseAlg, Parameters.UserInfoSignedResponseAlg) ??
                Validate(request.IntrospectionSignedResponseAlg, Parameters.IntrospectionSignedResponseAlg) ??
                ValidateAuthorizationSignedResponseAlg(request.AuthorizationSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// Validates <c>id_token_signed_response_alg</c>. OIDC Registration 1.0 §2: the value none MUST
+    /// NOT be used unless the client uses only response types that return no ID Token from the
+    /// authorization endpoint — an unsigned ID Token delivered through the browser would be
+    /// modifiable in transit.
+    /// </summary>
+    private OidcError? ValidateIdTokenSignedResponseAlg(Model.ClientRegistrationRequest request)
+    {
+        if (string.Equals(request.IdTokenSignedResponseAlg, SigningAlgorithms.None, StringComparison.Ordinal) &&
+            Array.Exists(request.ResponseTypes, responseType => responseType.Contains(ResponseTypes.IdToken)))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidClientMetadata,
+                $"The algorithm '{SigningAlgorithms.None}' is not allowed for {Parameters.IdTokenSignedResponseAlg} " +
+                $"when the registered response types return an ID Token from the authorization endpoint");
+        }
+
+        return Validate(request.IdTokenSignedResponseAlg, Parameters.IdTokenSignedResponseAlg);
     }
 
     /// <summary>
@@ -82,7 +106,7 @@ public class SignedResponseAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) 
     /// </returns>
     private OidcError? Validate(string? alg, string description)
     {
-        if (alg is not null && !jwtCreator.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
+        if (alg is not null && !jwtAlgorithms.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,

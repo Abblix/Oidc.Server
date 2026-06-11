@@ -22,9 +22,12 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
@@ -32,7 +35,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for responses to token revocation requests.
 /// </summary>
-public class RevocationResponseFormatter : IRevocationResponseFormatter
+/// <param name="issuerProvider">Supplies the issuer identifier used as the realm value on
+/// <c>WWW-Authenticate</c> challenges for client-authentication failures.</param>
+public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevocationResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a token revocation request.
@@ -50,6 +55,8 @@ public class RevocationResponseFormatter : IRevocationResponseFormatter
     {
         return Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new OkResult(),
-            onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+            // RFC 7009 §2.2.1 defers to RFC 6749 §5.2 for error semantics, so the shared formatter
+            // applies: invalid_client becomes a 401 with a Basic challenge, other errors stay 400.
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer())));
     }
 }

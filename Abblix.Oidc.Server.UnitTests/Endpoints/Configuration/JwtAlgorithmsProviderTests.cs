@@ -125,6 +125,29 @@ public class JwtAlgorithmsProviderTests
         Assert.Equal(signing, result);
     }
 
+    /// <summary>
+    /// OIDC Core §10.1: HS* signatures key on the client_secret, which this server stores only as
+    /// a hash — so HMAC algorithms must not be advertised on any client-addressed response-signing
+    /// list, even when the JWT layer has HMAC signers registered. Previously the full signer set
+    /// (HS* included) leaked into discovery, a client could register HS256 via DCR, and the first
+    /// issued id_token failed with a server error at signing-key lookup.
+    /// </summary>
+    [Fact]
+    public void ClientAddressedSigningLists_ExcludeHmacAlgorithms()
+    {
+        _creator.Setup(c => c.SignedResponseAlgorithmsSupported).Returns(
+        [
+            SigningAlgorithms.RS256, SigningAlgorithms.ES256,
+            SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512,
+        ]);
+        var provider = CreateProvider();
+
+        string[] expected = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
+        Assert.Equal(expected, provider.SignedResponseAlgorithmsSupported.ToArray());
+        Assert.Equal(expected, provider.AuthorizationSigningAlgValuesSupported.ToArray());
+        Assert.Equal(expected, provider.IntrospectionSigningAlgValuesSupported.ToArray());
+    }
+
     [Fact]
     public void AuthorizationEncryptionAlgValuesSupported_ForwardsValidatorKeyManagementAlgorithms()
     {

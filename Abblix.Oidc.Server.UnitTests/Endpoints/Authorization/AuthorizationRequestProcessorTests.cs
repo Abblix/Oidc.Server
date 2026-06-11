@@ -24,6 +24,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -35,6 +36,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -57,6 +59,7 @@ public class AuthorizationRequestProcessorTests
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
+    private readonly Mock<IAuthorizationDetailsPolicy> _authorizationDetailsPolicy;
     private readonly FakeTimeProvider _timeProvider;
     private readonly AuthorizationRequestProcessor _processor;
 
@@ -67,9 +70,22 @@ public class AuthorizationRequestProcessorTests
         _authorizationCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
+        _authorizationDetailsPolicy = new Mock<IAuthorizationDetailsPolicy>(MockBehavior.Strict);
+
+        // The anti-escalation backstop re-runs granted authorization_details through the per-type
+        // policy. For the processor tests the granted set is already a valid narrowing, so the
+        // policy passes it through unchanged; AD escalation/failure cases are covered in
+        // ConsentConstraintEnforcerTests against the real enforcer.
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
 
         _timeProvider = new FakeTimeProvider();
 
+        // A real ConsentConstraintEnforcer (not a mock) so the anti-escalation backstop is
+        // exercised end-to-end through the processor — granted scopes/resources that exceed the
+        // request must throw before the grant is built.
         _processor = new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _consentsProvider.Object,
@@ -78,7 +94,8 @@ public class AuthorizationRequestProcessorTests
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
-            ]);
+            ],
+            new ConsentConstraintEnforcer(_authorizationDetailsPolicy.Object));
     }
 
     private static ValidAuthorizationRequest CreateRequest(
@@ -183,6 +200,50 @@ public class AuthorizationRequestProcessorTests
         // Assert
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.LoginRequired, error.Error);
+    }
+
+    /// <summary>
+    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration
+    /// signal even when no session exists — previously the value fell through to the generic
+    /// no-session branch and the host saw an ordinary login request.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptCreate_NoSessions_ShouldReturnRegistrationRequired()
+    {
+        // Arrange
+        var request = CreateRequest(prompt: Prompts.Create);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(AsyncEnumerable.Empty<AuthSession>());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<RegistrationRequired>(result);
+    }
+
+    /// <summary>
+    /// Initiating User Registration via OpenID Connect 1.0: the registration experience is shown
+    /// regardless of whether the user is currently logged in — an existing session must not make
+    /// the request proceed as a normal authentication.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptCreate_ExistingSession_ShouldReturnRegistrationRequired()
+    {
+        // Arrange
+        var request = CreateRequest(prompt: Prompts.Create);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { CreateAuthSession() }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<RegistrationRequired>(result);
     }
 
     /// <summary>
@@ -472,6 +533,66 @@ public class AuthorizationRequestProcessorTests
         Assert.Equal(expectedCode, success.Code);
         Assert.Null(success.AccessToken);
         Assert.Null(success.IdToken);
+    }
+
+    /// <summary>
+    /// Anti-escalation backstop (#185): the IUserConsentsProvider contract permits a narrower grant
+    /// than the request, never a broader one. A granted scope absent from the request is a host-side
+    /// contract violation and must fail loud with an exception instead of issuing an escalated grant.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_GrantedScopeExceedsRequest_ShouldThrow()
+    {
+        // Arrange — request carries only openid; the consent provider returns an extra "admin"
+        // scope that was never requested (e.g. browser tampering it failed to intersect away).
+        var request = CreateRequest(responseType: [ResponseTypes.Code], scope: [Scopes.OpenId]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(
+            grantedScopes: [new ScopeDefinition(Scopes.OpenId), new ScopeDefinition("admin")]);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+        _authSessionService.Setup(s => s.SignInAsync(session)).Returns(Task.CompletedTask);
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        // Act + Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+    }
+
+    /// <summary>
+    /// Anti-escalation backstop (#185): a granted resource absent from the request is likewise a
+    /// host-side contract violation and must fail loud.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_GrantedResourceNotRequested_ShouldThrow()
+    {
+        // Arrange — the request carries no resources; the provider grants one anyway.
+        var request = CreateRequest(responseType: [ResponseTypes.Code]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(
+            grantedResources: [new ResourceDefinition(new Uri("https://api.example/admin"))]);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+        _authSessionService.Setup(s => s.SignInAsync(session)).Returns(Task.CompletedTask);
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        // Act + Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
     }
 
     /// <summary>
