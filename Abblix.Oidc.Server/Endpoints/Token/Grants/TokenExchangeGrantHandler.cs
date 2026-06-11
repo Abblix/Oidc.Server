@@ -66,7 +66,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// </para>
 /// </remarks>
 public class TokenExchangeGrantHandler(
-    IParameterValidator parameterValidator,
     IServiceProvider serviceProvider,
     ISessionIdGenerator sessionIdGenerator,
     TimeProvider timeProvider) : IAuthorizationGrantHandler
@@ -82,11 +81,10 @@ public class TokenExchangeGrantHandler(
         TokenRequest request,
         ClientInfo clientInfo)
     {
-        ValidateRequiredParameters(request);
-
         Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
 
         return initial
+            .Bind(ValidateRequiredParameters)
             .Bind(ValidateSubjectTokenType)
             .Bind(ValidateActorTokenPair)
             .Bind(ValidateActorTokenType)
@@ -111,10 +109,24 @@ public class TokenExchangeGrantHandler(
         SubjectTokenContext? Subject = null,
         SubjectTokenContext? Actor = null);
 
-    private void ValidateRequiredParameters(TokenRequest request)
+    /// <summary>
+    /// RFC 8693 §2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
+    /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 §5.2), not a server
+    /// fault — the previous throw-on-access surfaced it as HTTP 500.
+    /// </summary>
+    private static Result<ValidationContext, OidcError> ValidateRequiredParameters(ValidationContext ctx)
     {
-        parameterValidator.Required(request.SubjectToken, nameof(request.SubjectToken));
-        parameterValidator.Required(request.SubjectTokenType, nameof(request.SubjectTokenType));
+        if (!ctx.Request.SubjectToken.HasValue())
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectToken);
+        }
+
+        if (!ctx.Request.SubjectTokenType.HasValue())
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectTokenType);
+        }
+
+        return ctx;
     }
 
     /// <summary>

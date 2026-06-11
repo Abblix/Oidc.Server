@@ -50,21 +50,31 @@ public class RefreshTokenGrantHandlerTests
     private const string DifferentClientId = "different_client_456";
     private const string ValidRefreshToken = "valid.refresh.token";
 
-    private readonly Mock<IParameterValidator> _parameterValidator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
     private readonly Mock<IRefreshTokenService> _refreshTokenService;
     private readonly RefreshTokenGrantHandler _handler;
 
     public RefreshTokenGrantHandlerTests()
     {
-        _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _refreshTokenService = new Mock<IRefreshTokenService>(MockBehavior.Strict);
 
         _handler = new RefreshTokenGrantHandler(
-            _parameterValidator.Object,
             _jwtValidator.Object,
             _refreshTokenService.Object);
+    }
+
+    /// <summary>
+    /// RFC 6749 §5.2: a token request without the required refresh_token parameter is the caller's
+    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_MissingRefreshToken_ReturnsInvalidRequest()
+    {
+        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -78,8 +88,6 @@ public class RefreshTokenGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
@@ -113,8 +121,6 @@ public class RefreshTokenGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
@@ -150,8 +156,6 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var accessToken = CreateTokenWithType(JwtTypes.AccessToken);
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
-
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
             .ReturnsAsync(accessToken);
@@ -176,8 +180,6 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var idToken = CreateTokenWithType("JWT");
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
-
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
             .ReturnsAsync(idToken);
@@ -201,8 +203,6 @@ public class RefreshTokenGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = "malformed.jwt" };
 
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
-
         _jwtValidator
             .Setup(v => v.ValidateAsync("malformed.jwt", ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is malformed"));
@@ -225,8 +225,6 @@ public class RefreshTokenGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
@@ -252,8 +250,6 @@ public class RefreshTokenGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
-
-        _parameterValidator.Setup(v => v.Required(tokenRequest.RefreshToken, nameof(tokenRequest.RefreshToken)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))

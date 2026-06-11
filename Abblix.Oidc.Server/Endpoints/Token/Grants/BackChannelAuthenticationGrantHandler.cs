@@ -44,7 +44,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// Supports both short-polling (immediate response) and long-polling (holds connection until auth completes).
 /// </summary>
 /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
-/// <param name="parameterValidator">The service to validate request parameters.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
@@ -52,7 +51,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="httpContextAccessor">Accessor for HTTP context to retrieve cancellation token.</param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
-    IParameterValidator parameterValidator,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
@@ -99,8 +97,12 @@ public class BackChannelAuthenticationGrantHandler(
     /// </returns>
     public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
-        // Check if the request contains a valid authentication request ID
-        parameterValidator.Required(request.AuthenticationRequestId, nameof(request.AuthenticationRequestId));
+        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        if (!request.AuthenticationRequestId.HasValue())
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.AuthenticationRequestId);
+        }
 
         // Try to retrieve the corresponding backchannel authentication request from storage
         var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
