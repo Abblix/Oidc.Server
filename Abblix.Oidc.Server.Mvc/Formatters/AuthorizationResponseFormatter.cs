@@ -90,6 +90,16 @@ public class AuthorizationResponseFormatter(
                 return await RedirectAsync(
                     options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
+            // prompt=create (Initiating User Registration via OpenID Connect 1.0): a dedicated
+            // registration UI when the host configured one, otherwise the login UI — the original
+            // request parameters (including prompt=create) travel in the redirect, so a combined
+            // login/registration page can still branch on them.
+            case RegistrationRequired:
+                return await RedirectAsync(
+                    options.Value.RegistrationUri
+                        ?? options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                    response.Model);
+
             // iss/scope gating and JARM packing are applied upstream by the core response encoder (run from
             // the handler); here we only map the encoded response onto the MVC wire DTO and deliver it.
 
@@ -179,6 +189,12 @@ public class AuthorizationResponseFormatter(
         Code = success.Code,
         TokenType = success.TokenType,
         AccessToken = success.AccessToken?.EncodedJwt,
+        // RFC 6749 §4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from
+        // the authorization endpoint (implicit/hybrid). Derived from the issued token's own
+        // iat/exp pair, so the advertised lifetime always matches the token itself.
+        ExpiresIn = success.AccessToken is { Token.Payload: { ExpiresAt: { } expiresAt, IssuedAt: { } issuedAt } }
+            ? expiresAt - issuedAt
+            : null,
         IdToken = success.IdToken?.EncodedJwt,
         SessionState = success.SessionState,
     };

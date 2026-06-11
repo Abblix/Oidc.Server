@@ -71,6 +71,13 @@ public class AuthorizationRequestProcessor(
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
 		{
+			// Initiating User Registration via OpenID Connect 1.0: prompt=create takes the user to
+			// the account-creation experience regardless of whether a session exists. An OP that
+			// advertises create in prompt_values_supported must act on it — previously the value
+			// fell through to the generic branches and the registration intent was silently lost.
+			case (_, Prompts.Create):
+				return new RegistrationRequired(model);
+
 			// If no sessions exist and the prompt forbids user interaction,
 			// respond that login is required without allowing user interaction.
 			case (0, Prompts.None):

@@ -296,4 +296,80 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True((await handler.HandleAsync(withoutAlg)).TryGetSuccess(out var registeredDefault));
         Assert.Null(registeredDefault.IntrospectionSignedResponseAlg);
     }
+
+    /// <summary>
+    /// RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: the per-client FAPI-grade enforcement flags
+    /// round-trip through registration into the stored ClientInfo and are echoed on the response
+    /// (RFC 7591 §3.2.1).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FapiEnforcementFlags_RoundTripAndEcho()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
+
+        var request = CreateRequest() with
+        {
+            RequirePushedAuthorizationRequests = true,
+            RequireSignedRequestObject = true,
+            TlsClientCertificateBoundAccessTokens = true,
+        };
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.True(success.RequirePushedAuthorizationRequests);
+        Assert.True(success.RequireSignedRequestObject);
+        Assert.True(success.TlsClientCertificateBoundAccessTokens);
+
+        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        Assert.NotNull(stored);
+        Assert.True(stored.RequirePushedAuthorizationRequests);
+        Assert.True(stored.RequireSignedRequestObject);
+        Assert.True(stored.TlsClientCertificateBoundAccessTokens);
+    }
+
+    /// <summary>
+    /// OIDC Core §10.1: HS* signing keys on the client_secret, which this server stores only as a
+    /// hash — registration asking for an HMAC-signed id_token must be rejected at DCR time instead
+    /// of failing with a server error on the first issued token.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.HS256)]
+    [InlineData(SigningAlgorithms.HS512)]
+    public async Task HandleAsync_HmacIdTokenSignedResponseAlg_RejectsAtRegistration(string algorithm)
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var request = CreateRequest() with { IdTokenSignedResponseAlg = algorithm };
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// RFC 7591 §3.2.1: the response carries grant_types, response_types and scope read back from
+    /// the stored registration. Without them a client cannot learn the server-assigned defaults
+    /// (authorization_code / code) when its request omitted these fields — the DCR conformance
+    /// profile checks exactly this.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_RegistrationResponse_EchoesGrantResponseTypesAndScope()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var request = CreateRequest() with { Scope = [Scopes.OpenId, Scopes.Profile] };
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.Equal([GrantTypes.AuthorizationCode], success.GrantTypes);
+        Assert.Equal([[ResponseTypes.Code]], success.ResponseTypes);
+        Assert.Equal([Scopes.OpenId, Scopes.Profile], success.Scope);
+    }
 }

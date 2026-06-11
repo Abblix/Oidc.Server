@@ -33,8 +33,23 @@ public sealed class JwtAlgorithmsProvider(
 	IJsonWebTokenCreator jwtCreator,
 	IJsonWebTokenValidator jwtValidator) : IJwtAlgorithmsProvider
 {
+	/// <summary>
+	/// HMAC algorithms are excluded from every client-addressed response-signing list: per
+	/// OIDC Core §10.1 an HS* signature uses the client_secret as the key, but this server
+	/// persists client secrets as SHA-512 hashes (except the client_secret_jwt case), so it
+	/// cannot derive the HMAC key at signing time. Advertising HS* let a client register it
+	/// via DCR and then fail with a server error on the first issued token. The JWT layer
+	/// itself still supports HMAC signers — the constraint is about key availability here,
+	/// not signing capability.
+	/// </summary>
+	private static readonly string[] HmacAlgorithms =
+		[SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512];
+
+	private IEnumerable<string> ClientAddressedSigningAlgorithms
+		=> jwtCreator.SignedResponseAlgorithmsSupported.Where(alg => !HmacAlgorithms.Contains(alg));
+
 	/// <inheritdoc />
-	public IEnumerable<string> SignedResponseAlgorithmsSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+	public IEnumerable<string> SignedResponseAlgorithmsSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
@@ -50,7 +65,7 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> RequestObjectEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
 	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
@@ -59,7 +74,7 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => jwtCreator.SignedResponseAlgorithmsSupported;
+	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
 	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;

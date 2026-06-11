@@ -148,8 +148,20 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Specifies the algorithm that must be used for signing identity token responses issued to this client.
+    /// Per Back-Channel Logout 1.0 §2.4 logout tokens are signed in the same manner as ID Tokens, so this
+    /// value also serves as the default signing algorithm for back-channel logout tokens unless
+    /// <see cref="LogoutTokenSignedResponseAlgorithm"/> overrides it.
     /// </summary>
     public string IdentityTokenSignedResponseAlgorithm { get; set; } = SigningAlgorithms.RS256;
+
+    /// <summary>
+    /// The algorithm used to sign back-channel logout tokens issued to this client. When null
+    /// (the default), the value of <see cref="IdentityTokenSignedResponseAlgorithm"/> applies —
+    /// Back-Channel Logout 1.0 §2.4 signs logout tokens in the same manner as ID Tokens, and this
+    /// property makes that otherwise implicit coupling visible and overridable per client. There is
+    /// no registered DCR metadata parameter for it, so the override is host-side configuration only.
+    /// </summary>
+    public string? LogoutTokenSignedResponseAlgorithm { get; set; }
 
     /// <summary>
     /// Controls whether claims about the authenticated user are included directly in the identity token
@@ -250,6 +262,32 @@ public record ClientInfo(string ClientId)
     /// issued.
     /// </summary>
     public bool RequireDPoP { get; set; } = false;
+
+    /// <summary>
+    /// RFC 9126 §6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
+    /// a pushed authorization request is the only way this client may start an authorization flow —
+    /// a request arriving at the authorization endpoint without a PAR-issued request URI is rejected
+    /// even when the server-wide requirement is off. FAPI-grade clients set this so a granular
+    /// server-side toggle cannot silently weaken them.
+    /// </summary>
+    public bool RequirePushedAuthorizationRequests { get; set; } = false;
+
+    /// <summary>
+    /// RFC 9101 §10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
+    /// this client must deliver its authorization request parameters as a signed request object
+    /// (via the request parameter or a pushed authorization request) — plain-parameter requests and
+    /// unsigned request objects are rejected.
+    /// </summary>
+    public bool RequireSignedRequestObject { get; set; } = false;
+
+    /// <summary>
+    /// RFC 8705 §3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
+    /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
+    /// request arrives over mutual TLS — independently of the client authentication method, which
+    /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
+    /// already get.
+    /// </summary>
+    public bool TlsClientCertificateBoundAccessTokens { get; set; } = false;
 
     /// <summary>
     /// Determines the algorithm used for signing responses from the UserInfo endpoint.
