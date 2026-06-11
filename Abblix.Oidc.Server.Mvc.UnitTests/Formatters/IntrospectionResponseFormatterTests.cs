@@ -80,7 +80,7 @@ public class IntrospectionResponseFormatterTests
 
     private static IntrospectionSuccess ActiveResponse(string signedResponseAlgorithm) => new(
         true,
-        new JsonObject { ["sub"] = "user_123" },
+        new JsonObject { [IanaClaimTypes.Sub] = "user_123" },
         new ClientInfo(ClientId) { IntrospectionSignedResponseAlgorithm = signedResponseAlgorithm });
 
     [Fact]
@@ -88,10 +88,31 @@ public class IntrospectionResponseFormatterTests
     {
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.None), MediaTypes.TokenIntrospectionJwt);
 
-        Assert.IsType<JsonResult>(result);
+        // RFC 7662 §2.2: active is a JSON boolean, not the string "true".
+        var json = Assert.IsType<JsonResult>(result);
+        var introspection = Assert.IsType<JsonObject>(json.Value);
+        Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+
         _clientJwtFormatter.Verify(
             f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task FormatResponseAsync_WhenTokenInactive_ReturnsBooleanFalse()
+    {
+        var inactiveResponse = new IntrospectionSuccess(
+            false,
+            null,
+            new ClientInfo(ClientId) { IntrospectionSignedResponseAlgorithm = SigningAlgorithms.None });
+
+        var result = await FormatAsync(inactiveResponse, acceptHeader: null);
+
+        // The dangerous regression case: a string "false" is truthy for lenient JSON consumers, so a revoked
+        // token would read as active. The boolean false has no such failure mode.
+        var json = Assert.IsType<JsonResult>(result);
+        var introspection = Assert.IsType<JsonObject>(json.Value);
+        Assert.False(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
     [Fact]
@@ -129,7 +150,7 @@ public class IntrospectionResponseFormatterTests
         Assert.Contains(ClientId, capturedToken.Payload.Audiences);
 
         var introspection = capturedToken.Payload[IanaClaimTypes.TokenIntrospection]!.AsObject();
-        Assert.Equal("user_123", introspection["sub"]!.GetValue<string>());
-        Assert.True(introspection.ContainsKey("active"));
+        Assert.Equal("user_123", introspection[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 }
