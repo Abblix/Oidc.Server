@@ -568,8 +568,8 @@ public record ClientRegistrationRequest
 
     /// <summary>
     /// The <c>post_logout_redirect_uris</c> (OIDC RP-Initiated Logout): the absolute URIs the OP may redirect
-    /// the user agent to after RP-initiated logout. Authorization requests must specify a value that exactly
-    /// matches one of these.
+    /// the user agent to after RP-initiated logout. Logout requests must specify a
+    /// <c>post_logout_redirect_uri</c> that exactly matches one of these.
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]

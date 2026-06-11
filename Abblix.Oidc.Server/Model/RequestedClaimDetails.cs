@@ -39,7 +39,7 @@ public record RequestedClaimDetails
 
     /// <summary>
     /// Specifies the specific value the claim should have.
-    /// This property is used when a particular value for the claim is for processing.
+    /// This property is used when a particular value for the claim is required for processing.
     /// </summary>
     [JsonPropertyName("value")]
     public object? Value { get; init; }

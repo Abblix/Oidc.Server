@@ -288,38 +288,107 @@ public record ClientRegistrationResponse
     [JsonPropertyName(Parameters.TokenExchangeAudiences)]
     public string[]? TokenExchangeAudiences { get; init; }
 
+    /// <summary>
+    /// Wire-level member names of the client registration response (RFC 7591 §3.2.1, RFC 7592 §3,
+    /// OIDC Dynamic Client Registration §3.2).
+    /// </summary>
     private static class Parameters
     {
+        /// <summary>The <c>client_id</c> response member carrying the issued client identifier.</summary>
         public const string ClientId = "client_id";
+
+        /// <summary>The <c>client_id_issued_at</c> response member giving the issue time as Unix seconds.
+        /// </summary>
         public const string ClientIdIssuedAt = "client_id_issued_at";
 
+        /// <summary>The <c>client_secret</c> response member carrying the issued client secret.</summary>
         public const string ClientSecret = "client_secret";
+
+        /// <summary>The <c>client_secret_expires_at</c> response member giving the secret expiration time
+        /// as Unix seconds; <c>0</c> means the secret does not expire.</summary>
         public const string ClientSecretExpiresAt = "client_secret_expires_at";
 
+        /// <summary>The <c>registration_access_token</c> response member (RFC 7592) used to authorize
+        /// subsequent operations on the client configuration endpoint.</summary>
         public const string RegistrationAccessToken = "registration_access_token";
+
+        /// <summary>The <c>registration_client_uri</c> response member (RFC 7592) locating the client
+        /// configuration endpoint for this registration.</summary>
         public const string RegistrationClientUri = "registration_client_uri";
+
+        /// <summary>The <c>initiate_login_uri</c> echoed registration metadata member.</summary>
         public const string InitiateLoginUri = "initiate_login_uri";
+
+        /// <summary>The <c>token_endpoint_auth_method</c> echoed registration metadata member.</summary>
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
 
+        /// <summary>The <c>application_type</c> echoed registration metadata member.</summary>
         public const string ApplicationType = "application_type";
+
+        /// <summary>The <c>redirect_uris</c> echoed registration metadata member.</summary>
         public const string RedirectUris = "redirect_uris";
+
+        /// <summary>The <c>client_name</c> echoed registration metadata member.</summary>
         public const string ClientName = "client_name";
+
+        /// <summary>The <c>logo_uri</c> echoed registration metadata member.</summary>
         public const string LogoUri = "logo_uri";
+
+        /// <summary>The <c>subject_type</c> echoed registration metadata member.</summary>
         public const string SubjectType = "subject_type";
+
+        /// <summary>The <c>sector_identifier_uri</c> echoed registration metadata member.</summary>
         public const string SectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>The <c>jwks_uri</c> echoed registration metadata member.</summary>
         public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>userinfo_encrypted_response_alg</c> echoed registration metadata member.</summary>
         public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+
+        /// <summary>The <c>userinfo_encrypted_response_enc</c> echoed registration metadata member.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>contacts</c> echoed registration metadata member.</summary>
         public const string Contacts = "contacts";
+
+        /// <summary>The <c>request_uris</c> echoed registration metadata member.</summary>
         public const string RequestUris = "request_uris";
+
+        /// <summary>The <c>tls_client_auth_subject_dn</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
         public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+
+        /// <summary>The <c>tls_client_auth_san_dns</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
         public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+
+        /// <summary>The <c>tls_client_auth_san_uri</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
         public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+
+        /// <summary>The <c>tls_client_auth_san_ip</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+
+        /// <summary>The <c>tls_client_auth_san_email</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+
+        /// <summary>The <c>dpop_bound_access_tokens</c> echoed registration metadata member (RFC 9449 §5.2).
+        /// </summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>authorization_details_types</c> echoed registration metadata member
+        /// (RFC 9396 §5.1).</summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
+
+        /// <summary>The <c>token_exchange_subject_token_types</c> echoed registration metadata member
+        /// (non-standard extension).</summary>
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+
+        /// <summary>The <c>token_exchange_audiences</c> echoed registration metadata member
+        /// (non-standard extension).</summary>
         public const string TokenExchangeAudiences = "token_exchange_audiences";
     }
 }
