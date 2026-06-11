@@ -101,7 +101,10 @@ public class ConsentConstraintEnforcerTests
         var request = CreateRequest(scopes: [new ScopeDefinition(Scopes.OpenId), new ScopeDefinition(Scopes.Profile)]);
         var granted = Granted(scopes: [new ScopeDefinition(Scopes.OpenId)]);
 
-        await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+        var exception = await Record.ExceptionAsync(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -185,6 +188,9 @@ public class ConsentConstraintEnforcerTests
             new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" }));
         SetupPolicyPassThrough();
 
-        await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+        var exception = await Record.ExceptionAsync(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Null(exception);
     }
 }
