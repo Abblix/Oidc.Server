@@ -105,9 +105,9 @@ public class ClientManagementController : ControllerBase
         [FromServices] IReadClientResponseFormatter formatter,
         ClientAuthorizationRequest authorizationRequest)
     {
-        Core.ClientRequest clientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(clientRequest);
-        return await formatter.FormatResponseAsync(clientRequest, response);
+        Core.ClientRequest coreClientRequest = authorizationRequest;
+        var response = await handler.HandleAsync(coreClientRequest);
+        return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 
     /// <summary>
@@ -162,8 +162,8 @@ public class ClientManagementController : ControllerBase
         [FromServices] IRemoveClientResponseFormatter formatter,
         ClientAuthorizationRequest authorizationRequest)
     {
-        Core.ClientRequest clientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(clientRequest);
-        return await formatter.FormatResponseAsync(clientRequest, response);
+        Core.ClientRequest coreClientRequest = authorizationRequest;
+        var response = await handler.HandleAsync(coreClientRequest);
+        return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 }

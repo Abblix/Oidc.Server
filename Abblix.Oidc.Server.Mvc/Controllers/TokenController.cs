@@ -80,10 +80,9 @@ public class TokenController : ControllerBase
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        Core.TokenRequest mappedTokenRequest = tokenRequest;
-        Core.ClientRequest mappedClientRequest = clientRequest;
-        var response = await handler.HandleAsync(mappedTokenRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedTokenRequest, response);
+        Core.TokenRequest coreTokenRequest = tokenRequest;
+        var response = await handler.HandleAsync(coreTokenRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 
     /// <summary>
@@ -111,10 +110,9 @@ public class TokenController : ControllerBase
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        Core.RevocationRequest mappedRevocationRequest = revocationRequest;
-        Core.ClientRequest mappedClientRequest = clientRequest;
-        var response = await handler.HandleAsync(mappedRevocationRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedRevocationRequest, response);
+        Core.RevocationRequest coreRevocationRequest = revocationRequest;
+        var response = await handler.HandleAsync(coreRevocationRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
 
     /// <summary>
@@ -144,9 +142,8 @@ public class TokenController : ControllerBase
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        Core.IntrospectionRequest mappedIntrospectionRequest = introspectionRequest;
-        Core.ClientRequest mappedClientRequest = clientRequest;
-        var response = await handler.HandleAsync(mappedIntrospectionRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedIntrospectionRequest, response);
+        Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
+        var response = await handler.HandleAsync(coreIntrospectionRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }
 }
