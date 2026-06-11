@@ -42,10 +42,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// request, runs the RFC 7636 §4.6 verification by transforming the submitted <c>code_verifier</c> with
 /// the recorded <c>plain</c> / <c>S256</c> / <c>S512</c> method.
 /// </summary>
-/// <param name="parameterValidator">Asserts that required wire parameters (<c>code</c>) are present.</param>
 /// <param name="authorizationCodeService">Persists, looks up and removes authorization codes.</param>
 public class AuthorizationCodeGrantHandler(
-    IParameterValidator parameterValidator,
     IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
 {
     /// <summary>
@@ -72,8 +70,12 @@ public class AuthorizationCodeGrantHandler(
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
     public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
     {
-        // Ensures the authorization code is provided in the request.
-        parameterValidator.Required(request.Code, nameof(request.Code));
+        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        if (!request.Code.HasValue())
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.Code);
+        }
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
         var result = await authorizationCodeService.AuthorizeByCodeAsync(request.Code);
@@ -85,10 +87,13 @@ public class AuthorizationCodeGrantHandler(
         var grant = result.GetSuccess();
 
         // Verifies that the authorization code was issued for the requesting client.
+        // RFC 6749 §5.2 lists "authorization code ... issued to another client" explicitly under
+        // invalid_grant; unauthorized_client (used before) means the client is barred from the
+        // grant type as such, which is a different failure.
         if (grant.Context.ClientId != clientInfo.ClientId)
         {
             return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+                ErrorCodes.InvalidGrant,
                 "Code was issued for another client");
         }
 

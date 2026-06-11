@@ -56,14 +56,12 @@ public class BackChannelAuthenticationGrantHandlerTests
     private const string UserId = "user_456";
 
     private readonly Mock<IBackChannelRequestStorage> _storage;
-    private readonly Mock<IParameterValidator> _parameterValidator;
     private readonly BackChannelAuthenticationGrantHandler _handler;
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     public BackChannelAuthenticationGrantHandlerTests()
     {
         _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        _parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
@@ -78,7 +76,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         _handler = new BackChannelAuthenticationGrantHandler(
             _storage.Object,
-            _parameterValidator.Object,
             timeProvider,
             options,
             serviceProvider);
@@ -122,6 +119,19 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// RFC 6749 §5.2: a token request without the required auth_req_id parameter is the caller's
+    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_MissingAuthenticationRequestId_ReturnsInvalidRequest()
+    {
+        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
     /// Verifies that the handler supports the CIBA grant type.
     /// </summary>
     [Fact]
@@ -148,9 +158,6 @@ public class BackChannelAuthenticationGrantHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -188,9 +195,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
@@ -214,9 +218,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var wrongClientInfo = new ClientInfo("different_client_456") { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -249,9 +250,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var nextPollAt = _currentTime.AddSeconds(5);
 
@@ -290,9 +288,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -326,9 +321,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var nextPollAt = _currentTime.AddSeconds(-1); // In the past
 
@@ -364,9 +356,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -398,18 +387,12 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = null };
 
-        _parameterValidator
-            .Setup(v => v.Required<string>(null, nameof(tokenRequest.AuthenticationRequestId)));
-
         _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
         // Assert
-        _parameterValidator.Verify(
-            v => v.Required<string>(null, nameof(tokenRequest.AuthenticationRequestId)),
-            Times.Once);
     }
 
     /// <summary>
@@ -425,9 +408,6 @@ public class BackChannelAuthenticationGrantHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -460,9 +440,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -492,9 +469,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var sessionId = "session_xyz";
         var authTime = _currentTime.AddMinutes(-5);
@@ -536,9 +510,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var nextPollAt = _currentTime; // Exactly now
 
         var expectedGrant = new AuthorizedGrant(
@@ -576,9 +547,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -614,9 +582,6 @@ public class BackChannelAuthenticationGrantHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -654,9 +619,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -686,7 +648,6 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
@@ -704,7 +665,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
-            parameterValidator.Object,
             timeProvider,
             options,
             serviceProvider,
@@ -715,9 +675,6 @@ public class BackChannelAuthenticationGrantHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -779,7 +736,6 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
@@ -797,7 +753,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
-            parameterValidator.Object,
             timeProvider,
             options,
             serviceProvider,
@@ -805,9 +760,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -852,9 +804,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -887,7 +836,6 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var options = Options.Create(new OidcOptions
@@ -903,16 +851,12 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
-            parameterValidator.Object,
             timeProvider,
             options,
             serviceProvider); // Status notifier is null
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -945,7 +889,6 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         // Arrange
         var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        var parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
@@ -964,7 +907,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
-            parameterValidator.Object,
             timeProvider,
             options,
             serviceProvider,
@@ -972,9 +914,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -1017,9 +956,6 @@ public class BackChannelAuthenticationGrantHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        _parameterValidator
-            .Setup(v => v.Required(AuthReqId, nameof(tokenRequest.AuthenticationRequestId)));
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),

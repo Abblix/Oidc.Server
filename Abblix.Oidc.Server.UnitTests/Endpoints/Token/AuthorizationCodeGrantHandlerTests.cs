@@ -38,23 +38,55 @@ using Moq;
 
 using Xunit;
 
-
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
 public class AuthorizationCodeGrantHandlerTests
 {
 	private readonly Mock<IAuthorizationCodeService> _authCodeService;
-	private readonly Mock<IParameterValidator> _parameterValidator;
 	private readonly AuthorizationCodeGrantHandler _handler;
 
 	public AuthorizationCodeGrantHandlerTests()
 	{
 		_authCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
-		_parameterValidator = new Mock<IParameterValidator>(MockBehavior.Strict);
 
 		_handler = new AuthorizationCodeGrantHandler(
-			_parameterValidator.Object,
 			_authCodeService.Object);
+	}
+
+	/// <summary>
+	/// RFC 6749 §5.2: a token request without the required code parameter is the caller's protocol
+	/// error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+	/// </summary>
+	[Fact]
+	public async Task AuthorizeAsync_MissingCode_ReturnsInvalidRequest()
+	{
+		var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo("client1"));
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+	}
+
+	/// <summary>
+	/// RFC 6749 §5.2 lists a code issued to another client explicitly under invalid_grant —
+	/// previously this case was reported as unauthorized_client, which describes a client barred
+	/// from the grant type itself.
+	/// </summary>
+	[Fact]
+	public async Task AuthorizeAsync_CodeIssuedToAnotherClient_ReturnsInvalidGrant()
+	{
+		var authenticationTime = DateTimeOffset.Parse("2026-06-11T00:00:00Z");
+		var tokenRequest = new TokenRequest { Code = "abc" };
+		_authCodeService
+			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.ReturnsAsync(
+				new AuthorizedGrant(
+					new AuthSession("123", "session1", authenticationTime, "ip"),
+					Context: new AuthorizationContext("original-client", [Scopes.OpenId], null)));
+
+		var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo("another-client"));
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
 	/// <summary>
@@ -98,7 +130,6 @@ public class AuthorizationCodeGrantHandlerTests
 		// arrange
 		var clientInfo = new ClientInfo("client1");
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = codeVerifier };
-		_parameterValidator.Setup(v => v.Required(tokenRequest.Code, "Code"));
 
 		_authCodeService
 			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))

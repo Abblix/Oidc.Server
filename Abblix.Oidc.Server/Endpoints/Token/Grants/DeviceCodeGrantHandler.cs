@@ -40,12 +40,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// checking the device code status and returning tokens when authorized.
 /// </summary>
 /// <param name="storage">Service for storing and retrieving device authorization requests.</param>
-/// <param name="parameterValidator">Service to validate request parameters.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing polling interval settings.</param>
 public class DeviceCodeGrantHandler(
     IDeviceAuthorizationStorage storage,
-    IParameterValidator parameterValidator,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IAuthorizationGrantHandler
 {
@@ -60,7 +58,12 @@ public class DeviceCodeGrantHandler(
         TokenRequest request,
         ClientInfo clientInfo)
     {
-        parameterValidator.Required(request.DeviceCode, nameof(request.DeviceCode));
+        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        if (!request.DeviceCode.HasValue())
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.DeviceCode);
+        }
 
         var deviceRequest = await storage.TryGetByDeviceCodeAsync(request.DeviceCode);
 
