@@ -59,6 +59,12 @@ public class DeviceAuthorizationResponseFormatter(
                     DeviceCode = success.DeviceCode,
                     UserCode = success.UserCode,
                     VerificationUri = deviceAuthOptions.VerificationUri,
+                    // RFC 8628 §3.2: verification_uri_complete lets capable devices render a
+                    // direct link / QR code so the user skips typing the code. The field was
+                    // declared on the wire model but never populated.
+                    VerificationUriComplete = new Uri(
+                        deviceAuthOptions.VerificationUri.AddToQuery(
+                            [(CoreResponse.Parameters.UserCode, success.UserCode)])),
                     ExpiresIn = deviceAuthOptions.CodeLifetime,
                     Interval = deviceAuthOptions.PollingInterval,
                 };
