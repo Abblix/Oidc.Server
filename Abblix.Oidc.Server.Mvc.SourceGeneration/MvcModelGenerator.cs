@@ -341,18 +341,24 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			writer.AppendLine();
 			writer.AppendLine("\t/// <summary>");
-			writer.AppendLine("\t/// Implicitly projects the transport-bound model onto its core counterpart, copying every");
-			writer.AppendLine("\t/// bound parameter so the core pipeline operates on a transport-agnostic shape.");
+			writer.AppendLine("\t/// Projects the transport-bound model onto its core counterpart, copying every bound");
+			writer.AppendLine("\t/// parameter so the core pipeline operates on a transport-agnostic shape.");
 			writer.AppendLine("\t/// </summary>");
-			writer.AppendLine($"\tpublic static implicit operator {coreTypeName}({stub.Name} request) => new()");
+			writer.AppendLine($"\tpublic {coreTypeName} Map() => new()");
 			writer.AppendLine("\t{");
 
 			foreach (var name in mappedProperties)
 			{
-				writer.AppendLine($"\t\t{name} = request.{name},");
+				writer.AppendLine($"\t\t{name} = {name},");
 			}
 
 			writer.AppendLine("\t};");
+			writer.AppendLine();
+			writer.AppendLine("\t/// <summary>");
+			writer.AppendLine($"\t/// Implicit form of <see cref=\"Map\"/>, letting a bound model flow into any");
+			writer.AppendLine("\t/// core-typed parameter or variable without an explicit call.");
+			writer.AppendLine("\t/// </summary>");
+			writer.AppendLine($"\tpublic static implicit operator {coreTypeName}({stub.Name} request) => request.Map();");
 		}
 	}
 

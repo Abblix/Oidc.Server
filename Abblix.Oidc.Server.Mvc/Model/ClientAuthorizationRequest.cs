@@ -53,11 +53,18 @@ public record ClientAuthorizationRequest
     public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
 
     /// <summary>
-    /// Implicitly projects the management authorization onto the core client request model.
+    /// Projects the management authorization onto the core client request model.
     /// </summary>
-    public static implicit operator Server.Model.ClientRequest(ClientAuthorizationRequest request) => new()
+    public Server.Model.ClientRequest ToClientRequest() => new()
     {
-        ClientId = request.ClientId,
-        AuthorizationHeader = request.AuthorizationHeader,
+        ClientId = ClientId,
+        AuthorizationHeader = AuthorizationHeader,
     };
+
+    /// <summary>
+    /// Implicit form of <see cref="ToClientRequest"/>, letting the management authorization flow
+    /// into any core-typed parameter or variable without an explicit call.
+    /// </summary>
+    public static implicit operator Server.Model.ClientRequest(ClientAuthorizationRequest request)
+        => request.ToClientRequest();
 }
