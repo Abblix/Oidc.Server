@@ -85,7 +85,9 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
             TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
 
-            Scope = request.Scope,
+            // RFC 7591 §3.2.1: scope echoes the registered value (the server may narrow or default
+            // it), not the literal request input.
+            Scope = success.Scope ?? request.Scope,
             SoftwareId = request.SoftwareId,
             SoftwareVersion = request.SoftwareVersion,
             SoftwareStatement = request.SoftwareStatement,
@@ -93,6 +95,8 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             // RFC 7591 §3.2.1: echo registered metadata so clients can confirm what was stored.
             ApplicationType = success.ApplicationType,
             RedirectUris = success.RedirectUris,
+            GrantTypes = success.GrantTypes,
+            ResponseTypes = success.ResponseTypes,
             ClientName = success.ClientName,
             LogoUri = success.LogoUri,
             SubjectType = success.SubjectType,
@@ -109,6 +113,10 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
             // RFC 9449 §5.2: dpop_bound_access_tokens echo.
             DpopBoundAccessTokens = success.DpopBoundAccessTokens,
+            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client enforcement flags echo.
+            RequirePushedAuthorizationRequests = success.RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = success.RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = success.TlsClientCertificateBoundAccessTokens,
             // RFC 9396 §5.1: authorization_details_types echo.
             AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
             // Non-standard extension: token_exchange_subject_token_types echo.

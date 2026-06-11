@@ -384,6 +384,36 @@ public record ClientRegistrationRequest
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The <c>require_pushed_authorization_requests</c> client metadata per RFC 9126 §6: when
+    /// <c>true</c>, pushed authorization requests are the only way this client may start an
+    /// authorization flow. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.RequirePushedAuthorizationRequests"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// The <c>require_signed_request_object</c> client metadata per RFC 9101 §10.5: when
+    /// <c>true</c>, the client must deliver its authorization request parameters as a signed
+    /// request object. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.RequireSignedRequestObject"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The <c>tls_client_certificate_bound_access_tokens</c> client metadata per RFC 8705 §3.4:
+    /// when <c>true</c>, access tokens issued to this client are certificate-bound whenever the
+    /// token request arrives over mutual TLS, independently of the authentication method. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.TlsClientCertificateBoundAccessTokens"/>.
+    /// When omitted, treated as <c>false</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1: the per-client
     /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
     /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
@@ -700,6 +730,19 @@ public record ClientRegistrationRequest
         /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 §5.2) requiring
         /// DPoP-bound access tokens for this client.</summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>require_pushed_authorization_requests</c> registration parameter (RFC 9126 §6)
+        /// making PAR the only way this client may start an authorization flow.</summary>
+        public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>The <c>require_signed_request_object</c> registration parameter (RFC 9101 §10.5)
+        /// committing this client to signed request objects.</summary>
+        public const string RequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registration parameter
+        /// (RFC 8705 §3.4) requesting certificate-bound access tokens independently of the
+        /// authentication method.</summary>
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
 
         /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §5.1):
         /// per-client allowlist of authorization-detail <c>type</c> values this client may use in

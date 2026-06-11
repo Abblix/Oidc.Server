@@ -108,7 +108,58 @@ public class LogoutTokenServiceTests
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Equal(JwtTypes.LogoutToken, capturedToken!.Header.Type);
+        // The default ClientInfo registers RS256 for ID Token signing, and §2.4 signs the logout
+        // token in the same manner as the ID Token.
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// Back-Channel Logout §2.4: the logout token is signed in the same manner as the ID Token —
+    /// by default the client's registered ID Token signing algorithm applies, not a hardcoded RS256.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256)]
+    [InlineData(SigningAlgorithms.PS384)]
+    public async Task CreateLogoutTokenAsync_ShouldFallBackToIdTokenAlgorithm(string algorithm)
+    {
+        // Arrange
+        var clientInfo = CreateClientInfo();
+        clientInfo.IdentityTokenSignedResponseAlgorithm = algorithm;
+        var logoutContext = CreateLogoutContext();
+
+        JsonWebToken? capturedToken = null;
+        SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
+
+        // Act
+        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Equal(algorithm, capturedToken!.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// The explicit per-client logout token algorithm overrides the §2.4 default coupling with
+    /// the ID Token signing algorithm.
+    /// </summary>
+    [Fact]
+    public async Task CreateLogoutTokenAsync_ExplicitLogoutAlgorithm_OverridesIdTokenAlgorithm()
+    {
+        // Arrange
+        var clientInfo = CreateClientInfo();
+        clientInfo.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.ES256;
+        clientInfo.LogoutTokenSignedResponseAlgorithm = SigningAlgorithms.PS512;
+        var logoutContext = CreateLogoutContext();
+
+        JsonWebToken? capturedToken = null;
+        SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
+
+        // Act
+        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Equal(SigningAlgorithms.PS512, capturedToken!.Header.Algorithm);
     }
 
     /// <summary>

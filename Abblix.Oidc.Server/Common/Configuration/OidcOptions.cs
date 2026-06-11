@@ -85,6 +85,14 @@ public record OidcOptions
 	public Uri? LoginUri { get; set; }
 
 	/// <summary>
+	/// The URL of the account-creation (registration) UI the user is redirected to when a client requests
+	/// user registration via <c>prompt=create</c> (Initiating User Registration via OpenID Connect 1.0).
+	/// When not set, <see cref="LoginUri"/> is used instead, so hosts whose login page also offers
+	/// registration need no extra configuration.
+	/// </summary>
+	public Uri? RegistrationUri { get; set; }
+
+	/// <summary>
 	/// The name of the parameter used by the OIDC server to pass the authorization request identifier. This parameter
 	/// name is used in URLs and requests to reference specific authorization requests, especially in advanced features
 	/// like Pushed Authorization Requests (PAR). Customizing this parameter name can help align with specific client
@@ -228,6 +236,15 @@ public record OidcOptions
 	/// enhancing security for certain sensitive operations.
 	/// </summary>
 	public bool RequireSignedRequestObject { get; set; } = false;
+
+	/// <summary>
+	/// Switches request-object processing to the strict RFC 9101 §5 semantics: when a request
+	/// object is used, the authorization request is exactly the content of the object and any
+	/// parameter passed outside it is ignored instead of merged. The default (off) keeps the
+	/// OpenID Connect Core §6.1 merge semantics, where parameters outside the object complement
+	/// the ones inside. FAPI-style OAuth-only deployments enable this switch.
+	/// </summary>
+	public bool IgnoreParametersOutsideRequestObject { get; set; } = false;
 
 	/// <summary>
 	/// Determines whether the client registration endpoint requires an initial access token

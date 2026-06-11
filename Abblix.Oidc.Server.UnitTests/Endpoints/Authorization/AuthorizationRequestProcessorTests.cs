@@ -186,6 +186,50 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration
+    /// signal even when no session exists — previously the value fell through to the generic
+    /// no-session branch and the host saw an ordinary login request.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptCreate_NoSessions_ShouldReturnRegistrationRequired()
+    {
+        // Arrange
+        var request = CreateRequest(prompt: Prompts.Create);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(AsyncEnumerable.Empty<AuthSession>());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<RegistrationRequired>(result);
+    }
+
+    /// <summary>
+    /// Initiating User Registration via OpenID Connect 1.0: the registration experience is shown
+    /// regardless of whether the user is currently logged in — an existing session must not make
+    /// the request proceed as a normal authentication.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptCreate_ExistingSession_ShouldReturnRegistrationRequired()
+    {
+        // Arrange
+        var request = CreateRequest(prompt: Prompts.Create);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { CreateAuthSession() }.ToAsyncEnumerable());
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.IsType<RegistrationRequired>(result);
+    }
+
+    /// <summary>
     /// Verifies that when the request omits max_age, the client's registered default_max_age is
     /// applied (OIDC Core §2 / §3.1.2.1): a session older than default_max_age is filtered out.
     /// </summary>

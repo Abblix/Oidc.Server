@@ -182,6 +182,9 @@ public static class ServiceCollectionExtensions
         // compose AuthorizationContext validation as a pipeline of several IAuthorizationContextValidator
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ClientValidator>(),
+            // Right after ClientValidator: needs the resolved ClientInfo and must reject plain
+            // parameters from a require_signed_request_object client before further processing.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, SignedRequestObjectRequirementValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
             // Scoped: FlowTypeValidator consumes IEnumerable<IAuthorizationResponseBuilder>, which
             // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.

@@ -22,6 +22,7 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -254,6 +255,57 @@ public record ReadClientSuccessfulResponse
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
+    /// The registered grant types, including server-assigned defaults. Per RFC 7591 §2 / RFC 7592 §3.
+    /// </summary>
+    [JsonPropertyOrder(28)]
+    [JsonPropertyName(Parameters.GrantTypes)]
+    public string[]? GrantTypes { get; init; }
+
+    /// <summary>
+    /// The registered response type combinations (each entry space-separated), including
+    /// server-assigned defaults. Per RFC 7591 §2 / RFC 7592 §3.
+    /// </summary>
+    [JsonPropertyOrder(29)]
+    [JsonPropertyName(Parameters.ResponseTypes)]
+    [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
+    public string[][]? ResponseTypes { get; init; }
+
+    /// <summary>
+    /// The registered scope values, serialized as a space-separated string.
+    /// Per RFC 7591 §2 / RFC 7592 §3.
+    /// </summary>
+    [JsonPropertyOrder(30)]
+    [JsonPropertyName(Parameters.Scope)]
+    [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    public string[]? Scope { get; init; }
+
+    /// <summary>
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Echoes <see cref="Features.ClientInformation.ClientInfo.RequirePushedAuthorizationRequests"/>.
+    /// </summary>
+    [JsonPropertyOrder(31)]
+    [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// Whether this client must deliver authorization parameters as a signed request object per
+    /// RFC 9101 §10.5. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.RequireSignedRequestObject"/>.
+    /// </summary>
+    [JsonPropertyOrder(32)]
+    [JsonPropertyName(Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
+    /// TLS per RFC 8705 §3.4. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TlsClientCertificateBoundAccessTokens"/>.
+    /// </summary>
+    [JsonPropertyOrder(33)]
+    [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
     /// </summary>
     private static class Parameters
@@ -286,5 +338,11 @@ public record ReadClientSuccessfulResponse
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
         public const string TokenExchangeAudiences = "token_exchange_audiences";
+        public const string GrantTypes = "grant_types";
+        public const string ResponseTypes = "response_types";
+        public const string Scope = "scope";
+        public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+        public const string RequireSignedRequestObject = "require_signed_request_object";
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
     }
 }

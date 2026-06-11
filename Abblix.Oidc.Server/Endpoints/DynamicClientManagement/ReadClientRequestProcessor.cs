@@ -65,6 +65,14 @@ public class ReadClientRequestProcessor(
             TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
             ApplicationType = client.ApplicationType,
             RedirectUris = client.RedirectUris,
+            // RFC 7592 §3: the read response carries the full registered metadata, including the
+            // grant/response types the server assigned by default when registration omitted them.
+            GrantTypes = client.AllowedGrantTypes,
+            ResponseTypes = client.AllowedResponseTypes,
+            Scope = client.AllowedScopes,
+            RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = client.RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = client.TlsClientCertificateBoundAccessTokens,
             ClientName = client.ClientName,
             LogoUri = client.LogoUri,
             SubjectType = client.SubjectType,

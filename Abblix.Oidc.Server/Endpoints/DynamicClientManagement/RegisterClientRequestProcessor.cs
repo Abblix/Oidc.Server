@@ -90,6 +90,12 @@ public class RegisterClientRequestProcessor(
             TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
             ApplicationType = clientInfo.ApplicationType,
             RedirectUris = clientInfo.RedirectUris,
+            // RFC 7591 §3.2.1: grant_types/response_types/scope are read back from the stored
+            // ClientInfo, not from the request — this is what makes server-assigned defaults
+            // (authorization_code / code when omitted) visible to the client.
+            GrantTypes = clientInfo.AllowedGrantTypes,
+            ResponseTypes = clientInfo.AllowedResponseTypes,
+            Scope = clientInfo.AllowedScopes,
             ClientName = clientInfo.ClientName,
             LogoUri = clientInfo.LogoUri,
             SubjectType = clientInfo.SubjectType,
@@ -117,6 +123,9 @@ public class RegisterClientRequestProcessor(
             TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
             DpopBoundAccessTokens = clientInfo.RequireDPoP,
+            RequirePushedAuthorizationRequests = clientInfo.RequirePushedAuthorizationRequests,
+            RequireSignedRequestObject = clientInfo.RequireSignedRequestObject,
+            TlsClientCertificateBoundAccessTokens = clientInfo.TlsClientCertificateBoundAccessTokens,
             AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
             TokenExchangeAudiences = clientInfo.TokenExchangeAllowedAudiences,
@@ -145,6 +154,11 @@ public class RegisterClientRequestProcessor(
             OfflineAccessAllowed = model.OfflineAccessAllowed,
             // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
+            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
+            // flags — when omitted, default to false.
+            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
+            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
+            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.

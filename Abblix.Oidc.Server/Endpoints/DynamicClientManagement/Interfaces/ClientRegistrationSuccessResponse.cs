@@ -22,6 +22,7 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
@@ -94,6 +95,30 @@ public record ClientRegistrationSuccessResponse(
     /// </summary>
     [JsonPropertyName(ResponseParameters.RedirectUris)]
     public Uri[]? RedirectUris { get; init; }
+
+    /// <summary>
+    /// The grant types the client is registered to use at the token endpoint, including the
+    /// server-assigned default when the request omitted them. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.GrantTypes)]
+    public string[]? GrantTypes { get; init; }
+
+    /// <summary>
+    /// The response type combinations the client is registered to use at the authorization endpoint,
+    /// including the server-assigned default when the request omitted them. Each entry is a
+    /// space-separated combination, mirroring the request shape. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.ResponseTypes)]
+    [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
+    public string[][]? ResponseTypes { get; init; }
+
+    /// <summary>
+    /// The scope values the client is registered to request, serialized as a space-separated string.
+    /// Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.Scope)]
+    [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    public string[]? Scope { get; init; }
 
     /// <summary>
     /// The human-readable name of the client. Optional client metadata. Per RFC 7591 §2.
@@ -224,6 +249,27 @@ public record ClientRegistrationSuccessResponse(
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Echoes <c>ClientInfo.RequirePushedAuthorizationRequests</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// Whether this client must deliver authorization parameters as a signed request object per
+    /// RFC 9101 §10.5. Echoes <c>ClientInfo.RequireSignedRequestObject</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
+    /// TLS per RFC 8705 §3.4. Echoes <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c>.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
     /// RFC 9396 §5.1). Echoes the registered value of
@@ -257,6 +303,9 @@ public record ClientRegistrationSuccessResponse(
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
         public const string ApplicationType = "application_type";
         public const string RedirectUris = "redirect_uris";
+        public const string GrantTypes = "grant_types";
+        public const string ResponseTypes = "response_types";
+        public const string Scope = "scope";
         public const string ClientName = "client_name";
         public const string LogoUri = "logo_uri";
         public const string SubjectType = "subject_type";
@@ -276,6 +325,9 @@ public record ClientRegistrationSuccessResponse(
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+        public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+        public const string RequireSignedRequestObject = "require_signed_request_object";
+        public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
         public const string TokenExchangeAudiences = "token_exchange_audiences";

@@ -793,4 +793,79 @@ public class RequestObjectFetcherTests
                 It.Is<ValidationOptions>(opts => opts.HasFlag(ValidationOptions.RequireSignedTokens))),
             Times.Once);
     }
+
+    /// <summary>
+    /// RFC 9101 §10.5: a client registered with require_signed_request_object committed to SIGNED
+    /// request objects — an unsigned (alg=none) object passes structural validation but must be
+    /// rejected by the per-client commitment even when the server-wide requirement is off.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnsignedObjectFromCommittedClient_ShouldFail()
+    {
+        // Arrange — server-wide RequireSignedRequestObject stays off.
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
+        var jwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.None },
+            Payload = new JsonWebTokenPayload(new JsonObject()),
+        };
+        var committedClient = new ClientInfo("test-client") { RequireSignedRequestObject = true };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, committedClient));
+
+        // Act
+        var result = await fetcher.FetchAsync(request, jwt);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// RFC 9101 §5 strict mode: the payload binds onto a fresh model instead of merging over the
+    /// outer request, so parameters passed outside the request object are ignored.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_StrictMode_BindsPayloadOntoFreshModel()
+    {
+        // Arrange
+        _oidcOptions.IgnoreParametersOutsideRequestObject = true;
+        var fetcher = CreateFetcher();
+        var outerRequest = new Abblix.Oidc.Server.Model.AuthorizationRequest { State = "outer-state" };
+        var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
+        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.RS256 },
+            Payload = new JsonWebTokenPayload(payload),
+        };
+        var boundRequest = new Abblix.Oidc.Server.Model.AuthorizationRequest
+        {
+            ClientId = TestConstants.DefaultClientId,
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+
+        // The binder must receive a FRESH target, not the outer request — that is what makes the
+        // outer parameters invisible to the merged result.
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(
+                payload,
+                It.Is<Abblix.Oidc.Server.Model.AuthorizationRequest>(t => !ReferenceEquals(t, outerRequest))))
+            .ReturnsAsync(boundRequest);
+
+        // Act
+        var result = await fetcher.FetchAsync(outerRequest, jwt);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Same(boundRequest, value);
+        Assert.Null(value.State);
+    }
 }

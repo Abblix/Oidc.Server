@@ -22,6 +22,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -76,7 +77,7 @@ public class UpdateClientRequestProcessorTests
         var model = new ClientRegistrationRequest
         {
             RedirectUris = [new Uri("https://client.example.com/cb")],
-            Scope = ["openid", "profile"],
+            Scope = [Scopes.OpenId, Scopes.Profile],
         };
         var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
@@ -118,5 +119,38 @@ public class UpdateClientRequestProcessorTests
         tokenService.Verify(
             s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
             Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 §3:
+    /// the response must contain the full registered metadata (including DTO defaults), otherwise
+    /// the client cannot confirm the result of the full-replacement update.
+    /// </summary>
+    [Fact]
+    public async Task Update_ResponseEchoesGrantResponseTypesAndScope()
+    {
+        // Arrange
+        var (processor, _, _, _, idGenerator) = CreateProcessor(_ => { });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+            GrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
+            ResponseTypes = [[ResponseTypes.Code]],
+            Scope = [Scopes.OpenId, Scopes.Profile],
+        };
+        var existing = new ClientInfo("client-1");
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+
+        // Act
+        var result = await processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var response));
+        Assert.Equal(model.GrantTypes, response.GrantTypes);
+        Assert.Equal(model.ResponseTypes, response.ResponseTypes);
+        Assert.Equal(model.Scope, response.Scope);
     }
 }
