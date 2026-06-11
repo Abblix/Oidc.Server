@@ -39,17 +39,12 @@ public record TokenRequest
     /// Specifies the OAuth 2.0 grant type of the token request.
     /// This property defines the mechanism used to obtain the access token, such as authorization code, client credentials, or refresh token.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the core composite grant handler
+    /// rejects an unregistered grant with the protocol-level unsupported grant type error.
+    /// </remarks>
     [BindProperty(Name = Parameters.GrantType)]
     [Required]
-    [AllowedValues(
-        GrantTypes.AuthorizationCode,
-        GrantTypes.RefreshToken,
-        GrantTypes.Password,
-        GrantTypes.Ciba,
-        GrantTypes.ClientCredentials,
-        GrantTypes.JwtBearer,
-        GrantTypes.DeviceAuthorization,
-        GrantTypes.TokenExchange)]
     public required string GrantType { get; set; }
 
     /// <summary>

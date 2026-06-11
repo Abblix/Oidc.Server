@@ -69,16 +69,25 @@ public record AuthorizationRequest
 	/// <c>id_token</c> for the hybrid/implicit ID token.
 	/// Multiple values are space-separated and represented here as an array.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: authorization response processors
+	/// are registered per flow (the implicit flow is off by default), and the flow validator rejects
+	/// an unsupported part with the protocol-level unsupported response type error.
+	/// </remarks>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
 	[SpaceSeparatedString]
-    [AllowedValues(ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)]
     public string[]? ResponseType { get; init; }
 
 	/// <summary>
 	/// The OAuth 2.0 <c>client_id</c> identifying the relying party that issued the request,
 	/// per RFC 6749 §4.1.1. Required for any conformant authorization request.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not marked as required at the model level: a missing client identifier must
+	/// surface as the protocol-level invalid request error produced by the core validation
+	/// pipeline, not as a transport-level model-binding failure.
+	/// </remarks>
 	[JsonPropertyName(Parameters.ClientId)]
 	public string? ClientId { get; init; }
 

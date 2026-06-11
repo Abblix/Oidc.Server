@@ -116,18 +116,13 @@ public record TokenRequest
 	/// The grant type of the token request, indicating the method being used to get the token.
 	/// Common values include 'authorization_code', 'refresh_token', 'password', etc.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: grant handlers are an extensible,
+	/// host-configured set, and the composite grant handler rejects an unregistered grant with the
+	/// protocol-level unsupported grant type error.
+	/// </remarks>
 	[JsonPropertyName(Parameters.GrantType)]
 	[Required]
-	[AllowedValues(
-		GrantTypes.AuthorizationCode,
-		GrantTypes.RefreshToken,
-		GrantTypes.Password,
-		GrantTypes.Ciba,
-		GrantTypes.DeviceAuthorization,
-		GrantTypes.Implicit,
-		GrantTypes.ClientCredentials,
-		GrantTypes.JwtBearer,
-		GrantTypes.TokenExchange)]
 	public string GrantType { get; set; } = default!;
 
 	/// <summary>

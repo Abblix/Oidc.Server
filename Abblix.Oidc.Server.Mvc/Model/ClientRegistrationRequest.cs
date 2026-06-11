@@ -55,23 +55,22 @@ public record ClientRegistrationRequest
     /// <summary>
     /// JSON array containing a list of the OAuth 2.0 response_type values.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the core registration pipeline
+    /// validates every requested response type against the set the server actually supports.
+    /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
-    [AllowedValues(
-        Common.Constants.ResponseTypes.Code,
-        Common.Constants.ResponseTypes.Token,
-        Common.Constants.ResponseTypes.IdToken)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
     public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
 
     /// <summary>
     /// Array of response type strings indicating the type of responses the client wishes to receive.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the core registration pipeline
+    /// validates every requested grant against the union the server actually supports.
+    /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    [AllowedValues(
-        Common.Constants.GrantTypes.AuthorizationCode,
-        Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken,
-        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
 
     /// <summary>
@@ -79,6 +78,7 @@ public record ClientRegistrationRequest
     /// This affects how the client is expected to interact with the authorization server.
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
+    [AllowedValues(ApplicationTypes.Web, ApplicationTypes.Native)]
     public string ApplicationType { get; init; } = ApplicationTypes.Web;
 
     /// <summary>
@@ -160,6 +160,7 @@ public record ClientRegistrationRequest
     /// or 'pairwise' for unique identifiers per client.
     /// </summary>
     [JsonPropertyName(Parameters.SubjectType)]
+    [AllowedValues(SubjectTypes.Public, SubjectTypes.Pairwise)]
     public string? SubjectType { get; init; } = SubjectTypes.Public;
 
     /// <summary>
