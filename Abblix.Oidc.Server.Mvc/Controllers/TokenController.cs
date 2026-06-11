@@ -81,7 +81,7 @@ public class TokenController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.TokenRequest mappedTokenRequest = tokenRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedTokenRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedTokenRequest, response);
     }
@@ -112,7 +112,7 @@ public class TokenController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.RevocationRequest mappedRevocationRequest = revocationRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedRevocationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedRevocationRequest, response);
     }
@@ -145,7 +145,7 @@ public class TokenController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.IntrospectionRequest mappedIntrospectionRequest = introspectionRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedIntrospectionRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedIntrospectionRequest, response);
     }

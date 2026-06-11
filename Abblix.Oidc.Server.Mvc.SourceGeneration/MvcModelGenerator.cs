@@ -37,12 +37,25 @@ namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
 [Generator]
 public class MvcModelGenerator : IIncrementalGenerator
 {
+	// The generator targets netstandard2.0 and analyses the net8+ Abblix assemblies and the
+	// System.Text.Json serialization attributes through compilation symbols only, so it cannot
+	// reference those types for nameof/typeof — their identities are mirrored here as constants.
+	// A marker renamed on the core side does not drift silently: an unrecognised declarative
+	// marker on a payload-excluded property fails the build (see Emit).
 	private const string GeneratedFromAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.GeneratedFromAttribute";
 	private const string BindsAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.BindsAttribute";
+	private const string SupportsGetPropertyName = "SupportsGet";
 	private const string MvcAttributesNamespace = "Abblix.Oidc.Server.Mvc.Attributes";
 	private const string DeclarativeValidationNamespace = "Abblix.Oidc.Server.DeclarativeValidation";
+	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
+	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
+	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
 	private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
-	private const string CompilerServicesNamespace = "System.Runtime.CompilerServices";
+	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
+	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
+
+	private static readonly string CompilerServicesNamespace =
+		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
 
 	private static readonly SymbolDisplayFormat FullyQualifiedWithNullability =
 		SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
@@ -115,7 +128,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			: string.Empty;
 
 		var supportsGet = attribute.NamedArguments
-			.Any(static argument => argument is { Key: "SupportsGet", Value.Value: true });
+			.Any(static argument => argument is { Key: SupportsGetPropertyName, Value.Value: true });
 
 		return new StubInfo(
 			stubType.ContainingNamespace.ToDisplayString(),
@@ -165,8 +178,29 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			foreach (var property in CollectProperties(coreType))
 			{
-				if (!IsExcludedFromWire(property))
+				// A transport-source marker overrides the JSON exclusion: such properties are not
+				// wire payload parameters, yet they are bound — from a header or the TLS connection.
+				var sourceMarker = TryGetSourceMarker(property);
+				if (sourceMarker != null)
+				{
+					EmitSourceProperty(property, sourceMarker);
+				}
+				else if (IsExcludedFromWire(property))
+				{
+					// A payload-excluded property carrying a declarative marker the generator does
+					// not recognise would silently fall out of the model — fail the build instead,
+					// so a renamed or mistyped marker cannot drop a parameter unnoticed.
+					if (HasDeclarativeMarker(property))
+					{
+						diagnostics.Add(new DiagnosticInfo(
+							MarkerWithoutBinder, stub.Location,
+							"unrecognised", coreType.ToDisplayString(), property.Name));
+					}
+				}
+				else
+				{
 					EmitProperty(property);
+				}
 			}
 
 			EmitProjection();
@@ -176,6 +210,49 @@ public class MvcModelGenerator : IIncrementalGenerator
 				$"{stub.Namespace}.{stub.Name}.g.cs",
 				writer.ToString(),
 				new EquatableArray<DiagnosticInfo>([.. diagnostics]));
+		}
+
+		private void EmitSourceProperty(IPropertySymbol property, AttributeData sourceMarker)
+		{
+			if (mappedProperties.Count > 0)
+				writer.AppendLine();
+
+			writer.AppendLine($"\t/// <inheritdoc cref=\"{coreType.ToDisplayString()}.{property.Name}\"/>");
+
+			var markerClass = sourceMarker.AttributeClass!;
+			switch (markerClass.Name)
+			{
+				case RequestHeaderMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string headerName }]:
+					writer.AppendLine(
+						$"\t[global::Microsoft.AspNetCore.Mvc.FromHeader(Name = {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(headerName, quote: true)})]");
+					break;
+
+				case AuthorizationHeaderMarkerName
+					when binderMap.TryGetValue(markerClass.ToDisplayString(), out var headerBinder):
+					// "Authorization" is the standard HTTP header name implied by the marker's
+					// semantics (RFC 9110 §11.6.2), not binder-specific knowledge.
+					writer.AppendLine(
+						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), Name = \"Authorization\")]");
+					break;
+
+				case ClientCertificateMarkerName
+					when binderMap.TryGetValue(markerClass.ToDisplayString(), out var certificateBinder):
+					writer.AppendLine(
+						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({certificateBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
+					break;
+
+				default:
+					diagnostics.Add(new DiagnosticInfo(
+						MarkerWithoutBinder, stub.Location,
+						markerClass.Name, coreType.ToDisplayString(), property.Name));
+					return;
+			}
+
+			var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
+			writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
+
+			mappedProperties.Add(property.Name);
 		}
 
 		private void EmitProperty(IPropertySymbol property)
@@ -215,18 +292,17 @@ public class MvcModelGenerator : IIncrementalGenerator
 				return;
 
 			var attributeNamespace = attributeClass.ContainingNamespace.ToDisplayString();
+
+			// Serialization metadata drives the core's JSON shape; the generated model is bound
+			// from form/query values, where the wire name moves to BindProperty and the value
+			// conversion to a model binder. Compiler-synthesised attributes (NullableAttribute, ...)
+			// are reserved for the compiler and cannot be written by hand; nullability is already
+			// carried by #nullable enable plus the type's own annotations.
+			if (attributeNamespace == SystemTextJsonNamespace || attributeNamespace == CompilerServicesNamespace)
+				return;
+
 			switch (attributeNamespace)
 			{
-				// Serialization metadata drives the core's JSON shape; the generated model is bound
-				// from form/query values, where the wire name moves to BindProperty and the value
-				// conversion to a model binder.
-				case SystemTextJsonNamespace:
-				// Compiler-synthesised attributes (NullableAttribute, ...) are reserved for the
-				// compiler and cannot be written by hand; nullability is already carried by
-				// #nullable enable plus the type's own annotations.
-				case CompilerServicesNamespace:
-					return;
-
 				case DeclarativeValidationNamespace
 					when binderMap.TryGetValue(attributeClass.ToDisplayString(), out var binder):
 					writer.AppendLine(
@@ -349,16 +425,28 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_ => Convert.ToString(constant.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
 		};
 
+	private static AttributeData? TryGetSourceMarker(IPropertySymbol property)
+		=> property.GetAttributes().FirstOrDefault(static attribute =>
+			attribute.AttributeClass is
+			{
+				Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
+			} attributeClass &&
+			attributeClass.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace);
+
+	private static bool HasDeclarativeMarker(IPropertySymbol property)
+		=> property.GetAttributes().Any(static attribute =>
+			attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace);
+
 	private static bool IsExcludedFromWire(IPropertySymbol property)
 		=> property.GetAttributes().Any(static attribute =>
-			attribute.AttributeClass is { Name: "JsonIgnoreAttribute" } attributeClass &&
+			attribute.AttributeClass is { Name: JsonIgnoreAttributeName } attributeClass &&
 			attributeClass.ContainingNamespace.ToDisplayString() == SystemTextJsonNamespace);
 
 	private static string? GetWireName(IPropertySymbol property)
 	{
 		foreach (var attribute in property.GetAttributes())
 		{
-			if (attribute.AttributeClass is { Name: "JsonPropertyNameAttribute" } attributeClass &&
+			if (attribute.AttributeClass is { Name: JsonPropertyNameAttributeName } attributeClass &&
 			    attributeClass.ContainingNamespace.ToDisplayString() == SystemTextJsonNamespace &&
 			    attribute.ConstructorArguments is [{ Value: string wireName }])
 			{
@@ -405,7 +493,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 	private static bool HasCompilerGeneratedAttribute(ISymbol symbol)
 		=> symbol.GetAttributes().Any(static attribute =>
-			attribute.AttributeClass is { Name: "CompilerGeneratedAttribute" } attributeClass &&
+			attribute.AttributeClass is { Name: nameof(System.Runtime.CompilerServices.CompilerGeneratedAttribute) } attributeClass &&
 			attributeClass.ContainingNamespace.ToDisplayString() == CompilerServicesNamespace);
 
 	private static Dictionary<string, INamedTypeSymbol> BuildBinderMap(Compilation compilation)

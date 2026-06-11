@@ -88,7 +88,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.AuthorizationRequest mappedAuthorizationRequest = authorizationRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedAuthorizationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedAuthorizationRequest, response);
     }
@@ -149,7 +149,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromQueryOrForm] ClientRequest clientRequest)
     {
         Core.UserInfoRequest mappedUserInfoRequest = userInfoRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedUserInfoRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedUserInfoRequest, response);
     }
@@ -251,7 +251,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.BackChannelAuthenticationRequest mappedAuthenticationRequest = authenticationRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedAuthenticationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedAuthenticationRequest, mappedClientRequest, response);
     }
@@ -274,7 +274,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.DeviceAuthorizationRequest mappedDeviceAuthorizationRequest = deviceAuthorizationRequest;
-        var mappedClientRequest = clientRequest.Map();
+        Core.ClientRequest mappedClientRequest = clientRequest;
         var response = await handler.HandleAsync(mappedDeviceAuthorizationRequest, mappedClientRequest);
         return await formatter.FormatResponseAsync(mappedDeviceAuthorizationRequest, response);
     }
