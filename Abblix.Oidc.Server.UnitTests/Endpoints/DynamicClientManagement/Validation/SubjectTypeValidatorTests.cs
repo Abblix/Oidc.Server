@@ -245,18 +245,19 @@ public class SubjectTypeValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when sector content has extra URIs.
-    /// Per OIDC Core, sector document must only contain registered redirect URIs.
+    /// Verifies a shared sector document listing URIs of other clients is accepted.
+    /// Per OIDC Core Section 8.1, the document may be shared across several clients of the same
+    /// sector — only the registered redirect URIs must be present in it, extra entries are fine.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_SectorContentWithExtraUris_ShouldReturnError()
+    public async Task ValidateAsync_SectorContentWithExtraUris_ShouldReturnNull()
     {
         // Arrange
         var sectorUri = new Uri("https://example.com/sector.json");
         var sectorContent = new[]
         {
             TestConstants.DefaultRedirectUri,
-            new Uri("https://example.com/extra") // Not in redirect URIs
+            new Uri("https://example.com/another-clients-callback") // Belongs to a sibling client
         };
 
         _secureHttpFetcher
@@ -272,9 +273,37 @@ public class SubjectTypeValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
+        Assert.Null(result);
+        Assert.Equal("example.com", context.SectorIdentifier);
+    }
+
+    /// <summary>
+    /// Verifies error when a registered redirect URI is absent from the sector document.
+    /// Per OIDC Core Section 8.1, all registered redirect URIs must be included in the document —
+    /// otherwise a client could claim a sector it does not belong to.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_RegisteredUriMissingFromSectorContent_ShouldReturnError()
+    {
+        // Arrange
+        var sectorUri = new Uri("https://example.com/sector.json");
+        var sectorContent = new[] { new Uri("https://example.com/listed-callback") };
+
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+
+        var context = CreateContext(
+            redirectUris: [TestConstants.DefaultRedirectUri], // Not listed in the sector document
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("not in the registered list", result.ErrorDescription);
     }
 
     /// <summary>
