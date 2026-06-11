@@ -20,15 +20,15 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Attributes;
-using Core = Abblix.Oidc.Server.Model;
+using System.Diagnostics.CodeAnalysis;
 
-namespace Abblix.Oidc.Server.Mvc.Model;
+// ReSharper disable once CheckNamespace
+namespace System.Runtime.CompilerServices;
 
 /// <summary>
-/// The transport-bound counterpart of <see cref="Core.AuthorizationRequest"/> for the authorization
-/// endpoint. All bound properties, their model binders, validation attributes and the projection
-/// back onto the core model are generated from the core type and its declarative markers.
+/// Compiler polyfill enabling C# records and init-only setters on netstandard2.0,
+/// where the runtime does not ship this marker type.
 /// </summary>
-[GeneratedFrom(typeof(Core.AuthorizationRequest), SupportsGet = true)]
-public partial record AuthorizationRequest;
+[SuppressMessage("Major Code Smell", "S2094:Classes should not be empty",
+	Justification = "Compiler-required marker type; the compiler keys on its mere presence")]
+internal static class IsExternalInit;

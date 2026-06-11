@@ -20,15 +20,21 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Attributes;
-using Core = Abblix.Oidc.Server.Model;
-
-namespace Abblix.Oidc.Server.Mvc.Model;
+namespace Abblix.Oidc.Server.Mvc.Attributes;
 
 /// <summary>
-/// The transport-bound counterpart of <see cref="Core.AuthorizationRequest"/> for the authorization
-/// endpoint. All bound properties, their model binders, validation attributes and the projection
-/// back onto the core model are generated from the core type and its declarative markers.
+/// Declares that the model binder realises the given core wire-format marker from
+/// <c>Abblix.Oidc.Server.DeclarativeValidation</c>. The MVC model source generator scans
+/// the assembly for these declarations to build its marker-to-binder map, so the knowledge
+/// of which binder parses which wire format lives here, next to the binders — the core
+/// markers themselves stay purely semantic and binding-technology-free.
 /// </summary>
-[GeneratedFrom(typeof(Core.AuthorizationRequest), SupportsGet = true)]
-public partial record AuthorizationRequest;
+/// <param name="formatAttributeType">The core wire-format marker attribute type this binder realises.</param>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class BindsAttribute(Type formatAttributeType) : Attribute
+{
+	/// <summary>
+	/// The core wire-format marker attribute type this binder realises.
+	/// </summary>
+	public Type FormatAttributeType => formatAttributeType;
+}
