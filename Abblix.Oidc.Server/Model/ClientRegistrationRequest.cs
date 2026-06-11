@@ -42,7 +42,7 @@ public record ClientRegistrationRequest
     /// per RFC 7591 Section 3. This is a transport-level property, not part of the registration metadata.
     /// </summary>
     [JsonIgnore]
-    public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
+    public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
 
     /// <summary>
     /// The <c>redirect_uris</c> array (RFC 7591 §2) listing every absolute URI the OP may use to deliver
@@ -51,18 +51,20 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     [ElementsRequired]
-    public Uri[] RedirectUris { get; set; } = null!;
+    public Uri[] RedirectUris { get; init; } = null!;
 
     /// <summary>
     /// The <c>response_types</c> the client intends to use (RFC 7591 §2). Each entry is itself a
     /// space-separated combination of <c>code</c>, <c>token</c>, and/or <c>id_token</c>; the array therefore
     /// represents the full set of response type combinations registered for this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: authorization response processors
+    /// are registered per flow (the implicit flow is off by default), and the registration pipeline
+    /// already validates every requested response type against the set the server actually supports
+    /// and advertises in its discovery document.
+    /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
-    [AllowedValues(
-        Common.Constants.ResponseTypes.Code,
-        Common.Constants.ResponseTypes.Token,
-        Common.Constants.ResponseTypes.IdToken)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
     public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
 
@@ -70,12 +72,12 @@ public record ClientRegistrationRequest
     /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 §2,
     /// for example <c>authorization_code</c>, <c>refresh_token</c>, or <c>urn:openid:params:grant-type:ciba</c>.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: grant handlers are an extensible
+    /// set, and the registration pipeline already validates every requested grant against the
+    /// union the server actually supports and advertises in its discovery document.
+    /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    [AllowedValues(
-        Common.Constants.GrantTypes.AuthorizationCode,
-        Common.Constants.GrantTypes.Implicit,
-        Common.Constants.GrantTypes.RefreshToken,
-        Common.Constants.GrantTypes.Ciba)]
     public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
 
     /// <summary>
@@ -83,6 +85,7 @@ public record ClientRegistrationRequest
     /// typically <c>web</c> or <c>native</c>. Influences allowed redirect URI schemes and other policy.
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
+    [AllowedValues(ApplicationTypes.Web, ApplicationTypes.Native)]
     public string ApplicationType { get; init; } = ApplicationTypes.Web;
 
     /// <summary>
@@ -166,12 +169,18 @@ public record ClientRegistrationRequest
     /// <c>public</c> (same identifier across clients) or <c>pairwise</c> (per-sector pseudonymous).
     /// </summary>
     [JsonPropertyName(Parameters.SubjectType)]
+    [AllowedValues(SubjectTypes.Public, SubjectTypes.Pairwise)]
     public string? SubjectType { get; init; } = SubjectTypes.Public;
 
     /// <summary>
     /// The <c>id_token_signed_response_alg</c> (OIDC Core §2): the JWS <c>alg</c> the OP must use to sign
     /// ID Tokens issued to this client (e.g. <c>RS256</c>, <c>ES256</c>).
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
@@ -179,6 +188,11 @@ public record ClientRegistrationRequest
     /// The <c>id_token_encrypted_response_alg</c>: the JWE key-management algorithm the OP must use when
     /// encrypting ID Tokens for this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IdTokenEncryptedResponseAlg)]
     public string? IdTokenEncryptedResponseAlg { get; init; }
 
@@ -186,6 +200,11 @@ public record ClientRegistrationRequest
     /// The <c>id_token_encrypted_response_enc</c>: the JWE content-encryption algorithm paired with
     /// <see cref="IdTokenEncryptedResponseAlg"/> for ID Tokens issued to this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IdTokenEncryptedResponseEnc)]
     public string? IdTokenEncryptedResponseEnc { get; init; }
 
@@ -193,6 +212,11 @@ public record ClientRegistrationRequest
     /// The <c>userinfo_signed_response_alg</c>: the JWS algorithm the OP must use when signing UserInfo
     /// responses returned to this client. When omitted, UserInfo is returned as plain JSON.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
@@ -200,6 +224,11 @@ public record ClientRegistrationRequest
     /// The <c>userinfo_encrypted_response_alg</c>: the JWE key-management algorithm the OP must use when
     /// encrypting UserInfo responses for this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseAlg)]
     public string? UserInfoEncryptedResponseAlg { get; init; }
 
@@ -207,6 +236,11 @@ public record ClientRegistrationRequest
     /// The <c>userinfo_encrypted_response_enc</c>: the JWE content-encryption algorithm paired with
     /// <see cref="UserInfoEncryptedResponseAlg"/> for UserInfo responses to this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseEnc)]
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
@@ -214,6 +248,11 @@ public record ClientRegistrationRequest
     /// The <c>introspection_signed_response_alg</c> (RFC 9701): the JWS algorithm the OP must use when signing
     /// introspection responses returned to this client. When omitted, introspection is returned as plain JSON.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
     public string? IntrospectionSignedResponseAlg { get; init; }
 
@@ -221,6 +260,11 @@ public record ClientRegistrationRequest
     /// The <c>introspection_encrypted_response_alg</c> (RFC 9701): the JWE key-management algorithm the OP must use
     /// when encrypting introspection responses for this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
     public string? IntrospectionEncryptedResponseAlg { get; init; }
 
@@ -228,6 +272,11 @@ public record ClientRegistrationRequest
     /// The <c>introspection_encrypted_response_enc</c> (RFC 9701): the JWE content-encryption algorithm paired with
     /// <see cref="IntrospectionEncryptedResponseAlg"/> for introspection responses to this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
     public string? IntrospectionEncryptedResponseEnc { get; init; }
 
@@ -236,6 +285,11 @@ public record ClientRegistrationRequest
     /// authorization responses packed into a JWT for this client. Defaults to <c>RS256</c>; <c>none</c> is
     /// not permitted.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.AuthorizationSignedResponseAlg)]
     public string? AuthorizationSignedResponseAlg { get; init; }
 
@@ -244,6 +298,11 @@ public record ClientRegistrationRequest
     /// use when encrypting authorization responses for this client. When set, the signed response JWT is
     /// additionally encrypted (a Nested JWT).
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.AuthorizationEncryptedResponseAlg)]
     public string? AuthorizationEncryptedResponseAlg { get; init; }
 
@@ -252,6 +311,11 @@ public record ClientRegistrationRequest
     /// with <see cref="AuthorizationEncryptedResponseAlg"/> for authorization responses to this client.
     /// Defaults to <c>A128CBC-HS256</c> when the encryption algorithm is set.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.AuthorizationEncryptedResponseEnc)]
     public string? AuthorizationEncryptedResponseEnc { get; init; }
 
@@ -259,6 +323,11 @@ public record ClientRegistrationRequest
     /// The <c>request_object_signing_alg</c>: the JWS algorithm the client uses when signing Request Objects
     /// (OIDC Core §6) sent to the authorization endpoint. <c>none</c> indicates an unsigned Request Object.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.RequestObjectSigningAlg)]
     public string? RequestObjectSigningAlg { get; init; }
 
@@ -266,6 +335,11 @@ public record ClientRegistrationRequest
     /// The <c>request_object_encryption_alg</c>: the JWE key-management algorithm the client may use when
     /// encrypting Request Objects sent to the OP.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.RequestObjectEncryptionAlg)]
     public string? RequestObjectEncryptionAlg { get; init; }
 
@@ -273,6 +347,11 @@ public record ClientRegistrationRequest
     /// The <c>request_object_encryption_enc</c>: the JWE content-encryption algorithm paired with
     /// <see cref="RequestObjectEncryptionAlg"/> for Request Objects.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.RequestObjectEncryptionEnc)]
     public string? RequestObjectEncryptionEnc { get; init; }
 
@@ -281,6 +360,11 @@ public record ClientRegistrationRequest
     /// token endpoint, such as <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>tls_client_auth</c>, or <c>none</c>.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: client authenticators are an
+    /// extensible set, and the registration pipeline already validates the value against the
+    /// methods the server actually supports and announces in its discovery document.
+    /// </remarks>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
     public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
 
@@ -288,6 +372,11 @@ public record ClientRegistrationRequest
     /// The <c>token_endpoint_auth_signing_alg</c>: the JWS algorithm the client uses when signing
     /// authentication assertions for <c>private_key_jwt</c> or <c>client_secret_jwt</c> at the token endpoint.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
@@ -364,14 +453,14 @@ public record ClientRegistrationRequest
     /// per RFC 7636. Server extension to RFC 7591 metadata; defaults to <c>false</c>.
     /// </summary>
     [JsonPropertyName(Parameters.PkceRequired)]
-    public bool? PkceRequired { get; set; } = false;
+    public bool? PkceRequired { get; init; } = false;
 
     /// <summary>
     /// When <c>true</c>, the client is permitted to request the <c>offline_access</c> scope and receive
     /// refresh tokens. Server extension to RFC 7591 metadata; defaults to <c>true</c>.
     /// </summary>
     [JsonPropertyName(Parameters.OfflineAccessAllowed)]
-    public bool? OfflineAccessAllowed { get; set; } = true;
+    public bool? OfflineAccessAllowed { get; init; } = true;
 
     /// <summary>
     /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
@@ -452,14 +541,14 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelLogoutUri)]
     [AbsoluteUri]
-    public Uri? BackChannelLogoutUri { get; set; }
+    public Uri? BackChannelLogoutUri { get; init; }
 
     /// <summary>
     /// The <c>backchannel_logout_session_required</c> flag: when <c>true</c>, the OP must include the
     /// <c>sid</c> claim in the back-channel logout token so the client can identify the session being ended.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelLogoutSessionRequired)]
-    public bool? BackChannelLogoutSessionRequired { get; set; } = false;
+    public bool? BackChannelLogoutSessionRequired { get; init; }
 
     /// <summary>
     /// The <c>frontchannel_logout_uri</c> (OIDC Front-Channel Logout 1.0): an absolute URL the OP renders
@@ -467,7 +556,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutUri)]
     [AbsoluteUri]
-    public Uri? FrontChannelLogoutUri { get; set; }
+    public Uri? FrontChannelLogoutUri { get; init; }
 
     /// <summary>
     /// The <c>frontchannel_logout_session_required</c> flag: when <c>true</c>, the OP must append <c>iss</c>
@@ -475,16 +564,16 @@ public record ClientRegistrationRequest
     /// specific session being ended.
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
-    public bool? FrontChannelLogoutSessionRequired { get; set; } = false;
+    public bool? FrontChannelLogoutSessionRequired { get; init; }
 
     /// <summary>
     /// The <c>post_logout_redirect_uris</c> (OIDC RP-Initiated Logout): the absolute URIs the OP may redirect
-    /// the user agent to after RP-initiated logout. Authorization requests must specify a value that exactly
-    /// matches one of these.
+    /// the user agent to after RP-initiated logout. Logout requests must specify a
+    /// <c>post_logout_redirect_uri</c> that exactly matches one of these.
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
-    public Uri[] PostLogoutRedirectUris { get; set; } = [];
+    public Uri[] PostLogoutRedirectUris { get; init; } = [];
 
     /// <summary>
     /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
@@ -495,26 +584,31 @@ public record ClientRegistrationRequest
         BackchannelTokenDeliveryModes.Ping,
         BackchannelTokenDeliveryModes.Poll,
         BackchannelTokenDeliveryModes.Push)]
-    public string? BackChannelTokenDeliveryMode { get; set; }
+    public string? BackChannelTokenDeliveryMode { get; init; }
 
     /// <summary>
     /// The endpoint where backchannel client notifications are sent for this client.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
     [AbsoluteUri]
-    public Uri? BackChannelClientNotificationEndpoint { get; set; }
+    public Uri? BackChannelClientNotificationEndpoint { get; init; }
 
     /// <summary>
     /// The signing algorithm used for backchannel authentication requests sent to this client.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not constrained by a declarative value list: the permissible algorithms are
+    /// determined at runtime by the keyed signing/encryption registrations, so a static list
+    /// would misstate the host's actual capabilities.
+    /// </remarks>
     [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
-    public string? BackChannelAuthenticationRequestSigningAlg { get; set; }
+    public string? BackChannelAuthenticationRequestSigningAlg { get; init; }
 
     /// <summary>
     /// Indicates whether the backchannel authentication process supports user codes for this client.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
-    public bool BackChannelUserCodeParameter { get; set; } = false;
+    public bool BackChannelUserCodeParameter { get; init; }
 
     /// <summary>
     /// A space-separated list of scope values the client will use per RFC 7591 Section 2.

@@ -306,43 +306,118 @@ public record ReadClientSuccessfulResponse
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// Contains constants for parameter names per RFC 7591/7592 and OpenID Connect specifications.
+    /// Wire-level member names of the client read response (RFC 7592 §3, RFC 7591 §2/§3.2.1,
+    /// and OpenID Connect Dynamic Client Registration).
     /// </summary>
     private static class Parameters
     {
+        /// <summary>The <c>client_id</c> response member carrying the client identifier.</summary>
         public const string ClientId = "client_id";
+
+        /// <summary>The <c>client_secret</c> response member carrying the client secret.</summary>
         public const string ClientSecret = "client_secret";
+
+        /// <summary>The <c>client_secret_expires_at</c> response member giving the secret expiration time;
+        /// <c>0</c> means the secret does not expire.</summary>
         public const string ClientSecretExpiresAt = "client_secret_expires_at";
+
+        /// <summary>The <c>registration_client_uri</c> response member (RFC 7592) locating the client
+        /// configuration endpoint for this registration.</summary>
         public const string RegistrationClientUri = "registration_client_uri";
+
+        /// <summary>The <c>registration_access_token</c> response member (RFC 7592) used to authorize
+        /// subsequent operations on the client configuration endpoint.</summary>
         public const string RegistrationAccessToken = "registration_access_token";
+
+        /// <summary>The <c>token_endpoint_auth_method</c> registered metadata member.</summary>
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>The <c>application_type</c> registered metadata member.</summary>
         public const string ApplicationType = "application_type";
+
+        /// <summary>The <c>redirect_uris</c> registered metadata member.</summary>
         public const string RedirectUris = "redirect_uris";
+
+        /// <summary>The <c>client_name</c> registered metadata member.</summary>
         public const string ClientName = "client_name";
+
+        /// <summary>The <c>logo_uri</c> registered metadata member.</summary>
         public const string LogoUri = "logo_uri";
+
+        /// <summary>The <c>subject_type</c> registered metadata member.</summary>
         public const string SubjectType = "subject_type";
+
+        /// <summary>The <c>sector_identifier_uri</c> registered metadata member.</summary>
         public const string SectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>The <c>jwks_uri</c> registered metadata member.</summary>
         public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>userinfo_encrypted_response_alg</c> registered metadata member.</summary>
         public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+
+        /// <summary>The <c>userinfo_encrypted_response_enc</c> registered metadata member.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>contacts</c> registered metadata member.</summary>
         public const string Contacts = "contacts";
+
+        /// <summary>The <c>request_uris</c> registered metadata member.</summary>
         public const string RequestUris = "request_uris";
+
+        /// <summary>The <c>initiate_login_uri</c> registered metadata member.</summary>
         public const string InitiateLoginUri = "initiate_login_uri";
-        // RFC 8705 tls_client_auth metadata
+
+        /// <summary>The <c>tls_client_auth_subject_dn</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+
+        /// <summary>The <c>tls_client_auth_san_dns</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+
+        /// <summary>The <c>tls_client_auth_san_uri</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+
+        /// <summary>The <c>tls_client_auth_san_ip</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+
+        /// <summary>The <c>tls_client_auth_san_email</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+
+        /// <summary>The <c>dpop_bound_access_tokens</c> registered metadata member (RFC 9449 §5.2).
+        /// </summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>authorization_details_types</c> registered metadata member (RFC 9396 §5.1).
+        /// </summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
+
+        /// <summary>The <c>token_exchange_subject_token_types</c> registered metadata member
+        /// (non-standard extension).</summary>
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+
+        /// <summary>The <c>token_exchange_audiences</c> registered metadata member
+        /// (non-standard extension).</summary>
         public const string TokenExchangeAudiences = "token_exchange_audiences";
+
+        /// <summary>The <c>grant_types</c> registered metadata member.</summary>
         public const string GrantTypes = "grant_types";
+
+        /// <summary>The <c>response_types</c> registered metadata member.</summary>
         public const string ResponseTypes = "response_types";
+
+        /// <summary>The <c>scope</c> registered metadata member (space-separated).</summary>
         public const string Scope = "scope";
+
+        /// <summary>The <c>require_pushed_authorization_requests</c> registered metadata member
+        /// (RFC 9126 §6).</summary>
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>The <c>require_signed_request_object</c> registered metadata member (RFC 9101 §10.5).
+        /// </summary>
         public const string RequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registered metadata member
+        /// (RFC 8705 §3.4).</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
     }
 }

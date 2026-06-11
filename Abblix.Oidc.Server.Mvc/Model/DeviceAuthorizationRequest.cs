@@ -20,77 +20,16 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json.Nodes;
-using Abblix.Oidc.Server.Mvc.Binders;
-using Microsoft.AspNetCore.Mvc;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.Model;
 
 /// <summary>
-/// Represents a device authorization request as defined in RFC 8628.
-/// This request is initiated by a device with limited input capabilities to obtain
-/// a device code and user code for user authentication on a separate device.
+/// The transport-bound counterpart of <see cref="Core.DeviceAuthorizationRequest"/> for the
+/// device authorization endpoint (RFC 8628). All bound properties, model binders resolved from
+/// the core wire-format markers and the projection back onto the core model are generated from
+/// the core type.
 /// </summary>
-public record DeviceAuthorizationRequest
-{
-    /// <summary>
-    /// A space-separated list of scopes requested by the client.
-    /// Scopes define the level of access requested and the types of information
-    /// the client wants to retrieve.
-    /// </summary>
-    [BindProperty(Name = Parameters.Scope)]
-    [ModelBinder(typeof(SpaceSeparatedValuesBinder))]
-    public string[]? Scope { get; init; }
-
-    /// <summary>
-    /// Specifies the resource for which the access token is requested.
-    /// As defined in RFC 8707, this parameter requests access tokens with a specific
-    /// scope for a particular resource.
-    /// </summary>
-    [BindProperty(Name = Parameters.Resource)]
-    public Uri[]? Resources { get; init; }
-
-    /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array. Bound as the raw <see cref="JsonArray"/>
-    /// so member order and type-specific payload survive into the device-flow pipeline
-    /// byte-exact.
-    /// </summary>
-    [BindProperty(Name = Parameters.AuthorizationDetails)]
-    [ModelBinder(typeof(JsonSerializerModelBinder))]
-    public JsonArray? AuthorizationDetails { get; init; }
-
-    /// <summary>
-    /// Maps the properties of this device authorization request to a corresponding
-    /// <see cref="Core.DeviceAuthorizationRequest"/> object for processing in the core layer.
-    /// </summary>
-    /// <returns>
-    /// A <see cref="Core.DeviceAuthorizationRequest"/> object populated with the relevant data.
-    /// </returns>
-    public Core.DeviceAuthorizationRequest Map()
-    {
-        return new Core.DeviceAuthorizationRequest
-        {
-            Scope = Scope,
-            Resources = Resources,
-            AuthorizationDetails = AuthorizationDetails,
-        };
-    }
-
-    /// <summary>
-    /// Wire-level names of the OAuth 2.0 Device Authorization (RFC 8628) request parameters.
-    /// </summary>
-    public static class Parameters
-    {
-        /// <summary>The <c>scope</c> parameter naming the requested scopes.</summary>
-        public const string Scope = "scope";
-
-        /// <summary>The <c>resource</c> parameter naming the resource indicators the client
-        /// wants the issued token to be valid for (RFC 8707).</summary>
-        public const string Resource = "resource";
-
-        /// <summary>The <c>authorization_details</c> parameter (RFC 9396 §3) carrying a JSON
-        /// array of Rich Authorization Requests.</summary>
-        public const string AuthorizationDetails = "authorization_details";
-    }
-}
+[GeneratedFrom(typeof(Core.DeviceAuthorizationRequest))]
+public partial record DeviceAuthorizationRequest;

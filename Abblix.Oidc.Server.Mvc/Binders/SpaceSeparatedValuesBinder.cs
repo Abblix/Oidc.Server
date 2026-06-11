@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
@@ -35,6 +37,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// Other whitespace (tab, newline) is preserved as part of a token, matching the literal
 /// SP delimiter required by the specifications.
 /// </remarks>
+[Binds(typeof(SpaceSeparatedStringAttribute))]
 public class SpaceSeparatedValuesBinder : ModelBinderBase
 {
 	/// <summary>

@@ -20,16 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Attributes;
-using Core = Abblix.Oidc.Server.Model;
-
-namespace Abblix.Oidc.Server.Mvc.Model;
+namespace Abblix.Oidc.Server.DeclarativeValidation;
 
 /// <summary>
-/// The transport-bound counterpart of <see cref="Core.BackChannelAuthenticationRequest"/> for the
-/// CIBA backchannel authentication endpoint. All bound properties, model binders resolved from
-/// the core wire-format markers and the projection back onto the core model are generated from
-/// the core type.
+/// Declares that the value is the parsed HTTP <c>Authorization</c> request header — the scheme and
+/// credentials used by transport-level client authentication such as <c>Basic</c> (RFC 7617) or
+/// <c>Bearer</c> (RFC 6750). Purely semantic: it names the transport source and leaves the parsing
+/// mechanism to the transport layer.
 /// </summary>
-[GeneratedFrom(typeof(Core.BackChannelAuthenticationRequest))]
-public partial record BackChannelAuthenticationRequest;
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
+public class AuthorizationHeaderAttribute : Attribute;

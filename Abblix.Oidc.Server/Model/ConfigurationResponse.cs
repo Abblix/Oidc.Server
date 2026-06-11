@@ -344,7 +344,7 @@ public record ConfigurationResponse
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports session management for front channel logout,
-    /// enabling clients to be notified what user log out.
+    /// enabling clients to identify which user session is being logged out.
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionSupported)]
     public bool? FrontChannelLogoutSessionSupported { init; get; }

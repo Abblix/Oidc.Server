@@ -29,12 +29,6 @@ namespace Abblix.Oidc.Server.Common.Constants;
 public static class ResponseTypes
 {
 	/// <summary>
-	/// Represents the "none" response type, indicating no specific response type is requested.
-	/// This is typically used when the client does not expect a response or when only error handling is needed.
-	/// </summary>
-	public const string None = "none";
-
-	/// <summary>
 	/// Represents the "code" response type, indicating the authorization code response type.
 	/// This is used in the Authorization Code Flow to request an authorization code for later exchange.
 	/// </summary>

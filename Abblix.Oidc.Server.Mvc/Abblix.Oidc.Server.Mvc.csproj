@@ -50,6 +50,10 @@
         <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
         <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+        <!-- Build-time only: generates the MVC binding models from the core request models.
+             Not a runtime dependency, so it stays out of the package dependency graph. -->
+        <ProjectReference Include="..\Abblix.Oidc.Server.Mvc.SourceGeneration\Abblix.Oidc.Server.Mvc.SourceGeneration.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
     <ItemGroup>

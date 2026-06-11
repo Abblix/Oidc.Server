@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
@@ -31,6 +33,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// This model binder is useful for binding API parameters that are provided as seconds in string format,
 /// and need to be converted to a <see cref="TimeSpan"/> for internal processing.
 /// </remarks>
+[Binds(typeof(TotalSecondsAttribute))]
 public class SecondsToTimeSpanModelBinder : ModelBinderBase
 {
     /// <summary>

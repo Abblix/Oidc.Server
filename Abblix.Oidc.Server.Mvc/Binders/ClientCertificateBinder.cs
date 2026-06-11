@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
@@ -32,6 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// When the server is fronted by a reverse proxy that terminates TLS, register
 /// <c>CertificateForwardingMiddleware</c> beforehand so the forwarded header is hydrated into the connection.
 /// </summary>
+[Binds(typeof(ClientCertificateAttribute))]
 public class ClientCertificateBinder : IModelBinder
 {
     /// <summary>

@@ -26,8 +26,9 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Represents a successful backchannel authentication response. This record indicates that the
-/// backchannel authentication request has been successfully processed and the client has been authenticated.
+/// Represents a successful backchannel authentication response (CIBA Core §7.3). This record indicates that
+/// the backchannel authentication request has been accepted and end-user authentication is now pending;
+/// the issued <c>auth_req_id</c> identifies the pending request.
 /// </summary>
 public record BackChannelAuthenticationSuccess
 {
@@ -63,7 +64,7 @@ public record BackChannelAuthenticationSuccess
     public static class Parameters
     {
         /// <summary>The <c>auth_req_id</c> response parameter identifying the backchannel authentication
-        /// request (CIBA Core §10.1.1).</summary>
+        /// request (CIBA Core §7.3).</summary>
         public const string AuthenticationRequestId = "auth_req_id";
 
         /// <summary>The <c>expires_in</c> response parameter giving the lifetime of the request, in

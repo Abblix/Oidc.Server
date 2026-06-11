@@ -33,6 +33,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Core = Abblix.Oidc.Server.Model;
 using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -79,10 +80,9 @@ public class TokenController : ControllerBase
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedTokenRequest = tokenRequest.Map();
-        var mappedClientRequest = clientRequest.Map();
-        var response = await handler.HandleAsync(mappedTokenRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedTokenRequest, response);
+        Core.TokenRequest coreTokenRequest = tokenRequest;
+        var response = await handler.HandleAsync(coreTokenRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 
     /// <summary>
@@ -110,10 +110,9 @@ public class TokenController : ControllerBase
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedRevocationRequest = revocationRequest.Map();
-        var mappedClientRequest = clientRequest.Map();
-        var response = await handler.HandleAsync(mappedRevocationRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedRevocationRequest, response);
+        Core.RevocationRequest coreRevocationRequest = revocationRequest;
+        var response = await handler.HandleAsync(coreRevocationRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
 
     /// <summary>
@@ -143,9 +142,8 @@ public class TokenController : ControllerBase
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)
     {
-        var mappedIntrospectionRequest = introspectionRequest.Map();
-        var mappedClientRequest = clientRequest.Map();
-        var response = await handler.HandleAsync(mappedIntrospectionRequest, mappedClientRequest);
-        return await formatter.FormatResponseAsync(mappedIntrospectionRequest, response);
+        Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
+        var response = await handler.HandleAsync(coreIntrospectionRequest, clientRequest);
+        return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }
 }

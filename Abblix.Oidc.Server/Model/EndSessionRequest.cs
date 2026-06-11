@@ -110,6 +110,7 @@ public record EndSessionRequest
 	/// page should be localized.
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
+	[CultureList]
 	public IEnumerable<CultureInfo>? UiLocales { get; set; }
 
 	/// <summary>
