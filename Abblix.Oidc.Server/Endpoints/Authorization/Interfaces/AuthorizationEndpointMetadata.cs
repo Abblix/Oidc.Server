@@ -86,10 +86,13 @@ public record AuthorizationEndpointMetadata
 
     /// <summary>
     /// The code challenge methods supported for PKCE (Proof Key for Code Exchange).
+    /// Only the methods registered in the IANA "PKCE Code Challenge Methods" registry (plain,
+    /// S256 — verified 2026-06-11) are advertised: announcing an unregistered wire value in
+    /// discovery is a false conformance claim. The S512 transformation itself stays accepted at
+    /// runtime as an undocumented extension, so existing clients using it keep working.
     /// </summary>
     public List<string> CodeChallengeMethodsSupported { get; init; } =
     [
-        CodeChallengeMethods.S512,
         CodeChallengeMethods.S256,
         CodeChallengeMethods.Plain
     ];
