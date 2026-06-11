@@ -355,14 +355,17 @@ public class TokenExchangeGrantHandler(
         }
 
         var allowed = new HashSet<string>(allowlist, StringComparer.Ordinal);
-        foreach (var audience in audiences)
+        var disallowed = audiences
+            .Where(audience => !allowed.Contains(audience))
+            .ToArray();
+
+        if (disallowed.Length > 0)
         {
-            if (!allowed.Contains(audience))
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidTarget,
-                    $"audience '{audience}' is not in the client's allow list.");
-            }
+            // Report every disallowed audience, not just the first: a client fixing its request
+            // should not have to re-submit and rediscover the rejected values one round-trip at a time.
+            return new OidcError(
+                ErrorCodes.InvalidTarget,
+                $"The following audiences are not in the client's allow list: {string.Join(", ", disallowed)}.");
         }
 
         return ctx;
