@@ -43,6 +43,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
 	public string[] Scope { get; init; } = [];
 
 	/// <summary>
@@ -50,6 +51,7 @@ public record AuthorizationRequest
 	/// returned from the UserInfo endpoint.
 	/// </summary>
 	[JsonPropertyName(Parameters.Claims)]
+	[JsonObject]
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
@@ -57,6 +59,7 @@ public record AuthorizationRequest
     /// type-specific payload survive the request → grant → token round-trip without re-serialisation.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
+    [JsonObject]
     public JsonArray? AuthorizationDetails { get; init; }
 
 	/// <summary>
@@ -68,6 +71,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
     [AllowedValues(ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)]
     public string[]? ResponseType { get; init; }
 
@@ -134,6 +138,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.MaxAge)]
 	[JsonConverter(typeof(TimeSpanSecondsConverter))]
+	[TotalSeconds]
     public TimeSpan? MaxAge { get; init; }
 
 	/// <summary>
@@ -142,6 +147,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[CultureList]
     public CultureInfo[]? UiLocales { get; init; }
 
 	/// <summary>
@@ -150,6 +156,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.ClaimsLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[CultureList]
     public CultureInfo[]? ClaimsLocales { get; init; }
 
 	/// <summary>
@@ -172,6 +179,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.AcrValues)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
     public string[]? AcrValues { get; init; }
 
 	/// <summary>
@@ -199,11 +207,14 @@ public record AuthorizationRequest
 	public string? Request { get; init; }
 
 	/// <summary>
-	/// A URL referencing a resource that contains a Request Object, which is a JWT with the authorization request
-	/// parameters as its claims. This URL must use HTTPS.
+	/// A URI referencing the Request Object carrying the authorization request parameters as JWT claims:
+	/// either an HTTPS URL hosted by the client (OpenID Connect Core §6.2) or the
+	/// <c>urn:ietf:params:oauth:request_uri:</c> value issued by the pushed authorization request
+	/// endpoint (RFC 9126 §2.2). Both forms are absolute URIs; scheme-specific rules are enforced
+	/// by the request object fetchers.
 	/// </summary>
 	[JsonPropertyName(Parameters.RequestUri)]
-	[AbsoluteUri(RequireScheme = "https")]
+	[AbsoluteUri]
 	public Uri? RequestUri { get; init; }
 
 	/// <summary>
