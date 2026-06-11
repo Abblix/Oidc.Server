@@ -496,8 +496,9 @@ public class TokenExchangeGrantHandlerTests
         clientInfo.TokenExchangeAllowedAudiences = ["https://api1.example.com"];
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
         {
-            // One allowlisted, one not — the whole request must be rejected.
-            Audiences = ["https://api1.example.com", "https://api2.example.com"],
+            // One allowlisted, two not — the whole request must be rejected and EVERY disallowed
+            // audience reported, so the client can fix them all in one round-trip.
+            Audiences = ["https://api1.example.com", "https://api2.example.com", "https://api3.example.com"],
         };
 
         var result = await handler.AuthorizeAsync(request, clientInfo);
@@ -505,6 +506,8 @@ public class TokenExchangeGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
         Assert.Contains("api2.example.com", error.ErrorDescription);
+        Assert.Contains("api3.example.com", error.ErrorDescription);
+        Assert.DoesNotContain("api1.example.com", error.ErrorDescription);
     }
 
     [Fact]
