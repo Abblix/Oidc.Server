@@ -75,7 +75,12 @@ public class IntrospectionResponseFormatter(
     private async Task<ActionResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
         var introspectionResponse = success.Claims ?? new JsonObject();
-        introspectionResponse.SetProperty("active", success.Active ? "true" : "false");
+
+        // RFC 7662 §2.2: active is the only REQUIRED member and its type is a JSON boolean. Serializing it
+        // as the strings "true"/"false" (as before) broke strict deserializers and, worse, inverted the
+        // semantics for lenient ones: a non-empty string "false" is truthy, so a revoked token could be
+        // treated as active by the resource server.
+        introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
         var clientInfo = success.ClientInfo;
 

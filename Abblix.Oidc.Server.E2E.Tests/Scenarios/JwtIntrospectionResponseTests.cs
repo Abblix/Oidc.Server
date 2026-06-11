@@ -7,6 +7,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 
@@ -46,8 +47,9 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
 
         // The RFC 7662 response is carried under the token_introspection claim and reports the token as active.
+        // RFC 7662 §2.2 types active as a JSON boolean, so the assertion reads it as bool.
         var introspection = payload[IanaClaimTypes.TokenIntrospection]!.AsObject();
-        Assert.Equal("true", introspection["active"]!.GetValue<string>());
+        Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         Assert.NotEqual(IntrospectionJwtMediaType, response.Content.Headers.ContentType?.MediaType);
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
-        Assert.Equal("true", body["active"]!.GetValue<string>());
+        Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
     [Fact]
