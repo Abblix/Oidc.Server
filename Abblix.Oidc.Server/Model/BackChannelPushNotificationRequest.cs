@@ -44,7 +44,7 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
     public required string AccessToken { get; init; }
 
     /// <summary>
-    /// The type of the token (typically "Bearer").
+    /// The type of the token (typically <c>Bearer</c>).
     /// </summary>
     [JsonPropertyName(Parameters.TokenType)]
     public required string TokenType { get; init; }

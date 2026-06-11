@@ -22,6 +22,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -40,6 +41,7 @@ public record DeviceAuthorizationRequest
     /// </summary>
     [JsonPropertyName(Parameters.Scope)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    [SpaceSeparatedString]
     public string[]? Scope { get; init; }
 
     /// <summary>
@@ -58,6 +60,7 @@ public record DeviceAuthorizationRequest
     /// access token issued via the device-code grant byte-exact.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
+    [JsonObject]
     public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>

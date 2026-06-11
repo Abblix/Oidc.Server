@@ -20,16 +20,22 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Attributes;
-using Core = Abblix.Oidc.Server.Model;
-
-namespace Abblix.Oidc.Server.Mvc.Model;
+// ReSharper disable once CheckNamespace
+namespace System;
 
 /// <summary>
-/// The transport-bound counterpart of <see cref="Core.BackChannelAuthenticationRequest"/> for the
-/// CIBA backchannel authentication endpoint. All bound properties, model binders resolved from
-/// the core wire-format markers and the projection back onto the core model are generated from
-/// the core type.
+/// Compiler polyfill enabling list patterns on netstandard2.0, where the runtime does not ship
+/// this type. Mirrors the BCL semantics: a from-end index stores the one's complement of its value.
 /// </summary>
-[GeneratedFrom(typeof(Core.BackChannelAuthenticationRequest))]
-public partial record BackChannelAuthenticationRequest;
+internal readonly struct Index(int value, bool fromEnd = false)
+{
+	private readonly int value = fromEnd ? ~value : value;
+
+	public int Value => value < 0 ? ~value : value;
+
+	public bool IsFromEnd => value < 0;
+
+	public int GetOffset(int length) => IsFromEnd ? length + value + 1 : value;
+
+	public static implicit operator Index(int value) => new(value);
+}

@@ -20,16 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Mvc.Attributes;
-using Core = Abblix.Oidc.Server.Model;
-
-namespace Abblix.Oidc.Server.Mvc.Model;
+namespace Abblix.Oidc.Server.DeclarativeValidation;
 
 /// <summary>
-/// The transport-bound counterpart of <see cref="Core.BackChannelAuthenticationRequest"/> for the
-/// CIBA backchannel authentication endpoint. All bound properties, model binders resolved from
-/// the core wire-format markers and the projection back onto the core model are generated from
-/// the core type.
+/// Declares that the value travels on the wire as a JSON document carried inside a single parameter —
+/// e.g. the OIDC <c>claims</c> parameter or RFC 9396 <c>authorization_details</c>. Purely semantic:
+/// it names the wire format and leaves the parsing mechanism to the transport layer.
 /// </summary>
-[GeneratedFrom(typeof(Core.BackChannelAuthenticationRequest))]
-public partial record BackChannelAuthenticationRequest;
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
+public class JsonObjectAttribute : Attribute;

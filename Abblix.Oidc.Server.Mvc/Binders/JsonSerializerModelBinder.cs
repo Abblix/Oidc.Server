@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using System.Text.Json;
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
@@ -35,6 +37,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// complex objects. This binder can be applied to various types of data sources such as
 /// query strings, form data, or headers, allowing for flexible data binding from JSON content.
 /// </remarks>
+[Binds(typeof(JsonObjectAttribute))]
 public class JsonSerializerModelBinder : ModelBinderBase
 {
     /// <summary>

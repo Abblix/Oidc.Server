@@ -29,13 +29,28 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record Address
 {
+    /// <summary>
+    /// Wire-level member names of the <c>address</c> claim (OIDC Core §5.1.1).
+    /// </summary>
     private static class Parameters
     {
+        /// <summary>The <c>formatted</c> member carrying the full mailing address.</summary>
         public const string Formatted = "formatted";
+
+        /// <summary>The <c>street_address</c> member carrying the full street address component.</summary>
         public const string StreetAddress = "street_address";
+
+        /// <summary>The <c>locality</c> member carrying the city or locality component.</summary>
         public const string Locality = "locality";
+
+        /// <summary>The <c>region</c> member carrying the state, province, prefecture, or region component.
+        /// </summary>
         public const string Region = "region";
+
+        /// <summary>The <c>postal_code</c> member carrying the zip or postal code component.</summary>
         public const string PostalCode = "postal_code";
+
+        /// <summary>The <c>country</c> member carrying the country name component.</summary>
         public const string Country = "country";
     }
 

@@ -22,6 +22,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.DeclarativeValidation;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -41,6 +42,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [JsonPropertyName(Parameters.Scope)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    [SpaceSeparatedString]
     public string[] Scope { get; init; } = [];
 
     /// <summary>
@@ -57,6 +59,7 @@ public record BackChannelAuthenticationRequest
     /// such as multifactor authentication or biometric verification.
     /// </summary>
     [JsonPropertyName(Parameters.AcrValues)]
+    [SpaceSeparatedString]
     public string[]? AcrValues { get; init; }
 
     /// <summary>
@@ -103,6 +106,7 @@ public record BackChannelAuthenticationRequest
     /// </summary>
     [JsonPropertyName(Parameters.RequestedExpiry)]
     [JsonConverter(typeof(TimeSpanSecondsConverter))]
+    [TotalSeconds]
     public TimeSpan? RequestedExpiry { get; init; }
 
     /// <summary>
@@ -129,6 +133,7 @@ public record BackChannelAuthenticationRequest
     /// returned from the UserInfo endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.Claims)]
+    [JsonObject]
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
@@ -138,6 +143,7 @@ public record BackChannelAuthenticationRequest
     /// CIBA grant byte-exact (member order and type-specific payload preserved).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
+    [JsonObject]
     public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>

@@ -1,66 +1,34 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Mvc;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Core = Abblix.Oidc.Server.Model;
-using Parameters = Abblix.Oidc.Server.Model.RevocationRequest.Parameters;
-
 
 namespace Abblix.Oidc.Server.Mvc.Model;
 
 /// <summary>
-/// Represents a request for token revocation.
-/// This record is used to invalidate a token, making it no longer usable for authorization purposes.
+/// The transport-bound counterpart of <see cref="Core.RevocationRequest"/> for the token
+/// revocation endpoint (RFC 7009). All bound properties, validation attributes and the
+/// projection back onto the core model are generated from the core type.
 /// </summary>
-public record RevocationRequest
-{
-	/// <summary>
-	/// The token that the client wants to revoke.
-	/// This is the actual string value of the token which is intended to be invalidated and discontinued for further use.
-	/// </summary>
-	[BindProperty(Name = Parameters.Token)]
-	[Required]
-	public string Token { get; set; } = null!;
-
-	/// <summary>
-	/// A hint about the type of the token submitted for revocation.
-	/// Providing this information can help the revocation endpoint handle the token more efficiently.
-	/// If omitted, the server may assume a default token type.
-	/// </summary>
-	[BindProperty(Name = Parameters.TokenTypeHint)]
-	public string? TokenTypeHint { get; set; }
-
-	/// <summary>
-	/// Maps the properties of this revocation request to a <see cref="Core.RevocationRequest"/> object.
-	/// This method is used to translate the request data into a format that can be processed by the core logic of the server.
-	/// </summary>
-	/// <returns>A <see cref="Core.RevocationRequest"/> object populated with data from this request.</returns>
-	public Core.RevocationRequest Map()
-	{
-		return new Core.RevocationRequest
-		{
-			Token = Token,
-			TokenTypeHint = TokenTypeHint,
-		};
-	}
-}
+[GeneratedFrom(typeof(Core.RevocationRequest))]
+public partial record RevocationRequest;

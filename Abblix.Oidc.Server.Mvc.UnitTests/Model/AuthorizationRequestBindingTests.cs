@@ -23,6 +23,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Mvc.Model;
+using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Model;
 
@@ -30,30 +31,30 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Model;
 /// Covers the MVC binding edge for RFC 9396 authorization_details on the
 /// /authorize + /par endpoints (both routes share this single MVC model):
 /// the binder must surface the raw JsonArray onto the model and the
-/// Map() projection must hand it through to the core pipeline byte-exact.
+/// implicit projection must hand it through to the core pipeline byte-exact.
 /// </summary>
 public class AuthorizationRequestBindingTests
 {
     [Fact]
-    public void Map_PropagatesAuthorizationDetails_ByteExact()
+    public void ImplicitProjection_PropagatesAuthorizationDetails_ByteExact()
     {
         const string wireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var bound = (JsonArray)JsonNode.Parse(wireJson)!;
         var mvcModel = new AuthorizationRequest { AuthorizationDetails = bound };
 
-        var core = mvcModel.Map();
+        Core.AuthorizationRequest core = mvcModel;
 
         Assert.NotNull(core.AuthorizationDetails);
         Assert.Equal(wireJson, core.AuthorizationDetails!.ToJsonString());
     }
 
     [Fact]
-    public void Map_NullAuthorizationDetails_StaysNullOnCoreModel()
+    public void ImplicitProjection_NullAuthorizationDetails_StaysNullOnCoreModel()
     {
         var mvcModel = new AuthorizationRequest();
 
-        var core = mvcModel.Map();
+        Core.AuthorizationRequest core = mvcModel;
 
         Assert.Null(core.AuthorizationDetails);
     }

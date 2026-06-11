@@ -23,6 +23,8 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.DeclarativeValidation;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -61,6 +63,7 @@ public record ClientRequest
 	/// authentication schemes such as <c>Basic</c> (client_secret_basic) or <c>Bearer</c>. Not serialized.
 	/// </summary>
 	[JsonIgnore]
+	[AuthorizationHeader]
 	public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
 
 	/// <summary>
@@ -96,6 +99,8 @@ public record ClientRequest
     /// or forwarded by a trusted reverse proxy. Used for RFC 8705 client authentication and
     /// for certificate-bound access tokens.
     /// </summary>
+    [JsonIgnore]
+    [ClientCertificate]
     public X509Certificate2? ClientCertificate { get; set; }
 
     /// <summary>
@@ -106,5 +111,6 @@ public record ClientRequest
     /// proof was presented.
     /// </summary>
     [JsonIgnore]
+    [RequestHeader(HttpRequestHeaders.DPoP)]
     public string? DPoPProof { get; set; }
 }

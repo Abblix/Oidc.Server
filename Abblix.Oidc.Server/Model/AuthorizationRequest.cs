@@ -43,6 +43,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Scope)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
 	public string[] Scope { get; init; } = [];
 
 	/// <summary>
@@ -50,6 +51,7 @@ public record AuthorizationRequest
 	/// returned from the UserInfo endpoint.
 	/// </summary>
 	[JsonPropertyName(Parameters.Claims)]
+	[JsonObject]
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
@@ -57,6 +59,7 @@ public record AuthorizationRequest
     /// type-specific payload survive the request → grant → token round-trip without re-serialisation.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
+    [JsonObject]
     public JsonArray? AuthorizationDetails { get; init; }
 
 	/// <summary>
@@ -66,15 +69,25 @@ public record AuthorizationRequest
 	/// <c>id_token</c> for the hybrid/implicit ID token.
 	/// Multiple values are space-separated and represented here as an array.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: authorization response processors
+	/// are registered per flow (the implicit flow is off by default), and the flow validator rejects
+	/// an unsupported part with the protocol-level unsupported response type error.
+	/// </remarks>
 	[JsonPropertyName(Parameters.ResponseType)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
-    [AllowedValues(ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken)]
+	[SpaceSeparatedString]
     public string[]? ResponseType { get; init; }
 
 	/// <summary>
 	/// The OAuth 2.0 <c>client_id</c> identifying the relying party that issued the request,
 	/// per RFC 6749 §4.1.1. Required for any conformant authorization request.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not marked as required at the model level: a missing client identifier must
+	/// surface as the protocol-level invalid request error produced by the core validation
+	/// pipeline, not as a transport-level model-binding failure.
+	/// </remarks>
 	[JsonPropertyName(Parameters.ClientId)]
 	public string? ClientId { get; init; }
 
@@ -134,6 +147,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.MaxAge)]
 	[JsonConverter(typeof(TimeSpanSecondsConverter))]
+	[TotalSeconds]
     public TimeSpan? MaxAge { get; init; }
 
 	/// <summary>
@@ -142,6 +156,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[CultureList]
     public CultureInfo[]? UiLocales { get; init; }
 
 	/// <summary>
@@ -150,6 +165,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.ClaimsLocales)]
 	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[CultureList]
     public CultureInfo[]? ClaimsLocales { get; init; }
 
 	/// <summary>
@@ -172,6 +188,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.AcrValues)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
     public string[]? AcrValues { get; init; }
 
 	/// <summary>
@@ -199,11 +216,14 @@ public record AuthorizationRequest
 	public string? Request { get; init; }
 
 	/// <summary>
-	/// A URL referencing a resource that contains a Request Object, which is a JWT with the authorization request
-	/// parameters as its claims. This URL must use HTTPS.
+	/// A URI referencing the Request Object carrying the authorization request parameters as JWT claims:
+	/// either an HTTPS URL hosted by the client (OpenID Connect Core §6.2) or the
+	/// <c>urn:ietf:params:oauth:request_uri:</c> value issued by the pushed authorization request
+	/// endpoint (RFC 9126 §2.2). Both forms are absolute URIs; scheme-specific rules are enforced
+	/// by the request object fetchers.
 	/// </summary>
 	[JsonPropertyName(Parameters.RequestUri)]
-	[AbsoluteUri(RequireScheme = "https")]
+	[AbsoluteUri]
 	public Uri? RequestUri { get; init; }
 
 	/// <summary>

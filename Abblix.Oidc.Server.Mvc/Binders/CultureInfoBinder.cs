@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using System.Globalization;
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
 
@@ -33,6 +35,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// This binder is capable of handling culture-specific data by converting string values into <see cref="CultureInfo"/> objects.
 /// It supports binding single <see cref="CultureInfo"/> objects, arrays, and lists of <see cref="CultureInfo"/>.
 /// </remarks>
+[Binds(typeof(CultureListAttribute))]
 public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
 {
     /// <summary>

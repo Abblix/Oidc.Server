@@ -44,7 +44,7 @@ public record BackChannelTokenPushRequest
     public required string AccessToken { get; init; }
 
     /// <summary>
-    /// The type of the token issued (typically "Bearer").
+    /// The type of the token issued (typically <c>Bearer</c>).
     /// </summary>
     [JsonPropertyName(Parameters.TokenType)]
     public required string TokenType { get; init; }
@@ -71,38 +71,32 @@ public record BackChannelTokenPushRequest
     public string? RefreshToken { get; init; }
 
     /// <summary>
-    /// Contains JSON property names for CIBA push mode token delivery.
+    /// Wire-level parameter names for the CIBA push-mode token delivery payload
+    /// (OpenID Connect CIBA Core 1.0 §10.3.1).
     /// </summary>
     public static class Parameters
     {
-        /// <summary>
-        /// The authentication request identifier.
+        /// <summary>The <c>auth_req_id</c> push payload parameter identifying the original CIBA request.
         /// </summary>
         public const string AuthReqId = "auth_req_id";
 
-        /// <summary>
-        /// The access token.
+        /// <summary>The <c>access_token</c> push payload parameter carrying the issued access token.
         /// </summary>
         public const string AccessToken = "access_token";
 
-        /// <summary>
-        /// The token type.
-        /// </summary>
+        /// <summary>The <c>token_type</c> push payload parameter naming the access token type
+        /// (typically <c>Bearer</c>).</summary>
         public const string TokenType = "token_type";
 
-        /// <summary>
-        /// The token expiration time in seconds.
-        /// </summary>
+        /// <summary>The <c>expires_in</c> push payload parameter giving the access token lifetime in
+        /// seconds.</summary>
         public const string ExpiresIn = "expires_in";
 
-        /// <summary>
-        /// The ID token.
-        /// </summary>
+        /// <summary>The <c>id_token</c> push payload parameter carrying the issued ID Token.</summary>
         public const string IdToken = "id_token";
 
-        /// <summary>
-        /// The refresh token.
-        /// </summary>
+        /// <summary>The <c>refresh_token</c> push payload parameter carrying the issued refresh token,
+        /// when one was issued.</summary>
         public const string RefreshToken = "refresh_token";
     }
 }

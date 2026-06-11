@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// Represents a successful device authorization response as defined in RFC 8628.
-/// This response contains the device code and user code that the device displays
-/// to the user for authentication on a separate device.
+/// This response contains the device code the client uses to poll the token endpoint
+/// and the user code the device displays to the user for entry on a separate device.
 /// </summary>
 public record DeviceAuthorizationResponse
 {
@@ -47,7 +47,7 @@ public record DeviceAuthorizationResponse
     public required string UserCode { get; init; }
 
     /// <summary>
-    /// The lifetime of the device_code and user_code.
+    /// The lifetime of the <c>device_code</c> and <c>user_code</c>.
     /// After this duration, the codes expire and the client must start a new request.
     /// </summary>
     [JsonPropertyName(Parameters.ExpiresIn)]

@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using System.Net.Http.Headers;
+using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
@@ -34,6 +36,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// This binder is specifically designed to extract and bind authentication header values from HTTP requests.
 /// It extends the functionality of <see cref="ModelBinderBase"/> to handle authentication headers.
 /// </remarks>
+[Binds(typeof(AuthorizationHeaderAttribute))]
 public class AuthenticationHeaderBinder : ModelBinderBase
 {
     /// <summary>
