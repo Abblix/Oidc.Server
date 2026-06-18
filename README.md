@@ -36,6 +36,7 @@
 - [About](#-about)
 - [What's New](#-whats-new)
 - [Certification](#-certification)
+- [How to Install](#-how-to-install)
 - [How to Build](#-how-to-build)
 - [Documentation](#-documentation)
 - [Feedback and Contributions](#-feedback-and-contributions)
@@ -121,6 +122,16 @@ For convenience, the certification information is provided in the tables below:
 |Back-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=5kbQfVOWmJV76) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=VWmk225h0coIZ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=YzDOT2LFWi4X7) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RxPPCdLI7LlcR) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=x73qpcrHcFWv0) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=uYoYs5BFAZkgr)|12|
 |**Total**||**102**|
 
+## 📦 How to Install
+
+Add the package to your ASP.NET Core project from NuGet:
+
+```shell
+dotnet add package Abblix.OIDC.Server.MVC
+```
+
+This integrates the server into standard ASP.NET Core MVC controllers and routing, and pulls in the core `Abblix.OIDC.Server` package as a dependency. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+
 ## 📝 How to Build
 
 To build the packages, follow these steps:
@@ -169,7 +180,7 @@ We appreciate your support and look forward to making our product even better wi
 
 ## 📃 License
 
-This product is distributed under a proprietary license. See📋[License Agreement](LICENSE.md) for details.
+This product is distributed under a source-available proprietary license. See 📋[License Agreement](LICENSE.md) for details.
 
 For non-commercial use, this product is available for free.
 
