@@ -37,7 +37,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         response.EnsureSuccessStatusCode();
         Assert.Equal(IntrospectionJwtMediaType, response.Content.Headers.ContentType?.MediaType);
 
-        var jwt = await response.Content.ReadAsStringAsync();
+        var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var payload = DecodeJwtPayload(jwt);
 
         // RFC 9701 §5: addressed to the client and issued by the AS.
@@ -67,7 +67,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         response.EnsureSuccessStatusCode();
         Assert.NotEqual(IntrospectionJwtMediaType, response.Content.Headers.ContentType?.MediaType);
 
-        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
@@ -81,7 +81,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported!);
     }
 
-    private async Task<(string ClientId, string ClientSecret, string AccessToken)> RegisterClientAndGetAccessTokenAsync(
+    private static async Task<(string ClientId, string ClientSecret, string AccessToken)> RegisterClientAndGetAccessTokenAsync(
         HttpClient httpClient,
         DiscoveryDocument discovery,
         string introspectionSignedResponseAlg)

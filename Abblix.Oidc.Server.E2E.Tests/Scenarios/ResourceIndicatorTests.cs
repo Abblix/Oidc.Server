@@ -75,7 +75,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
             [TokenRequest.Parameters.Resource] = "https://unregistered.example.com/api",
         });
 
-        var raw = await response.Content.ReadAsStringAsync();
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.False(response.IsSuccessStatusCode,
             $"Expected invalid_target rejection, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();

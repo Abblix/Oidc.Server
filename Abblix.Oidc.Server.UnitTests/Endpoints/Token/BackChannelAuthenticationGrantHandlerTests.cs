@@ -390,9 +390,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
-        // Assert
+        // Assert: the missing required auth_req_id is rejected by the parameter validator.
+        Assert.True(result.TryGetFailure(out _));
     }
 
     /// <summary>

@@ -76,7 +76,7 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
-        Assert.Equal(["openid"], ctx.Scope);
+        Assert.Equal(["openid"], ctx.Scope!);
     }
 
     [Fact]
