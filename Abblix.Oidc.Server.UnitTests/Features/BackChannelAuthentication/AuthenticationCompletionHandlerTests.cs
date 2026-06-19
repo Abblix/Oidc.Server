@@ -54,17 +54,16 @@ public class AuthenticationCompletionHandlerTests
     private readonly Mock<IBackChannelRequestStorage> _storage = new(MockBehavior.Strict);
     private readonly Mock<INotificationDeliveryService> _notificationService = new(MockBehavior.Strict);
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
-    private readonly Mock<ILogger<AuthenticationCompletionHandler>> _logger = new(MockBehavior.Loose);
     private readonly TimeSpan _expiresIn = TimeSpan.FromMinutes(5);
 
     private PollModeCompletionHandler CreatePollModeHandler() =>
-        new(_logger.Object, _storage.Object, null);
+        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, null);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
-        new(_logger.Object, _storage.Object, _notificationService.Object);
+        new(Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, _notificationService.Object);
 
     private PushModeCompletionHandler CreatePushModeHandler() =>
-        new(_logger.Object, _storage.Object, _notificationService.Object, _tokenRequestProcessor.Object);
+        new(Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, _notificationService.Object, _tokenRequestProcessor.Object);
 
     /// <summary>
     /// Verifies that when a ping mode request is completed, both storage update
