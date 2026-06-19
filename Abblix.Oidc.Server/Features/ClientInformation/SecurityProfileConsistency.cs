@@ -64,9 +64,7 @@ public static class SecurityProfileConsistency
                 "but the client does not allow it");
         }
 
-        var allowsImplicitOrHybrid = allowedResponseTypes.Any(
-            responseType => responseType.ReturnsTokenFromAuthorizationEndpoint());
-        if (allowsImplicitOrHybrid)
+        if (allowedResponseTypes.Any(responseType => responseType.ReturnsTokenFromAuthorization()))
         {
             violations.Add(
                 "the FAPI 2.0 Security Profile forbids implicit and hybrid response types, " +

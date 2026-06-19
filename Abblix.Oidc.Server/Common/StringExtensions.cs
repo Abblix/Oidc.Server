@@ -40,16 +40,6 @@ internal static class StringExtensions
 		=> values != null && values.Contains(flag, StringComparer.OrdinalIgnoreCase);
 
 	/// <summary>
-	/// Determines whether a <c>response_type</c> combination returns a token directly from the
-	/// authorization endpoint — that is, whether it contains the <c>token</c> or <c>id_token</c> part
-	/// and is therefore an implicit or hybrid flow rather than the plain authorization code flow. The
-	/// single definition of "token-bearing response type" used by both the flow-type validator and
-	/// the security-profile consistency check.
-	/// </summary>
-	public static bool ReturnsTokenFromAuthorizationEndpoint(this string[]? responseType)
-		=> responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
-
-	/// <summary>
 	/// Attempts to parse a string into an array of allowed values using a separator.
 	/// </summary>
 	/// <param name="source">The source string to parse.</param>
@@ -57,7 +47,11 @@ internal static class StringExtensions
 	/// <param name="separator">The character separator.</param>
 	/// <param name="values">The parsed values if successful; otherwise, null.</param>
 	/// <returns>True if parsing is successful; otherwise, false.</returns>
-	public static bool TryParse(this string source, string[] allowedValues, char separator, [NotNullWhen(true)] out string[]? values)
+	public static bool TryParse(
+		this string source,
+		string[] allowedValues,
+		char separator,
+		[NotNullWhen(true)] out string[]? values)
 	{
 		if (string.IsNullOrEmpty(source))
 		{

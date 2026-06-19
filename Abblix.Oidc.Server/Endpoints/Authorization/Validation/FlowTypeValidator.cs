@@ -81,7 +81,7 @@ public partial class FlowTypeValidator(
         // server-support gate so a profiled client gets the profile-specific reason even on a server
         // where Implicit Flow is enabled for other clients.
         var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
-        if (profile.RequireCodeResponseTypeOnly && responseType.ReturnsTokenFromAuthorizationEndpoint())
+        if (profile.RequireCodeResponseTypeOnly && responseType.ReturnsTokenFromAuthorization())
         {
             LogResponseTypeNotAllowed(responseType);
             return Error(
@@ -129,7 +129,7 @@ public partial class FlowTypeValidator(
             // returned in the fragment as well. The previous unconditional query default delivered
             // the error to a channel the client never reads and exposed it to the server hosting
             // the redirect URI via the query string.
-            var defaultResponseMode = responseType.ReturnsTokenFromAuthorizationEndpoint()
+            var defaultResponseMode = responseType.ReturnsTokenFromAuthorization()
                 ? ResponseModes.Fragment
                 : ResponseModes.Query;
 
@@ -177,7 +177,7 @@ public partial class FlowTypeValidator(
         out string responseMode)
     {
         var code = responseType.HasFlag(ResponseTypes.Code);
-        var token = responseType.ReturnsTokenFromAuthorizationEndpoint();
+        var token = responseType.ReturnsTokenFromAuthorization();
 
         (var result, flowType, responseMode) = (code, token) switch
         {
