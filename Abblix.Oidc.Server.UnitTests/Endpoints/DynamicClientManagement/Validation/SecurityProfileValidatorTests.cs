@@ -32,9 +32,10 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Unit tests for <see cref="SecurityProfileValidator"/> verifying the fail-loud rejection of a
-/// registration whose response types cannot satisfy its effective FAPI 2.0 profile, and the no-op
-/// behaviour when no profile applies.
+/// Unit tests for <see cref="SecurityProfileValidator"/>. A dynamically registered client cannot
+/// declare a profile (that is a server-side policy decision), so the validator rejects a registration
+/// whose response types cannot satisfy the server-wide <c>DefaultSecurityProfile</c>, and is a no-op
+/// when no server-wide profile applies.
 /// </summary>
 public class SecurityProfileValidatorTests
 {
@@ -42,71 +43,23 @@ public class SecurityProfileValidatorTests
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
         => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
 
-    private static ClientRegistrationValidationContext CreateContext(
-        string[][] responseTypes,
-        string? securityProfile = null)
+    private static ClientRegistrationValidationContext CreateContext(string[][] responseTypes)
     {
         var request = new ClientRegistrationRequest
         {
             RedirectUris = [TestConstants.DefaultRedirectUri],
             ResponseTypes = responseTypes,
-            SecurityProfile = securityProfile,
         };
 
         return new ClientRegistrationValidationContext(request);
     }
 
     /// <summary>
-    /// A FAPI 2.0 registration limited to the authorization-code response type is self-consistent.
+    /// With no server-wide profile the validator is a no-op: an implicit-only registration passes this
+    /// step (the response-type/grant-type consistency is enforced by other validators).
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_Fapi2CodeOnly_ShouldReturnNull()
-    {
-        var context = CreateContext([[ResponseTypes.Code]], ClientSecurityProfiles.Fapi2);
-
-        var result = await CreateValidator().ValidateAsync(context);
-
-        Assert.Null(result);
-    }
-
-    /// <summary>
-    /// A FAPI 2.0 registration that requests an implicit response type and never permits code is
-    /// rejected with invalid_client_metadata.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_Fapi2ImplicitOnly_ShouldReturnError()
-    {
-        var context = CreateContext([[ResponseTypes.IdToken]], ClientSecurityProfiles.Fapi2);
-
-        var result = await CreateValidator().ValidateAsync(context);
-
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-    }
-
-    /// <summary>
-    /// A FAPI 2.0 registration that allows code but also a hybrid response type is rejected: the
-    /// hybrid type can never be used under the profile.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_Fapi2CodePlusHybrid_ShouldReturnError()
-    {
-        var context = CreateContext(
-            [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
-            ClientSecurityProfiles.Fapi2);
-
-        var result = await CreateValidator().ValidateAsync(context);
-
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-    }
-
-    /// <summary>
-    /// Without a profile the validator is a no-op: an implicit-only registration passes this step
-    /// (the response-type/grant-type consistency is enforced by other validators).
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_NoProfileImplicitOnly_ShouldReturnNull()
+    public async Task ValidateAsync_NoServerProfileImplicitOnly_ShouldReturnNull()
     {
         var context = CreateContext([[ResponseTypes.IdToken]]);
 
@@ -116,11 +69,25 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
-    /// A registration that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0,
-    /// so an implicit-only response type is rejected.
+    /// Under a server-wide FAPI 2.0 default, a registration limited to the authorization-code response
+    /// type is self-consistent.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_GlobalDefaultFapi2ImplicitOnly_ShouldReturnError()
+    public async Task ValidateAsync_ServerDefaultFapi2CodeOnly_ShouldReturnNull()
+    {
+        var context = CreateContext([[ResponseTypes.Code]]);
+
+        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Under a server-wide FAPI 2.0 default, a registration that requests an implicit response type and
+    /// never permits code is rejected with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ServerDefaultFapi2ImplicitOnly_ShouldReturnError()
     {
         var context = CreateContext([[ResponseTypes.IdToken]]);
 
@@ -131,16 +98,17 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
-    /// A registration that explicitly selects <c>none</c> opts out of a server-wide FAPI 2.0 default,
-    /// so an implicit-only response type is accepted.
+    /// Under a server-wide FAPI 2.0 default, a registration that allows code but also a hybrid response
+    /// type is rejected: the hybrid type can never be used under the profile.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_ShouldReturnNull()
+    public async Task ValidateAsync_ServerDefaultFapi2CodePlusHybrid_ShouldReturnError()
     {
-        var context = CreateContext([[ResponseTypes.IdToken]], ClientSecurityProfiles.None);
+        var context = CreateContext([[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]]);
 
         var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 }

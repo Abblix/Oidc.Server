@@ -503,18 +503,6 @@ public record ClientRegistrationRequest
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// The <c>security_profile</c> client metadata (Abblix extension, no registered RFC parameter):
-    /// the named security profile the client is held to. <c>fapi2</c> forces the FAPI 2.0 control
-    /// bundle (PKCE restricted to <c>S256</c>, Pushed Authorization Requests, sender-constrained
-    /// tokens, code-only responses); <c>none</c> (the default) leaves the client governed by its
-    /// individual metadata flags. Maps to
-    /// <see cref="Features.ClientInformation.ClientInfo.SecurityProfile"/>.
-    /// </summary>
-    [JsonPropertyName(Parameters.SecurityProfile)]
-    [AllowedValues(ClientSecurityProfiles.None, ClientSecurityProfiles.Fapi2)]
-    public string? SecurityProfile { get; init; }
-
-    /// <summary>
     /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1: the per-client
     /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
     /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
@@ -849,10 +837,6 @@ public record ClientRegistrationRequest
         /// (RFC 8705 §3.4) requesting certificate-bound access tokens independently of the
         /// authentication method.</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
-
-        /// <summary>The <c>security_profile</c> registration parameter (Abblix extension): the named
-        /// security profile bundle the client is held to (for example <c>fapi2</c>).</summary>
-        public const string SecurityProfile = "security_profile";
 
         /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §5.1):
         /// per-client allowlist of authorization-detail <c>type</c> values this client may use in

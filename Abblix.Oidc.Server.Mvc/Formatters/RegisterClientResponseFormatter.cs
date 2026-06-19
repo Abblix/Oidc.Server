@@ -117,8 +117,6 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             RequirePushedAuthorizationRequests = success.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = success.RequireSignedRequestObject,
             TlsClientCertificateBoundAccessTokens = success.TlsClientCertificateBoundAccessTokens,
-            // Abblix extension: security_profile echo.
-            SecurityProfile = success.SecurityProfile,
             // RFC 9396 §5.1: authorization_details_types echo.
             AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
             // Non-standard extension: token_exchange_subject_token_types echo.
