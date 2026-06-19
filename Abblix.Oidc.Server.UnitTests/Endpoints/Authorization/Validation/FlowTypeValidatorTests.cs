@@ -22,7 +22,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -30,7 +29,6 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -58,10 +56,8 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors, NoProfileOptions());
+        _validator = new FlowTypeValidator(logger.Object, processors);
     }
-
-    private static IOptions<OidcOptions> NoProfileOptions() => Options.Create(new OidcOptions());
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -405,7 +401,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
@@ -439,7 +435,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
@@ -586,7 +582,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);

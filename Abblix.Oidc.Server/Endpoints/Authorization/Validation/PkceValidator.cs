@@ -20,12 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
-using Microsoft.Extensions.Options;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -36,9 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
-/// <param name="options">Provides the server-wide default security profile, which tightens PKCE
-/// enforcement (mandatory PKCE, S256-only) when a client falls under a profile.</param>
-public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
+public class PkceValidator : SyncAuthorizationContextValidatorBase
 {
 	/// <summary>
 	/// Validates the PKCE-related parameters in the authorization request against the client's
@@ -52,7 +48,7 @@ public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationCon
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
-		var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
+		var profile = SecurityProfileRequirements.For(context.ClientInfo);
 
 		if (context.Request.CodeChallenge.HasValue())
 		{

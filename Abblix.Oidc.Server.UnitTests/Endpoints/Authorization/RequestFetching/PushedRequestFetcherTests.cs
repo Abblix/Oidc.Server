@@ -44,18 +44,12 @@ public class PushedRequestFetcherTests
     private readonly Mock<IAuthorizationRequestStorage> _storage = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
 
-    private PushedRequestFetcher CreateFetcher(
-        bool serverWideRequirement = false,
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
+    private PushedRequestFetcher CreateFetcher(bool serverWideRequirement = false)
     {
         var snapshot = new Mock<IOptionsSnapshot<OidcOptions>>();
         snapshot
             .Setup(s => s.Value)
-            .Returns(new OidcOptions
-            {
-                RequirePushedAuthorizationRequests = serverWideRequirement,
-                DefaultSecurityProfile = defaultSecurityProfile,
-            });
+            .Returns(new OidcOptions { RequirePushedAuthorizationRequests = serverWideRequirement });
 
         return new PushedRequestFetcher(snapshot.Object, _storage.Object, _clientInfoProvider.Object);
     }
@@ -127,24 +121,6 @@ public class PushedRequestFetcherTests
             });
 
         var result = await CreateFetcher().FetchAsync(CreateRequest());
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
-    }
-
-    /// <summary>
-    /// The server-wide DefaultSecurityProfile=FAPI 2.0 imposes PAR on an unprofiled client that does
-    /// not set the per-client flag.
-    /// </summary>
-    [Fact]
-    public async Task FetchAsync_GlobalDefaultFapi2_ImposesPushedRequestOnUnprofiledClient()
-    {
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
-            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
-
-        var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2)
-            .FetchAsync(CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);

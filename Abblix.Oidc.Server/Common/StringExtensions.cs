@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Constants;
 
 namespace Abblix.Oidc.Server.Common;
 
@@ -37,6 +38,16 @@ internal static class StringExtensions
 	/// <returns>True, if the flag is found, otherwise, false.</returns>
 	public static bool HasFlag(this string[]? values, string flag)
 		=> values != null && values.Contains(flag, StringComparer.OrdinalIgnoreCase);
+
+	/// <summary>
+	/// Determines whether a <c>response_type</c> combination returns a token directly from the
+	/// authorization endpoint — that is, whether it contains the <c>token</c> or <c>id_token</c> part
+	/// and is therefore an implicit or hybrid flow rather than the plain authorization code flow. The
+	/// single definition of "token-bearing response type" used by both the flow-type validator and
+	/// the security-profile consistency check.
+	/// </summary>
+	public static bool ReturnsTokenFromAuthorizationEndpoint(this string[]? responseType)
+		=> responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
 
 	/// <summary>
 	/// Attempts to parse a string into an array of allowed values using a separator.

@@ -35,12 +35,18 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// tightens a client and cannot weaken it, which is the invariant that lets a granular toggle (for
 /// example <see cref="ClientInfo.PkceRequired"/> set to <c>false</c>) coexist with a profile without
 /// silently downgrading it.
+///
+/// Every flag below names the validator that enforces it. That coupling is documented here on
+/// purpose: the enforcement is distributed across the request pipeline, so a new flag added to a
+/// profile without a matching consumer would ship silently unenforced. When adding a flag, wire a
+/// validator that reads it and a test that proves the control fires.
 /// </remarks>
 public sealed record SecurityProfileRequirements
 {
     /// <summary>
     /// The profile mandates PKCE on every authorization request, even when the client's own
-    /// <see cref="ClientInfo.PkceRequired"/> is <c>false</c>.
+    /// <see cref="ClientInfo.PkceRequired"/> is <c>false</c>. Enforced by
+    /// <c>Endpoints.Authorization.Validation.PkceValidator</c>.
     /// </summary>
     public bool RequirePkce { get; init; }
 
@@ -48,7 +54,8 @@ public sealed record SecurityProfileRequirements
     /// The profile restricts the PKCE code challenge method to exactly <c>S256</c>, rejecting both
     /// <c>plain</c> and the non-standard <c>S512</c> extension. FAPI 2.0 names <c>S256</c>, and the
     /// IANA "PKCE Code Challenge Methods" registry defines only <c>plain</c> and <c>S256</c>, so a
-    /// conformance suite never presents <c>S512</c>.
+    /// conformance suite never presents <c>S512</c>. Enforced by
+    /// <c>Endpoints.Authorization.Validation.PkceValidator</c>.
     /// </summary>
     public bool RequireS256CodeChallenge { get; init; }
 
@@ -56,18 +63,22 @@ public sealed record SecurityProfileRequirements
     /// The profile requires the client to start every authorization flow through a Pushed
     /// Authorization Request, independent of the server-wide
     /// <see cref="Common.Configuration.OidcOptions.RequirePushedAuthorizationRequests"/> flag.
+    /// Enforced by <c>Endpoints.Authorization.RequestFetching.PushedRequestFetcher</c>.
     /// </summary>
     public bool RequirePushedAuthorizationRequests { get; init; }
 
     /// <summary>
-    /// The profile requires a sender-constrained access token. Today that means a DPoP proof
-    /// (RFC 9449); the mTLS sender-constraining path is a separate follow-up.
+    /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
+    /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 §3). Enforced by
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
 
     /// <summary>
     /// The profile permits only the authorization-code response type, rejecting any implicit or
     /// hybrid response type that returns a token or id_token from the authorization endpoint.
+    /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
+    /// by <see cref="SecurityProfileConsistency"/> as a fail-loud registration/startup check.
     /// </summary>
     public bool RequireCodeResponseTypeOnly { get; init; }
 
@@ -92,24 +103,12 @@ public sealed record SecurityProfileRequirements
     };
 
     /// <summary>
-    /// Resolves the profile that actually governs a client: the client's own
-    /// <see cref="ClientInfo.SecurityProfile"/> when it selects one, otherwise the server-wide
-    /// default. A client therefore opts in (or out) individually, while a single-profile deployment
-    /// sets the default once and every client inherits it.
+    /// Convenience entry point for the validators: returns the control bundle for a client's own
+    /// <see cref="ClientInfo.SecurityProfile"/>. The client's profile is authoritative — a client
+    /// without a profile is governed by <see cref="ClientSecurityProfile.None"/> and no profile is
+    /// imposed on it.
     /// </summary>
-    /// <param name="clientProfile">The profile selected on the client, if any.</param>
-    /// <param name="defaultProfile">The server-wide default profile.</param>
-    public static ClientSecurityProfile Effective(
-        ClientSecurityProfile clientProfile,
-        ClientSecurityProfile defaultProfile)
-        => clientProfile != ClientSecurityProfile.None ? clientProfile : defaultProfile;
-
-    /// <summary>
-    /// Convenience entry point for the validators: resolves the effective profile for a client and
-    /// returns its control bundle in one call.
-    /// </summary>
-    /// <param name="client">The client whose effective profile is being resolved.</param>
-    /// <param name="defaultProfile">The server-wide default profile to fall back to.</param>
-    public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
-        => Resolve(Effective(client.SecurityProfile, defaultProfile));
+    /// <param name="client">The client whose profile determines the control bundle.</param>
+    public static SecurityProfileRequirements For(ClientInfo client)
+        => Resolve(client.SecurityProfile);
 }

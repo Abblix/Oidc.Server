@@ -41,12 +41,8 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
 
         foreach (var client in options.Clients)
         {
-            var effectiveProfile = SecurityProfileRequirements.Effective(
-                client.SecurityProfile,
-                options.DefaultSecurityProfile);
-
             foreach (var violation in
-                     SecurityProfileConsistency.FindViolations(client.AllowedResponseTypes, effectiveProfile))
+                     SecurityProfileConsistency.FindViolations(client.AllowedResponseTypes, client.SecurityProfile))
             {
                 failures.Add($"Client '{client.ClientId}': {violation}.");
             }

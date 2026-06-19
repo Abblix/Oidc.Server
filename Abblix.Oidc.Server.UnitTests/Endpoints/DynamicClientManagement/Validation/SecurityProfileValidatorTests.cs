@@ -21,12 +21,10 @@
 // info@abblix.com
 
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
@@ -38,9 +36,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SecurityProfileValidatorTests
 {
-    private static SecurityProfileValidator CreateValidator(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
+    private static SecurityProfileValidator CreateValidator() => new();
 
     private static ClientRegistrationValidationContext CreateContext(
         string[][] responseTypes,
@@ -116,17 +112,16 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
-    /// The server-wide DefaultSecurityProfile=FAPI 2.0 makes an unprofiled, implicit-only
-    /// registration inconsistent and is rejected.
+    /// A registration that explicitly selects <c>none</c> is not constrained, even with an
+    /// implicit-only response type.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_GlobalDefaultFapi2ImplicitOnly_ShouldReturnError()
+    public async Task ValidateAsync_ExplicitNoneImplicitOnly_ShouldReturnNull()
     {
-        var context = CreateContext([[ResponseTypes.IdToken]]);
+        var context = CreateContext([[ResponseTypes.IdToken]], ClientSecurityProfiles.None);
 
-        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+        var result = await CreateValidator().ValidateAsync(context);
 
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+        Assert.Null(result);
     }
 }

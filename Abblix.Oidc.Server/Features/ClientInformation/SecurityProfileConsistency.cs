@@ -53,7 +53,10 @@ public static class SecurityProfileConsistency
 
         var violations = new List<string>();
 
-        var allowsCode = allowedResponseTypes.Any(responseType => responseType is [ResponseTypes.Code]);
+        // A single-element "code" entry, matched case-insensitively to stay consistent with the
+        // token-bearing check below (both ultimately use HasFlag's OrdinalIgnoreCase comparison).
+        var allowsCode = allowedResponseTypes.Any(
+            responseType => responseType is { Length: 1 } && responseType.HasFlag(ResponseTypes.Code));
         if (!allowsCode)
         {
             violations.Add(
@@ -62,8 +65,7 @@ public static class SecurityProfileConsistency
         }
 
         var allowsImplicitOrHybrid = allowedResponseTypes.Any(
-            responseType => responseType.HasFlag(ResponseTypes.Token) ||
-                            responseType.HasFlag(ResponseTypes.IdToken));
+            responseType => responseType.ReturnsTokenFromAuthorizationEndpoint());
         if (allowsImplicitOrHybrid)
         {
             violations.Add(

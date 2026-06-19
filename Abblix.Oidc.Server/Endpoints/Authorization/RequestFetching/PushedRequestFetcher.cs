@@ -108,8 +108,7 @@ public class PushedRequestFetcher(
         if (request.ClientId is { } clientId &&
             await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is { } clientInfo &&
             (clientInfo.RequirePushedAuthorizationRequests ||
-             SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
-                 .RequirePushedAuthorizationRequests))
+             SecurityProfileRequirements.For(clientInfo).RequirePushedAuthorizationRequests))
         {
             return ErrorFactory.InvalidRequestObject(
                 "The client is required to use Pushed Authorization Requests (PAR)");

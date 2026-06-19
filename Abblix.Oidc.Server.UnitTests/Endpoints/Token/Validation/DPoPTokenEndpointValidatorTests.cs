@@ -21,6 +21,9 @@
 // info@abblix.com
 
 using System;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -121,14 +124,40 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
-    /// The server-wide DefaultSecurityProfile=FAPI 2.0 imposes sender-constraining on an unprofiled
-    /// client, so a missing proof is rejected.
+    /// A FAPI 2.0 client that sender-constrains via mutual TLS (a certificate-bound token, RFC 8705
+    /// §3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
+    /// issued token will be certificate-bound. FAPI 2.0 permits either mechanism.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
+    public async Task ValidateAsync_MissingHeaderFapi2ClientWithCertificateBoundToken_ReturnsNull()
     {
-        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
-        var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.Fapi2,
+            clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: true);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+        Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// The per-client dpop_bound_access_tokens flag mandates DPoP specifically: an mTLS
+    /// certificate-bound token does NOT satisfy it, so a missing proof is still rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderClientRequiresDPoPWithCertificate_ReturnsInvalidDPoPProof()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: true,
+            clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: true);
 
         var error = await _validator.ValidateAsync(context);
 
@@ -271,9 +300,11 @@ public class DPoPTokenEndpointValidatorTests
         string? proofJwt,
         bool clientRequiresDPoP,
         string? committedThumbprint = null,
-        ClientSecurityProfile securityProfile = ClientSecurityProfile.None)
+        ClientSecurityProfile securityProfile = ClientSecurityProfile.None,
+        X509Certificate2? clientCertificate = null,
+        bool tlsClientCertificateBoundAccessTokens = false)
     {
-        var clientRequest = new ClientRequest { DPoPProof = proofJwt };
+        var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
         {
             ProofKeyThumbprint = committedThumbprint,
@@ -285,9 +316,24 @@ public class DPoPTokenEndpointValidatorTests
             {
                 RequireDPoP = clientRequiresDPoP,
                 SecurityProfile = securityProfile,
+                TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };
+    }
+
+    private static X509Certificate2 CreateCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=Test Client",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        var notBefore = DateTimeOffset.Parse("2025-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        var notAfter = DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 
     private static Proof BuildProof(string? nonceClaim = null)

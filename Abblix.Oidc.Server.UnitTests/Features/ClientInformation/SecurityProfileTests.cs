@@ -60,30 +60,15 @@ public class SecurityProfileTests
     }
 
     [Theory]
-    // client, default, expected effective
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.None, ClientSecurityProfile.None)]
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // falls back to default
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // client wins
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)]
-    public void Effective_ClientFallsBackToDefault(
-        ClientSecurityProfile clientProfile,
-        ClientSecurityProfile defaultProfile,
-        ClientSecurityProfile expected)
+    [InlineData(ClientSecurityProfile.None, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, true)]
+    public void For_UsesClientProfile(ClientSecurityProfile clientProfile, bool expectSenderConstrained)
     {
-        Assert.Equal(expected, SecurityProfileRequirements.Effective(clientProfile, defaultProfile));
-    }
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
 
-    [Fact]
-    public void For_UsesEffectiveProfile_FromClient()
-    {
-        var client = new ClientInfo(TestConstants.DefaultClientId)
-        {
-            SecurityProfile = ClientSecurityProfile.Fapi2,
-        };
+        var requirements = SecurityProfileRequirements.For(client);
 
-        var requirements = SecurityProfileRequirements.For(client, ClientSecurityProfile.None);
-
-        Assert.True(requirements.RequireSenderConstrainedTokens);
+        Assert.Equal(expectSenderConstrained, requirements.RequireSenderConstrainedTokens);
     }
 
     [Fact]
@@ -91,6 +76,20 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
+            ClientSecurityProfile.Fapi2);
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// The code-only check is case-insensitive, matching the runtime flow-type validator: a
+    /// non-canonical "Code" casing is still recognised as the authorization-code response type.
+    /// </summary>
+    [Fact]
+    public void FindViolations_Fapi2CodeOnlyNonCanonicalCasing_NoViolations()
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [["Code"]],
             ClientSecurityProfile.Fapi2);
 
         Assert.Empty(violations);
@@ -167,12 +166,15 @@ public class SecurityProfileTests
         Assert.True(result.Failed);
     }
 
+    /// <summary>
+    /// An unprofiled (None) client is not constrained even with an implicit/hybrid response type:
+    /// the client's profile is authoritative and None imposes nothing, so startup validation passes.
+    /// </summary>
     [Fact]
-    public void OptionsValidator_GlobalDefaultFapi2_ValidatesUnprofiledClients()
+    public void OptionsValidator_UnprofiledClientWithHybrid_Succeeds()
     {
         var options = new OidcOptions
         {
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
             Clients =
             [
                 new ClientInfo(TestConstants.DefaultClientId)
@@ -184,6 +186,6 @@ public class SecurityProfileTests
 
         var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
 
-        Assert.True(result.Failed);
+        Assert.True(result.Succeeded);
     }
 }

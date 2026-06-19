@@ -21,37 +21,31 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Fail-loud companion to the request-time profile enforcement: rejects a registration whose declared
-/// metadata can never satisfy the security profile it would fall under, so the contradiction surfaces
-/// at registration with a clear <c>invalid_client_metadata</c> diagnostic instead of as a per-request
+/// metadata can never satisfy the security profile it selects, so the contradiction surfaces at
+/// registration with a clear <c>invalid_client_metadata</c> diagnostic instead of as a per-request
 /// rejection the client has to reverse-engineer later.
 /// </summary>
-/// <param name="options">Provides the server-wide default profile a registration inherits when it
-/// does not select one of its own.</param>
-public class SecurityProfileValidator(IOptions<OidcOptions> options) : SyncClientRegistrationContextValidator
+public class SecurityProfileValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error describing how the requested response types
-    /// conflict with the effective security profile, or <c>null</c> when the registration is
+    /// conflict with the selected security profile, or <c>null</c> when the registration is
     /// self-consistent (including when no profile applies).
     /// </summary>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
-        var effectiveProfile = SecurityProfileRequirements.Effective(
-            ClientSecurityProfiles.Parse(context.Request.SecurityProfile),
-            options.Value.DefaultSecurityProfile);
+        var profile = ClientSecurityProfiles.Parse(context.Request.SecurityProfile);
 
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
-            effectiveProfile);
+            profile);
 
         return violations.Count == 0
             ? null

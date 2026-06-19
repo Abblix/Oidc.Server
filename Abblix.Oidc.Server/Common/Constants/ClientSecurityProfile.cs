@@ -39,8 +39,8 @@ public enum ClientSecurityProfile
 {
     /// <summary>
     /// No bundled profile. The client is governed only by its individual metadata flags. This is the
-    /// default for both a client and the server-wide <see cref="Configuration.OidcOptions.DefaultSecurityProfile"/>,
-    /// so existing deployments are unaffected until a profile is explicitly selected.
+    /// default, so existing deployments are unaffected until a profile is explicitly selected on a
+    /// client.
     /// </summary>
     None = 0,
 

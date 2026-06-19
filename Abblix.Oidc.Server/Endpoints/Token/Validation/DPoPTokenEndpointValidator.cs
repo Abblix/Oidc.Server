@@ -58,22 +58,31 @@ public partial class DPoPTokenEndpointValidator(
     {
         var committed = context.AuthorizedGrant?.Context.ProofKeyThumbprint;
 
-        // A high-assurance profile (FAPI 2.0) requires a sender-constrained token; today that means a
-        // DPoP proof. This is added to the per-client RequireDPoP flag so a profiled client cannot be
-        // left bearer-only by leaving that flag unset — the profile tightens, the toggle cannot weaken.
-        var requireSenderConstrainedToken = context.ClientInfo.RequireDPoP ||
-            SecurityProfileRequirements
-                .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
-                .RequireSenderConstrainedTokens;
-
         if (context.ClientRequest is not { DPoPProof: {} proofJwt })
         {
-            if (requireSenderConstrainedToken)
+            // The per-client dpop_bound_access_tokens flag (RFC 9449 §5.2) mandates DPoP specifically;
+            // an mTLS-bound token does not satisfy it.
+            if (context.ClientInfo.RequireDPoP)
             {
                 LogProofRequiredButMissing("client policy");
                 return new OidcError(
                     ErrorCodes.InvalidDPoPProof,
                     "DPoP proof is required for this client.");
+            }
+
+            // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by
+            // EITHER a DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 §3). With the
+            // proof absent, the requirement is met only when the token will be certificate-bound;
+            // otherwise neither mechanism applies and the profile is not satisfied. The profile
+            // tightens and the granular RequireDPoP toggle cannot weaken it.
+            if (SecurityProfileRequirements.For(context.ClientInfo).RequireSenderConstrainedTokens &&
+                !WillIssueCertificateBoundToken(context))
+            {
+                LogProofRequiredButMissing("security profile");
+                return new OidcError(
+                    ErrorCodes.InvalidDPoPProof,
+                    "The security profile requires a sender-constrained token: " +
+                    "present a DPoP proof or authenticate with mutual TLS.");
             }
 
             if (committed is not null)
@@ -120,5 +129,27 @@ public partial class DPoPTokenEndpointValidator(
 
         context.ProofKeyThumbprint = proof.ProofKeyThumbprint;
         return null;
+    }
+
+    /// <summary>
+    /// Whether the access token about to be issued will be certificate-bound (RFC 8705 §3), and
+    /// therefore sender-constrained via mutual TLS rather than DPoP. Mirrors the binding decision in
+    /// TokenAuthorizationContextEvaluator: a binding the grant already carries (e.g. on refresh), or a
+    /// certificate presented by a client that authenticates with mTLS or has opted into
+    /// certificate-bound tokens. Used to credit the mTLS mechanism when a security profile requires a
+    /// sender-constrained token but the client presents no DPoP proof.
+    /// </summary>
+    private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
+    {
+        if (context.AuthorizedGrant?.Context.CertificateSha256Thumbprint != null)
+            return true;
+
+        if (context.ClientRequest?.ClientCertificate is null)
+            return false;
+
+        var authMethod = context.ClientInfo.TokenEndpointAuthMethod;
+        return authMethod == ClientAuthenticationMethods.SelfSignedTlsClientAuth
+            || authMethod == ClientAuthenticationMethods.TlsClientAuth
+            || context.ClientInfo.TlsClientCertificateBoundAccessTokens;
     }
 }

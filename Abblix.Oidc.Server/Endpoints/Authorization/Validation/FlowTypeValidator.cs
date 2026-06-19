@@ -22,12 +22,10 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -42,12 +40,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor — this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
-/// <param name="options">Provides the server-wide default security profile, used to reject implicit
-/// and hybrid response types for a client held to a code-only profile (FAPI 2.0).</param>
 public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
-    IEnumerable<IAuthorizationResponseBuilder> processors,
-    IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
+    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
@@ -79,9 +74,8 @@ public partial class FlowTypeValidator(
         // permits — the profile tightens, the granular whitelist cannot widen it. Checked before the
         // server-support gate so a profiled client gets the profile-specific reason even on a server
         // where Implicit Flow is enabled for other clients.
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
-        if (profile.RequireCodeResponseTypeOnly &&
-            (responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken)))
+        var profile = SecurityProfileRequirements.For(context.ClientInfo);
+        if (profile.RequireCodeResponseTypeOnly && responseType.ReturnsTokenFromAuthorizationEndpoint())
         {
             LogResponseTypeNotAllowed(responseType);
             return Error(
@@ -129,11 +123,9 @@ public partial class FlowTypeValidator(
             // returned in the fragment as well. The previous unconditional query default delivered
             // the error to a channel the client never reads and exposed it to the server hosting
             // the redirect URI via the query string.
-            var defaultResponseMode =
-                responseType != null &&
-                (responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken))
-                    ? ResponseModes.Fragment
-                    : ResponseModes.Query;
+            var defaultResponseMode = responseType.ReturnsTokenFromAuthorizationEndpoint()
+                ? ResponseModes.Fragment
+                : ResponseModes.Query;
 
             context.ResponseMode = context.Request.ResponseMode ?? defaultResponseMode;
             return context.Error(errorCode, message);
@@ -179,7 +171,7 @@ public partial class FlowTypeValidator(
         out string responseMode)
     {
         var code = responseType.HasFlag(ResponseTypes.Code);
-        var token = responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
+        var token = responseType.ReturnsTokenFromAuthorizationEndpoint();
 
         (var result, flowType, responseMode) = (code, token) switch
         {
