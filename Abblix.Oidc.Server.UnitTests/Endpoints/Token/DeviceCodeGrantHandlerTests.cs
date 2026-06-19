@@ -339,9 +339,10 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
 
-        // Assert
+        // Assert: the missing required device_code is rejected by the parameter validator.
+        Assert.True(result.TryGetFailure(out _));
     }
 
     /// <summary>

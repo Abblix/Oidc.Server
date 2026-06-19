@@ -74,7 +74,8 @@ public class AuthorizationCodeGrantHandlerTests
 	[Fact]
 	public async Task AuthorizeAsync_CodeIssuedToAnotherClient_ReturnsInvalidGrant()
 	{
-		var authenticationTime = DateTimeOffset.Parse("2026-06-11T00:00:00Z");
+		var authenticationTime = DateTimeOffset.Parse(
+			"2026-06-11T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
 		var tokenRequest = new TokenRequest { Code = "abc" };
 		_authCodeService
 			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))

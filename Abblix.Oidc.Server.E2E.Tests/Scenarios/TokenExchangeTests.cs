@@ -153,7 +153,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var raw = await response.Content.ReadAsStringAsync();
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.False(response.IsSuccessStatusCode,
             $"Expected cross-client exchange to be rejected, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();

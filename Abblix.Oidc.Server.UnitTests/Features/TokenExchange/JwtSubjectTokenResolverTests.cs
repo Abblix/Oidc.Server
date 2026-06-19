@@ -70,7 +70,7 @@ public class JwtSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-1", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
-        Assert.Equal(["openid", "profile"], ctx.Scope);
+        Assert.Equal(["openid", "profile"], ctx.Scope!);
         Assert.Null(ctx.AuthorizationDetails);
     }
 

@@ -368,8 +368,8 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(request);
 
         Assert.True(result.TryGetSuccess(out var success));
-        Assert.Equal([GrantTypes.AuthorizationCode], success.GrantTypes);
+        Assert.Equal([GrantTypes.AuthorizationCode], success.GrantTypes!);
         Assert.Equal([[ResponseTypes.Code]], success.ResponseTypes);
-        Assert.Equal([Scopes.OpenId, Scopes.Profile], success.Scope);
+        Assert.Equal([Scopes.OpenId, Scopes.Profile], success.Scope!);
     }
 }

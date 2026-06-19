@@ -476,42 +476,6 @@ public class ResponseModeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that <c>query.jwt</c> inherits <c>query</c>'s prohibition for token-bearing flows (JARM §2.3.1):
-    /// the JWT does not exempt the response from the rule that credentials must not appear in the URL query.
-    /// The <c>jwt</c> shortcut, by contrast, resolves to fragment for these flows and is accepted.
-    /// </summary>
-    [Theory]
-    [InlineData(FlowTypes.Implicit, ResponseModes.QueryJwt, false)]
-    [InlineData(FlowTypes.Implicit, ResponseModes.FragmentJwt, true)]
-    [InlineData(FlowTypes.Implicit, ResponseModes.FormPostJwt, true)]
-    [InlineData(FlowTypes.Implicit, ResponseModes.Jwt, true)]
-    [InlineData(FlowTypes.Hybrid, ResponseModes.QueryJwt, false)]
-    [InlineData(FlowTypes.Hybrid, ResponseModes.Jwt, true)]
-    public async Task ValidateAsync_TokenBearingFlowWithJarmMode_ShouldRespectQueryProhibition(
-        FlowTypes flowType,
-        string responseMode,
-        bool shouldSucceed)
-    {
-        // Arrange
-        var context = CreateContext(flowType, responseMode);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
-        if (shouldSucceed)
-        {
-            Assert.Null(result);
-            Assert.Equal(responseMode, context.ResponseMode);
-        }
-        else
-        {
-            Assert.NotNull(result);
-            Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        }
-    }
-
-    /// <summary>
     /// Verifies that ValidateAsync preserves original context response mode on null input.
     /// When response_mode is not specified, context default should remain.
     /// Tests context preservation for optional parameters.
@@ -532,9 +496,11 @@ public class ResponseModeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync handles all three flow types correctly.
-    /// Tests validator comprehensively covers AuthorizationCode, Implicit, and Hybrid flows.
-    /// Ensures no flow type is missed in validation logic.
+    /// Verifies that ValidateAsync handles every flow type against both the plain response modes and
+    /// the JARM modes. Token-bearing flows (Implicit, Hybrid) reject <c>query</c> and its
+    /// <c>query.jwt</c> JARM variant (JARM §2.3.1: the JWT does not exempt the response from the rule
+    /// that credentials must not appear in the URL query), while fragment, form_post and their JARM
+    /// variants are accepted; the authorization code flow accepts all modes.
     /// </summary>
     [Theory]
     [InlineData(FlowTypes.AuthorizationCode, ResponseModes.Query, true)]
@@ -546,6 +512,12 @@ public class ResponseModeValidatorTests
     [InlineData(FlowTypes.Hybrid, ResponseModes.Query, false)]
     [InlineData(FlowTypes.Hybrid, ResponseModes.Fragment, true)]
     [InlineData(FlowTypes.Hybrid, ResponseModes.FormPost, true)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.QueryJwt, false)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.FragmentJwt, true)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.FormPostJwt, true)]
+    [InlineData(FlowTypes.Implicit, ResponseModes.Jwt, true)]
+    [InlineData(FlowTypes.Hybrid, ResponseModes.QueryJwt, false)]
+    [InlineData(FlowTypes.Hybrid, ResponseModes.Jwt, true)]
     public async Task ValidateAsync_AllFlowTypesAndModes_ShouldValidateCorrectly(
         FlowTypes flowType,
         string responseMode,

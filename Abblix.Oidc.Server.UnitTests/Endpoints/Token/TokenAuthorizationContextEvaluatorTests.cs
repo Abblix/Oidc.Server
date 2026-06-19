@@ -119,7 +119,7 @@ public class TokenAuthorizationContextEvaluatorTests
 
         var result = Evaluator.EvaluateAuthorizationContext(request);
 
-        Assert.Equal([a], result.Resources);
+        Assert.Equal([a], result.Resources!);
     }
 
     private static ValidTokenRequest CreateResourceRequest(Uri[]? grantResources, Uri[] requestedResources)

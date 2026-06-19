@@ -77,10 +77,11 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
             [AuthorizationRequest.Parameters.CodeChallenge] = plainChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         });
-        var plainResponse = await client.GetAsync(plainAuthorizeUri);
+        var plainResponse = await client.GetAsync(plainAuthorizeUri, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, plainResponse.StatusCode);
-        var body = JsonNode.Parse(await plainResponse.Content.ReadAsStringAsync())!.AsObject();
+        var responseText = await plainResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = JsonNode.Parse(responseText)!.AsObject();
         Assert.Equal(ErrorCodes.InvalidRequestObject, body["error"]!.GetValue<string>());
     }
 }

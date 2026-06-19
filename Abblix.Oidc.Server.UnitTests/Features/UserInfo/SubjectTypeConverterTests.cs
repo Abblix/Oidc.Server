@@ -49,7 +49,7 @@ public class SubjectTypeConverterTests
     {
         SubjectType = SubjectTypes.Pairwise,
         SectorIdentifier = sectorIdentifier,
-        RedirectUris = redirectUris,
+        RedirectUris = redirectUris ?? [],
     };
 
     /// <summary>
