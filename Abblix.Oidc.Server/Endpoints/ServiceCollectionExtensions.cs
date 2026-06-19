@@ -432,6 +432,9 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="TImpl">The concrete response-builder implementation to register.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <param name="lifetime">The service lifetime for the processor and its aliases; defaults to
+    /// <see cref="ServiceLifetime.Singleton"/>. Use <see cref="ServiceLifetime.Scoped"/> when the
+    /// processor has scoped dependencies, to avoid a captive dependency.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddAuthorizationResponseProcessor<TImpl>(
         this IServiceCollection services,
@@ -589,6 +592,10 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedResponseTypeValidator>(),
             ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedGrantTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, GrantTypeValidator>(),
+            // Fail-loud profile self-consistency: runs after the response/grant-type gates so an
+            // unsupported or inconsistent type is reported as such before this surfaces a
+            // profile-specific rejection.
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),

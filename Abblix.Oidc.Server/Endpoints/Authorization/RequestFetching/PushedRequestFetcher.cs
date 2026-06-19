@@ -99,12 +99,17 @@ public class PushedRequestFetcher(
 
         // RFC 9126 §6: the per-client require_pushed_authorization_requests metadata makes PAR the
         // only way for this client to start an authorization flow, independent of the server-wide
-        // flag. Enforced here (not in the shared context-validator pipeline) because this fetcher
-        // participates only in the authorization endpoint's chain — the PAR endpoint itself runs a
-        // different fetcher set and must not trip over the requirement it is there to satisfy.
+        // flag. A code-only/high-assurance profile (FAPI 2.0) imposes the same requirement on the
+        // client even when neither the server-wide flag nor the per-client metadata is set — the
+        // profile tightens and the granular toggle cannot weaken it. Enforced here (not in the shared
+        // context-validator pipeline) because this fetcher participates only in the authorization
+        // endpoint's chain — the PAR endpoint itself runs a different fetcher set and must not trip
+        // over the requirement it is there to satisfy.
         if (request.ClientId is { } clientId &&
-            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is
-                { RequirePushedAuthorizationRequests: true })
+            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is { } clientInfo &&
+            (clientInfo.RequirePushedAuthorizationRequests ||
+             SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+                 .RequirePushedAuthorizationRequests))
         {
             return ErrorFactory.InvalidRequestObject(
                 "The client is required to use Pushed Authorization Requests (PAR)");

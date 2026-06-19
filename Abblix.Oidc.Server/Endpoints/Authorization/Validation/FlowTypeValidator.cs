@@ -22,9 +22,12 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -39,9 +42,13 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor — this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
+/// <param name="options">Provides the server-wide default security profile a client inherits when it
+/// states none, used to reject implicit and hybrid response types for a client held to a code-only
+/// profile (FAPI 2.0).</param>
 public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
-    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
+    IEnumerable<IAuthorizationResponseBuilder> processors,
+    IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
@@ -58,6 +65,7 @@ public partial class FlowTypeValidator(
     protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
     {
         var responseType = context.Request.ResponseType;
+        var returnsTokenFromAuthorization = responseType.ReturnsTokenFromAuthorization();
 
         // RFC 6749 §4.1.2.1: response_type is REQUIRED, and a missing required parameter is
         // invalid_request — not unsupported_response_type (no method was named at all) and not
@@ -66,6 +74,20 @@ public partial class FlowTypeValidator(
         {
             LogResponseTypeInvalid(responseType);
             return Error(ErrorCodes.InvalidRequest, "The response type is required");
+        }
+
+        // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token
+        // from the authorization endpoint, regardless of what the client's AllowedResponseTypes
+        // permits — the profile tightens, the granular whitelist cannot widen it. Checked before the
+        // server-support gate so a profiled client gets the profile-specific reason even on a server
+        // where Implicit Flow is enabled for other clients.
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
+        if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
+        {
+            LogResponseTypeNotAllowed(responseType);
+            return Error(
+                ErrorCodes.UnauthorizedClient,
+                "The security profile permits only the authorization code response type");
         }
 
         // Server-level support: every part of response_type must have a registered processor. This
@@ -103,20 +125,17 @@ public partial class FlowTypeValidator(
 
         AuthorizationRequestValidationError Error(string errorCode, string message)
         {
-            // OAuth 2.0 Multiple Response Types §5: when the requested response_type contains a
-            // value that requires fragment encoding (token / id_token), the error response MUST be
-            // returned in the fragment as well. The previous unconditional query default delivered
-            // the error to a channel the client never reads and exposed it to the server hosting
-            // the redirect URI via the query string.
-            var defaultResponseMode =
-                responseType != null &&
-                (responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken))
-                    ? ResponseModes.Fragment
-                    : ResponseModes.Query;
-
-            context.ResponseMode = context.Request.ResponseMode ?? defaultResponseMode;
+            context.ResponseMode = context.Request.ResponseMode ?? GetDefaultResponseMode();
             return context.Error(errorCode, message);
         }
+
+        // OAuth 2.0 Multiple Response Types §5: when the requested response_type contains a
+        // value that requires fragment encoding (token / id_token), the error response MUST be
+        // returned in the fragment as well. The previous unconditional query default delivered
+        // the error to a channel the client never reads and exposed it to the server hosting
+        // the redirect URI via the query string.
+        string GetDefaultResponseMode()
+            => returnsTokenFromAuthorization ? ResponseModes.Fragment : ResponseModes.Query;
     }
 
     /// <summary>
@@ -158,7 +177,7 @@ public partial class FlowTypeValidator(
         out string responseMode)
     {
         var code = responseType.HasFlag(ResponseTypes.Code);
-        var token = responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
+        var token = responseType.ReturnsTokenFromAuthorization();
 
         (var result, flowType, responseMode) = (code, token) switch
         {

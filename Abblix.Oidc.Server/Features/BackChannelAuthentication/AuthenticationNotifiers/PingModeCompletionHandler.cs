@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="notificationService">Service for sending ping notifications.</param>
 public partial class PingModeCompletionHandler(
-    ILogger<AuthenticationCompletionHandler> logger,
+    ILogger<PingModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     INotificationDeliveryService notificationService)
     : AuthenticationCompletionHandler(logger, storage)

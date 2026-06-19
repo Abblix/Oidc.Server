@@ -279,4 +279,15 @@ public record OidcOptions
 	/// <see cref="ProofValidator"/> behaviour and related primitives.
 	/// </summary>
 	public DPoPOptions DPoP { get; set; } = new();
+
+	/// <summary>
+	/// The server-wide default security profile, applied to every client whose own
+	/// <see cref="ClientInfo.SecurityProfile"/> is left unset (<c>null</c>). A single-profile
+	/// deployment sets this once — for example to <see cref="ClientSecurityProfile.Fapi2"/> — and
+	/// every client without an explicit profile inherits the FAPI 2.0 control bundle; an individual
+	/// client opts out by setting its own profile to <see cref="ClientSecurityProfile.None"/>. The
+	/// default <see cref="ClientSecurityProfile.None"/> leaves unprofiled clients governed by their
+	/// individual metadata flags, so existing deployments are unaffected.
+	/// </summary>
+	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
 }

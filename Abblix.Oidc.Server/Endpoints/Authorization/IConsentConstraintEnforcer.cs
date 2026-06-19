@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// Defense-in-depth backstop that asserts the anti-escalation invariant on the consent decision:
 /// the set granted by <see cref="IUserConsentsProvider"/> MUST be a subset of what the
 /// authorization request carried. This mirrors the strictly narrowing-only
-/// <see cref="Token.ITokenAuthorizationContextEvaluator"/> at the token endpoint (RFC 8707 §2.2),
-/// giving the authorize-time consent path the same guarantee.
+/// <see cref="Abblix.Oidc.Server.Endpoints.Token.Interfaces.ITokenAuthorizationContextEvaluator"/> at
+/// the token endpoint (RFC 8707 §2.2), giving the authorize-time consent path the same guarantee.
 /// </summary>
 /// <remarks>
 /// Violating <c>granted ⊆ requested</c> is never a protocol-level condition: the consent decision

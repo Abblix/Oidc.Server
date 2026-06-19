@@ -21,6 +21,9 @@
 // info@abblix.com
 
 using System;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -95,6 +98,99 @@ public class DPoPTokenEndpointValidatorTests
     public async Task ValidateAsync_MissingHeaderClientOpportunistic_ReturnsNullAndLeavesThumbprintUnset()
     {
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+        Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// A FAPI 2.0 client requires a sender-constrained token even when its per-client RequireDPoP flag
+    /// is unset: the profile mandates DPoP and the granular toggle cannot weaken it. A missing proof
+    /// is therefore rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2Client_ReturnsInvalidDPoPProof()
+    {
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A FAPI 2.0 client that sender-constrains via mutual TLS (a certificate-bound token, RFC 8705
+    /// §3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
+    /// issued token will be certificate-bound. FAPI 2.0 permits either mechanism.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2ClientWithCertificateBoundToken_ReturnsNull()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.Fapi2,
+            clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: true);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+        Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// The per-client dpop_bound_access_tokens flag mandates DPoP specifically: an mTLS
+    /// certificate-bound token does NOT satisfy it, so a missing proof is still rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderClientRequiresDPoPWithCertificate_ReturnsInvalidDPoPProof()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: true,
+            clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: true);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A client that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0, which
+    /// requires sender-constraining, so a missing proof is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(proofJwt: null, clientRequiresDPoP: false, securityProfile: null);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default, so a missing
+    /// proof is accepted (opportunistic) rather than rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderExplicitNoneOverridesGlobalDefaultFapi2_ReturnsNull()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.None);
 
         var error = await _validator.ValidateAsync(context);
 
@@ -237,9 +333,12 @@ public class DPoPTokenEndpointValidatorTests
     private static TokenValidationContext CreateContext(
         string? proofJwt,
         bool clientRequiresDPoP,
-        string? committedThumbprint = null)
+        string? committedThumbprint = null,
+        ClientSecurityProfile? securityProfile = null,
+        X509Certificate2? clientCertificate = null,
+        bool tlsClientCertificateBoundAccessTokens = false)
     {
-        var clientRequest = new ClientRequest { DPoPProof = proofJwt };
+        var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
         {
             ProofKeyThumbprint = committedThumbprint,
@@ -250,9 +349,25 @@ public class DPoPTokenEndpointValidatorTests
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequireDPoP = clientRequiresDPoP,
+                SecurityProfile = securityProfile,
+                TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };
+    }
+
+    private static X509Certificate2 CreateCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=Test Client",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        var notBefore = DateTimeOffset.Parse("2025-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        var notAfter = DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture);
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 
     private static Proof BuildProof(string? nonceClaim = null)

@@ -32,6 +32,15 @@
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
+    <!-- Analyzer rules deliberately not actioned in code, so the project builds warning-free:
+         - S1133: the [Obsolete]-marked APIs are intentional; the "remove deprecated code" reminder
+           does not apply while the API is still published.
+         - S3241: a fluent IServiceCollection extension keeps its return value for chaining even
+           where a given call site ignores it. -->
+    <PropertyGroup>
+        <NoWarn>$(NoWarn);S1133;S3241</NoWarn>
+    </PropertyGroup>
+
     <ItemGroup>
       <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
       <EmbeddedResource Include=".\Features\LogoutNotification\Resources\frontChannelLogout.html" />

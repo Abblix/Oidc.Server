@@ -40,6 +40,8 @@ public record IntrospectionSuccess(bool Active, JsonObject? Claims, ClientInfo C
     /// </summary>
     public static class Parameters
     {
+        /// <summary>The <c>active</c> response member (RFC 7662 §2.2) reporting whether the token is
+        /// currently active.</summary>
         public const string Active = "active";
     }
 
