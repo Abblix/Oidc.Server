@@ -60,15 +60,27 @@ public class SecurityProfileTests
     }
 
     [Theory]
-    [InlineData(ClientSecurityProfile.None, false)]
-    [InlineData(ClientSecurityProfile.Fapi2, true)]
-    public void For_UsesClientProfile(ClientSecurityProfile clientProfile, bool expectSenderConstrained)
+    // clientProfile (null = unset), defaultProfile, expected effective
+    [InlineData(null, ClientSecurityProfile.None, ClientSecurityProfile.None)]
+    [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset inherits the default
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.None)] // explicit None opts out
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // client wins
+    public void Effective_UnsetInheritsDefault_ExplicitWins(
+        ClientSecurityProfile? clientProfile,
+        ClientSecurityProfile defaultProfile,
+        ClientSecurityProfile expected)
     {
-        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
+        Assert.Equal(expected, SecurityProfileRequirements.Effective(clientProfile, defaultProfile));
+    }
 
-        var requirements = SecurityProfileRequirements.For(client);
+    [Fact]
+    public void For_UnsetClientInheritsServerDefault()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId); // SecurityProfile left unset (null)
 
-        Assert.Equal(expectSenderConstrained, requirements.RequireSenderConstrainedTokens);
+        var requirements = SecurityProfileRequirements.For(client, ClientSecurityProfile.Fapi2);
+
+        Assert.True(requirements.RequireSenderConstrainedTokens);
     }
 
     [Fact]
@@ -179,6 +191,55 @@ public class SecurityProfileTests
             [
                 new ClientInfo(TestConstants.DefaultClientId)
                 {
+                    AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    /// <summary>
+    /// An unprofiled client inherits the server-wide DefaultSecurityProfile=FAPI 2.0; a hybrid
+    /// response type then makes it inconsistent and startup validation fails.
+    /// </summary>
+    [Fact]
+    public void OptionsValidator_GlobalDefaultFapi2_UnprofiledHybrid_Fails()
+    {
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+    }
+
+    /// <summary>
+    /// A client that explicitly selects None opts out of the server-wide FAPI 2.0 default, so its
+    /// hybrid response type is not constrained and startup validation passes.
+    /// </summary>
+    [Fact]
+    public void OptionsValidator_ExplicitNoneOverridesGlobalDefault_Succeeds()
+    {
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    SecurityProfile = ClientSecurityProfile.None,
                     AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
                 },
             ],

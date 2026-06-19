@@ -21,10 +21,12 @@
 // info@abblix.com
 
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
@@ -36,7 +38,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SecurityProfileValidatorTests
 {
-    private static SecurityProfileValidator CreateValidator() => new();
+    private static SecurityProfileValidator CreateValidator(
+        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
+        => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
 
     private static ClientRegistrationValidationContext CreateContext(
         string[][] responseTypes,
@@ -112,15 +116,30 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
-    /// A registration that explicitly selects <c>none</c> is not constrained, even with an
-    /// implicit-only response type.
+    /// A registration that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0,
+    /// so an implicit-only response type is rejected.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ExplicitNoneImplicitOnly_ShouldReturnNull()
+    public async Task ValidateAsync_GlobalDefaultFapi2ImplicitOnly_ShouldReturnError()
+    {
+        var context = CreateContext([[ResponseTypes.IdToken]]);
+
+        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// A registration that explicitly selects <c>none</c> opts out of a server-wide FAPI 2.0 default,
+    /// so an implicit-only response type is accepted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_ShouldReturnNull()
     {
         var context = CreateContext([[ResponseTypes.IdToken]], ClientSecurityProfiles.None);
 
-        var result = await CreateValidator().ValidateAsync(context);
+        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
 
         Assert.Null(result);
     }

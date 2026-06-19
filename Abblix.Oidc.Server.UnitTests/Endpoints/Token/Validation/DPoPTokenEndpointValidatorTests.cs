@@ -164,6 +164,40 @@ public class DPoPTokenEndpointValidatorTests
         AssertProofRejected(error, context);
     }
 
+    /// <summary>
+    /// A client that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0, which
+    /// requires sender-constraining, so a missing proof is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(proofJwt: null, clientRequiresDPoP: false, securityProfile: null);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default, so a missing
+    /// proof is accepted (opportunistic) rather than rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderExplicitNoneOverridesGlobalDefaultFapi2_ReturnsNull()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.None);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+        Assert.Null(context.ProofKeyThumbprint);
+    }
+
     [Fact]
     public async Task ValidateAsync_ValidProofClientOpportunistic_StashesThumbprint()
     {
@@ -300,7 +334,7 @@ public class DPoPTokenEndpointValidatorTests
         string? proofJwt,
         bool clientRequiresDPoP,
         string? committedThumbprint = null,
-        ClientSecurityProfile securityProfile = ClientSecurityProfile.None,
+        ClientSecurityProfile? securityProfile = null,
         X509Certificate2? clientCertificate = null,
         bool tlsClientCertificateBoundAccessTokens = false)
     {

@@ -37,25 +37,29 @@ public static class ClientSecurityProfiles
     public const string Fapi2 = "fapi2";
 
     /// <summary>
-    /// Maps a registration wire token to the enum. An absent or unrecognised value maps to
-    /// <see cref="ClientSecurityProfile.None"/>; the registration validator rejects an explicitly
-    /// invalid token up front (via <c>[AllowedValues]</c>), so this only ever sees a known token or
-    /// nothing.
+    /// Maps a registration wire token to the enum. An explicit token maps to its value (including
+    /// <c>none</c> as a deliberate opt-out); an absent value maps to <c>null</c>, meaning the client
+    /// states no preference and inherits the server-wide default. Model binding rejects any token
+    /// outside the allowed set up front (via <c>[AllowedValues]</c>), so this only ever sees a known
+    /// token or nothing.
     /// </summary>
-    public static ClientSecurityProfile Parse(string? value) => value switch
+    public static ClientSecurityProfile? Parse(string? value) => value switch
     {
         Fapi2 => ClientSecurityProfile.Fapi2,
-        _ => ClientSecurityProfile.None,
+        None => ClientSecurityProfile.None,
+        _ => null,
     };
 
     /// <summary>
-    /// Maps the enum to its registration wire token. <see cref="ClientSecurityProfile.None"/> maps to
-    /// <c>null</c> so the registration response omits the field rather than echoing an explicit
-    /// "no profile" — keeping the echoed metadata to what was actually registered.
+    /// Maps a stored profile to its registration wire token. An explicit profile (including the
+    /// <see cref="ClientSecurityProfile.None"/> opt-out) is echoed faithfully; an unset profile
+    /// (<c>null</c>) maps to <c>null</c> so the registration response omits the field rather than
+    /// inventing a value the client never set.
     /// </summary>
-    public static string? ToWire(ClientSecurityProfile profile) => profile switch
+    public static string? ToWire(ClientSecurityProfile? profile) => profile switch
     {
         ClientSecurityProfile.Fapi2 => Fapi2,
+        ClientSecurityProfile.None => None,
         _ => null,
     };
 }

@@ -293,11 +293,14 @@ public record ClientInfo(string ClientId)
     /// The named security profile this client is held to. <see cref="ClientSecurityProfile.Fapi2"/>
     /// forces the FAPI 2.0 control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization
     /// Requests, sender-constrained tokens, code-only responses) on the client and prevents the
-    /// individual toggles above from weakening it. <see cref="ClientSecurityProfile.None"/> (the
-    /// default) leaves the client governed by those individual toggles alone. The client's profile is
-    /// authoritative — there is no server-wide profile that overrides it.
+    /// individual toggles above from weakening it. <see cref="ClientSecurityProfile.None"/> is an
+    /// explicit opt-out that leaves the client governed by those individual toggles alone, overriding
+    /// any server-wide default. <c>null</c> (the default) means the client states no preference and
+    /// inherits <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> — which is
+    /// itself <see cref="ClientSecurityProfile.None"/> unless the deployment sets a server-wide
+    /// profile, so existing clients are unaffected.
     /// </summary>
-    public ClientSecurityProfile SecurityProfile { get; set; } = ClientSecurityProfile.None;
+    public ClientSecurityProfile? SecurityProfile { get; set; }
 
     /// <summary>
     /// Determines the algorithm used for signing responses from the UserInfo endpoint.

@@ -22,6 +22,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -29,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -56,8 +58,12 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors);
+        _validator = new FlowTypeValidator(logger.Object, processors, ProfileOptions());
     }
+
+    private static IOptions<OidcOptions> ProfileOptions(
+        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
+        => Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile });
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -66,7 +72,7 @@ public class FlowTypeValidatorTests
         string[]? responseType,
         string[][]? allowedResponseTypes = null,
         string? responseMode = null,
-        ClientSecurityProfile securityProfile = ClientSecurityProfile.None)
+        ClientSecurityProfile? securityProfile = null)
     {
         var request = new AuthorizationRequest
         {
@@ -401,7 +407,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
@@ -435,7 +441,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
@@ -582,7 +588,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);
@@ -694,5 +700,53 @@ public class FlowTypeValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static FlowTypeValidator AllFlowsValidator(ClientSecurityProfile defaultProfile)
+    {
+        var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
+        IAuthorizationResponseBuilder[] processors =
+        [
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
+        ];
+        return new FlowTypeValidator(logger.Object, processors, ProfileOptions(defaultProfile));
+    }
+
+    /// <summary>
+    /// A client that states no profile (null) inherits the server-wide DefaultSecurityProfile: a
+    /// global FAPI 2.0 default rejects an implicit response type for the unprofiled client.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_GlobalDefaultFapi2_RejectsImplicitForUnprofiledClient()
+    {
+        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.IdToken]], securityProfile: null);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default: the implicit
+    /// response type it is registered for is accepted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_AllowsImplicit()
+    {
+        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var context = CreateContext(
+            [ResponseTypes.IdToken],
+            [[ResponseTypes.IdToken]],
+            securityProfile: ClientSecurityProfile.None);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.Null(result);
+        Assert.Equal(FlowTypes.Implicit, context.FlowType);
     }
 }

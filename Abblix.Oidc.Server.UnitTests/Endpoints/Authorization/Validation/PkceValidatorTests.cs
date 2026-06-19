@@ -22,11 +22,13 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
@@ -46,8 +48,12 @@ public class PkceValidatorTests
 
     public PkceValidatorTests()
     {
-        _validator = new PkceValidator();
+        _validator = CreateValidator();
     }
+
+    private static PkceValidator CreateValidator(
+        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
+        => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -57,7 +63,7 @@ public class PkceValidatorTests
         string? codeChallengeMethod = null,
         bool? pkceRequired = null,
         bool plainPkceAllowed = false,
-        ClientSecurityProfile securityProfile = ClientSecurityProfile.None)
+        ClientSecurityProfile? securityProfile = null)
     {
         var request = new AuthorizationRequest
         {
@@ -597,5 +603,45 @@ public class PkceValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("requires PKCE", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A client that states no profile (null) inherits the server-wide DefaultSecurityProfile: a
+    /// global FAPI 2.0 default restricts the method to S256 for the unprofiled client.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_GlobalDefaultFapi2_RestrictsUnprofiledClientToS256()
+    {
+        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var context = CreateContext(
+            codeChallenge: CodeChallengePlain,
+            codeChallengeMethod: CodeChallengeMethods.Plain,
+            plainPkceAllowed: true,
+            securityProfile: null);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default: the explicit
+    /// profile overrides the default, so the plain method it allows is accepted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_AllowsPlain()
+    {
+        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var context = CreateContext(
+            codeChallenge: CodeChallengePlain,
+            codeChallengeMethod: CodeChallengeMethods.Plain,
+            plainPkceAllowed: true,
+            securityProfile: ClientSecurityProfile.None);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.Null(result);
     }
 }

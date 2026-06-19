@@ -38,9 +38,10 @@ namespace Abblix.Oidc.Server.Common.Constants;
 public enum ClientSecurityProfile
 {
     /// <summary>
-    /// No bundled profile. The client is governed only by its individual metadata flags. This is the
-    /// default, so existing deployments are unaffected until a profile is explicitly selected on a
-    /// client.
+    /// No bundled profile: the client is governed only by its individual metadata flags. As a client's
+    /// explicit value this is an opt-out that overrides the server-wide default; as the server-wide
+    /// <see cref="Configuration.OidcOptions.DefaultSecurityProfile"/> it imposes nothing. A client that
+    /// states no preference leaves its profile unset (<c>null</c>) rather than selecting this.
     /// </summary>
     None = 0,
 

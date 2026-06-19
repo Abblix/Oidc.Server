@@ -75,7 +75,9 @@ public partial class DPoPTokenEndpointValidator(
             // proof absent, the requirement is met only when the token will be certificate-bound;
             // otherwise neither mechanism applies and the profile is not satisfied. The profile
             // tightens and the granular RequireDPoP toggle cannot weaken it.
-            if (SecurityProfileRequirements.For(context.ClientInfo).RequireSenderConstrainedTokens &&
+            if (SecurityProfileRequirements
+                    .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
+                    .RequireSenderConstrainedTokens &&
                 !WillIssueCertificateBoundToken(context))
             {
                 LogProofRequiredButMissing("security profile");
