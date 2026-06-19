@@ -36,12 +36,9 @@
          - S1133: the [Obsolete]-marked APIs are intentional; the "remove deprecated code" reminder
            does not apply while the API is still published.
          - S3241: a fluent IServiceCollection extension keeps its return value for chaining even
-           where a given call site ignores it.
-         - S6672: the CIBA completion handlers share the base AuthenticationCompletionHandler logger
-           by design; retyping the logger per derived class would break the base constructor chain
-           and change the established log categories. -->
+           where a given call site ignores it. -->
     <PropertyGroup>
-        <NoWarn>$(NoWarn);S1133;S3241;S6672</NoWarn>
+        <NoWarn>$(NoWarn);S1133;S3241</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
