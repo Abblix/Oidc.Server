@@ -55,12 +55,12 @@ public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
             if (!resource.Resource.IsAbsoluteUri)
                 throw new ArgumentException(
                     $"The configured resource '{resource.Resource}' must be an absolute URI (RFC 8707 Section 2).",
-                    nameof(OidcOptions.Resources));
+                    nameof(options));
 
             if (!resources.TryAdd(resource.Resource, resource))
                 throw new ArgumentException(
                     $"Duplicate resource definition for '{resource.Resource}'. Each configured resource URI must be unique.",
-                    nameof(OidcOptions.Resources));
+                    nameof(options));
         }
 
         return resources;
