@@ -126,6 +126,13 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<ClientInfoStorage>();
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
+
+        // Fail loud at startup when a statically-configured client cannot satisfy its effective
+        // security profile, instead of letting the contradiction surface per-request. TryAddEnumerable
+        // because the options framework resolves every registered IValidateOptions.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>());
+
         return services
             .AddAlias<IClientInfoProvider, ClientInfoStorage>()
             .AddAlias<IClientInfoManager, ClientInfoStorage>();

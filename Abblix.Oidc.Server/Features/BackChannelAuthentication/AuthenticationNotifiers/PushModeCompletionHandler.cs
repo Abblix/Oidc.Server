@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
 public partial class PushModeCompletionHandler(
-    ILogger<AuthenticationCompletionHandler> logger,
+    ILogger<PushModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor)

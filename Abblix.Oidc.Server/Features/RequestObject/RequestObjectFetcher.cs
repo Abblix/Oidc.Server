@@ -56,6 +56,8 @@ public partial class RequestObjectFetcher(
     /// <typeparam name="T">The type of the request model.</typeparam>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
+    /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
+    /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, AuthError}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -101,6 +103,8 @@ public partial class RequestObjectFetcher(
     /// and structure, based on the OIDC options.
     /// </summary>
     /// <param name="requestObject">The JWT request object to be validated.</param>
+    /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
+    /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains a <see cref="Result{JsonObject, AuthError}"/>
     /// indicating whether the JWT is valid or contains errors.
