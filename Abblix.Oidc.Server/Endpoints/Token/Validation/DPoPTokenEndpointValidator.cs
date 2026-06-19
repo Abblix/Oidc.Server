@@ -60,8 +60,8 @@ public partial class DPoPTokenEndpointValidator(
 
         if (context.ClientRequest is not { DPoPProof: {} proofJwt })
         {
-            // The per-client dpop_bound_access_tokens flag (RFC 9449 §5.2) mandates DPoP specifically;
-            // an mTLS-bound token does not satisfy it.
+            // The per-client dpop_bound_access_tokens flag (RFC 9449 §5.2) mandates DPoP specifically, so
+            // an mTLS-bound token does not satisfy it and a missing proof is rejected outright.
             if (context.ClientInfo.RequireDPoP)
             {
                 LogProofRequiredButMissing("client policy");
@@ -71,10 +71,10 @@ public partial class DPoPTokenEndpointValidator(
             }
 
             // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by
-            // EITHER a DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 §3). With the
-            // proof absent, the requirement is met only when the token will be certificate-bound;
-            // otherwise neither mechanism applies and the profile is not satisfied. The profile
-            // tightens and the granular RequireDPoP toggle cannot weaken it.
+            // either a DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 §3). With the
+            // proof absent, the requirement is met only when the token will be certificate-bound. In
+            // any other case neither mechanism applies and the profile is not satisfied. The profile
+            // tightens, and the granular RequireDPoP toggle cannot weaken it.
             if (SecurityProfileRequirements
                     .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
                     .RequireSenderConstrainedTokens &&
