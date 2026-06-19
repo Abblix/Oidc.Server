@@ -306,6 +306,16 @@ public record ReadClientSuccessfulResponse
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The named security profile bundle the client is held to (Abblix extension,
+    /// <c>security_profile</c>). Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.SecurityProfile"/>; omitted when the client
+    /// has no profile.
+    /// </summary>
+    [JsonPropertyOrder(34)]
+    [JsonPropertyName(Parameters.SecurityProfile)]
+    public string? SecurityProfile { get; init; }
+
+    /// <summary>
     /// Wire-level member names of the client read response (RFC 7592 §3, RFC 7591 §2/§3.2.1,
     /// and OpenID Connect Dynamic Client Registration).
     /// </summary>
@@ -419,5 +429,9 @@ public record ReadClientSuccessfulResponse
         /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registered metadata member
         /// (RFC 8705 §3.4).</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
+
+        /// <summary>The <c>security_profile</c> registered metadata member (Abblix extension): the
+        /// named security profile bundle the client is held to.</summary>
+        public const string SecurityProfile = "security_profile";
     }
 }

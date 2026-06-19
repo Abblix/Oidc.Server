@@ -102,6 +102,39 @@ public class DPoPTokenEndpointValidatorTests
         Assert.Null(context.ProofKeyThumbprint);
     }
 
+    /// <summary>
+    /// A FAPI 2.0 client requires a sender-constrained token even when its per-client RequireDPoP flag
+    /// is unset: the profile mandates DPoP and the granular toggle cannot weaken it. A missing proof
+    /// is therefore rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2Client_ReturnsInvalidDPoPProof()
+    {
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// The server-wide DefaultSecurityProfile=FAPI 2.0 imposes sender-constraining on an unprofiled
+    /// client, so a missing proof is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
+
+        var error = await _validator.ValidateAsync(context);
+
+        AssertProofRejected(error, context);
+    }
+
     [Fact]
     public async Task ValidateAsync_ValidProofClientOpportunistic_StashesThumbprint()
     {
@@ -237,7 +270,8 @@ public class DPoPTokenEndpointValidatorTests
     private static TokenValidationContext CreateContext(
         string? proofJwt,
         bool clientRequiresDPoP,
-        string? committedThumbprint = null)
+        string? committedThumbprint = null,
+        ClientSecurityProfile securityProfile = ClientSecurityProfile.None)
     {
         var clientRequest = new ClientRequest { DPoPProof = proofJwt };
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
@@ -250,6 +284,7 @@ public class DPoPTokenEndpointValidatorTests
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequireDPoP = clientRequiresDPoP,
+                SecurityProfile = securityProfile,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };

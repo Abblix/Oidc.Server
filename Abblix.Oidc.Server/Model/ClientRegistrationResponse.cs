@@ -264,6 +264,15 @@ public record ClientRegistrationResponse
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The named security profile bundle the client is held to (Abblix extension,
+    /// <c>security_profile</c>). Echoes the registered value of
+    /// <see cref="Features.ClientInformation.ClientInfo.SecurityProfile"/>; omitted when the client
+    /// has no profile.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SecurityProfile)]
+    public string? SecurityProfile { get; init; }
+
+    /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
     /// RFC 9396 §5.1). Echoes the registered value of

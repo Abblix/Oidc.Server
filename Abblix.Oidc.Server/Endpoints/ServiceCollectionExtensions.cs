@@ -589,6 +589,10 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedResponseTypeValidator>(),
             ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedGrantTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, GrantTypeValidator>(),
+            // Fail-loud profile self-consistency: runs after the response/grant-type gates so an
+            // unsupported or inconsistent type is reported as such before this surfaces a
+            // profile-specific rejection.
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),

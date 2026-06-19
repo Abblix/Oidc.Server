@@ -22,6 +22,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -29,6 +30,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -56,8 +58,10 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors);
+        _validator = new FlowTypeValidator(logger.Object, processors, NoProfileOptions());
     }
+
+    private static IOptions<OidcOptions> NoProfileOptions() => Options.Create(new OidcOptions());
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -65,7 +69,8 @@ public class FlowTypeValidatorTests
     private static AuthorizationValidationContext CreateContext(
         string[]? responseType,
         string[][]? allowedResponseTypes = null,
-        string? responseMode = null)
+        string? responseMode = null,
+        ClientSecurityProfile securityProfile = ClientSecurityProfile.None)
     {
         var request = new AuthorizationRequest
         {
@@ -79,6 +84,7 @@ public class FlowTypeValidatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             AllowedResponseTypes = allowedResponseTypes ?? [[ResponseTypes.Code]],
+            SecurityProfile = securityProfile,
         };
 
         return new AuthorizationValidationContext(request)
@@ -399,7 +405,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
@@ -433,7 +439,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
@@ -580,7 +586,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, NoProfileOptions());
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);
@@ -632,5 +638,65 @@ public class FlowTypeValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         // Note: Cannot access context.FlowType - it throws when not set
+    }
+
+    /// <summary>
+    /// Under the FAPI 2.0 profile the authorization-code response type is accepted — the profile
+    /// permits exactly this flow.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2CodeResponseType_ShouldSucceed()
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code],
+            [[ResponseTypes.Code]],
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+        Assert.Equal(FlowTypes.AuthorizationCode, context.FlowType);
+    }
+
+    /// <summary>
+    /// Under the FAPI 2.0 profile an implicit or hybrid response type is rejected with
+    /// unauthorized_client, even though the client allows it and the server registers the builder —
+    /// the profile permits code only, and the granular AllowedResponseTypes whitelist cannot widen it.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.IdToken)]
+    [InlineData(ResponseTypes.Token)]
+    public async Task ValidateAsync_Fapi2ImplicitResponseType_EvenWhenAllowed_ShouldReturnError(
+        string implicitResponseType)
+    {
+        var context = CreateContext(
+            [implicitResponseType],
+            [[implicitResponseType]],
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Under the FAPI 2.0 profile a hybrid response type (code + id_token) is rejected: the token-
+    /// bearing part is forbidden even though it is combined with code.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2HybridResponseType_ShouldReturnError()
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code, ResponseTypes.IdToken],
+            [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 }

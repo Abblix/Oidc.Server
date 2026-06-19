@@ -58,9 +58,17 @@ public partial class DPoPTokenEndpointValidator(
     {
         var committed = context.AuthorizedGrant?.Context.ProofKeyThumbprint;
 
+        // A high-assurance profile (FAPI 2.0) requires a sender-constrained token; today that means a
+        // DPoP proof. This is added to the per-client RequireDPoP flag so a profiled client cannot be
+        // left bearer-only by leaving that flag unset — the profile tightens, the toggle cannot weaken.
+        var requireSenderConstrainedToken = context.ClientInfo.RequireDPoP ||
+            SecurityProfileRequirements
+                .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
+                .RequireSenderConstrainedTokens;
+
         if (context.ClientRequest is not { DPoPProof: {} proofJwt })
         {
-            if (context.ClientInfo.RequireDPoP)
+            if (requireSenderConstrainedToken)
             {
                 LogProofRequiredButMissing("client policy");
                 return new OidcError(

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -73,6 +74,7 @@ public class ReadClientRequestProcessor(
             RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = client.RequireSignedRequestObject,
             TlsClientCertificateBoundAccessTokens = client.TlsClientCertificateBoundAccessTokens,
+            SecurityProfile = ClientSecurityProfiles.ToWire(client.SecurityProfile),
             ClientName = client.ClientName,
             LogoUri = client.LogoUri,
             SubjectType = client.SubjectType,

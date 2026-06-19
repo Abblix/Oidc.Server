@@ -20,9 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -33,7 +36,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
-public class PkceValidator : SyncAuthorizationContextValidatorBase
+/// <param name="options">Provides the server-wide default security profile, which tightens PKCE
+/// enforcement (mandatory PKCE, S256-only) when a client falls under a profile.</param>
+public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
 {
 	/// <summary>
 	/// Validates the PKCE-related parameters in the authorization request against the client's
@@ -47,15 +52,28 @@ public class PkceValidator : SyncAuthorizationContextValidatorBase
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
+		var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
+
 		if (context.Request.CodeChallenge.HasValue())
 		{
+			// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
+			// rejected — including plain and the non-standard S512 — before the per-client plain check,
+			// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
+			// defaults to plain (RFC 7636 §4.3), which fails this S256 comparison as it should.
+			if (profile.RequireS256CodeChallenge &&
+			    context.Request.CodeChallengeMethod != CodeChallengeMethods.S256)
+			{
+				return context.InvalidRequest(
+					"The security profile requires the S256 PKCE code challenge method");
+			}
+
 			if (context.Request.CodeChallengeMethod == CodeChallengeMethods.Plain &&
 			    !context.ClientInfo.PlainPkceAllowed)
 			{
 				return context.InvalidRequest("The client is not allowed PKCE plain method");
 			}
 		}
-		else if (context.ClientInfo.PkceRequired ?? true)
+		else if (profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true))
 		{
 			return context.InvalidRequest("The client requires PKCE code challenge");
 		}

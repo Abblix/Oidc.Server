@@ -126,6 +126,7 @@ public class RegisterClientRequestProcessor(
             RequirePushedAuthorizationRequests = clientInfo.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = clientInfo.RequireSignedRequestObject,
             TlsClientCertificateBoundAccessTokens = clientInfo.TlsClientCertificateBoundAccessTokens,
+            SecurityProfile = ClientSecurityProfiles.ToWire(clientInfo.SecurityProfile),
             AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
             TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
             TokenExchangeAudiences = clientInfo.TokenExchangeAllowedAudiences,
@@ -159,6 +160,9 @@ public class RegisterClientRequestProcessor(
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
+            // Abblix extension: the named security profile bundle (e.g. FAPI 2.0) the client is held
+            // to. Absent or unrecognised maps to ClientSecurityProfile.None.
+            SecurityProfile = ClientSecurityProfiles.Parse(model.SecurityProfile),
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.

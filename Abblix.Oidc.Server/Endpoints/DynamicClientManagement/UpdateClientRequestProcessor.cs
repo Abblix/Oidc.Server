@@ -80,6 +80,9 @@ public class UpdateClientRequestProcessor(
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
+            // Abblix extension: the named security profile bundle (e.g. FAPI 2.0). RFC 7592 update is
+            // a full replacement, so omission resets it to ClientSecurityProfile.None.
+            SecurityProfile = ClientSecurityProfiles.Parse(model.SecurityProfile),
             // RFC 9396 §5.1: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
@@ -190,6 +193,7 @@ public class UpdateClientRequestProcessor(
             RequirePushedAuthorizationRequests = updatedClient.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = updatedClient.RequireSignedRequestObject,
             TlsClientCertificateBoundAccessTokens = updatedClient.TlsClientCertificateBoundAccessTokens,
+            SecurityProfile = ClientSecurityProfiles.ToWire(updatedClient.SecurityProfile),
             ClientName = updatedClient.ClientName,
             LogoUri = updatedClient.LogoUri,
             SubjectType = updatedClient.SubjectType,

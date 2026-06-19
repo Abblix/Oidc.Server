@@ -44,12 +44,18 @@ public class PushedRequestFetcherTests
     private readonly Mock<IAuthorizationRequestStorage> _storage = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
 
-    private PushedRequestFetcher CreateFetcher(bool serverWideRequirement = false)
+    private PushedRequestFetcher CreateFetcher(
+        bool serverWideRequirement = false,
+        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
     {
         var snapshot = new Mock<IOptionsSnapshot<OidcOptions>>();
         snapshot
             .Setup(s => s.Value)
-            .Returns(new OidcOptions { RequirePushedAuthorizationRequests = serverWideRequirement });
+            .Returns(new OidcOptions
+            {
+                RequirePushedAuthorizationRequests = serverWideRequirement,
+                DefaultSecurityProfile = defaultSecurityProfile,
+            });
 
         return new PushedRequestFetcher(snapshot.Object, _storage.Object, _clientInfoProvider.Object);
     }
@@ -103,5 +109,44 @@ public class PushedRequestFetcherTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A FAPI 2.0 client must use PAR even though its require_pushed_authorization_requests flag is
+    /// unset and the server-wide requirement is off — the profile imposes PAR and the granular toggle
+    /// cannot weaken it.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_Fapi2ClientWithoutPushedRequest_ReturnsError()
+    {
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.Fapi2,
+            });
+
+        var result = await CreateFetcher().FetchAsync(CreateRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// The server-wide DefaultSecurityProfile=FAPI 2.0 imposes PAR on an unprofiled client that does
+    /// not set the per-client flag.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_GlobalDefaultFapi2_ImposesPushedRequestOnUnprofiledClient()
+    {
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
+
+        var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2)
+            .FetchAsync(CreateRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
     }
 }

@@ -270,6 +270,14 @@ public record ClientRegistrationSuccessResponse(
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
+    /// The named security profile bundle the client is held to (Abblix extension,
+    /// <c>security_profile</c>). Echoes <c>ClientInfo.SecurityProfile</c>; omitted when the client
+    /// has no profile.
+    /// </summary>
+    [JsonPropertyName(ResponseParameters.SecurityProfile)]
+    public string? SecurityProfile { get; init; }
+
+    /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
     /// RFC 9396 §5.1). Echoes the registered value of
@@ -328,6 +336,7 @@ public record ClientRegistrationSuccessResponse(
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
         public const string RequireSignedRequestObject = "require_signed_request_object";
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
+        public const string SecurityProfile = "security_profile";
         public const string AuthorizationDetailsTypes = "authorization_details_types";
         public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
         public const string TokenExchangeAudiences = "token_exchange_audiences";
