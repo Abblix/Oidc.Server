@@ -176,6 +176,8 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 
 Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
 
+For how we handle contributions — and why the library is developed in-house — see our [Contributing Guidelines](CONTRIBUTING.md).
+
 We appreciate your support and look forward to making our product even better with your help!
 
 ## 📃 License
