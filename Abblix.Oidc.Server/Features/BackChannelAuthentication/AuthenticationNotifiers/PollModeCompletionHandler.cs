@@ -33,14 +33,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
-/// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes. Null when long-polling is disabled.</param>
+/// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes.
+/// Null when long-polling is disabled.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     IBackChannelLongPollingService? statusNotifier)
     : AuthenticationCompletionHandler(logger, storage)
 {
-    private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
