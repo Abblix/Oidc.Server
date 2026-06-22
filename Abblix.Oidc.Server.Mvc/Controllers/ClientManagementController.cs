@@ -45,6 +45,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// For detailed protocol specifications, refer to <see href="https://openid.net/specs/openid-connect-registration-1_0.html"/>.
 /// </remarks>
 [ApiController]
+[ReturnsOidcInvalidRequest]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]

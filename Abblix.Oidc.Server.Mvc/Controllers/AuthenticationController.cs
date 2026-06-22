@@ -54,6 +54,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// of user sessions for OIDC compliance.
 /// </remarks>
 [ApiController]
+[ReturnsOidcInvalidRequest]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
