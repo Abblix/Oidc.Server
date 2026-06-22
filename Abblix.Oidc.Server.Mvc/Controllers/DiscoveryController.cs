@@ -50,6 +50,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// <see href="https://openid.net/specs/openid-connect-discovery-1_0.html"/>.
 /// </remarks>
 [ApiController]
+[ReturnsOidcInvalidRequest]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [EnableCors(OidcConstants.CorsPolicyName)]
