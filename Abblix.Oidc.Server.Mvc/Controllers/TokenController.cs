@@ -43,6 +43,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// Serves as the primary interface between clients and the authorization server for managing tokens' lifecycle.
 /// </summary>
 [ApiController]
+[ReturnsOidcInvalidRequest]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
