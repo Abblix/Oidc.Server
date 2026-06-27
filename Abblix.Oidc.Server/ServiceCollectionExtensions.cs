@@ -159,6 +159,7 @@ public static class ServiceCollectionExtensions
 			.AddUserInfoEndpoint()
 			.AddEndSessionEndpoint()
 			.AddBackChannelAuthenticationEndpoint()
+			.AddDeviceAuthorizationEndpoint()
 			.AddCheckSessionEndpoint()
 			.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
 	}
