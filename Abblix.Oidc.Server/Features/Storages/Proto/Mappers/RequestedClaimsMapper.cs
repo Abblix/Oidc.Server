@@ -98,9 +98,14 @@ internal static class RequestedClaimsMapper
         };
     }
 
-    private static RequestedClaimDetails ToProtoDetails(this Model.RequestedClaimDetails source)
+    private static RequestedClaimDetails ToProtoDetails(this Model.RequestedClaimDetails? source)
     {
         var proto = new RequestedClaimDetails();
+
+        // OIDC Core 5.5 permits a requested claim to carry a null value (e.g. {"email": null}) — a voluntary
+        // claim with no constraints. Persist it as an empty detail rather than dereferencing the null source.
+        if (source is null)
+            return proto;
 
         if (source.Essential.HasValue)
             proto.Essential = source.Essential.Value;
