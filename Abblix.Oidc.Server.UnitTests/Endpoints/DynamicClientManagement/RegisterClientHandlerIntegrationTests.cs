@@ -23,6 +23,7 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
@@ -82,6 +83,11 @@ public class RegisterClientHandlerIntegrationTests
             // fires first and short-circuits with «invalid_token» before any support gate
             // sees the request — masking the very behaviour we want to verify.
             opts.RequireInitialAccessToken = false;
+
+            // This suite exercises dynamic client registration, not the device flow, so drop the
+            // default-enabled device endpoint rather than configure it (the startup validator requires
+            // DeviceAuthorization settings whenever that endpoint is enabled).
+            opts.EnabledEndpoints &= ~OidcEndpoints.DeviceAuthorization;
         });
         configure?.Invoke(services);
         return services.BuildServiceProvider();
