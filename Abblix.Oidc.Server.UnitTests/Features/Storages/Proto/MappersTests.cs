@@ -137,6 +137,28 @@ public class MappersTests
     }
 
     [Fact]
+    public void RequestedClaimsMapper_ToProto_HandlesNullClaimDetail()
+    {
+        // OIDC Core 5.5: a claim requested with a null value is a voluntary claim with no constraints.
+        // Mapping that null detail to proto must not dereference it (regressed once as an NRE on
+        // ToProtoDetails, surfaced by a Minimal API authorize E2E test that requested a null claim).
+        var claims = new RequestedClaims
+        {
+            UserInfo = new() { ["email"] = null! },
+        };
+
+        // Act
+        var proto = claims.ToProto();
+
+        // Assert: no throw, the entry survives, and it round-trips to a non-null empty detail.
+        Assert.Single(proto.UserInfo);
+        var result = RequestedClaimsMapper.FromProto(proto);
+        Assert.NotNull(result);
+        Assert.NotNull(result!.UserInfo);
+        Assert.True(result.UserInfo!.ContainsKey("email"));
+    }
+
+    [Fact]
     public void AuthSessionMapper_ToProto_PreservesAllOptionalFields()
     {
         // Arrange
