@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -72,6 +73,11 @@ public class PushModeValidatorRegistrationTests
             options.Issuer = TestConstants.DefaultIssuer.OriginalString;
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
             options.RequireInitialAccessToken = false;
+
+            // This test inspects the CIBA validator pipeline, not the device flow, so drop the default-enabled
+            // device endpoint rather than configure it (the startup validator requires DeviceAuthorization settings
+            // whenever that endpoint is enabled).
+            options.EnabledEndpoints &= ~OidcEndpoints.DeviceAuthorization;
         });
 
         return services.BuildServiceProvider();

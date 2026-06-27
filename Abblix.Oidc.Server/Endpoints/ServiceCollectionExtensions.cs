@@ -64,6 +64,7 @@ using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
 using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
 using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
@@ -704,6 +705,13 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
         services.TryAddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>();
         services.TryAddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
+
+        // Fail loud at startup when the device endpoint is enabled but its settings are absent, instead of letting the
+        // gap surface as an unhandled 500 on the first request. TryAddEnumerable because the options framework
+        // resolves every registered IValidateOptions.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DeviceAuthorizationOptionsValidator>());
+
         return services;
     }
 

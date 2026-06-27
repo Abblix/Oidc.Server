@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
@@ -64,6 +65,17 @@ builder.Services.AddOidcServices(options =>
     [
         new ResourceDefinition(new Uri(TestConstants.ApiResource)),
     ];
+
+    // RFC 8628 device flow settings — required now that the startup validator rejects an enabled device endpoint with
+    // no configuration. No client here uses the device grant; this keeps the default-enabled endpoint valid.
+    options.DeviceAuthorization = new DeviceAuthorizationOptions
+    {
+        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
+        CodeLifetime = TimeSpan.FromMinutes(15),
+        PollingInterval = TimeSpan.FromSeconds(5),
+        DeviceCodeLength = 32,
+        UserCodeLength = 8,
+    };
     return;
 
     static ClientInfo Mint(
