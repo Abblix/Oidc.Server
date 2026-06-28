@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -57,9 +58,12 @@ internal sealed class ReturnsOidcInvalidRequestAttribute : Attribute, IActionFil
 		if (context.ModelState.IsValid)
 			return;
 
-		context.Result = ModelValidationError
-			.InvalidRequest(context.ModelState)
-			.Format(StatusCodes.Status400BadRequest);
+		var messages =
+			from entry in context.ModelState
+			from error in entry.Value.Errors
+			select error.ErrorMessage;
+
+		context.Result = ErrorFactory.InvalidRequest(messages).Format(StatusCodes.Status400BadRequest);
 	}
 
 	/// <inheritdoc />
