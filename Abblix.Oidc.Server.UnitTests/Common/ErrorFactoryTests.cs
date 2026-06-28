@@ -20,29 +20,39 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Mvc.ActionResults;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Abblix.Oidc.Server.Common.Validation;
+using Xunit;
 
-namespace Abblix.Oidc.Server.Mvc.UnitTests;
+namespace Abblix.Oidc.Server.UnitTests.Common;
 
 /// <summary>
-/// Covers the MVC-specific aggregation of a failed <c>[ApiController]</c> <c>ModelState</c> onto the OAuth
-/// <c>invalid_request</c> error. The shared message-to-<c>OidcError</c> mapping it delegates to lives in the core and
-/// is covered by the core's own <c>ModelValidationErrorTests</c>; the scoping/short-circuit behaviour by
-/// <see cref="Filters.ReturnsOidcInvalidRequestTests"/>.
+/// Covers the shared request-binding error mapping both transport adapters delegate to: a flat sequence of
+/// model-validation messages becomes an <c>invalid_request</c> <see cref="OidcError"/>.
 /// </summary>
-public class ModelValidationErrorTests
+public class ErrorFactoryTests
 {
     [Fact]
-    public void InvalidRequest_FromModelState_AggregatesErrorMessages()
+    public void InvalidRequest_FromMessages_JoinsAndSetsInvalidRequestCode()
     {
-        var modelState = new ModelStateDictionary();
-        modelState.AddModelError("response_mode", "The value 'bogus' is invalid");
-
-        var error = ModelValidationError.InvalidRequest(modelState);
+        var error = ErrorFactory.InvalidRequest(["first problem", "second problem"]);
 
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Contains("bogus", error.ErrorDescription);
+        Assert.Equal("first problem second problem", error.ErrorDescription);
+    }
+
+    [Fact]
+    public void InvalidRequest_FromBlankOrNoMessages_FallsBackToGenericDescription()
+    {
+        string[][] blankCases = [[], [""], ["   "], ["", "   "]];
+
+        foreach (var messages in blankCases)
+        {
+            var error = ErrorFactory.InvalidRequest(messages);
+
+            Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+            Assert.False(string.IsNullOrWhiteSpace(error.ErrorDescription));
+        }
     }
 }
