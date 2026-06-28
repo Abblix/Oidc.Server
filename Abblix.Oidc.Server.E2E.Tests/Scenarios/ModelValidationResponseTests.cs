@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <c>error</c> code OAuth/OIDC clients read. Without the <c>[ReturnsOidcInvalidRequest]</c> attribute on the
 /// controller this test fails: the problem+json body carries no <c>error</c> key and the wrong media type.
 /// </summary>
-public class ModelValidationErrorResponseTests(TestFactory factory) : TestBase(factory)
+public class ModelValidationResponseTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
     public async Task Authorize_WithInvalidPromptValue_ReturnsOAuthInvalidRequestJson()
