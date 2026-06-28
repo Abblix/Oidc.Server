@@ -29,13 +29,13 @@ namespace System;
 /// </summary>
 internal readonly struct Index(int value, bool fromEnd = false)
 {
-	private readonly int value = fromEnd ? ~value : value;
+	private readonly int _value = fromEnd ? ~value : value;
 
-	public int Value => value < 0 ? ~value : value;
+	public int Value => _value < 0 ? ~_value : _value;
 
-	public bool IsFromEnd => value < 0;
+	public bool IsFromEnd => _value < 0;
 
-	public int GetOffset(int length) => IsFromEnd ? length + value + 1 : value;
+	public int GetOffset(int length) => IsFromEnd ? length + _value + 1 : _value;
 
 	public static implicit operator Index(int value) => new(value);
 }
