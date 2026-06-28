@@ -45,7 +45,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string GeneratedFromAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.GeneratedFromAttribute";
 	private const string BindsAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.BindsAttribute";
 	private const string SupportsGetPropertyName = "SupportsGet";
-	private const string MvcAttributesNamespace = "Abblix.Oidc.Server.Mvc.Attributes";
+	private const string ValidationAttributesNamespace = "Abblix.Utils.Validation";
 	private const string DeclarativeValidationNamespace = "Abblix.Oidc.Server.DeclarativeValidation";
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
@@ -74,7 +74,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "Wire-format marker has no binder",
 		messageFormat: "The declarative marker '{0}' on '{1}.{2}' is realised by no model binder: " +
 		               "no binder in this assembly declares it via [Binds], and no executable attribute " +
-		               "with the same name exists in '" + MvcAttributesNamespace + "'. " +
+		               "with the same name exists in '" + ValidationAttributesNamespace + "'. " +
 		               "The parameter would silently stop binding.",
 		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
 		defaultSeverity: DiagnosticSeverity.Error,
@@ -315,7 +315,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 					// (handled above) or a validation marker mirrored by an executable MVC attribute
 					// with the same name. Anything else is a silent-drop hazard, so fail the build.
 					var executable = compilation.GetTypeByMetadataName(
-						$"{MvcAttributesNamespace}.{attributeClass.MetadataName}");
+						$"{ValidationAttributesNamespace}.{attributeClass.MetadataName}");
 					if (executable != null)
 					{
 						writer.AppendLine(
