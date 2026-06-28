@@ -1,0 +1,49 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
+
+namespace Abblix.Oidc.Server.MinimalApi;
+
+/// <summary>
+/// Maps the framework-neutral <see cref="Common.CookieOptions"/> used by the core library to the ASP.NET Core
+/// <see cref="CookieOptions"/> consumed by <see cref="IResponseCookies"/>.
+/// </summary>
+internal static class CookieOptionsExtensions
+{
+    /// <summary>Converts core <see cref="Common.CookieOptions"/> to ASP.NET Core's <see cref="CookieOptions"/>.</summary>
+    public static CookieOptions ConvertOptions(this Common.CookieOptions options) => new()
+    {
+        Domain = options.Domain,
+        Path = options.Path,
+        Secure = options.Secure,
+        IsEssential = options.IsEssential,
+        HttpOnly = options.HttpOnly,
+        SameSite = options.SameSite.ConvertSameSite(),
+        Expires = options.Expires,
+        MaxAge = options.MaxAge,
+    };
+
+    private static SameSiteMode ConvertSameSite(this string? sameSite)
+        => sameSite.HasValue() ? Enum.Parse<SameSiteMode>(sameSite, true) : SameSiteMode.Unspecified;
+}
