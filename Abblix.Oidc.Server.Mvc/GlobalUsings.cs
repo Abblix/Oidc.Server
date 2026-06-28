@@ -21,5 +21,5 @@
 // info@abblix.com
 
 global using UriBuilder = Abblix.Utils.UriBuilder;
-global using AllowedValuesAttribute = Abblix.Oidc.Server.Mvc.Attributes.AllowedValuesAttribute;
-global using ElementsRequiredAttribute = Abblix.Oidc.Server.Mvc.Attributes.ElementsRequiredAttribute;
+global using AllowedValuesAttribute = Abblix.Utils.Validation.AllowedValuesAttribute;
+global using ElementsRequiredAttribute = Abblix.Utils.Validation.ElementsRequiredAttribute;
