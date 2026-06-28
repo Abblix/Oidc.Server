@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -39,7 +40,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         // ui_locales (culture list), claims (JSON-in-a-field) and resource (repeated Uri[]).
         var query = new Dictionary<string, string>
         {
-            ["client_id"] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             ["response_type"] = ResponseTypes.Code,
             ["redirect_uri"] = TestConstants.RedirectUri,
             ["scope"] = Scopes.OpenId,
@@ -127,8 +128,8 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var response = await client.PostFormJsonAsync(OidcFlows.Endpoint(discovery, "device_authorization_endpoint"),
             new Dictionary<string, string>
             {
-                ["client_id"] = TestConstants.ConfidentialClientId,
-                ["client_secret"] = TestConstants.ConfidentialClientSecret,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
                 ["scope"] = Scopes.OpenId,
             });
 
@@ -156,7 +157,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             ["client_name"] = "Lifecycle Test Client",
         }, HttpStatusCode.Created);
 
-        var clientId = registered["client_id"]!.GetValue<string>();
+        var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
         var registrationAccessToken = registered["registration_access_token"]!.GetValue<string>();
         var registrationClientUri = registered["registration_client_uri"]!.GetValue<string>();
         Assert.False(string.IsNullOrEmpty(clientId));
@@ -170,20 +171,20 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
         var readBody = JsonNode.Parse(
             await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(clientId, readBody["client_id"]!.GetValue<string>());
+        Assert.Equal(clientId, readBody[ClientRequest.Parameters.ClientId]!.GetValue<string>());
 
         // UPDATE (RFC 7592 §2.2): PUT the full metadata with a changed client_name.
         var updateBody = new JsonObject
         {
-            ["client_id"] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
             ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { ResponseTypes.Code },
             ["token_endpoint_auth_method"] = "client_secret_basic",
             ["client_name"] = "Renamed Client",
         };
-        if (registered["client_secret"]?.GetValue<string>() is { } secret)
-            updateBody["client_secret"] = secret;
+        if (registered[ClientRequest.Parameters.ClientSecret]?.GetValue<string>() is { } secret)
+            updateBody[ClientRequest.Parameters.ClientSecret] = secret;
         var update = await SendWithBearerAsync(
             client, HttpMethod.Put, registrationClientUri, registrationAccessToken, updateBody);
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);

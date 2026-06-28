@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -41,7 +42,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var responseJwt = await client.AuthorizeGetCallbackAsync(OidcFlows.Endpoint(discovery, "authorization_endpoint"),
             new Dictionary<string, string>
             {
-                ["client_id"] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 ["response_type"] = ResponseTypes.Code,
                 ["redirect_uri"] = TestConstants.RedirectUri,
                 ["scope"] = Scopes.OpenId,
@@ -80,8 +81,8 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             new Dictionary<string, string>
             {
                 ["grant_type"] = GrantTypes.ClientCredentials,
-                ["client_id"] = TestConstants.ClientCredentialsClientId,
-                ["client_secret"] = TestConstants.ConfidentialClientSecret,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             });
 
         response.EnsureSuccessStatusCode();
@@ -105,7 +106,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, "authorization_endpoint"), new Dictionary<string, string>
             {
-                ["client_id"] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 ["response_type"] = ResponseTypes.Code,
                 ["redirect_uri"] = TestConstants.RedirectUri,
                 ["scope"] = Scopes.OpenId,
@@ -164,8 +165,8 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             TestContext.Current.CancellationToken);
         var registered = JsonNode.Parse(
             await registerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        var clientId = registered["client_id"]!.GetValue<string>();
-        var clientSecret = registered["client_secret"]!.GetValue<string>();
+        var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
 
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, clientId, clientSecret))
             ["access_token"]!.GetValue<string>();
@@ -194,8 +195,8 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["token"] = token,
-                ["client_id"] = clientId,
-                ["client_secret"] = clientSecret,
+                [ClientRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
             }),
         };
         request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(accept));
@@ -226,7 +227,8 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
 
         Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var cspValues),
             "check_session response is missing the Content-Security-Policy header");
-        var match = Regex.Match(string.Join(' ', cspValues!), "nonce-([A-Za-z0-9+/=]+)");
+        var match = Regex.Match(
+            string.Join(' ', cspValues!), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
         Assert.True(match.Success, "no nonce in the Content-Security-Policy header");
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return (match.Groups[1].Value, body);

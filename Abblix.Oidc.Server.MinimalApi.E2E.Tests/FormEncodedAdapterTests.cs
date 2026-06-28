@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -49,8 +50,8 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
             new Dictionary<string, string>
             {
                 ["grant_type"] = GrantTypes.ClientCredentials,
-                ["client_id"] = TestConstants.ClientCredentialsClientId,
-                ["client_secret"] = TestConstants.ConfidentialClientSecret,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
                 ["resource"] = TestConstants.ApiResource,
             });
 
@@ -68,8 +69,8 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
             new Dictionary<string, string>
             {
                 ["grant_type"] = GrantTypes.ClientCredentials,
-                ["client_id"] = TestConstants.ClientCredentialsClientId,
-                ["client_secret"] = "wrong-secret",
+                [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+                [ClientRequest.Parameters.ClientSecret] = "wrong-secret",
             });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -96,8 +97,8 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
             new Dictionary<string, string>
             {
                 ["token"] = accessToken,
-                ["client_id"] = TestConstants.ConfidentialClientId,
-                ["client_secret"] = TestConstants.ConfidentialClientSecret,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             });
         Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
 
@@ -110,7 +111,7 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
             new Dictionary<string, string>
             {
                 ["token"] = token,
-                ["client_id"] = TestConstants.ConfidentialClientId,
-                ["client_secret"] = TestConstants.ConfidentialClientSecret,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             });
 }
