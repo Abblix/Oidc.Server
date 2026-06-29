@@ -7,6 +7,7 @@
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <IsPackable>true</IsPackable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Abblix.OIDC.Server.MinimalApi</PackageId>
         <Title>Abblix OIDC Server Minimal API</Title>
         <Description>The package integrates Abblix's OIDC Server capabilities with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as the MVC integration without taking a dependency on the MVC framework.</Description>
@@ -18,6 +19,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+        <PackageReleaseNotes>Initial release: ASP.NET Core Minimal API integration for the Abblix OIDC Server. Maps the OpenID Connect and OAuth 2.0 endpoints as route handlers via AddOidcMinimalApi/MapOidcEndpoints, offering the same protocol coverage as the MVC integration without a dependency on the MVC framework. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
