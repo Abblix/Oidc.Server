@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using TokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
+using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 

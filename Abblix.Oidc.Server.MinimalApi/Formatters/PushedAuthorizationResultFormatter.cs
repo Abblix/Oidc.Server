@@ -23,10 +23,10 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
+using CoreModel = Abblix.Oidc.Server.Model;
 using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
-using ParResponse = Abblix.Oidc.Server.MinimalApi.Model.PushedAuthorizationResponse;
+using ParResponse = Abblix.Oidc.Server.Model.PushedAuthorizationResponse;
 using CorePushedAuthorizationResponse = Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
@@ -47,7 +47,7 @@ public class PushedAuthorizationResultFormatter : IPushedAuthorizationResultForm
                 statusCode: StatusCodes.Status201Created),
 
             AuthorizationError error => Results.Json(
-                new ErrorResponse(error.Error, error.ErrorDescription),
+                new CoreModel.ErrorResponse(error.Error, error.ErrorDescription),
                 statusCode: error.Error switch
                 {
                     ErrorCodes.InvalidClient => StatusCodes.Status401Unauthorized,

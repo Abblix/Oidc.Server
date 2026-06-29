@@ -22,13 +22,13 @@
 
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.RandomGenerators;
-using Abblix.Oidc.Server.Model;
+using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Provides storage and retrieval services for OAuth 2.0 authorization requests using a distributed cache.
-/// This class is designed to handle the storage of <see cref="AuthorizationRequest"/> objects and facilitate
+/// This class is designed to handle the storage of <see cref="Model.AuthorizationRequest"/> objects and facilitate
 /// their retrieval using unique request URIs, supporting scenarios such as the OAuth 2.0 Pushed Authorization Requests
 /// (PAR).
 /// </summary>
@@ -51,7 +51,7 @@ public class AuthorizationRequestStorage(
     /// <returns>A task that resolves to a <see cref="PushedAuthorizationResponse"/>, which includes the stored request
     /// and its unique URI. This response is used to facilitate subsequent authorization processes that may require
     /// accessing the request via its URI.</returns>
-    public async Task<PushedAuthorizationResponse> StoreAsync(AuthorizationRequest request, TimeSpan expiresIn)
+    public async Task<PushedAuthorizationResponse> StoreAsync(Model.AuthorizationRequest request, TimeSpan expiresIn)
     {
         var requestUri = authorizationRequestUriGenerator.GenerateRequestUri();
 
@@ -71,8 +71,8 @@ public class AuthorizationRequestStorage(
     /// <param name="shouldRemove">Whether to remove the request from the cache after retrieving it. This is typically
     /// true for operations where the request is intended for single retrieval, such as after redirecting a client
     /// to an authorization endpoint.</param>
-    /// <returns>A task that resolves to the retrieved <see cref="AuthorizationRequest"/> if found; otherwise, null.
+    /// <returns>A task that resolves to the retrieved <see cref="Model.AuthorizationRequest"/> if found; otherwise, null.
     /// If the request is not found, it may have expired or been removed from the cache previously.</returns>
-    public Task<AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false)
-        => storage.GetAsync<AuthorizationRequest>(keyFactory.AuthorizationRequestKey(requestUri), shouldRemove);
+    public Task<Model.AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false)
+        => storage.GetAsync<Model.AuthorizationRequest>(keyFactory.AuthorizationRequestKey(requestUri), shouldRemove);
 }

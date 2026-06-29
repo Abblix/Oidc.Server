@@ -23,12 +23,14 @@
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
-namespace Abblix.Oidc.Server.MinimalApi.Model;
+namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// The authorization response delivered to the client's redirect URI (via query, fragment or form_post), carrying
 /// either the success parameters (code/tokens) or the error, or — under JARM — the single packed <c>response</c> JWT.
-/// This is a framework-neutral wire DTO, identical to the one the MVC integration emits.
+/// This is the framework-neutral wire projection both transport adapters serialize. It is distinct from the domain
+/// result <see cref="Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse"/> (the abstract
+/// pipeline outcome): the formatter flattens that domain result onto this wire shape.
 /// </summary>
 public record AuthorizationResponse
 {

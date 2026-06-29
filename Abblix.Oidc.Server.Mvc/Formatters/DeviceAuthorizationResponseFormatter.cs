@@ -28,7 +28,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
-using MvcResponse = Abblix.Oidc.Server.Mvc.Model.DeviceAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -54,7 +53,7 @@ public class DeviceAuthorizationResponseFormatter(
                 var deviceAuthOptions = options.Value.DeviceAuthorization
                     .NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-                var mvcResponse = new MvcResponse
+                var deviceResponse = new CoreResponse
                 {
                     DeviceCode = success.DeviceCode,
                     UserCode = success.UserCode,
@@ -69,7 +68,7 @@ public class DeviceAuthorizationResponseFormatter(
                     Interval = deviceAuthOptions.PollingInterval,
                 };
 
-                return new OkObjectResult(mvcResponse);
+                return new OkObjectResult(deviceResponse);
             },
             onFailure: error => new BadRequestObjectResult(
                 new ErrorResponse(error.Error, error.ErrorDescription))));

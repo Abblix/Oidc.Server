@@ -91,7 +91,7 @@ public static class ServiceCollectionExtensions
 			.AddHttpContextAccessor();
 
 		services.TryAddSingleton<IParameterValidator, ParameterValidator>();
-		services.TryAddSingleton<IParametersProvider, ParametersProvider>();
+		services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>();
 		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
 		services.TryAddSingleton<IUriResolver, UriResolver>();

@@ -21,12 +21,13 @@
 // info@abblix.com
 
 using System.Text.Json;
+using Abblix.Oidc.Server.Common.Interfaces;
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
 /// Extracts parameters from an object by serializing it to a JSON element and enumerating its properties. Pure
-/// System.Text.Json, framework-neutral — identical to the MVC integration's provider.
+/// System.Text.Json, framework-neutral — the single implementation both the MVC and Minimal API transports use.
 /// </summary>
 public class ParametersProvider : IParametersProvider
 {

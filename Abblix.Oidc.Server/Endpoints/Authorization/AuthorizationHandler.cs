@@ -23,7 +23,7 @@
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
-using Abblix.Oidc.Server.Model;
+using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -63,7 +63,7 @@ public class AuthorizationHandler(
     /// This method ensures that only requests meeting the necessary validation criteria are processed,
     /// maintaining the integrity and security of the authorization flow.
     /// </remarks>
-    public async Task<AuthorizationResponse> HandleAsync(AuthorizationRequest request)
+    public async Task<AuthorizationResponse> HandleAsync(Model.AuthorizationRequest request)
     {
         // Produce the response through the full processing chain (including the session-management
         // decorator that sets session_state), then let the encoder apply iss/scope gating and — for a
@@ -74,7 +74,7 @@ public class AuthorizationHandler(
         return response;
     }
 
-    private async Task<AuthorizationResponse> ProduceResponseAsync(AuthorizationRequest request)
+    private async Task<AuthorizationResponse> ProduceResponseAsync(Model.AuthorizationRequest request)
     {
         var fetchResult = await fetcher.FetchAsync(request);
 

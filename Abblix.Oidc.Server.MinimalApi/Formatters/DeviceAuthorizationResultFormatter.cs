@@ -27,7 +27,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
-using MinimalApiResponse = Abblix.Oidc.Server.MinimalApi.Model.DeviceAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -51,7 +50,7 @@ public class DeviceAuthorizationResultFormatter(
                 var deviceAuthOptions = options.Value.DeviceAuthorization
                     .NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-                var deviceResponse = new MinimalApiResponse
+                var deviceResponse = new CoreResponse
                 {
                     DeviceCode = success.DeviceCode,
                     UserCode = success.UserCode,

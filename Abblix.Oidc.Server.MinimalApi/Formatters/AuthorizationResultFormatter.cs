@@ -23,15 +23,14 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
-using ResponseDto = Abblix.Oidc.Server.MinimalApi.Model.AuthorizationResponse;
+using CoreModel = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -48,7 +47,7 @@ public class AuthorizationResultFormatter(
     IHttpContextAccessor httpContextAccessor) : IAuthorizationResultFormatter
 {
     /// <inheritdoc />
-    public async Task<IResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationResponse response)
+    public async Task<IResult> FormatResponseAsync(CoreModel.AuthorizationRequest request, AuthorizationResponse response)
     {
         switch (response)
         {
@@ -78,7 +77,7 @@ public class AuthorizationResultFormatter(
             // JARM (*.jwt): success and error alike deliver the single packed response JWT. Matched first so any
             // JWT-bearing response takes this path.
             case ClientDeliveredResponse { ResponseJwt: { } responseJwt } jarm:
-                return Deliver(jarm, new ResponseDto { Response = responseJwt });
+                return Deliver(jarm, new CoreModel.AuthorizationResponse { Response = responseJwt });
 
             case SuccessfullyAuthenticated success:
                 return Deliver(success, MapSuccess(success));
@@ -91,7 +90,7 @@ public class AuthorizationResultFormatter(
         }
     }
 
-    private IResult Deliver(ClientDeliveredResponse response, ResponseDto dto)
+    private IResult Deliver(ClientDeliveredResponse response, CoreModel.AuthorizationResponse dto)
     {
         Uri redirectUri;
 
@@ -107,7 +106,7 @@ public class AuthorizationResultFormatter(
 
             // An error with no usable redirect URI (e.g. an invalid redirect_uri) is surfaced directly.
             case AuthorizationError { RedirectUri: null, Error: var error, ErrorDescription: var description }:
-                return Results.Json(new ErrorResponse(error, description), statusCode: StatusCodes.Status400BadRequest);
+                return Results.Json(new CoreModel.ErrorResponse(error, description), statusCode: StatusCodes.Status400BadRequest);
 
             default:
                 throw new UnexpectedTypeException(nameof(response), response.GetType());
@@ -139,7 +138,7 @@ public class AuthorizationResultFormatter(
         return result;
     }
 
-    private static ResponseDto MapSuccess(SuccessfullyAuthenticated success) => new()
+    private static CoreModel.AuthorizationResponse MapSuccess(SuccessfullyAuthenticated success) => new()
     {
         State = success.Model.State,
         Issuer = success.Issuer,
@@ -156,7 +155,7 @@ public class AuthorizationResultFormatter(
         SessionState = success.SessionState,
     };
 
-    private static ResponseDto MapError(AuthorizationError error) => new()
+    private static CoreModel.AuthorizationResponse MapError(AuthorizationError error) => new()
     {
         State = error.Model.State,
         Issuer = error.Issuer,
@@ -165,10 +164,10 @@ public class AuthorizationResultFormatter(
         ErrorUri = error.ErrorUri,
     };
 
-    private (string name, string? value)[] GetParametersFrom(ResponseDto response)
+    private (string name, string? value)[] GetParametersFrom(CoreModel.AuthorizationResponse response)
         => parametersProvider.GetParameters(response).ToArray();
 
-    private async Task<IResult> RedirectAsync(Uri uri, AuthorizationRequest request)
+    private async Task<IResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
         var stored = await authorizationRequestStorage.StoreAsync(request, options.Value.LoginSessionExpiresIn);
         var resolved = ResolveContent(uri);

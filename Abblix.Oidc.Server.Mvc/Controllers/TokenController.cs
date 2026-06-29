@@ -34,7 +34,7 @@ using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
-using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
+using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
 

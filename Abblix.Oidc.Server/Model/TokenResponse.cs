@@ -24,11 +24,12 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
-namespace Abblix.Oidc.Server.MinimalApi.Model;
+namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// The response from an OAuth 2.0 / OpenID Connect token endpoint. This is a framework-neutral wire DTO, identical to
-/// the one the MVC integration emits.
+/// The response from an OAuth 2.0 / OpenID Connect token endpoint. This is the framework-neutral wire DTO both
+/// transport adapters (MVC, Minimal API) serialize; serialization is identical across frameworks, so a single core
+/// type serves both.
 /// </summary>
 public record TokenResponse
 {

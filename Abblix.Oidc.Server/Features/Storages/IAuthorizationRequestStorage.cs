@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Model;
+using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -38,13 +38,13 @@ public interface IAuthorizationRequestStorage
 	/// like the Pushed Authorization Request (PAR). This method also accepts an expiration time for the request,
 	/// allowing the storage mechanism to automatically invalidate the request after a certain period.
 	/// </summary>
-	/// <param name="request">The <see cref="AuthorizationRequest"/> instance to be stored.</param>
+	/// <param name="request">The <see cref="Model.AuthorizationRequest"/> instance to be stored.</param>
 	/// <param name="expiresIn">The duration after which the stored request should expire and be considered invalid.</param>
 	/// <returns>A <see cref="Task"/> that, when completed successfully,
 	/// yields a <see cref="PushedAuthorizationResponse"/> containing the unique identifier of the stored request
 	/// and its expiration information.
 	/// </returns>
-	Task<PushedAuthorizationResponse> StoreAsync(AuthorizationRequest request, TimeSpan expiresIn);
+	Task<PushedAuthorizationResponse> StoreAsync(Model.AuthorizationRequest request, TimeSpan expiresIn);
 
 	/// <summary>
 	/// Asynchronously retrieves an authorization request using a previously stored unique identifier.
@@ -57,7 +57,7 @@ public interface IAuthorizationRequestStorage
 	/// <param name="shouldRemove">Specifies whether the request should be removed from storage on retrieval.
 	/// This is useful for one-time use scenarios, ensuring that an authorization request cannot be reused.</param>
 	/// <returns>A <see cref="Task"/> that, when completed successfully, yields
-	/// the <see cref="AuthorizationRequest"/> associated with the specified identifier,
+	/// the <see cref="Model.AuthorizationRequest"/> associated with the specified identifier,
 	/// or null if no such request exists or if it has expired.</returns>
-	Task<AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false);
+	Task<Model.AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false);
 }

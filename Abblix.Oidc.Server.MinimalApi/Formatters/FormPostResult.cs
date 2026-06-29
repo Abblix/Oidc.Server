@@ -22,6 +22,7 @@
 
 using System.Text;
 using System.Xml;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;

@@ -20,31 +20,17 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json.Serialization;
-using Abblix.Utils.Json;
-
-namespace Abblix.Oidc.Server.MinimalApi.Model;
+namespace Abblix.Oidc.Server.Common.Interfaces;
 
 /// <summary>
-/// The response to a pushed authorization request (RFC 9126): the request URI the client refers to on the
-/// authorization endpoint, and how long it stays valid.
+/// Extracts a flat set of name/value pairs from a response object — the reverse of binding — for delivery as query,
+/// fragment or form_post parameters. The transport adapters (MVC, Minimal API) share this contract because flattening
+/// a response DTO is framework-neutral; the implementation lives in the core for the same reason.
 /// </summary>
-public record PushedAuthorizationResponse
+public interface IParametersProvider
 {
-    private static class Parameters
-    {
-        public const string RequestUri = "request_uri";
-        public const string ExpiresIn = "expires_in";
-    }
-
-    /// <summary>The URI where the pushed authorization request is stored.</summary>
-    [JsonPropertyName(Parameters.RequestUri)]
-    [JsonPropertyOrder(1)]
-    public Uri RequestUri { get; init; } = null!;
-
-    /// <summary>How long the stored request stays valid.</summary>
-    [JsonPropertyName(Parameters.ExpiresIn)]
-    [JsonConverter(typeof(TimeSpanSecondsConverter))]
-    [JsonPropertyOrder(2)]
-    public TimeSpan ExpiresIn { get; init; }
+    /// <summary>Retrieves the parameters as name/value pairs from the specified object.</summary>
+    /// <param name="obj">The object to extract parameters from.</param>
+    /// <returns>The parameter name/value pairs.</returns>
+    IEnumerable<(string name, string? value)> GetParameters(object obj);
 }

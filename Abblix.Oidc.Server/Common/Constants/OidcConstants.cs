@@ -20,16 +20,17 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.Common.Constants;
 
 /// <summary>
-/// Constants used by the Minimal API integration.
+/// Shared identifiers the HTTP transport adapters (MVC, Minimal API) agree on. The core declares them so both
+/// adapters reference one value rather than each carrying its own copy.
 /// </summary>
 public static class OidcConstants
 {
     /// <summary>
     /// The name of the CORS policy applied to the cross-origin OIDC endpoints. The host registers a policy under this
-    /// name (and calls <c>UseCors</c>); the value matches the MVC integration so a host can share one policy.
+    /// name (and calls <c>UseCors</c>); both transport adapters apply the same name so a host can share one policy.
     /// </summary>
     public const string CorsPolicyName = "OidcCorsPolicy";
 }

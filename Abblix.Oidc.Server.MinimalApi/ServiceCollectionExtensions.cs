@@ -83,7 +83,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
 
         // Flattens a response DTO into name/value pairs for query/fragment/form_post delivery.
-        services.TryAddSingleton<IParametersProvider, ParametersProvider>();
+        services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 
         // Response formatters turn a core result into an IResult. TryAdd lets a host swap any of them.
         services.TryAddScoped<IConfigurationResultFormatter, ConfigurationResultFormatter>();

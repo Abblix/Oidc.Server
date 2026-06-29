@@ -30,7 +30,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
+using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 

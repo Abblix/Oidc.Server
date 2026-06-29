@@ -27,7 +27,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using TokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
-using TokenResponse = Abblix.Oidc.Server.MinimalApi.Model.TokenResponse;
+using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
