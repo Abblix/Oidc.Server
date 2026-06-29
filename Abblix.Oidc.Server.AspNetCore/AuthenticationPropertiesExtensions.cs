@@ -24,7 +24,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 
-namespace Abblix.Oidc.Server.Mvc;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
 /// Extension methods for <see cref="AuthenticationProperties"/>.
@@ -43,7 +43,17 @@ public static class AuthenticationPropertiesExtensions
 		var json = properties.GetString(key);
 		if (json != null)
 		{
-			values = JsonSerializer.Deserialize<List<string>>(json);
+			try
+			{
+				values = JsonSerializer.Deserialize<List<string>>(json);
+			}
+			catch (JsonException)
+			{
+				// A property tampered with or written by another component is treated as absent, not a 500.
+				values = null;
+				return false;
+			}
+
 			if (values != null)
 				return true;
 		}

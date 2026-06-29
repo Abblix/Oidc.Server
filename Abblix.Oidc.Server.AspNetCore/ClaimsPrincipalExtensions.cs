@@ -24,7 +24,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 
-namespace Abblix.Oidc.Server.Mvc;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
 /// Extension methods for <see cref="ClaimsPrincipal"/>.
@@ -49,7 +49,17 @@ public static class ClaimsPrincipalExtensions
 
 		if (claimValue.StartsWith('['))
 		{
-			values = JsonSerializer.Deserialize<List<string>>(claimValue);
+			try
+			{
+				values = JsonSerializer.Deserialize<List<string>>(claimValue);
+			}
+			catch (JsonException)
+			{
+				// A claim that opens like a JSON array but is malformed is treated as absent, not a 500.
+				values = null;
+				return false;
+			}
+
 			return values != null;
 		}
 
