@@ -22,17 +22,13 @@
 
 using Microsoft.AspNetCore.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
-/// Extension methods that read URL components from an <see cref="HttpRequest"/>.
+/// Reads URL components from an <see cref="HttpRequest"/>. Touches only <see cref="HttpRequest"/> (no MVC, no Minimal
+/// API types), so it is shared by both transport adapters.
 /// </summary>
-/// <remarks>
-/// These are framework-neutral (they touch only <see cref="HttpRequest"/>, not MVC) and mirror the helpers the MVC
-/// integration keeps in its own <c>HttpRequestExtensions</c>. They are a candidate for a shared HTTP-neutral package
-/// if one is later extracted, so both adapters stop carrying their own copy.
-/// </remarks>
-internal static class HttpRequestExtensions
+public static class HttpRequestExtensions
 {
     /// <summary>
     /// Gets the application's base URL (scheme, host, and base path) from the request.

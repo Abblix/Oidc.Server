@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -92,7 +93,7 @@ public static class ServiceCollectionExtensions
 
 		services.TryAddSingleton<IParameterValidator, ParameterValidator>();
 		services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
-		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoAdapter>();
+		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
 		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
 		services.TryAddSingleton<IUriResolver, UriResolver>();
 		services.TryAddScoped<IEndpointResolver, EndpointResolver>();

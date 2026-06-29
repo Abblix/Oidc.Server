@@ -26,36 +26,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Mvc;
 
 /// <summary>
-/// Provides extension methods for the <see cref="HttpRequest"/> class.
-/// These methods are used to retrieve various URL components from an HTTP request.
+/// MVC-only <see cref="HttpRequest"/> extension that resolves an application-relative path to an absolute URI
+/// through the MVC <see cref="IUriResolver"/>. The framework-neutral URL helpers (<c>GetAppUrl</c>/<c>GetBaseUrl</c>)
+/// live in the shared <c>Abblix.Oidc.Server.AspNetCore</c> project.
 /// </summary>
 public static class HttpRequestExtensions
 {
-	/// <summary>
-	/// Gets the application's base URL from the HTTP request.
-	/// This includes the scheme, host, and the base path of the application.
-	/// </summary>
-	/// <param name="request">The HTTP request.</param>
-	/// <returns>The application's base URL.</returns>
-	public static string GetAppUrl(this HttpRequest request) => request.GetFullUrl(request.PathBase);
-
-	/// <summary>
-	/// Gets the base URL of the request.
-	/// This includes the scheme, host, and the path of the request.
-	/// </summary>
-	/// <param name="request">The HTTP request.</param>
-	/// <returns>The base URL of the request.</returns>
-	public static string GetBaseUrl(this HttpRequest request) => request.GetFullUrl(request.Path);
-
-	/// <summary>
-	/// Constructs a full URL from the request's components and the specified path.
-	/// </summary>
-	/// <param name="request">The HTTP request.</param>
-	/// <param name="path">The path to append to the base URL.</param>
-	/// <returns>The full URL constructed from the request's components and the specified path.</returns>
-	private static string GetFullUrl(this HttpRequest request, PathString path)
-		=> request.Scheme + Uri.SchemeDelimiter + request.Host + path;
-
 	/// <summary>
 	/// Converts a relative path into an absolute URI using the application's base URL.
 	/// </summary>

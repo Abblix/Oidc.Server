@@ -25,17 +25,13 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
 /// Supplies the core with information about the current HTTP request, reading it from the ambient
-/// <see cref="HttpContext"/>.
+/// <see cref="HttpContext"/>. Touches only ASP.NET Core's HTTP abstractions (no MVC, no Minimal API types), so it is
+/// shared by both transport adapters as the default <see cref="IRequestInfoProvider"/>.
 /// </summary>
-/// <remarks>
-/// Equivalent to the MVC integration's <c>HttpRequestInfoAdapter</c>: both read only <see cref="HttpContext"/> and
-/// carry no MVC dependency, so the implementation is shared in spirit and a candidate for a common HTTP-neutral
-/// package if one is later extracted.
-/// </remarks>
 public class HttpRequestInfoProvider(IHttpContextAccessor httpContextAccessor) : IRequestInfoProvider
 {
     private HttpRequest Request => httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;

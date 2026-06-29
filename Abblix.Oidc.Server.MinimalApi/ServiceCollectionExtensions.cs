@@ -22,6 +22,7 @@
 
 using System.Text.Json.Serialization.Metadata;
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
