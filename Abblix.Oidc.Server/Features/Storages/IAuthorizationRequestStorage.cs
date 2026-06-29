@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 

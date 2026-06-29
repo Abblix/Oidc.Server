@@ -22,13 +22,11 @@
 
 using System;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Moq;
 using Xunit;
 

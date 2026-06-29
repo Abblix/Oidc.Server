@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 

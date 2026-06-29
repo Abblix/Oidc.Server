@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.RandomGenerators;
-using Model = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 

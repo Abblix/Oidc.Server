@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Common.Constants;
 
 namespace Abblix.Oidc.Server.Common;
 

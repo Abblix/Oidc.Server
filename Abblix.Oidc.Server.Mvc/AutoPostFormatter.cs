@@ -24,7 +24,6 @@ using System.Net.Mime;
 using System.Text;
 using System.Xml;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc.Formatters;
 
 namespace Abblix.Oidc.Server.Mvc;
