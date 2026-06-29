@@ -5,12 +5,14 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -41,25 +43,26 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var query = new Dictionary<string, string>
         {
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            ["response_type"] = ResponseTypes.Code,
-            ["redirect_uri"] = TestConstants.RedirectUri,
-            ["scope"] = Scopes.OpenId,
-            ["state"] = Guid.NewGuid().ToString("N"),
-            ["nonce"] = Guid.NewGuid().ToString("N"),
-            ["code_challenge"] = challenge,
-            ["code_challenge_method"] = CodeChallengeMethods.S256,
-            ["max_age"] = "3600",
-            ["ui_locales"] = "en-US fr-FR",
-            ["claims"] = """{"userinfo":{"email":{"essential":true}}}""",
-            ["resource"] = TestConstants.ApiResource,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.MaxAge] = "3600",
+            [AuthorizationRequest.Parameters.UiLocales] = "en-US fr-FR",
+            [AuthorizationRequest.Parameters.Claims] = """{"userinfo":{"email":{"essential":true}}}""",
+            [AuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource,
         };
 
-        var code = await client.AuthorizeGetCallbackAsync(OidcFlows.Endpoint(discovery, "authorization_endpoint"), query, "code");
+        var code = await client.AuthorizeGetCallbackAsync(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query, ResponseParameters.Code);
         Assert.False(string.IsNullOrEmpty(code));
 
         // The code is real and redeemable — closes the loop that the bound request produced a usable grant.
         var token = await client.ExchangeCodeAsync(discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
-        Assert.NotNull(token["access_token"]);
+        Assert.NotNull(token[ResponseParameters.AccessToken]);
     }
 
     [Fact]
@@ -69,14 +72,14 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var discovery = await client.FetchDiscoveryAsync();
         var accessToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))
-            ["access_token"]!.GetValue<string>();
-        var userInfoEndpoint = OidcFlows.Endpoint(discovery, "userinfo_endpoint");
+            [ResponseParameters.AccessToken]!.GetValue<string>();
+        var userInfoEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint);
 
         // OIDC Core 5.3.1: the access token may be presented as the access_token request parameter. This is the
         // query branch of the generated UserInfoRequest.BindAsync (SupportsGet -> RequestValues(query, form)).
         var viaQuery = await OidcFlows.GetJsonAsync(
-            client, OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { ["access_token"] = accessToken }));
-        Assert.False(string.IsNullOrEmpty(viaQuery["sub"]?.GetValue<string>()));
+            client, OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }));
+        Assert.False(string.IsNullOrEmpty(viaQuery[IanaClaimTypes.Sub]?.GetValue<string>()));
 
         // OIDC Core 5.3.1 RECOMMENDED form: the access token in the Authorization: Bearer header.
         using var request = new HttpRequestMessage(HttpMethod.Get, userInfoEndpoint);
@@ -85,7 +88,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         headerResponse.EnsureSuccessStatusCode();
         var viaHeader = JsonNode.Parse(
             await headerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(viaQuery["sub"]!.GetValue<string>(), viaHeader["sub"]!.GetValue<string>());
+        Assert.Equal(viaQuery[IanaClaimTypes.Sub]!.GetValue<string>(), viaHeader[IanaClaimTypes.Sub]!.GetValue<string>());
     }
 
     [Fact]
@@ -95,20 +98,20 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var discovery = await client.FetchDiscoveryAsync();
         var idToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))
-            ["id_token"]!.GetValue<string>();
+            [ResponseParameters.IdToken]!.GetValue<string>();
 
         // GET /endsession binding the SupportsGet EndSessionRequest: id_token_hint (string), post_logout_redirect_uri
         // (Uri) and ui_locales (culture list) from the query. With a valid hint and a registered post-logout URI the
         // RP-initiated logout redirects back to that URI.
         var query = new Dictionary<string, string>
         {
-            ["id_token_hint"] = idToken,
-            ["post_logout_redirect_uri"] = MinimalApiTestConstants.PostLogoutRedirectUri,
-            ["ui_locales"] = "en-US",
+            [EndSessionRequest.Parameters.IdTokenHint] = idToken,
+            [EndSessionRequest.Parameters.PostLogoutRedirectUri] = MinimalApiTestConstants.PostLogoutRedirectUri,
+            [EndSessionRequest.Parameters.UiLocales] = "en-US",
             ["confirmed"] = "true",
         };
         var response = await client.GetAsync(
-            OidcFlows.BuildQuery(OidcFlows.Endpoint(discovery, "end_session_endpoint"), query),
+            OidcFlows.BuildQuery(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.EndSessionEndpoint), query),
             TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
@@ -125,18 +128,19 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         // RFC 8628: a confidential client (ClientSecretPost) starts the device grant. Binds the generated
         // DeviceAuthorizationRequest + ClientRequest from the posted form. This is also the regression guard for the
         // core bug where IDeviceAuthorizationHandler was unregistered and the endpoint mis-inferred a [FromBody] 415.
-        var response = await client.PostFormJsonAsync(OidcFlows.Endpoint(discovery, "device_authorization_endpoint"),
+        var response = await client.PostFormJsonAsync(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.DeviceAuthorizationEndpoint),
             new Dictionary<string, string>
             {
                 [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-                ["scope"] = Scopes.OpenId,
+                [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             });
 
-        Assert.False(string.IsNullOrEmpty(response["device_code"]?.GetValue<string>()));
-        Assert.False(string.IsNullOrEmpty(response["user_code"]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(response[DeviceAuthorizationResponse.Parameters.DeviceCode]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(response[DeviceAuthorizationResponse.Parameters.UserCode]?.GetValue<string>()));
         Assert.False(string.IsNullOrEmpty(response["verification_uri"]?.GetValue<string>()));
-        Assert.NotNull(response["expires_in"]);
+        Assert.NotNull(response[DeviceAuthorizationResponse.Parameters.ExpiresIn]);
     }
 
     [Fact]
@@ -144,17 +148,17 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     {
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
-        var registrationEndpoint = OidcFlows.Endpoint(discovery, "registration_endpoint");
+        var registrationEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.RegistrationEndpoint);
 
         // REGISTER (RFC 7591): JSON body via native [FromBody], not a form. The host runs open DCR
         // (RequireInitialAccessToken=false), so no initial access token is needed.
         var (registered, registerResponse) = await PostJsonAsync(client, registrationEndpoint, new JsonObject
         {
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_basic",
-            ["client_name"] = "Lifecycle Test Client",
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+            [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
+            [ClientRegistrationRequest.Parameters.ClientName] = "Lifecycle Test Client",
         }, HttpStatusCode.Created);
 
         var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
@@ -177,11 +181,11 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var updateBody = new JsonObject
         {
             [ClientRequest.Parameters.ClientId] = clientId,
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_basic",
-            ["client_name"] = "Renamed Client",
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+            [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
+            [ClientRegistrationRequest.Parameters.ClientName] = "Renamed Client",
         };
         if (registered[ClientRequest.Parameters.ClientSecret]?.GetValue<string>() is { } secret)
             updateBody[ClientRequest.Parameters.ClientSecret] = secret;

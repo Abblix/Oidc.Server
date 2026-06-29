@@ -4,14 +4,18 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Mime;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Net.Http.Headers;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -39,36 +43,37 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         // JARM: response_mode=query.jwt makes the AS pack the authorization response into one signed `response` JWT
         // delivered as a query parameter, instead of bare query parameters. Exercises AuthorizationResultFormatter's
         // JARM branch.
-        var responseJwt = await client.AuthorizeGetCallbackAsync(OidcFlows.Endpoint(discovery, "authorization_endpoint"),
+        var responseJwt = await client.AuthorizeGetCallbackAsync(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),
             new Dictionary<string, string>
             {
                 [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-                ["response_type"] = ResponseTypes.Code,
-                ["redirect_uri"] = TestConstants.RedirectUri,
-                ["scope"] = Scopes.OpenId,
-                ["state"] = state,
-                ["nonce"] = Guid.NewGuid().ToString("N"),
-                ["code_challenge"] = challenge,
-                ["code_challenge_method"] = CodeChallengeMethods.S256,
-                ["response_mode"] = ResponseModes.QueryJwt,
-            }, "response");
+                [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+                [AuthorizationRequest.Parameters.State] = state,
+                [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+                [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+                [AuthorizationRequest.Parameters.ResponseMode] = ResponseModes.QueryJwt,
+            }, ResponseParameters.Response);
 
         Assert.Equal(3, responseJwt.Split('.').Length);
         var payload = OidcFlows.DecodeJwtPayload(responseJwt);
 
         // JARM §2.1 mandated claims, plus the authorization response packed inside the JWT (not on the wire).
         Assert.Equal(
-            discovery["issuer"]!.GetValue<string>().TrimEnd('/'),
-            payload["iss"]!.GetValue<string>().TrimEnd('/'));
-        Assert.Equal(TestConstants.ConfidentialClientId, payload["aud"]!.GetValue<string>());
-        Assert.NotNull(payload["exp"]);
-        Assert.Equal(state, payload["state"]!.GetValue<string>());
+            discovery[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>().TrimEnd('/'),
+            payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
+        Assert.Equal(TestConstants.ConfidentialClientId, payload[IanaClaimTypes.Aud]!.GetValue<string>());
+        Assert.NotNull(payload[IanaClaimTypes.Exp]);
+        Assert.Equal(state, payload[ResponseParameters.State]!.GetValue<string>());
 
         // The code inside the JWT is real and redeemable.
-        var code = payload["code"]!.GetValue<string>();
+        var code = payload[ResponseParameters.Code]!.GetValue<string>();
         var token = await OidcFlows.ExchangeCodeAsync(
             client, discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
-        Assert.NotNull(token["access_token"]);
+        Assert.NotNull(token[ResponseParameters.AccessToken]);
     }
 
     [Fact]
@@ -77,10 +82,11 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
 
-        var response = await client.PostFormAsync(OidcFlows.Endpoint(discovery, "token_endpoint"),
+        var response = await client.PostFormAsync(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.TokenEndpoint),
             new Dictionary<string, string>
             {
-                ["grant_type"] = GrantTypes.ClientCredentials,
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
                 [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
                 [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             });
@@ -104,21 +110,21 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         // response_mode=form_post answers with a 200 text/html auto-submitting form that POSTs the authorization
         // response back to redirect_uri — a custom IResult (the ported AutoPostFormatter), not a redirect.
         var response = await client.GetAsync(OidcFlows.BuildQuery(
-            OidcFlows.Endpoint(discovery, "authorization_endpoint"), new Dictionary<string, string>
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
                 [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-                ["response_type"] = ResponseTypes.Code,
-                ["redirect_uri"] = TestConstants.RedirectUri,
-                ["scope"] = Scopes.OpenId,
-                ["state"] = state,
-                ["nonce"] = Guid.NewGuid().ToString("N"),
-                ["code_challenge"] = challenge,
-                ["code_challenge_method"] = CodeChallengeMethods.S256,
-                ["response_mode"] = ResponseModes.FormPost,
+                [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+                [AuthorizationRequest.Parameters.State] = state,
+                [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+                [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+                [AuthorizationRequest.Parameters.ResponseMode] = ResponseModes.FormPost,
             }), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
         var html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("<form", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(TestConstants.RedirectUri, html);
@@ -132,7 +138,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var discovery = await client.FetchDiscoveryAsync();
 
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, OidcFlows.Endpoint(discovery, "userinfo_endpoint"));
+            HttpMethod.Get, OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint));
         request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, "not-a-real-token");
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
@@ -153,14 +159,14 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         // in a signed JWT when it Accepts the +jwt media type, and the plain RFC 7662 JSON otherwise. Register such a
         // client, then introspect its own auth-code token.
         var registerResponse = await client.PostAsync(
-            OidcFlows.Endpoint(discovery, "registration_endpoint"),
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.RegistrationEndpoint),
             JsonContent.Create(new JsonObject
             {
-                ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
-                ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-                ["response_types"] = new JsonArray { ResponseTypes.Code },
-                ["token_endpoint_auth_method"] = "client_secret_post",
-                ["introspection_signed_response_alg"] = SigningAlgorithms.RS256,
+                [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+                [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+                [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+                [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+                [ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg] = SigningAlgorithms.RS256,
             }),
             TestContext.Current.CancellationToken);
         var registered = JsonNode.Parse(
@@ -169,8 +175,8 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
 
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, clientId, clientSecret))
-            ["access_token"]!.GetValue<string>();
-        var introspectionEndpoint = OidcFlows.Endpoint(discovery, "introspection_endpoint");
+            [ResponseParameters.AccessToken]!.GetValue<string>();
+        var introspectionEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.IntrospectionEndpoint);
 
         // The +jwt media type yields a 3-segment signed JWT carried under that content type.
         var jwt = await IntrospectWithAcceptAsync(
@@ -180,11 +186,11 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
 
         // A plain JSON Accept yields the RFC 7662 document reporting the token active.
         var json = await IntrospectWithAcceptAsync(
-            client, introspectionEndpoint, clientId, clientSecret, accessToken, "application/json");
+            client, introspectionEndpoint, clientId, clientSecret, accessToken, MediaTypeNames.Application.Json);
         Assert.NotEqual(MediaTypes.TokenIntrospectionJwt, json.Content.Headers.ContentType?.MediaType);
         var body = JsonNode.Parse(
             await json.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.True(body["active"]!.GetValue<bool>());
+        Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
     private static async Task<HttpResponseMessage> IntrospectWithAcceptAsync(
@@ -194,7 +200,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["token"] = token,
+                [IntrospectionRequest.Parameters.Token] = token,
                 [ClientRequest.Parameters.ClientId] = clientId,
                 [ClientRequest.Parameters.ClientSecret] = clientSecret,
             }),
@@ -208,7 +214,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
     {
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
-        var checkSession = OidcFlows.Endpoint(discovery, "check_session_iframe");
+        var checkSession = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.CheckSessionIframe);
 
         var (nonce1, body1) = await FetchCheckSessionAsync(client, checkSession);
         var (nonce2, _) = await FetchCheckSessionAsync(client, checkSession);
@@ -223,9 +229,9 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
     {
         var response = await client.GetAsync(url, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
 
-        Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var cspValues),
+        Assert.True(response.Headers.TryGetValues(HeaderNames.ContentSecurityPolicy, out var cspValues),
             "check_session response is missing the Content-Security-Policy header");
         var match = Regex.Match(
             string.Join(' ', cspValues!), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));

@@ -3,12 +3,14 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Mime;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -38,7 +41,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     {
         var client = ClientOf(factory);
         var discovery = await client.FetchDiscoveryAsync();
-        var tokenPath = new Uri(discovery["token_endpoint"]!.GetValue<string>()).AbsolutePath;
+        var tokenPath = new Uri(discovery[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>()).AbsolutePath;
 
         // The token endpoint is mapped POST-only; a GET matches the path but not the method, so ASP.NET routing
         // answers 405 (not 404).
@@ -68,7 +71,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         // The introspection path as the enabled host maps it.
         var enabledClient = ClientOf(factory);
         var discovery = await enabledClient.FetchDiscoveryAsync();
-        var introspectPath = new Uri(discovery["introspection_endpoint"]!.GetValue<string>()).AbsolutePath;
+        var introspectPath = new Uri(discovery[ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath;
 
         // A host that clears the Introspection flag never maps the endpoint, so the same path is a 404.
         using var disabled = factory.WithWebHostBuilder(builder =>
@@ -80,7 +83,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var client = ClientOf(disabled);
 
         var response = await client.PostAsync(introspectPath, new FormUrlEncodedContent(
-            new Dictionary<string, string> { ["token"] = "irrelevant" }), TestContext.Current.CancellationToken);
+            new Dictionary<string, string> { [IntrospectionRequest.Parameters.Token] = "irrelevant" }), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -95,22 +98,22 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         // MVC adapter) is a 400 with {"error":"invalid_request"} served as application/json — not the framework
         // default ValidationProblemDetails (application/problem+json), which omits the error code OIDC clients read.
         var response = await client.GetAsync(OidcFlows.BuildQuery(
-            OidcFlows.Endpoint(discovery, "authorization_endpoint"), new Dictionary<string, string>
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
-                ["client_id"] = TestConstants.ConfidentialClientId,
-                ["response_type"] = ResponseTypes.Code,
-                ["redirect_uri"] = TestConstants.RedirectUri,
-                ["scope"] = Scopes.OpenId,
-                ["code_challenge"] = challenge,
-                ["code_challenge_method"] = CodeChallengeMethods.S256,
-                ["prompt"] = "bogus",
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+                [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+                [AuthorizationRequest.Parameters.Prompt] = "bogus",
             }), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(MediaTypeNames.Application.Json, response.Content.Headers.ContentType?.MediaType);
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -128,7 +131,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
 
         // The discovery document is the host formatter's marker object, not the adapter's metadata.
         Assert.True(discovery["host_override_marker"]?.GetValue<bool>());
-        Assert.Null(discovery["issuer"]);
+        Assert.Null(discovery[ConfigurationResponse.Parameters.Issuer]);
     }
 
     /// <summary>A stand-in discovery formatter a host registers to prove its registration wins over the adapter's.</summary>

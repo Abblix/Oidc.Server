@@ -8,7 +8,9 @@ using System.Text.Json.Nodes;
 using System.Web;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -86,8 +88,9 @@ internal static class OidcFlows
         JsonObject discovery,
         IEnumerable<KeyValuePair<string, string>> form)
     {
-        var par = await client.PostFormJsonAsync(Endpoint(discovery, "pushed_authorization_request_endpoint"), form);
-        return par["request_uri"]!.GetValue<string>();
+        var par = await client.PostFormJsonAsync(
+            Endpoint(discovery, ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint), form);
+        return par[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
     }
 
     /// <summary>
@@ -105,22 +108,28 @@ internal static class OidcFlows
         var (verifier, challenge) = Pkce();
         var parForm = new List<KeyValuePair<string, string>>
         {
-            new("client_id", clientId),
-            new("client_secret", clientSecret),
-            new("response_type", ResponseTypes.Code),
-            new("redirect_uri", TestConstants.RedirectUri),
-            new("scope", Scopes.OpenId),
-            new("state", Guid.NewGuid().ToString("N")),
-            new("nonce", Guid.NewGuid().ToString("N")),
-            new("code_challenge", challenge),
-            new("code_challenge_method", CodeChallengeMethods.S256),
+            new(ClientRequest.Parameters.ClientId, clientId),
+            new(ClientRequest.Parameters.ClientSecret, clientSecret),
+            new(AuthorizationRequest.Parameters.ResponseType, ResponseTypes.Code),
+            new(AuthorizationRequest.Parameters.RedirectUri, TestConstants.RedirectUri),
+            new(AuthorizationRequest.Parameters.Scope, Scopes.OpenId),
+            new(AuthorizationRequest.Parameters.State, Guid.NewGuid().ToString("N")),
+            new(AuthorizationRequest.Parameters.Nonce, Guid.NewGuid().ToString("N")),
+            new(AuthorizationRequest.Parameters.CodeChallenge, challenge),
+            new(AuthorizationRequest.Parameters.CodeChallengeMethod, CodeChallengeMethods.S256),
         };
         if (extraAuthorizeParams is not null)
             parForm.AddRange(extraAuthorizeParams);
 
         var requestUri = await client.PushAuthorizationRequestAsync(discovery, parForm);
-        var code = await client.AuthorizeGetCallbackAsync(Endpoint(discovery, "authorization_endpoint"),
-            new Dictionary<string, string> { ["client_id"] = clientId, ["request_uri"] = requestUri }, "code");
+        var code = await client.AuthorizeGetCallbackAsync(
+            Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),
+            new Dictionary<string, string>
+            {
+                [ClientRequest.Parameters.ClientId] = clientId,
+                [AuthorizationRequest.Parameters.RequestUri] = requestUri,
+            },
+            ResponseParameters.Code);
         return await client.ExchangeCodeAsync(discovery, code, verifier, clientId, clientSecret);
     }
 
@@ -132,15 +141,17 @@ internal static class OidcFlows
         string verifier,
         string clientId,
         string clientSecret)
-        => await client.PostFormJsonAsync(Endpoint(discovery, "token_endpoint"), new Dictionary<string, string>
-        {
-            ["grant_type"] = GrantTypes.AuthorizationCode,
-            ["code"] = code,
-            ["redirect_uri"] = TestConstants.RedirectUri,
-            ["code_verifier"] = verifier,
-            ["client_id"] = clientId,
-            ["client_secret"] = clientSecret,
-        });
+        => await client.PostFormJsonAsync(
+            Endpoint(discovery, ConfigurationResponse.Parameters.TokenEndpoint),
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = code,
+                [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [TokenRequest.Parameters.CodeVerifier] = verifier,
+                [ClientRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
+            });
 
     public static JsonObject DecodeJwtPayload(string jwt)
     {
