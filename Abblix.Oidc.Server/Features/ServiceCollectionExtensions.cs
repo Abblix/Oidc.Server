@@ -547,9 +547,18 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures services for handling Device Authorization Grant (RFC 8628) requests,
-    /// enabling devices with limited input capabilities to obtain user authorization.
+    /// Opts the server into the Device Authorization Grant (RFC 8628). This single call registers the device
+    /// feature services, the device endpoint (handler, validators, options validator) and re-enables the
+    /// <see cref="OidcEndpoints.DeviceAuthorization"/> flag, which is off in the default
+    /// <see cref="OidcOptions.EnabledEndpoints"/>. A server that never calls this method exposes no device
+    /// endpoint and runs no device options validation.
     /// </summary>
+    /// <remarks>
+    /// Call this <b>before</b> <c>AddOidcCore</c>/<c>AddOidcServices</c>: the device-code grant handler must be
+    /// registered before <c>AddAuthorizationGrants()</c> composes the grant handlers at the end of
+    /// <c>AddOidcCore</c>, otherwise it is registered beside the composite and the token endpoint resolves the
+    /// wrong single <c>IAuthorizationGrantHandler</c>.
+    /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddDeviceAuthorization(this IServiceCollection services)
@@ -563,6 +572,13 @@ public static class ServiceCollectionExtensions
 
         // Register Device Authorization grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
         services.AddAuthorizationGrant<DeviceCodeGrantHandler>();
+
+        // Single opt-in: registering the feature also brings in the endpoint services (handler, validators,
+        // the DeviceAuthorization options validator) and turns the endpoint on. EnabledEndpoints defaults to
+        // All & ~DeviceAuthorization, so a server that never calls this method neither registers the device
+        // types nor advertises/validates the endpoint.
+        services.AddDeviceAuthorizationEndpoint();
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.DeviceAuthorization);
 
         return services;
     }

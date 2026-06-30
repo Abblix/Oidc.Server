@@ -117,7 +117,6 @@ public static class ServiceCollectionExtensions
 			.AddUserInfo()
 			.AddRequestObject()
 			.AddBackChannelAuthentication()
-			.AddDeviceAuthorization()
 			.AddDPoP()
 			.AddRichAuthorizationRequests();
 			// AddSecureHttpFetch() moved to AddOidcCore() to run before AddEndpoints()
@@ -159,7 +158,6 @@ public static class ServiceCollectionExtensions
 			.AddUserInfoEndpoint()
 			.AddEndSessionEndpoint()
 			.AddBackChannelAuthenticationEndpoint()
-			.AddDeviceAuthorizationEndpoint()
 			.AddCheckSessionEndpoint()
 			.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
 	}

@@ -8,6 +8,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -25,6 +26,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 await LoadEmbeddedTestLicenseAsync();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Opt into device authorization BEFORE AddOidcMinimalApi: the device-code grant handler must be registered
+// before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or it lands beside the composite
+// and the token endpoint resolves the wrong single IAuthorizationGrantHandler.
+builder.Services.AddDeviceAuthorization();
 
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the

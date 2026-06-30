@@ -103,9 +103,13 @@ public record OidcOptions
 	/// <summary>
 	/// Specifies which OIDC endpoints are enabled on the server. This property allows for fine-grained control over
 	/// the available functionality, enabling or disabling specific endpoints based on the server's role, security
-	/// considerations, or operational requirements. By default, all endpoints are enabled.
+	/// considerations, or operational requirements. By default every endpoint is enabled except
+	/// <see cref="OidcEndpoints.DeviceAuthorization"/>: device authorization is opt-in via
+	/// <c>AddDeviceAuthorization()</c>, which registers the feature and re-enables the flag. The device
+	/// endpoint requires a configured <see cref="DeviceAuthorization"/>, so leaving it off by default keeps
+	/// a server that never opts in from advertising — or validating — an endpoint it cannot serve.
 	/// </summary>
-	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.All;
+	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.All & ~OidcEndpoints.DeviceAuthorization;
 
 	/// <summary>
 	/// The collection of JSON Web Keys (JWK) used for signing tokens issued by the OIDC server.
