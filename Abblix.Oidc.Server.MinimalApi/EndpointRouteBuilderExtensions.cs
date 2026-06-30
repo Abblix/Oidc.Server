@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore;
@@ -193,6 +194,9 @@ public static class EndpointRouteBuilderExtensions
     /// individually. Runs inside the group's validation filter, so it covers the handler's responses (success and error)
     /// but not a request short-circuited by validation — matching the previous per-result behavior.
     /// </summary>
+    [SuppressMessage("SonarLint", "S3241:Methods should not return values that are never used",
+        Justification = "Fluent endpoint convention like WithName/RequireCors: it returns the builder to stay " +
+                        "chainable, so a call site need not place it last even though none currently consumes the result.")]
     private static TBuilder WithNoCache<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder
         => builder.AddEndpointFilter(async (context, next) =>
         {
