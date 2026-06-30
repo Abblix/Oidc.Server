@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;

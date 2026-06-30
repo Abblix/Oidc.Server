@@ -28,7 +28,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
-using MvcResponse = Abblix.Oidc.Server.Mvc.Model.DeviceAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
@@ -62,7 +61,7 @@ public class DeviceAuthorizationResponseFormatterTests
         var result = await formatter.FormatResponseAsync(new DeviceAuthorizationRequest(), coreResponse);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var response = Assert.IsType<MvcResponse>(ok.Value);
+        var response = Assert.IsType<CoreResponse>(ok.Value);
         Assert.Equal(new Uri("https://auth.example.com/device"), response.VerificationUri);
         Assert.Equal(
             new Uri("https://auth.example.com/device?user_code=WDJB-MJHT"),

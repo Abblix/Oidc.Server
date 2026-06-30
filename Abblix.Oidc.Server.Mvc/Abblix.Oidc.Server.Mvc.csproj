@@ -8,6 +8,9 @@
         <IsPackable>true</IsPackable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+        <!-- Embed the shared Abblix.Oidc.Server.AspNetCore assembly into this package (see the target below). -->
+        <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
         <PackageId>Abblix.OIDC.Server.MVC</PackageId>
         <Title>Abblix OIDC Server Model-View-Controller</Title>
         <Description>The package integrates Abblix's OIDC Server capabilities with ASP.NET MVC, offering seamless support for OpenID Connect in MVC applications. It enables fast and easy implementation of secure OpenID Connect protocols, ensuring security features are accessible within the MVC framework.</Description>
@@ -50,6 +53,9 @@
         <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
         <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+        <!-- Shared ASP.NET-Core-neutral code. PrivateAssets=all keeps it out of the package dependency graph;
+             the IncludeAspNetCoreSharedInPackage target below embeds its assembly into this package. -->
+        <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" PrivateAssets="all" />
         <!-- Build-time only: generates the MVC binding models from the core request models.
              Not a runtime dependency, so it stays out of the package dependency graph. -->
         <ProjectReference Include="..\Abblix.Oidc.Server.Mvc.SourceGeneration\Abblix.Oidc.Server.Mvc.SourceGeneration.csproj"
@@ -65,5 +71,15 @@
         <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
         <None Include="README.md" Pack="true" PackagePath="" />
     </ItemGroup>
+
+    <!-- The shared Abblix.Oidc.Server.AspNetCore project is referenced with PrivateAssets=all (no package
+         dependency) and is not packable on its own. Embed its assembly into this package's lib folder so the
+         consumer gets it; otherwise it would be missing at runtime. -->
+    <Target Name="IncludeAspNetCoreSharedInPackage" DependsOnTargets="ResolveReferences">
+        <ItemGroup>
+            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)"
+                                  Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Abblix.Oidc.Server.AspNetCore'" />
+        </ItemGroup>
+    </Target>
 
 </Project>

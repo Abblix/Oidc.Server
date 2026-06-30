@@ -62,7 +62,6 @@ public class EndSessionResponseFormatter(
                 success.FrontChannelLogoutRequestUris);
 
             return new ContentResult { Content = response.HtmlContent, ContentType = MediaTypeNames.Text.Html }
-                .WithNoCacheHeaders()
                 .WithHeader(HeaderNames.ContentSecurityPolicy, GetContentSecurityPolicy(response));
         }
 

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+
+  <!-- Embedded under this assembly's name so Program loads it as
+       Abblix.Oidc.Server.MinimalApi.E2E.TestHost.Resources.test-license.jwt.
+       Linked from the MVC test host rather than duplicated. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Abblix.Oidc.Server.E2E.TestHost\Resources\test-license.jwt" Link="Resources\test-license.jwt" />
+  </ItemGroup>
+
+  <!-- Framework-neutral test stubs + constants shared with the MVC test host. Linked, not copied:
+       the only adapter-specific code is this project's Program.cs (AddOidcMinimalApi + MapOidcEndpoints). -->
+  <ItemGroup>
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestInfrastructure\TestConstants.cs" Link="TestInfrastructure\TestConstants.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\AutoAuthSessionService.cs" Link="TestStubs\AutoAuthSessionService.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\AutoConsentsProvider.cs" Link="TestStubs\AutoConsentsProvider.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\StaticUserClaimsProvider.cs" Link="TestStubs\StaticUserClaimsProvider.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\PaymentInitiationValidator.cs" Link="TestStubs\PaymentInitiationValidator.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\TestConsentOverrideMiddleware.cs" Link="TestStubs\TestConsentOverrideMiddleware.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
+  </ItemGroup>
+
+  <!-- Expose internal Program to the test assembly so WebApplicationFactory<Program>
+       can bind to the top-level statements' synthesised Program type. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi.E2E.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

@@ -22,12 +22,12 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ParApiModel = Abblix.Oidc.Server.Mvc.Model.PushedAuthorizationResponse;
+using ParApiModel = Abblix.Oidc.Server.Model.PushedAuthorizationResponse;
+using CorePushedAuthorizationResponse = Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
@@ -44,7 +44,7 @@ public class PushedAuthorizationResponseFormatterTests
     public async Task FormatResponseAsync_PushedAuthorizationResponse_ReturnsJsonWith201()
     {
         var request = new AuthorizationRequest();
-        var response = new PushedAuthorizationResponse(
+        var response = new CorePushedAuthorizationResponse(
             request,
             new Uri("urn:ietf:params:oauth:request_uri:abc123"),
             TimeSpan.FromSeconds(60));

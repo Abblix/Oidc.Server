@@ -20,20 +20,20 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
+using CoreModel = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -69,7 +69,7 @@ public class AuthorizationResponseFormatter(
     /// <returns>A task that returns an <see cref="ActionResult"/>
     /// that can be returned by an ASP.NET Core controller.</returns>
     public async Task<ActionResult> FormatResponseAsync(
-        AuthorizationRequest request,
+        CoreModel.AuthorizationRequest request,
         Endpoints.Authorization.Interfaces.AuthorizationResponse response)
     {
         switch (response)
@@ -107,7 +107,7 @@ public class AuthorizationResponseFormatter(
             // JWT packed by the encoder. Matched before the plaintext branches so any JWT-bearing response
             // (of either type) takes this path.
             case ClientDeliveredResponse { ResponseJwt: { } responseJwt } jarm:
-                return Deliver(jarm, new AuthorizationResponse { Response = responseJwt });
+                return Deliver(jarm, new CoreModel.AuthorizationResponse { Response = responseJwt });
 
             case SuccessfullyAuthenticated success:
                 return Deliver(success, MapSuccess(success));
@@ -125,7 +125,7 @@ public class AuthorizationResponseFormatter(
     /// response mode, appending the OIDC Session Management cookie for successful authentications. An error
     /// with no redirect URI (e.g. an invalid redirect_uri) is surfaced directly as a bad request.
     /// </summary>
-    private ActionResult Deliver(ClientDeliveredResponse response, AuthorizationResponse dto)
+    private ActionResult Deliver(ClientDeliveredResponse response, CoreModel.AuthorizationResponse dto)
     {
         Uri redirectUri;
 
@@ -140,7 +140,7 @@ public class AuthorizationResponseFormatter(
                 break;
 
             case AuthorizationError { RedirectUri: null, Error: var error, ErrorDescription: var description }:
-                return new BadRequestObjectResult(new ErrorResponse(error, description));
+                return new BadRequestObjectResult(new CoreModel.ErrorResponse(error, description));
 
             default:
                 throw new UnexpectedTypeException(nameof(response), response.GetType());
@@ -181,7 +181,7 @@ public class AuthorizationResponseFormatter(
     /// Maps a plaintext successful authentication onto the MVC wire DTO. JARM responses are mapped by the
     /// caller to the single <c>response</c> JWT parameter instead.
     /// </summary>
-    private static AuthorizationResponse MapSuccess(SuccessfullyAuthenticated success) => new()
+    private static CoreModel.AuthorizationResponse MapSuccess(SuccessfullyAuthenticated success) => new()
     {
         State = success.Model.State,
         Issuer = success.Issuer,
@@ -202,7 +202,7 @@ public class AuthorizationResponseFormatter(
     /// <summary>
     /// Maps a plaintext authorization error onto the MVC wire DTO.
     /// </summary>
-    private static AuthorizationResponse MapError(AuthorizationError error) => new()
+    private static CoreModel.AuthorizationResponse MapError(AuthorizationError error) => new()
     {
         State = error.Model.State,
         Issuer = error.Issuer,
@@ -214,7 +214,7 @@ public class AuthorizationResponseFormatter(
     /// <summary>
     /// Extracts and formats response parameters from the MVC wire DTO.
     /// </summary>
-    private (string name, string? value)[] GetParametersFrom(AuthorizationResponse response)
+    private (string name, string? value)[] GetParametersFrom(CoreModel.AuthorizationResponse response)
         => parametersProvider.GetParameters(response).ToArray();
 
     /// <summary>
@@ -223,7 +223,7 @@ public class AuthorizationResponseFormatter(
     /// <param name="uri">The base URI to redirect to.</param>
     /// <param name="request">The authorization request to attach to the URI as a query parameter.</param>
     /// <returns>A task that returns a redirect action result.</returns>
-    private async Task<ActionResult> RedirectAsync(Uri uri, AuthorizationRequest request)
+    private async Task<ActionResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
         var response = await authorizationRequestStorage.StoreAsync(
             request,
