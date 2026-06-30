@@ -44,26 +44,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TokenRequest = Abblix.Oidc.Server.MinimalApi.Model.TokenRequest;
-using ClientRequest = Abblix.Oidc.Server.MinimalApi.Model.ClientRequest;
-using RevocationRequest = Abblix.Oidc.Server.MinimalApi.Model.RevocationRequest;
-using IntrospectionRequest = Abblix.Oidc.Server.MinimalApi.Model.IntrospectionRequest;
-using AuthorizationRequest = Abblix.Oidc.Server.MinimalApi.Model.AuthorizationRequest;
-using BackChannelAuthenticationRequest = Abblix.Oidc.Server.MinimalApi.Model.BackChannelAuthenticationRequest;
-using DeviceAuthorizationRequest = Abblix.Oidc.Server.MinimalApi.Model.DeviceAuthorizationRequest;
-using UserInfoRequest = Abblix.Oidc.Server.MinimalApi.Model.UserInfoRequest;
-using EndSessionRequest = Abblix.Oidc.Server.MinimalApi.Model.EndSessionRequest;
-using ClientAuthorizationRequest = Abblix.Oidc.Server.MinimalApi.Model.ClientAuthorizationRequest;
-using CoreTokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
-using CoreClientRequest = Abblix.Oidc.Server.Model.ClientRequest;
-using CoreRevocationRequest = Abblix.Oidc.Server.Model.RevocationRequest;
-using CoreIntrospectionRequest = Abblix.Oidc.Server.Model.IntrospectionRequest;
-using CoreAuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
-using CoreBackChannelAuthenticationRequest = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest;
-using CoreDeviceAuthorizationRequest = Abblix.Oidc.Server.Model.DeviceAuthorizationRequest;
-using CoreUserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
-using CoreEndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
-using CoreClientRegistrationRequest = Abblix.Oidc.Server.Model.ClientRegistrationRequest;
+using Abblix.Oidc.Server.MinimalApi.Model;
+using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.MinimalApi;
 
@@ -123,7 +105,8 @@ public static class EndpointRouteBuilderExtensions
             oidcGroup
                 .MapPost(routes.Token, TokenAsync)
                 .WithName(EndpointNames.Token)
-                .RequireCors(OidcConstants.CorsPolicyName);
+                .RequireCors(OidcConstants.CorsPolicyName)
+                .WithNoCache();
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Revocation))
@@ -175,7 +158,8 @@ public static class EndpointRouteBuilderExtensions
             oidcGroup
                 .MapMethods(routes.EndSession, [HttpMethods.Get, HttpMethods.Post], EndSessionAsync)
                 .WithName(EndpointNames.EndSession)
-                .RequireCors(OidcConstants.CorsPolicyName);
+                .RequireCors(OidcConstants.CorsPolicyName)
+                .WithNoCache();
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Authorize))
@@ -203,6 +187,19 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
+    /// Applies the no-store cache headers (RFC 6749 §5.1) to every response of the endpoint through an endpoint filter,
+    /// so the no-cache behavior is a property of the endpoint rather than something each <see cref="IResult"/> opts into
+    /// individually. Runs inside the group's validation filter, so it covers the handler's responses (success and error)
+    /// but not a request short-circuited by validation — matching the previous per-result behavior.
+    /// </summary>
+    private static TBuilder WithNoCache<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder
+        => builder.AddEndpointFilter(async (context, next) =>
+        {
+            context.HttpContext.Response.SetNoCacheHeaders();
+            return await next(context);
+        });
+
+    /// <summary>
     /// Handles the authorization request (OpenID Connect Core 3.1). The request is bound from the query string or the
     /// posted form, and the response is delivered to the client's redirect URI or an interaction page.
     /// </summary>
@@ -211,7 +208,7 @@ public static class EndpointRouteBuilderExtensions
         IAuthorizationHandler handler,
         IAuthorizationResultFormatter formatter)
     {
-        CoreAuthorizationRequest coreAuthorizationRequest = authorizationRequest;
+        Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreAuthorizationRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
@@ -221,7 +218,7 @@ public static class EndpointRouteBuilderExtensions
     /// token, the only value the body cannot carry, is merged from the Authorization header.
     /// </summary>
     private static async Task<IResult> RegisterClientAsync(
-        CoreClientRegistrationRequest request,
+        Core.ClientRegistrationRequest request,
         HttpContext context,
         IRegisterClientHandler handler,
         IRegisterClientResultFormatter formatter)
@@ -237,7 +234,7 @@ public static class EndpointRouteBuilderExtensions
         IReadClientHandler handler,
         IReadClientResultFormatter formatter)
     {
-        CoreClientRequest coreClientRequest = authorizationRequest;
+        Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
@@ -245,7 +242,7 @@ public static class EndpointRouteBuilderExtensions
     /// <summary>Updates a registered client's configuration (RFC 7592 §2.2).</summary>
     private static async Task<IResult> UpdateClientAsync(
         ClientAuthorizationRequest authorizationRequest,
-        CoreClientRegistrationRequest registrationRequest,
+        Core.ClientRegistrationRequest registrationRequest,
         IUpdateClientHandler handler,
         IUpdateClientResultFormatter formatter)
     {
@@ -260,7 +257,7 @@ public static class EndpointRouteBuilderExtensions
         IRemoveClientHandler handler,
         IRemoveClientResultFormatter formatter)
     {
-        CoreClientRequest coreClientRequest = authorizationRequest;
+        Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
@@ -283,8 +280,8 @@ public static class EndpointRouteBuilderExtensions
         IPushedAuthorizationHandler handler,
         IPushedAuthorizationResultFormatter formatter)
     {
-        CoreAuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreAuthorizationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
@@ -299,8 +296,8 @@ public static class EndpointRouteBuilderExtensions
         IBackChannelAuthenticationHandler handler,
         IBackChannelAuthenticationResultFormatter formatter)
     {
-        CoreBackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreAuthenticationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthenticationRequest, coreClientRequest, response);
     }
@@ -315,8 +312,8 @@ public static class EndpointRouteBuilderExtensions
         IDeviceAuthorizationHandler handler,
         IDeviceAuthorizationResultFormatter formatter)
     {
-        CoreDeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreDeviceAuthorizationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreDeviceAuthorizationRequest, response);
     }
@@ -331,8 +328,8 @@ public static class EndpointRouteBuilderExtensions
         IUserInfoHandler handler,
         IUserInfoResultFormatter formatter)
     {
-        CoreUserInfoRequest coreUserInfoRequest = userInfoRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreUserInfoRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
@@ -346,7 +343,7 @@ public static class EndpointRouteBuilderExtensions
         IEndSessionHandler handler,
         IEndSessionResultFormatter formatter)
     {
-        CoreEndSessionRequest coreEndSessionRequest = endSessionRequest;
+        Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
         var response = await handler.HandleAsync(coreEndSessionRequest);
         return await formatter.FormatResponseAsync(coreEndSessionRequest, response);
     }
@@ -361,8 +358,8 @@ public static class EndpointRouteBuilderExtensions
         ITokenHandler handler,
         ITokenResultFormatter formatter)
     {
-        CoreTokenRequest coreTokenRequest = tokenRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.TokenRequest coreTokenRequest = tokenRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreTokenRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
@@ -374,8 +371,8 @@ public static class EndpointRouteBuilderExtensions
         IRevocationHandler handler,
         IRevocationResultFormatter formatter)
     {
-        CoreRevocationRequest coreRevocationRequest = revocationRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.RevocationRequest coreRevocationRequest = revocationRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreRevocationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
@@ -387,8 +384,8 @@ public static class EndpointRouteBuilderExtensions
         IIntrospectionHandler handler,
         IIntrospectionResultFormatter formatter)
     {
-        CoreIntrospectionRequest coreIntrospectionRequest = introspectionRequest;
-        CoreClientRequest coreClientRequest = clientRequest;
+        Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
+        Core.ClientRequest coreClientRequest = clientRequest;
         var response = await handler.HandleAsync(coreIntrospectionRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }

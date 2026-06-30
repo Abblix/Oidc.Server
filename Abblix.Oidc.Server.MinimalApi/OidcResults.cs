@@ -84,12 +84,13 @@ public static class OidcResults
     {
         var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
-        IResult result = error switch
+        var result = error switch
         {
             InvalidDPoPProofError or UseDPoPNonceError or { Error: ErrorCodes.InvalidToken }
                 => Results.StatusCode(StatusCodes.Status401Unauthorized),
 
-            { Error: ErrorCodes.InsufficientScope } => Results.StatusCode(StatusCodes.Status403Forbidden),
+            { Error: ErrorCodes.InsufficientScope }
+                => Results.StatusCode(StatusCodes.Status403Forbidden),
 
             _ when fallbackStatusCode == StatusCodes.Status400BadRequest
                 => Results.Json(new ErrorResponse(error.Error, error.ErrorDescription),
@@ -102,7 +103,7 @@ public static class OidcResults
             _ => Results.Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: fallbackStatusCode),
         };
 
-        result = result.WithAppendHeader(HeaderNames.WWWAuthenticate, challenges);
+        result = result.WithHeader(HeaderNames.WWWAuthenticate, challenges);
 
         if (error is UseDPoPNonceError { Nonce: var nonce })
             result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
@@ -115,7 +116,7 @@ public static class OidcResults
         => new ResultDecorator(inner, response => response.Headers[name] = value);
 
     /// <summary>Decorates a result to append each value as a separate header line under the same name.</summary>
-    public static IResult WithAppendHeader(this IResult inner, string name, IEnumerable<string> values)
+    public static IResult WithHeader(this IResult inner, string name, IEnumerable<string> values)
         => new ResultDecorator(inner, response =>
         {
             foreach (var value in values)
@@ -131,10 +132,6 @@ public static class OidcResults
     public static IResult WithDeleteCookie(
         this IResult inner, string name, Microsoft.AspNetCore.Http.CookieOptions options)
         => new ResultDecorator(inner, response => response.Cookies.Delete(name, options));
-
-    /// <summary>Decorates a result with comprehensive no-cache headers so sensitive responses are never cached.</summary>
-    public static IResult WithNoCacheHeaders(this IResult inner)
-        => new ResultDecorator(inner, SetNoCacheHeaders);
 
     /// <summary>Sets comprehensive no-cache headers on the response for maximum cross-cache compatibility.</summary>
     public static void SetNoCacheHeaders(this HttpResponse response)

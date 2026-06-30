@@ -57,7 +57,7 @@ public class TokenResultFormatter(IIssuerProvider issuerProvider) : ITokenResult
             AuthorizationDetails = success.AuthorizationDetails,
         };
 
-        return Results.Json(tokenResponse).WithNoCacheHeaders();
+        return Results.Json(tokenResponse);
     }
 
     private IResult FormatError(OidcError error)
@@ -66,10 +66,10 @@ public class TokenResultFormatter(IIssuerProvider issuerProvider) : ITokenResult
         // everything else -> 400 with the JSON envelope.
         var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer());
 
-        // RFC 9449 §8: a use_dpop_nonce error MUST carry the fresh nonce on a DPoP-Nonce header, and §8.2 asks such
-        // responses to be uncacheable so a proxy does not stale-serve the nonce on retry.
+        // RFC 9449 §8: a use_dpop_nonce error MUST carry the fresh nonce on a DPoP-Nonce header. §8.2 asks such
+        // responses to be uncacheable; the endpoint-level no-cache filter (see MapOidcEndpoints) covers that.
         if (error is UseDPoPNonceError { Nonce: var nonce })
-            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce).WithNoCacheHeaders();
+            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
 
         return result;
     }

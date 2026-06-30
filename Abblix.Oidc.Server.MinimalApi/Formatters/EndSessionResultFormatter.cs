@@ -57,7 +57,6 @@ public class EndSessionResultFormatter(
                 success.FrontChannelLogoutRequestUris);
 
             return Results.Content(logout.HtmlContent, MediaTypeNames.Text.Html)
-                .WithNoCacheHeaders()
                 .WithHeader(HeaderNames.ContentSecurityPolicy, GetContentSecurityPolicy(logout));
         }
 

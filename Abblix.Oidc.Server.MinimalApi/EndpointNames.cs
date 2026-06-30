@@ -33,18 +33,20 @@ namespace Abblix.Oidc.Server.MinimalApi;
 /// </remarks>
 internal static class EndpointNames
 {
-    public const string Authorize = "Abblix.Oidc.Authorize";
-    public const string PushedAuthorizationRequest = "Abblix.Oidc.PushedAuthorizationRequest";
-    public const string UserInfo = "Abblix.Oidc.UserInfo";
-    public const string EndSession = "Abblix.Oidc.EndSession";
-    public const string CheckSession = "Abblix.Oidc.CheckSession";
-    public const string Token = "Abblix.Oidc.Token";
-    public const string Revocation = "Abblix.Oidc.Revocation";
-    public const string Introspection = "Abblix.Oidc.Introspection";
-    public const string BackChannelAuthentication = "Abblix.Oidc.BackChannelAuthentication";
-    public const string DeviceAuthorization = "Abblix.Oidc.DeviceAuthorization";
-    public const string Register = "Abblix.Oidc.Register";
-    public const string RegisterClient = "Abblix.Oidc.RegisterClient";
-    public const string Configuration = "Abblix.Oidc.Configuration";
-    public const string Keys = "Abblix.Oidc.Keys";
+    private const string Prefix = $"{nameof(Abblix)}.{nameof(Oidc)}.";
+
+    public const string Authorize = Prefix + nameof(Authorize);
+    public const string PushedAuthorizationRequest = Prefix + nameof(PushedAuthorizationRequest);
+    public const string UserInfo = Prefix + nameof(UserInfo);
+    public const string EndSession = Prefix + nameof(EndSession);
+    public const string CheckSession = Prefix + nameof(CheckSession);
+    public const string Token = Prefix + nameof(Token);
+    public const string Revocation = Prefix + nameof(Revocation);
+    public const string Introspection = Prefix + nameof(Introspection);
+    public const string BackChannelAuthentication = Prefix + nameof(BackChannelAuthentication);
+    public const string DeviceAuthorization = Prefix + nameof(DeviceAuthorization);
+    public const string Register = Prefix + nameof(Register);
+    public const string RegisterClient = Prefix + nameof(RegisterClient);
+    public const string Configuration = Prefix + nameof(Configuration);
+    public const string Keys = Prefix + nameof(Keys);
 }
