@@ -32,14 +32,14 @@ namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
 internal readonly struct EquatableArray<T>(T[] items) : IEquatable<EquatableArray<T>>, IEnumerable<T>
 	where T : IEquatable<T>
 {
-	private readonly T[]? items = items;
+	private readonly T[]? _items = items;
 
-	public int Length => items?.Length ?? 0;
+	public int Length => _items?.Length ?? 0;
 
 	public bool Equals(EquatableArray<T> other)
 	{
-		var left = items ?? [];
-		var right = other.items ?? [];
+		var left = _items ?? [];
+		var right = other._items ?? [];
 
 		if (left.Length != right.Length)
 			return false;
@@ -58,11 +58,11 @@ internal readonly struct EquatableArray<T>(T[] items) : IEquatable<EquatableArra
 
 	public override int GetHashCode()
 	{
-		if (items == null)
+		if (_items == null)
 			return 0;
 
 		var hashCode = 17;
-		foreach (var item in items)
+		foreach (var item in _items)
 		{
 			hashCode = unchecked(hashCode * 31 + item.GetHashCode());
 		}
@@ -70,7 +70,7 @@ internal readonly struct EquatableArray<T>(T[] items) : IEquatable<EquatableArra
 		return hashCode;
 	}
 
-	public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)(items ?? [])).GetEnumerator();
+	public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)(_items ?? [])).GetEnumerator();
 
 	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

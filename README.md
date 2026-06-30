@@ -51,7 +51,7 @@
 - **Testability**: Improved separation of concerns makes the code more testable.
 - **Maintainability**: Clear structure and separation facilitate better management of the codebase.
 
-The library also supports Dependency Injection through the standard .NET DI container, aiding in the organization and management of code. Specifically tailored for seamless integration with ASP.NET WebApi, Abblix OIDC Server employs standard controller classes, binding, and routing mechanisms, simplifying the integration of OpenID Connect into your services.
+The library also supports Dependency Injection through the standard .NET DI container, aiding in the organization and management of code. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints — one for MVC controllers and routing, and one for Minimal API endpoint routing — so you can adopt whichever hosting model your application already uses, without taking a dependency on the other.
 
 ## ✨ What's New
 
@@ -124,13 +124,21 @@ For convenience, the certification information is provided in the tables below:
 
 ## 📦 How to Install
 
-Add the package to your ASP.NET Core project from NuGet:
+Add the adapter that matches your ASP.NET Core hosting model from NuGet.
+
+**For MVC** controllers and routing:
 
 ```shell
 dotnet add package Abblix.OIDC.Server.MVC
 ```
 
-This integrates the server into standard ASP.NET Core MVC controllers and routing, and pulls in the core `Abblix.OIDC.Server` package as a dependency. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+**For Minimal API** endpoint routing:
+
+```shell
+dotnet add package Abblix.OIDC.Server.MinimalApi
+```
+
+Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency — pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
 ## 📝 How to Build
 

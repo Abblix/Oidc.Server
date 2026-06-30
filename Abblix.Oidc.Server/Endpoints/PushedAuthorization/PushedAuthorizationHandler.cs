@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 
@@ -62,8 +61,8 @@ public class PushedAuthorizationHandler(
     /// or an error response in case of failure.
     /// </remarks>
     public async Task<AuthorizationResponse> HandleAsync(
-        AuthorizationRequest authorizationRequest,
-        ClientRequest clientRequest)
+        Model.AuthorizationRequest authorizationRequest,
+        Model.ClientRequest clientRequest)
     {
         var fetchResult = await fetcher.FetchAsync(authorizationRequest);
 

@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 
@@ -35,9 +34,9 @@ public interface IPushedAuthorizationHandler
     /// Asynchronously handles and processes a Pushed Authorization Request, ensuring it complies with OAuth 2.0
     /// and OpenID Connect specifications.
     /// </summary>
-    /// <param name="authorizationRequest">An instance of <see cref="AuthorizationRequest"/> representing the details
+    /// <param name="authorizationRequest">An instance of <see cref="Model.AuthorizationRequest"/> representing the details
     /// of the authorization request submitted by the client.</param>
-    /// <param name="clientRequest">An instance of <see cref="ClientRequest"/> providing additional information about
+    /// <param name="clientRequest">An instance of <see cref="Model.ClientRequest"/> providing additional information about
     /// the client making the request, used for contextual validation.</param>
     /// <returns>
     /// A <see cref="Task"/> that resolves to an <see cref="AuthorizationResponse"/>, indicating the outcome of the
@@ -51,6 +50,6 @@ public interface IPushedAuthorizationHandler
     /// the exposure of sensitive information in subsequent authorization requests.
     /// </remarks>
     Task<AuthorizationResponse> HandleAsync(
-        AuthorizationRequest authorizationRequest,
-        ClientRequest clientRequest);
+        Model.AuthorizationRequest authorizationRequest,
+        Model.ClientRequest clientRequest);
 }

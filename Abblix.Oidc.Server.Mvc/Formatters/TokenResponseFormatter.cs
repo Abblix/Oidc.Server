@@ -30,7 +30,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using TokenResponse = Abblix.Oidc.Server.Mvc.Model.TokenResponse;
+using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -69,8 +69,7 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
                     AuthorizationDetails = success.AuthorizationDetails,
                 };
 
-                return new ActionResult<TokenResponse>(
-                    new OkObjectResult(tokenResponse).WithNoCacheHeaders());
+                return new ActionResult<TokenResponse>(new OkObjectResult(tokenResponse));
             },
             onFailure: FormatError));
     }
@@ -83,10 +82,10 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
 
         // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.
-        // §8.2 also asks responses bearing DPoP-Nonce to be uncacheable so an
-        // intermediate proxy does not stale-serve the nonce on a follow-up retry.
+        // §8.2 also asks responses bearing DPoP-Nonce to be uncacheable; the controller's
+        // [ResponseCache(NoStore)] covers that for every token-endpoint response.
         if (error is UseDPoPNonceError { Nonce: var nonce })
-            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce).WithNoCacheHeaders();
+            result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
 
         return new ActionResult<TokenResponse>(result);
     }

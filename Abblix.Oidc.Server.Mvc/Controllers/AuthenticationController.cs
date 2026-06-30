@@ -37,7 +37,6 @@ using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
-using AuthorizationResponse = Abblix.Oidc.Server.Mvc.Model.AuthorizationResponse;
 using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -82,7 +81,7 @@ public sealed class AuthenticationController : ControllerBase
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
     [EnabledBy(OidcEndpoints.PushedAuthorizationRequest)]
-    public async Task<ActionResult<AuthorizationResponse>> PushAuthorizeAsync(
+    public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
         [FromForm] AuthorizationRequest authorizationRequest,
@@ -113,7 +112,7 @@ public sealed class AuthenticationController : ControllerBase
     //[Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
     [EnabledBy(OidcEndpoints.Authorize)]
-    public async Task<ActionResult<AuthorizationResponse>> AuthorizeAsync(
+    public async Task<ActionResult<Core.AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
         [FromQueryOrForm] AuthorizationRequest request)

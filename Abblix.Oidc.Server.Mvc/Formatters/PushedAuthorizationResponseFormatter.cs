@@ -23,11 +23,12 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using CoreModel = Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ParResponse = Abblix.Oidc.Server.Model.PushedAuthorizationResponse;
+using Core = Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -47,19 +48,19 @@ public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponse
     /// </summary>
     /// <param name="request">The original authorization request.</param>
     /// <param name="response">The response from processing the authorization request.
-    /// This could be a <see cref="PushedAuthorizationResponse"/> indicating success,
+    /// This could be a <see cref="Core.PushedAuthorizationResponse"/> indicating success,
     /// or an <see cref="AuthorizationError"/> indicating failure.</param>
     /// <returns>A task that resolves to an action result suitable for returning from an MVC action,
     /// representing the formatted response. This could include setting specific HTTP status codes
     /// or returning error information.</returns>
     public Task<ActionResult> FormatResponseAsync(
-        AuthorizationRequest request,
+        CoreModel.AuthorizationRequest request,
         AuthorizationResponse response)
     {
         ActionResult result = response switch
         {
-            PushedAuthorizationResponse par => new JsonResult(
-                new Model.PushedAuthorizationResponse
+            Core.PushedAuthorizationResponse par => new JsonResult(
+                new ParResponse
                 {
                     RequestUri = par.RequestUri,
                     ExpiresIn = par.ExpiresIn,
@@ -68,7 +69,7 @@ public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponse
                 StatusCode = StatusCodes.Status201Created,
             },
 
-            AuthorizationError error => new JsonResult(new ErrorResponse(error.Error, error.ErrorDescription))
+            AuthorizationError error => new JsonResult(new CoreModel.ErrorResponse(error.Error, error.ErrorDescription))
             {
                 StatusCode = error.Error switch
                 {

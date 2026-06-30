@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Core = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Moq;
@@ -54,7 +55,7 @@ public class AuthorizationHandlerTests
         _validator = new Mock<IAuthorizationRequestValidator>(MockBehavior.Strict);
         _processor = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
         _encoder = new Mock<IAuthorizationResponseEncoder>(MockBehavior.Strict);
-        _encoder.Setup(e => e.EncodeAsync(It.IsAny<AuthorizationResponse>())).Returns(Task.CompletedTask);
+        _encoder.Setup(e => e.EncodeAsync(It.IsAny<Core.AuthorizationResponse>())).Returns(Task.CompletedTask);
         _handler = new AuthorizationHandler(
             _fetcher.Object,
             _validator.Object,
