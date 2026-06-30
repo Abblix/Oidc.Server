@@ -8,6 +8,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -26,6 +27,11 @@ await LoadEmbeddedTestLicenseAsync();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+
+// Opt into device authorization BEFORE AddOidcServices: the device-code grant handler must be registered
+// before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or it lands beside the composite
+// and the token endpoint resolves the wrong single IAuthorizationGrantHandler.
+builder.Services.AddDeviceAuthorization();
 
 builder.Services.AddOidcServices(options =>
 {
@@ -66,8 +72,8 @@ builder.Services.AddOidcServices(options =>
         new ResourceDefinition(new Uri(TestConstants.ApiResource)),
     ];
 
-    // RFC 8628 device flow settings — required now that the startup validator rejects an enabled device endpoint with
-    // no configuration. No client here uses the device grant; this keeps the default-enabled endpoint valid.
+    // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),
+    // which enables the endpoint and makes these settings mandatory; no client here drives the device grant.
     options.DeviceAuthorization = new DeviceAuthorizationOptions
     {
         VerificationUri = new Uri($"{TestConstants.Issuer}/device"),

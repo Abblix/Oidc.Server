@@ -694,12 +694,14 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures services for handling Device Authorization Grant (RFC 8628) requests,
-    /// enabling devices with limited input capabilities to obtain user authorization.
+    /// Registers the Device Authorization Grant (RFC 8628) endpoint services — handler, request and context
+    /// validators, and the <c>DeviceAuthorizationOptionsValidator</c>. Invoked by the public
+    /// <c>AddDeviceAuthorization()</c> opt-in method, not by the unconditional endpoint wiring: device
+    /// authorization is a single opt-in feature, so its validator only runs when a server opts in.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddDeviceAuthorizationEndpoint(this IServiceCollection services)
+    internal static IServiceCollection AddDeviceAuthorizationEndpoint(this IServiceCollection services)
     {
         services.AddDeviceAuthorizationContextValidators();
         services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
