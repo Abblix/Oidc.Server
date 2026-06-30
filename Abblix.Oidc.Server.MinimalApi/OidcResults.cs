@@ -133,23 +133,6 @@ public static class OidcResults
         this IResult inner, string name, Microsoft.AspNetCore.Http.CookieOptions options)
         => new ResultDecorator(inner, response => response.Cookies.Delete(name, options));
 
-    /// <summary>Sets comprehensive no-cache headers on the response for maximum cross-cache compatibility.</summary>
-    public static void SetNoCacheHeaders(this HttpResponse response)
-    {
-        var headers = response.GetTypedHeaders();
-        headers.Expires = DateTimeOffset.UnixEpoch;
-        headers.CacheControl = PreventStorageInAnyCache;
-        response.Headers.Pragma = CacheControlHeaderValue.NoCacheString;
-    }
-
-    private static readonly CacheControlHeaderValue PreventStorageInAnyCache = new()
-    {
-        MaxAge = TimeSpan.Zero,
-        SharedMaxAge = TimeSpan.Zero,
-        NoStore = true,
-        NoCache = true,
-    };
-
     /// <summary>
     /// Wraps an inner <see cref="IResult"/> and applies a mutation to the response (headers, cookies) before the inner
     /// result writes the status and body.
