@@ -25,7 +25,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
 /// Builds the RFC 7592 <c>registration_client_uri</c> — the absolute URL of a client's configuration endpoint — from
