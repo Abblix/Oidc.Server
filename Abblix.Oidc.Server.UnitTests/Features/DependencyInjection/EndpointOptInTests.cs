@@ -93,15 +93,20 @@ public class EndpointOptInTests
     }
 
     [Fact]
-    public void Opting_into_one_endpoint_leaves_the_others_off()
+    public void Each_opt_in_enables_exactly_its_own_endpoint_on_top_of_Base()
     {
-        var enabled = EnabledAfter(s => s.AddRevocation());
-
-        Assert.True(enabled.HasFlag(OidcEndpoints.Revocation));
-        Assert.False(enabled.HasFlag(OidcEndpoints.Introspection));
-        Assert.False(enabled.HasFlag(OidcEndpoints.RegisterClient));
-        Assert.False(enabled.HasFlag(OidcEndpoints.CheckSession));
-        Assert.False(enabled.HasFlag(OidcEndpoints.BackChannelAuthentication));
+        // The result is Base plus exactly the one opted-in flag — no other opt-in endpoint leaks on.
+        // (Device is covered separately because its options validator requires configured settings.)
+        Assert.Equal(OidcEndpoints.Base | OidcEndpoints.CheckSession,
+            EnabledAfter(s => s.AddCheckSession()));
+        Assert.Equal(OidcEndpoints.Base | OidcEndpoints.Revocation,
+            EnabledAfter(s => s.AddRevocation()));
+        Assert.Equal(OidcEndpoints.Base | OidcEndpoints.Introspection,
+            EnabledAfter(s => s.AddIntrospection()));
+        Assert.Equal(OidcEndpoints.Base | OidcEndpoints.RegisterClient,
+            EnabledAfter(s => s.AddDynamicClientRegistration()));
+        Assert.Equal(OidcEndpoints.Base | OidcEndpoints.BackChannelAuthentication,
+            EnabledAfter(s => s.AddBackChannelAuthentication()));
     }
 
     [Fact]
@@ -126,5 +131,31 @@ public class EndpointOptInTests
         var services = new ServiceCollection();
         services.AddDynamicClientRegistration();
         Assert.Contains(services, d => d.ServiceType == typeof(IRegisterClientHandler));
+    }
+
+    [Fact]
+    public void All_opt_ins_together_enable_the_full_All_set()
+    {
+        // Base plus all six opt-in endpoints reconstitutes the complete OidcEndpoints.All set — the previous
+        // every-endpoint-on default is exactly Base with every AddX() applied.
+        var enabled = EnabledAfter(s =>
+        {
+            s.AddCheckSession();
+            s.AddRevocation();
+            s.AddIntrospection();
+            s.AddDynamicClientRegistration();
+            s.AddBackChannelAuthentication();
+            s.AddDeviceAuthorization();
+            s.Configure<OidcOptions>(o => o.DeviceAuthorization = new DeviceAuthorizationOptions
+            {
+                VerificationUri = new Uri("https://provider.example/device"),
+                CodeLifetime = TimeSpan.FromMinutes(15),
+                PollingInterval = TimeSpan.FromSeconds(5),
+                DeviceCodeLength = 32,
+                UserCodeLength = 8,
+            });
+        });
+
+        Assert.Equal(OidcEndpoints.All, enabled);
     }
 }
