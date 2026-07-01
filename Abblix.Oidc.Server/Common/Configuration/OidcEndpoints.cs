@@ -36,6 +36,19 @@ public enum OidcEndpoints
 	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication | DeviceAuthorization,
 
 	/// <summary>
+	/// The base set of endpoints for a typical OpenID Provider: discovery, JWKS, the interactive authorization and
+	/// token core, PAR, UserInfo and RP-initiated logout. This is the default value of
+	/// <see cref="OidcOptions.EnabledEndpoints"/> — the minimal functional provider on top of which the opt-in
+	/// endpoints are added. It deliberately excludes the six opt-in endpoints — <see cref="CheckSession"/>,
+	/// <see cref="Revocation"/>, <see cref="Introspection"/>, <see cref="RegisterClient"/>,
+	/// <see cref="BackChannelAuthentication"/> and <see cref="DeviceAuthorization"/> — each of which is niche,
+	/// security-sensitive or carries its own grant, and is enabled by a dedicated <c>AddX()</c> call that both
+	/// registers the feature and re-enables its flag. A server that opts into none of them exposes exactly this set
+	/// and neither advertises nor validates an endpoint it was never asked to serve.
+	/// </summary>
+	Base = Configuration | Keys | Authorize | Token | UserInfo | EndSession | PushedAuthorizationRequest,
+
+	/// <summary>
 	/// The configuration endpoint, used by clients to dynamically discover information about the OpenID Provider.
 	/// This typically provides metadata such as available endpoints, supported grant types, and signing algorithms.
 	/// </summary>

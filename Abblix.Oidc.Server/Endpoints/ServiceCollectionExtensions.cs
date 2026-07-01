@@ -458,7 +458,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddRevocationEndpoint(this IServiceCollection services)
+    internal static IServiceCollection AddRevocationEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IRevocationHandler, RevocationHandler>();
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
@@ -473,7 +473,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddIntrospectionEndpoint(this IServiceCollection services)
+    internal static IServiceCollection AddIntrospectionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
         services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
@@ -494,7 +494,7 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure with check session endpoint support.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>, enabling further chaining of service registrations.</returns>
-    public static IServiceCollection AddCheckSessionEndpoint(this IServiceCollection services)
+    internal static IServiceCollection AddCheckSessionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<ICheckSessionHandler, CheckSessionHandler>();
         return services;
@@ -534,7 +534,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <param name="newClientOptionsFactory">A factory function to setup options for new client registrations.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddDynamicClientEndpoints(
+    internal static IServiceCollection AddDynamicClientEndpoints(
         this IServiceCollection services,
         Func<IServiceProvider, NewClientOptions> newClientOptionsFactory)
     {
@@ -655,7 +655,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddBackChannelAuthenticationEndpoint(this IServiceCollection services)
+    internal static IServiceCollection AddBackChannelAuthenticationEndpoint(this IServiceCollection services)
     {
         services.AddBackChannelAuthenticationContextValidators();
 

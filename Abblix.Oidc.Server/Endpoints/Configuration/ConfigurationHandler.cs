@@ -49,10 +49,16 @@ public sealed class ConfigurationHandler(
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
-	IAuthenticationCompletionHandler cibaCompletionHandler,
+	IEnumerable<IAuthenticationCompletionHandler> cibaCompletionHandlers,
 	IAcrMetadataProvider acrMetadata,
 	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
 {
+	// CIBA metadata is advertised only when the CIBA feature is opted in (AddBackChannelAuthentication), the sole
+	// registrar of IAuthenticationCompletionHandler. Resolved from a collection so discovery — an always-on
+	// endpoint — still constructs under ValidateOnBuild when CIBA is off; null means CIBA is disabled, so the
+	// backchannel discovery fields are omitted rather than advertised.
+	private readonly IAuthenticationCompletionHandler? cibaCompletionHandler = cibaCompletionHandlers.FirstOrDefault();
+
 	/// <summary>
 	/// Handles the configuration request by building discovery metadata.
 	/// </summary>
@@ -119,9 +125,11 @@ public sealed class ConfigurationHandler(
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		DpopSigningAlgValuesSupported = jwtAlgorithms.DpopSigningAlgorithmsSupported,
 
-		BackChannelAuthenticationRequestSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
-		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler.TokenDeliveryModesSupported,
-		BackChannelUserCodeParameterSupported = options.Value.BackChannelAuthentication.UserCodeParameterSupported,
+		BackChannelAuthenticationRequestSigningAlgValuesSupported =
+			cibaCompletionHandler is null ? null : jwtAlgorithms.SigningAlgorithmsSupported,
+		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler?.TokenDeliveryModesSupported,
+		BackChannelUserCodeParameterSupported =
+			cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
 		AcrValuesSupported = acrMetadata.AcrValuesSupported,
 

@@ -103,13 +103,15 @@ public record OidcOptions
 	/// <summary>
 	/// Specifies which OIDC endpoints are enabled on the server. This property allows for fine-grained control over
 	/// the available functionality, enabling or disabling specific endpoints based on the server's role, security
-	/// considerations, or operational requirements. By default every endpoint is enabled except
-	/// <see cref="OidcEndpoints.DeviceAuthorization"/>: device authorization is opt-in via
-	/// <c>AddDeviceAuthorization()</c>, which registers the feature and re-enables the flag. The device
-	/// endpoint requires a configured <see cref="DeviceAuthorization"/>, so leaving it off by default keeps
-	/// a server that never opts in from advertising — or validating — an endpoint it cannot serve.
+	/// considerations, or operational requirements. Defaults to <see cref="OidcEndpoints.Base"/> — the core
+	/// interactive OIDC set plus PAR and RP-initiated logout. The six niche or security-sensitive endpoints
+	/// (CheckSession, Revocation, Introspection, dynamic client registration, CIBA and device authorization) are
+	/// off by default and each turned on by its dedicated <c>AddX()</c> opt-in, which registers the feature and
+	/// re-enables the corresponding flag. Leaving them off keeps a server that never opts in from advertising — or
+	/// validating — an endpoint it was never asked to serve. Set this explicitly to <see cref="OidcEndpoints.All"/>
+	/// to restore the previous every-endpoint-on behaviour.
 	/// </summary>
-	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.All & ~OidcEndpoints.DeviceAuthorization;
+	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.Base;
 
 	/// <summary>
 	/// The collection of JSON Web Keys (JWK) used for signing tokens issued by the OIDC server.

@@ -25,7 +25,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server;
 
@@ -116,33 +115,31 @@ public static class ServiceCollectionExtensions
 			.AddStorages()
 			.AddUserInfo()
 			.AddRequestObject()
-			.AddBackChannelAuthentication()
 			.AddDPoP()
 			.AddRichAuthorizationRequests();
 			// AddSecureHttpFetch() moved to AddOidcCore() to run before AddEndpoints()
 	}
 
 	/// <summary>
-	/// Configures the service collection with a comprehensive suite of endpoints necessary for handling various
-	/// OAuth 2.0 and OpenID Connect flows, including authorization, token issuance, revocation, introspection,
-	/// user information, session management and dynamic client registration.
+	/// Configures the service collection with the always-on OAuth 2.0 and OpenID Connect endpoints — the set
+	/// mounted unconditionally regardless of <see cref="OidcOptions.EnabledEndpoints"/>: discovery, authorization,
+	/// PAR, token, UserInfo and end session.
 	/// </summary>
 	/// <remarks>
 	/// By calling this method, the application integrates support for:
 	///
+	/// - The Configuration (discovery) Endpoint for publishing provider metadata.
 	/// - The Authorization Endpoint for initiating user authentication and consent.
 	/// - Pushed Authorization Request (PAR) Endpoint for pre-registering authorization requests.
 	/// - Token Endpoint for issuing tokens following successful authentication.
-	/// - Revocation Endpoint for token revocation by clients.
-	/// - Introspection Endpoint for token validation by resource servers.
 	/// - User Info Endpoint for accessing authenticated user information.
 	/// - End Session Endpoint for managing user logout processes.
-	/// - Back Channel Authentication Endpoint for supporting CIBA (Client Initiated Backchannel Authentication).
-	/// - Check Session Endpoint for session state management in browser clients.
-	/// - Dynamic Client Registration Endpoint for runtime registration of new clients.
 	///
-	/// This setup ensures the application is equipped to support a wide range of authentication, authorization
-	/// and session management scenarios in a secure and standards-compliant manner.
+	/// The niche or security-sensitive endpoints — Revocation, Introspection, CIBA, Check Session and Dynamic
+	/// Client Registration — are not wired here. Each is opt-in through its dedicated <c>AddX()</c> feature method
+	/// (<c>AddRevocation</c>, <c>AddIntrospection</c>, <c>AddBackChannelAuthentication</c>, <c>AddCheckSession</c>,
+	/// <c>AddDynamicClientRegistration</c>), which registers the endpoint services and re-enables its flag in
+	/// <see cref="OidcOptions.EnabledEndpoints"/> (defaulting to <see cref="OidcEndpoints.Base"/>).
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to configure with necessary endpoints.</param>
 	/// <returns>The configured <see cref="IServiceCollection"/>, enabling further service registration chaining.</returns>
@@ -153,12 +150,7 @@ public static class ServiceCollectionExtensions
 			.AddAuthorizationEndpoint()
 			.AddPushedAuthorizationEndpoint()
 			.AddTokenEndpoint()
-			.AddRevocationEndpoint()
-			.AddIntrospectionEndpoint()
 			.AddUserInfoEndpoint()
-			.AddEndSessionEndpoint()
-			.AddBackChannelAuthenticationEndpoint()
-			.AddCheckSessionEndpoint()
-			.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
+			.AddEndSessionEndpoint();
 	}
 }
