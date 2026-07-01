@@ -72,6 +72,10 @@ public class RegisterClientHandlerIntegrationTests
         // so this suite's DCR handlers and validators resolve.
         services.AddDynamicClientRegistration();
 
+        // Apply per-test opt-ins (e.g. EnablePasswordGrant) BEFORE AddOidcServices: a grant handler must be
+        // registered before AddOidcCore composes the handlers, otherwise the ordering guard rejects it.
+        configure?.Invoke(services);
+
         services.AddOidcServices(opts =>
         {
             opts.Issuer = TestConstants.DefaultIssuer.OriginalString;
@@ -90,7 +94,7 @@ public class RegisterClientHandlerIntegrationTests
             opts.RequireInitialAccessToken = false;
 
         });
-        configure?.Invoke(services);
+
         return services.BuildServiceProvider();
     }
 
