@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -289,18 +290,19 @@ public class AddAuthorizationGrantTests
     }
 
     /// <summary>
-    /// When the host opts into ROPC via <c>EnablePasswordGrant()</c> on top of
-    /// <c>AddOidcServices</c>, <see cref="PasswordGrantHandler"/> appears in the
-    /// <see cref="IGrantTypeInformer"/> descriptor list — proving the opt-in surfaces in the
-    /// same registry discovery and the registration validator read.
+    /// When the host opts into ROPC via <c>EnablePasswordGrant()</c> BEFORE <c>AddOidcServices</c>,
+    /// <see cref="PasswordGrantHandler"/> appears in the <see cref="IGrantTypeInformer"/> descriptor list — proving
+    /// the opt-in surfaces in the same registry discovery and the registration validator read. The opt-in must
+    /// precede <c>AddOidcCore</c> so the handler is included in the composite the token endpoint dispatches on;
+    /// registering it after is rejected by the ordering guard (see below).
     /// </summary>
     [Fact]
     public void AddOidcServices_WithPasswordOptIn_IncludesPasswordGrantInInformer()
     {
         var services = new ServiceCollection();
         services
-            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString)
-            .EnablePasswordGrant();
+            .EnablePasswordGrant()
+            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString);
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -308,5 +310,58 @@ public class AddAuthorizationGrantTests
             .ToList();
 
         Assert.Contains(typeof(PasswordGrantHandler), informerImpls);
+    }
+
+    /// <summary>
+    /// A grant handler registered AFTER the grant handlers were composed by <c>AddOidcCore</c> would land beside the
+    /// composite rather than inside it, so the token endpoint would silently not dispatch its grant type. The
+    /// ordering guard turns that latent misconfiguration into a loud startup error naming the offending handler and
+    /// pointing at the fix — call the opt-in before <c>AddOidcCore</c>.
+    /// </summary>
+    [Fact]
+    public void AddAuthorizationGrant_AfterOidcCore_ThrowsWithOrderingGuidance()
+    {
+        var services = new ServiceCollection();
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.AddAuthorizationGrant<StubGrantHandler>());
+
+        Assert.Contains(nameof(StubGrantHandler), exception.Message);
+        Assert.Contains("AddOidcCore", exception.Message);
+    }
+
+    /// <summary>
+    /// The mirror of the guard: a grant handler registered BEFORE <c>AddOidcCore</c> — the correct order — is
+    /// accepted, and the subsequent composition does not throw. This is the path every opt-in feature method takes.
+    /// </summary>
+    [Fact]
+    public void AddAuthorizationGrant_BeforeOidcCore_IsAccepted()
+    {
+        var services = new ServiceCollection();
+        services.AddAuthorizationGrant<StubGrantHandler>();
+
+        var exception = Record.Exception(
+            () => services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// The guard fires through a real opt-in feature method, not only the low-level helper: calling
+    /// <c>EnablePasswordGrant()</c> after <c>AddOidcServices</c> — the exact misuse a host might commit — is rejected
+    /// with the grant handler named and the fix pointed at. This is the consumer-facing shape of the ordering
+    /// contract, and the regression that would return if the sentinel check were removed.
+    /// </summary>
+    [Fact]
+    public void EnablePasswordGrant_AfterOidcCore_IsRejectedByTheOrderingGuard()
+    {
+        var services = new ServiceCollection();
+        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer.OriginalString);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.EnablePasswordGrant());
+
+        Assert.Contains(nameof(PasswordGrantHandler), exception.Message);
+        Assert.Contains("AddOidcCore", exception.Message);
     }
 }
