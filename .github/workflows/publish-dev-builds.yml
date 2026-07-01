@@ -85,7 +85,10 @@ jobs:
 
         timeout-minutes: 3
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg
+        # GeneratePackageOnBuild=true on the family csprojs makes `pack --no-build` invoke the Build
+        # target (a newer .NET SDK turned that into a hard error: "NoBuild set but Build invoked").
+        # Override it here so pack repackages the already-built assemblies instead of rebuilding.
+        run: dotnet pack --no-build -c Release -o nupkg -p:GeneratePackageOnBuild=false
 
         timeout-minutes: 3
       - name: Push to GitHub Packages
