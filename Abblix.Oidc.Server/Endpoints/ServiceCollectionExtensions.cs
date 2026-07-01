@@ -284,7 +284,9 @@ public static class ServiceCollectionExtensions
     /// user credentials directly, which can increase the risk of credential exposure and related security issues.
     /// By isolating this method, we ensure that developers make a deliberate decision to enable this feature, being
     /// fully aware of its security implications. It's recommended to use more secure grant types like authorization
-    /// code or client credentials whenever possible.
+    /// code or client credentials whenever possible. Call this before <c>AddOidcCore</c>/<c>AddOidcServices</c>:
+    /// the password grant handler must be registered before the grant handlers are composed, otherwise the
+    /// registration is rejected at startup.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the password grant handler to.</param>
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
@@ -416,6 +418,21 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthorizationGrant<TImpl>(this IServiceCollection services)
         where TImpl : class, IAuthorizationGrantHandler
     {
+        // Fail loud when a grant handler is registered after AddOidcCore has composed the handlers. Compose registers
+        // CompositeAuthorizationGrantHandler as a concrete service and removes the individual
+        // IAuthorizationGrantHandler registrations, so its presence marks that composition already happened: a handler
+        // added now lands beside the composite rather than inside it, and the token endpoint would silently not
+        // dispatch its grant type. The opt-in that registers the handler must run before AddOidcCore.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(CompositeAuthorizationGrantHandler)))
+        {
+            throw new InvalidOperationException(
+                $"The authorization grant handler '{typeof(TImpl).Name}' is registered after the grant handlers were " +
+                "composed by AddOidcCore/AddOidcServices. Registered this late it lands beside the composite the token " +
+                "endpoint dispatches on rather than inside it, so its grant type would be silently unavailable. Call " +
+                "the opt-in that registers this handler (for example AddDeviceAuthorization, " +
+                "AddBackChannelAuthentication or EnablePasswordGrant) BEFORE AddOidcCore/AddOidcServices.");
+        }
+
         services.TryAddSingleton<TImpl>();
         services.TryAddEnumerableAlias<IAuthorizationGrantHandler, TImpl>();
         services.TryAddEnumerableAlias<IGrantTypeInformer, TImpl>();
@@ -731,7 +748,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>(),
             // RFC 9396 §3 authorization_details on device authorization requests.
-            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.DeviceAuthorizationDetailsValidator>(),
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorizationDetailsValidator>(),
         ]);
         return services.Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();
     }
