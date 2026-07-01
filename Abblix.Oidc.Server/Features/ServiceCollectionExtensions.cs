@@ -485,9 +485,18 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures services for handling back-channel authentication requests, enabling secure server-to-server
-    /// authentication flows and registers the CIBA grant handler.
+    /// Opts the server into Client-Initiated Backchannel Authentication (CIBA). This single call registers the
+    /// CIBA feature services, the CIBA grant handler, the backchannel endpoint services and re-enables the
+    /// <see cref="OidcEndpoints.BackChannelAuthentication"/> flag, which is off in the default
+    /// <see cref="OidcOptions.EnabledEndpoints"/>. A server that never calls this method exposes no backchannel
+    /// endpoint and runs no CIBA grant.
     /// </summary>
+    /// <remarks>
+    /// Call this <b>before</b> <c>AddOidcCore</c>/<c>AddOidcServices</c>: the CIBA grant handler must be
+    /// registered before <c>AddAuthorizationGrants()</c> composes the grant handlers at the end of
+    /// <c>AddOidcCore</c>, otherwise it is registered beside the composite and the token endpoint resolves the
+    /// wrong single <c>IAuthorizationGrantHandler</c>.
+    /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddBackChannelAuthentication(this IServiceCollection services)
@@ -543,6 +552,12 @@ public static class ServiceCollectionExtensions
         // Register CIBA grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
         services.AddAuthorizationGrant<BackChannelAuthenticationGrantHandler>();
 
+        // Single opt-in: registering the feature also brings in the backchannel endpoint services and turns the
+        // endpoint on. EnabledEndpoints defaults to OidcEndpoints.Base (CIBA off), so a server that never calls this
+        // method neither registers the CIBA types nor advertises/validates the endpoint.
+        services.AddBackChannelAuthenticationEndpoint();
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.BackChannelAuthentication);
+
         return services;
     }
 
@@ -580,6 +595,73 @@ public static class ServiceCollectionExtensions
         services.AddDeviceAuthorizationEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.DeviceAuthorization);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Opts the server into the OpenID Connect Session Management check-session endpoint. This single call
+    /// registers the check-session handler and re-enables the <see cref="OidcEndpoints.CheckSession"/> flag,
+    /// which is off in the default <see cref="OidcOptions.EnabledEndpoints"/>. Many SPAs do not use the
+    /// session-management iframe, so it is opt-in: a server that never calls this method exposes no check-session
+    /// endpoint and does not advertise it in discovery.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddCheckSession(this IServiceCollection services)
+    {
+        services.AddCheckSessionEndpoint();
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.CheckSession);
+        return services;
+    }
+
+    /// <summary>
+    /// Opts the server into the OAuth 2.0 Token Revocation endpoint (RFC 7009). This single call registers the
+    /// revocation handler, validator and processor and re-enables the <see cref="OidcEndpoints.Revocation"/>
+    /// flag, which is off in the default <see cref="OidcOptions.EnabledEndpoints"/>. This governs only the public
+    /// <c>/revoke</c> endpoint; the internal token-revocation machinery that refresh-token rotation, logout and
+    /// initial-access-token invalidation depend on is always registered and is unaffected. A server that never
+    /// calls this method exposes no revocation endpoint and does not advertise it in discovery.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddRevocation(this IServiceCollection services)
+    {
+        services.AddRevocationEndpoint();
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.Revocation);
+        return services;
+    }
+
+    /// <summary>
+    /// Opts the server into the OAuth 2.0 Token Introspection endpoint (RFC 7662). This single call registers the
+    /// introspection handler, validator and processor and re-enables the <see cref="OidcEndpoints.Introspection"/>
+    /// flag, which is off in the default <see cref="OidcOptions.EnabledEndpoints"/>. Introspection is chiefly
+    /// needed by resource servers validating opaque tokens; a server issuing self-contained JWTs often does not
+    /// need it, so it is opt-in. A server that never calls this method exposes no introspection endpoint and does
+    /// not advertise it in discovery.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddIntrospection(this IServiceCollection services)
+    {
+        services.AddIntrospectionEndpoint();
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.Introspection);
+        return services;
+    }
+
+    /// <summary>
+    /// Opts the server into Dynamic Client Registration (RFC 7591 / RFC 7592). This single call registers the
+    /// registration, read, update and remove handlers and their validators, and re-enables the
+    /// <see cref="OidcEndpoints.RegisterClient"/> flag, which is off in the default
+    /// <see cref="OidcOptions.EnabledEndpoints"/>. Open registration widens the attack surface, so it is opt-in:
+    /// a server that never calls this method exposes no registration endpoint and does not advertise it in
+    /// discovery. New-client defaults are taken from <see cref="OidcOptions.NewClientOptions"/>.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddDynamicClientRegistration(this IServiceCollection services)
+    {
+        services.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
+        services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.RegisterClient);
         return services;
     }
 

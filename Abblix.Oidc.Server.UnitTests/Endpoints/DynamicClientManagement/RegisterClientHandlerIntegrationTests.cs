@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -67,6 +68,10 @@ public class RegisterClientHandlerIntegrationTests
         services.AddSingleton(Mock.Of<IUserCredentialsAuthenticator>());
         services.AddSingleton(Mock.Of<IUserInfoProvider>());
 
+        // Dynamic client registration is opt-in (off in the OidcEndpoints.Base set); register it explicitly
+        // so this suite's DCR handlers and validators resolve.
+        services.AddDynamicClientRegistration();
+
         services.AddOidcServices(opts =>
         {
             opts.Issuer = TestConstants.DefaultIssuer.OriginalString;
@@ -84,10 +89,6 @@ public class RegisterClientHandlerIntegrationTests
             // sees the request — masking the very behaviour we want to verify.
             opts.RequireInitialAccessToken = false;
 
-            // This suite exercises dynamic client registration, not the device flow, so drop the
-            // default-enabled device endpoint rather than configure it (the startup validator requires
-            // DeviceAuthorization settings whenever that endpoint is enabled).
-            opts.EnabledEndpoints &= ~OidcEndpoints.DeviceAuthorization;
         });
         configure?.Invoke(services);
         return services.BuildServiceProvider();

@@ -8,6 +8,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -68,16 +69,15 @@ public class PushModeValidatorRegistrationTests
         services.AddSingleton(Mock.Of<IUserCredentialsAuthenticator>());
         services.AddSingleton(Mock.Of<IUserInfoProvider>());
 
+        // CIBA is opt-in (off in the OidcEndpoints.Base set) and carries a grant handler, so it must be
+        // registered before AddOidcServices composes the grant handlers. This test inspects its validator pipeline.
+        services.AddBackChannelAuthentication();
+
         services.AddOidcServices(options =>
         {
             options.Issuer = TestConstants.DefaultIssuer.OriginalString;
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
             options.RequireInitialAccessToken = false;
-
-            // This test inspects the CIBA validator pipeline, not the device flow, so drop the default-enabled
-            // device endpoint rather than configure it (the startup validator requires DeviceAuthorization settings
-            // whenever that endpoint is enabled).
-            options.EnabledEndpoints &= ~OidcEndpoints.DeviceAuthorization;
         });
 
         return services.BuildServiceProvider();

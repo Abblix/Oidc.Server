@@ -87,6 +87,36 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     }
 
     [Fact]
+    public async Task Base_configuration_advertises_and_maps_no_opt_in_endpoint()
+    {
+        // The full host advertises introspection; capture the path it maps so we can prove the Base host 404s it.
+        var introspectPath = new Uri((await ClientOf(factory).FetchDiscoveryAsync())
+            [ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath;
+
+        // Reset the host to the default OidcEndpoints.Base set — the state of a server that opts into nothing.
+        using var baseHost = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.EnabledEndpoints = OidcEndpoints.Base))));
+        var client = ClientOf(baseHost);
+        var baseDiscovery = await client.FetchDiscoveryAsync();
+
+        // A base endpoint stays advertised; every opt-in endpoint drops out of the discovery document.
+        Assert.NotNull(baseDiscovery[ConfigurationResponse.Parameters.TokenEndpoint]);
+        Assert.Null(baseDiscovery[ConfigurationResponse.Parameters.IntrospectionEndpoint]);
+        Assert.Null(baseDiscovery[ConfigurationResponse.Parameters.RevocationEndpoint]);
+        Assert.Null(baseDiscovery[ConfigurationResponse.Parameters.RegistrationEndpoint]);
+
+        // And the path the full host mapped for introspection is unmapped here.
+        var response = await client.PostAsync(introspectPath, new FormUrlEncodedContent(
+            new Dictionary<string, string> { [IntrospectionRequest.Parameters.Token] = "irrelevant" }),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Model_validation_failure_is_rendered_as_oauth_invalid_request_json()
     {
         var client = ClientOf(factory);

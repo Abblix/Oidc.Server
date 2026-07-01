@@ -28,10 +28,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 
-// Opt into device authorization BEFORE AddOidcServices: the device-code grant handler must be registered
-// before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or it lands beside the composite
-// and the token endpoint resolves the wrong single IAuthorizationGrantHandler.
+// Opt into the endpoints that are no longer on by default (EnabledEndpoints now defaults to OidcEndpoints.Base).
+// The grant-bearing features — device authorization and CIBA — MUST be registered BEFORE AddOidcServices: their
+// grant handlers must exist before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or a
+// handler lands beside the composite and the token endpoint resolves the wrong single IAuthorizationGrantHandler.
+// The endpoint-only opt-ins have no ordering constraint but are grouped here so the host mirrors the previous
+// every-endpoint-on server the E2E suite expects.
 builder.Services.AddDeviceAuthorization();
+builder.Services.AddBackChannelAuthentication();
+builder.Services.AddRevocation();
+builder.Services.AddIntrospection();
+builder.Services.AddCheckSession();
+builder.Services.AddDynamicClientRegistration();
 
 builder.Services.AddOidcServices(options =>
 {
