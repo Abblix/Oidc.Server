@@ -33,11 +33,6 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 public abstract record AuthorizationResponse(AuthorizationRequest Model)
 {
     /// <summary>
-    /// The original or recovered request model that was processed.
-    /// </summary>
-    public AuthorizationRequest Model { get; init; } = Model;
-
-    /// <summary>
     /// Wire-level parameter names returned to the client by the authorization endpoint (via query,
     /// fragment, form_post, or — under JARM — as claims inside the single <c>response</c> JWT). Shared by
     /// the core response encoder and the MVC serialization DTO so the two never drift.
