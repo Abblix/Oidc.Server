@@ -21,8 +21,12 @@
 // info@abblix.com
 
 using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -222,4 +226,81 @@ public class JwtEncryptionTests
     private static IEnumerable<(string Key, string?)> ExtractClaims(JsonWebToken token)
         => from claim in token.Payload.Json
             select (claim.Key, claim.Value?.ToJsonString());
+    /// <summary>
+    /// Verifies the RFC 7516 §11.5 mitigation closes the Bleichenbacher timing oracle even when RSA1_5
+    /// decryption SUCCEEDS with structurally valid PKCS#1 v1.5 padding but produces a wrong-length CEK.
+    /// A wrong-length CEK would make the content decryptor fast-fail on its length check before running
+    /// the AEAD step, whereas the padding-invalid branch substitutes a correct-length random CEK and runs
+    /// the full step — an observable difference in work. The JWE decryptor must therefore also substitute
+    /// a random CEK on a length mismatch, so the content decryptor always receives a correct-length key.
+    /// </summary>
+    [Fact]
+    public async Task Rsa1_5_ValidPaddingWrongLengthCek_StillRunsAeadOnCorrectLengthKey()
+    {
+        // A spy content decryptor records the CEK length the JWE decryptor hands it and reports the
+        // A256GCM key size so the mitigation's length comparison targets 32 bytes.
+        var spy = new CekLengthRecordingEncryptor(keySizeInBytes: 32);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        // Appended after AddJsonWebTokens so keyed last-wins resolution routes A256GCM to the spy.
+        services.AddKeyedSingleton<IDataEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, spy);
+        await using var provider = services.BuildServiceProvider();
+
+        var encKey = (RsaJsonWebKey)encryptionKey;
+
+        // Craft an encrypted_key that RSA1_5-decrypts to valid padding but a 5-byte (wrong-length) CEK.
+        byte[] craftedEncryptedKey;
+        using (var rsa = encKey.ToRsa())
+            craftedEncryptedKey = rsa.Encrypt(new byte[] { 1, 2, 3, 4, 5 }, RSAEncryptionPadding.Pkcs1);
+
+        var header = new JsonObject
+        {
+            [JwtClaimTypes.Algorithm] = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+            [JwtClaimTypes.EncryptionAlgorithm] = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            [JwtClaimTypes.KeyId] = encKey.KeyId,
+        };
+
+        var jwtParts = new[]
+        {
+            Base64Url.EncodeToString(Encoding.UTF8.GetBytes(header.ToJsonString())),
+            Base64Url.EncodeToString(craftedEncryptedKey),
+            Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(12)),
+            Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(16)),
+            Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(16)),
+        };
+
+        var encryptor = provider.GetRequiredService<IJsonWebTokenEncryptor>();
+        var result = await encryptor.DecryptAsync(
+            jwtParts, new JsonWebKey[] { encKey }.ToAsyncEnumerable());
+
+        // The content decryptor must run on a correct-length CEK (32 bytes for A256GCM), not on the
+        // 5-byte value RSA1_5 decrypted — otherwise the fast length-fail leaks PKCS1 padding validity.
+        Assert.Equal(32, spy.LastCekLength);
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    private sealed class CekLengthRecordingEncryptor(int keySizeInBytes) : IDataEncryptor
+    {
+        public int LastCekLength { get; private set; } = -1;
+
+        public int KeySizeInBytes { get; } = keySizeInBytes;
+
+        public EncryptedData Encrypt(byte[] cek, byte[] plaintext, byte[] additionalAuthenticatedData)
+            => throw new NotSupportedException();
+
+        public bool TryDecrypt(
+            byte[] cek,
+            EncryptedData encryptedData,
+            byte[] additionalAuthenticatedData,
+            [NotNullWhen(true)] out byte[]? plaintext)
+        {
+            LastCekLength = cek.Length;
+            plaintext = null;
+            return false;
+        }
+    }
 }

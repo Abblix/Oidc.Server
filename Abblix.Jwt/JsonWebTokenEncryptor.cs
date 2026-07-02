@@ -191,14 +191,19 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
                     $"Decryption operation requires private key material, but key (kid={key.KeyId}) contains only public key data.");
             }
 
-            // RFC 7516 §11.5: if CEK decryption fails — wrong key, malformed padding, or an
-            // unregistered key-management 'alg' — substitute a randomly generated CEK of the
-            // correct size and still run the AEAD step. The authentication tag then fails exactly
-            // as it would for a successful-but-wrong CEK, so a decryption failure is processed
-            // identically regardless of its cause. This is what makes RSA1_5 (RSAES-PKCS1-v1_5)
-            // safe to support: it closes the Bleichenbacher/Manger padding oracle by removing the
-            // observable difference between valid and invalid padding.
-            if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey))
+            // RFC 7516 §11.5: substitute a randomly generated CEK of the correct size and still run the
+            // AEAD step when CEK decryption fails — wrong key, malformed padding, or an unregistered
+            // key-management 'alg' — OR when it succeeds with a structurally valid but wrong-length key.
+            // The authentication tag then fails exactly as it would for a successful-but-wrong CEK, so a
+            // decryption failure is processed identically regardless of its cause. The wrong-length case
+            // matters because a content decryptor fast-fails on a length mismatch before doing the
+            // AEAD/HMAC work, whereas a correct-length random CEK runs the full step — leaving that
+            // difference in place would be an observable timing oracle signalling valid PKCS1 padding.
+            // This is what makes RSA1_5 (RSAES-PKCS1-v1_5) safe to support: it closes the
+            // Bleichenbacher/Manger padding oracle by removing the observable difference between valid
+            // and invalid padding.
+            if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey) ||
+                contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
             if (contentDecryptor.TryDecrypt(
