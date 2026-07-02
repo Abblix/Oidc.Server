@@ -20,13 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
@@ -38,16 +36,21 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <param name="cache">The distributed cache backend used for atomic operations.</param>
 /// <param name="serializer">The serializer for converting objects to/from binary format.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
-/// <param name="options">Configuration options containing device authorization settings.</param>
+/// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
 public class DeviceAuthorizationStorage(
     IDistributedCache cache,
     IBinarySerializer serializer,
     IEntityStorageKeyFactory keyFactory,
-    IOptions<OidcOptions> options) : IDeviceAuthorizationStorage
+    TimeProvider timeProvider) : IDeviceAuthorizationStorage
 {
     /// <inheritdoc />
     public async Task StoreAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
+        // Persist the absolute expiry so a regularly-polling client cannot extend the code: the token
+        // endpoint derives the remaining cache TTL from this fixed instant instead of resetting the full
+        // lifetime on every poll (RFC 8628 §3.2)
+        request.ExpiresAt = timeProvider.GetUtcNow() + expiresIn;
+
         var cacheOptions = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn };
 
         // Store the request by device code (primary key for client polling)
@@ -86,13 +89,15 @@ public class DeviceAuthorizationStorage(
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request)
+    public Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
-        var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
+        // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
+        // record's fixed ExpiresAt (RFC 8628 §3.2) and gates on expiry first, so polling cannot extend the
+        // code and the TTL here is always positive — no second clock read that could race the expiry boundary
         return cache.SetAsync(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
             serializer.Serialize(request),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime });
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn });
     }
 
     /// <inheritdoc />

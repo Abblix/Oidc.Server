@@ -40,6 +40,7 @@ internal static class DeviceAuthorizationRequestMapper
             ClientId = source.ClientId,
             UserCode = source.UserCode,
             Status = source.Status.ToProtoStatus(),
+            ExpiresAt = source.ExpiresAt.ToTimestamp(),
         };
 
         proto.Scope.AddRange(source.Scope);
@@ -84,6 +85,7 @@ internal static class DeviceAuthorizationRequestMapper
             source.UserCode)
         {
             NextPollAt = source.NextPollAt != null ? source.NextPollAt.ToDateTimeOffset() : null,
+            ExpiresAt = source.ExpiresAt?.ToDateTimeOffset() ?? default,
             Status = source.Status.FromProtoStatus(),
             AuthorizedGrant = source.AuthorizedGrant?.FromProto(),
             AuthorizationDetails = source.HasAuthorizationDetailsJson

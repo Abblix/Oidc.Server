@@ -124,7 +124,8 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Authorized,
-            AuthorizedGrant = expectedGrant
+            AuthorizedGrant = expectedGrant,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
@@ -161,7 +162,8 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Authorized,
-            AuthorizedGrant = expectedGrant
+            AuthorizedGrant = expectedGrant,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
@@ -213,7 +215,8 @@ public class DeviceCodeGrantHandlerTests
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
-            Status = DeviceAuthorizationStatus.Pending
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
@@ -243,11 +246,12 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt
+            NextPollAt = nextPollAt,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -258,7 +262,7 @@ public class DeviceCodeGrantHandlerTests
 
         // Verify interval was increased
         Assert.Equal(nextPollAt + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest), Times.Once);
+        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
     }
 
     /// <summary>
@@ -276,11 +280,12 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null
+            NextPollAt = null,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -292,7 +297,7 @@ public class DeviceCodeGrantHandlerTests
 
         // Verify NextPollAt was set
         Assert.Equal(_currentTime + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest), Times.Once);
+        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
     }
 
     /// <summary>
@@ -308,7 +313,8 @@ public class DeviceCodeGrantHandlerTests
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
-            Status = DeviceAuthorizationStatus.Denied
+            Status = DeviceAuthorizationStatus.Denied,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
@@ -356,11 +362,12 @@ public class DeviceCodeGrantHandlerTests
 
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
-            Status = DeviceAuthorizationStatus.Pending
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -391,7 +398,8 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, scope, null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Authorized,
-            AuthorizedGrant = expectedGrant
+            AuthorizedGrant = expectedGrant,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
@@ -426,11 +434,12 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt
+            NextPollAt = nextPollAt,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -456,11 +465,12 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt
+            NextPollAt = nextPollAt,
+            ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -468,5 +478,120 @@ public class DeviceCodeGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+    }
+
+    /// <summary>
+    /// RFC 8628 §3.2: once the device_code reaches its fixed lifetime the token endpoint returns
+    /// expired_token and the record is cleaned up — polling must not keep an expired code alive.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_CodeExpired_ReturnsExpiredTokenAndRemoves()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            NextPollAt = _currentTime.AddSeconds(-30),
+            ExpiresAt = _currentTime.AddSeconds(-1),
+        };
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// RFC 8628 §3.5: a poll that races a just-completed approval must not overwrite the Authorized
+    /// status with its stale Pending snapshot. The handler must re-read and surface the granted tokens
+    /// instead of persisting authorization_pending forever.
+    /// </summary>
+    [Fact]
+    public async Task PendingPoll_ApprovalRacedIn_DoesNotClobberApproval()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var pending = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            NextPollAt = null,
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        var approvedGrant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "device"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var approved = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = approvedGrant,
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        // First read (line 67) sees Pending; the re-read in the pending branch and the re-dispatch see
+        // the approval that landed in the window.
+        _storage.SetupSequence(s => s.TryGetByDeviceCodeAsync(DeviceCode))
+            .ReturnsAsync(pending)
+            .ReturnsAsync(approved)
+            .ReturnsAsync(approved);
+        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert: the approval survives — tokens are issued, and no Pending snapshot was written back.
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(UserId, grant.AuthSession.Subject);
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// RFC 8628 §3.2: each poll refreshes the cache TTL with the code's remaining lifetime, never the full
+    /// CodeLifetime — so a client that keeps polling cannot extend the device_code past its fixed expiry.
+    /// </summary>
+    [Fact]
+    public async Task PendingPoll_CapsCacheTtlAtRemainingLifetime_NotFullCodeLifetime()
+    {
+        // Arrange: stored 12 minutes ago with a 15-minute lifetime, so only 3 minutes remain.
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            NextPollAt = null,
+            ExpiresAt = _currentTime.AddMinutes(3),
+        };
+
+        TimeSpan capturedTtl = default;
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()))
+            .Callback<string, StoredDeviceAuthorizationRequest, TimeSpan>((_, _, ttl) => capturedTtl = ttl)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        // Assert: the refreshed TTL is the 3-minute remainder, not the 15-minute CodeLifetime.
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+        Assert.Equal(TimeSpan.FromMinutes(3), capturedTtl);
     }
 }

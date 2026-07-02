@@ -70,6 +70,10 @@ public class DeviceCodeGrantHandler(
             .NotNull(nameof(OidcOptions.DeviceAuthorization));
         var pollingInterval = deviceAuthOptions.PollingInterval;
 
+        // A single clock read shared by the expiry gate and the remaining-lifetime passed to UpdateAsync, so
+        // the two never disagree and the refreshed cache TTL is guaranteed positive (RFC 8628 §3.2).
+        var now = timeProvider.GetUtcNow();
+
         switch (deviceRequest)
         {
             // Device code not found or expired
@@ -79,6 +83,12 @@ public class DeviceCodeGrantHandler(
             // Device code belongs to different client
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:
                 return new OidcError(ErrorCodes.InvalidGrant, "The device code was issued to another client");
+
+            // Code has reached its fixed RFC 8628 §3.2 lifetime - reject and clean up rather than letting a
+            // polling client keep it alive by resetting the cache TTL
+            case { } when now >= deviceRequest.ExpiresAt:
+                await storage.RemoveAsync(request.DeviceCode);
+                return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
             // User has authorized the device - atomically claim the authorization
             case { Status: DeviceAuthorizationStatus.Authorized }
@@ -98,11 +108,16 @@ public class DeviceCodeGrantHandler(
 
             // Authorization still pending - check polling rate
             case { Status: DeviceAuthorizationStatus.Pending, NextPollAt: { } nextPollAt }
-                when timeProvider.GetUtcNow() < nextPollAt:
+                when now < nextPollAt:
 
-                // Polling too fast - increase the interval per RFC 8628 Section 3.5
-                deviceRequest.NextPollAt = nextPollAt + pollingInterval;
-                await storage.UpdateAsync(request.DeviceCode, deviceRequest);
+                // Polling too fast - increase the interval per RFC 8628 Section 3.5. Persisting the stale
+                // Pending snapshot here would revert an approval that landed after the read above, so the
+                // helper re-reads and this re-dispatches when the status has advanced under us.
+                if (!await TryBumpNextPollAsync(
+                        request.DeviceCode, nextPollAt + pollingInterval, deviceRequest.ExpiresAt - now))
+                {
+                    return await AuthorizeAsync(request, clientInfo);
+                }
 
                 return new OidcError(
                     ErrorCodes.SlowDown,
@@ -111,8 +126,11 @@ public class DeviceCodeGrantHandler(
             // Authorization still pending - update next poll time
             case { Status: DeviceAuthorizationStatus.Pending }:
 
-                deviceRequest.NextPollAt = timeProvider.GetUtcNow() + pollingInterval;
-                await storage.UpdateAsync(request.DeviceCode, deviceRequest);
+                if (!await TryBumpNextPollAsync(
+                        request.DeviceCode, now + pollingInterval, deviceRequest.ExpiresAt - now))
+                {
+                    return await AuthorizeAsync(request, clientInfo);
+                }
 
                 return new OidcError(
                     ErrorCodes.AuthorizationPending,
@@ -129,5 +147,22 @@ public class DeviceCodeGrantHandler(
                 throw new InvalidOperationException(
                     $"Unexpected device authorization status: {deviceRequest.Status}");
         }
+    }
+
+    // Re-reads the record and only writes the rate-limit bump when it is still Pending, so a concurrent
+    // approval is not overwritten. Returns false when the status has advanced, signalling the caller to
+    // re-dispatch on the fresh state. The remaining lifetime is computed by the caller from the same clock
+    // read as the expiry gate, so the refreshed cache TTL stays positive and cannot extend the code
+    private async Task<bool> TryBumpNextPollAsync(string deviceCode, DateTimeOffset nextPollAt, TimeSpan remaining)
+    {
+        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
+        if (current is not { Status: DeviceAuthorizationStatus.Pending })
+        {
+            return false;
+        }
+
+        current.NextPollAt = nextPollAt;
+        await storage.UpdateAsync(deviceCode, current, remaining);
+        return true;
     }
 }

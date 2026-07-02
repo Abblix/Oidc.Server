@@ -590,8 +590,8 @@ public static class ServiceCollectionExtensions
 
         // Single opt-in: registering the feature also brings in the endpoint services (handler, validators,
         // the DeviceAuthorization options validator) and turns the endpoint on. EnabledEndpoints defaults to
-        // All & ~DeviceAuthorization, so a server that never calls this method neither registers the device
-        // types nor advertises/validates the endpoint.
+        // OidcEndpoints.Base, which excludes DeviceAuthorization, so a server that never calls this method
+        // neither registers the device types nor advertises/validates the endpoint.
         services.AddDeviceAuthorizationEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.DeviceAuthorization);
 
