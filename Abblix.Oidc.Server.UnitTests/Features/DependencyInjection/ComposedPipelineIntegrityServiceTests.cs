@@ -77,6 +77,8 @@ public class ComposedPipelineIntegrityServiceTests
         var integrity = IntegrityServiceOf(provider);
 
         // No shadowing registration — every composed singular resolves to its composite, so the check passes.
-        await integrity.StartAsync(default);
+        var exception = await Record.ExceptionAsync(() => integrity.StartAsync(default));
+
+        Assert.Null(exception);
     }
 }
