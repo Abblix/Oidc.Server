@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Buffers.Text;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -330,18 +331,80 @@ public class DPoPTokenEndpointValidatorTests
         _nonceService.VerifyNoOtherCalls();
     }
 
+    /// <summary>
+    /// RFC 8705 §4: a certificate-bound grant redeemed by a non-mTLS client that presents no certificate
+    /// must be rejected with invalid_grant — otherwise a stolen certificate-bound refresh token is
+    /// redeemable with no certificate at all.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_CertBoundGrant_NonMtlsClient_NoCertificate_ReturnsInvalidGrant()
+    {
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            committedCertThumbprint: "committed-x5t-s256",
+            tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// A non-mTLS client that re-presents the same certificate the grant is bound to passes the RFC 8705
+    /// §4 binding check (and, with no DPoP proof required, the request is accepted).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_CertBoundGrant_NonMtlsClient_MatchingCertificate_ReturnsNull()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            clientCertificate: certificate,
+            committedCertThumbprint: CertThumbprint(certificate),
+            tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A client that authenticates with mutual TLS is skipped: its authentication already proved
+    /// certificate possession on the connection, so the binding check does not additionally demand the
+    /// certificate be re-presented here.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_CertBoundGrant_MutualTlsClient_NoCertificate_ReturnsNull()
+    {
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            committedCertThumbprint: "committed-x5t-s256",
+            tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.Null(error);
+    }
+
     private static TokenValidationContext CreateContext(
         string? proofJwt,
         bool clientRequiresDPoP,
         string? committedThumbprint = null,
         ClientSecurityProfile? securityProfile = null,
         X509Certificate2? clientCertificate = null,
-        bool tlsClientCertificateBoundAccessTokens = false)
+        bool tlsClientCertificateBoundAccessTokens = false,
+        string? committedCertThumbprint = null,
+        string? tokenEndpointAuthMethod = null)
     {
         var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
         {
             ProofKeyThumbprint = committedThumbprint,
+            CertificateSha256Thumbprint = committedCertThumbprint,
         };
         var authSession = new AuthSession("user-1", "session-1", ProofIssuedAt, "local");
         return new TokenValidationContext(new TokenRequest(), clientRequest)
@@ -351,10 +414,14 @@ public class DPoPTokenEndpointValidatorTests
                 RequireDPoP = clientRequiresDPoP,
                 SecurityProfile = securityProfile,
                 TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
+                TokenEndpointAuthMethod = tokenEndpointAuthMethod,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };
     }
+
+    private static string CertThumbprint(X509Certificate2 certificate)
+        => Base64Url.EncodeToString(SHA256.HashData(certificate.RawData));
 
     private static X509Certificate2 CreateCertificate()
     {
