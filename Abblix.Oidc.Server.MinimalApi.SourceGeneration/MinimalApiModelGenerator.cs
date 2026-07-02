@@ -66,7 +66,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string ElementsRequiredMarkerName = "ElementsRequiredAttribute";
     private const string RequiredMarkerName = "RequiredAttribute";
 
-    private const string FormValues = "global::Abblix.Oidc.Server.MinimalApi.Model.FormValues";
+    private const string FormValues = "global::Abblix.Oidc.Server.MinimalApi.FormValues";
     private const string ValidationAttributes = "global::Abblix.Utils.Validation";
     private const string ValidatableModel = "global::Abblix.Oidc.Server.MinimalApi.Model.IValidatableModel";
 
@@ -346,7 +346,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 _writer.AppendLine(
                     "\t\tvar form = request.HasFormContentType ? await request.ReadFormAsync(context.RequestAborted) : null;");
                 _writer.AppendLine(
-                    "\t\tvar source = new global::Abblix.Oidc.Server.MinimalApi.Model.RequestValues(request.Query, form);");
+                    "\t\tvar source = new global::Abblix.Oidc.Server.MinimalApi.RequestValues(request.Query, form);");
             }
             else
             {
