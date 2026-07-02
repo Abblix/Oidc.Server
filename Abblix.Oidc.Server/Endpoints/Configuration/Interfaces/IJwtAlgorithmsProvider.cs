@@ -38,6 +38,23 @@ public interface IJwtAlgorithmsProvider
 	IEnumerable<string> SigningAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWS algorithms a client may use to sign a JWT client-authentication assertion
+	/// (<c>client_secret_jwt</c> / <c>private_key_jwt</c>), advertised via
+	/// <c>token_endpoint_auth_signing_alg_values_supported</c>. RFC 8414 §2 and OpenID Connect
+	/// Discovery 1.0 §3 both state the value <c>none</c> MUST NOT appear here, so it is excluded
+	/// from the underlying verification set.
+	/// </summary>
+	IEnumerable<string> TokenEndpointAuthSigningAlgValuesSupported { get; }
+
+	/// <summary>
+	/// Lists the JWS algorithms a client may use to sign a CIBA backchannel authentication request,
+	/// advertised via <c>backchannel_authentication_request_signing_alg_values_supported</c>. CIBA
+	/// Core §7.1.1 mandates an asymmetric signature, so both <c>none</c> and the symmetric HS*
+	/// algorithms are excluded from the underlying verification set.
+	/// </summary>
+	IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported { get; }
+
+	/// <summary>
 	/// Lists the JWS signing algorithms the authorization server accepts on inbound DPoP
 	/// proofs (RFC 9449 §5.1 <c>dpop_signing_alg_values_supported</c>): the intersection
 	/// of <see cref="SigningAlgorithmsSupported"/> with the static DPoP-compatible

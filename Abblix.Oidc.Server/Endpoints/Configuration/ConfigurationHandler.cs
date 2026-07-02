@@ -120,13 +120,13 @@ public sealed class ConfigurationHandler(
 			? true
 			: null,
 
-		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.SigningAlgorithmsSupported,
+		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported,
 		IdTokenSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
 		DpopSigningAlgValuesSupported = jwtAlgorithms.DpopSigningAlgorithmsSupported,
 
 		BackChannelAuthenticationRequestSigningAlgValuesSupported =
-			cibaCompletionHandler is null ? null : jwtAlgorithms.SigningAlgorithmsSupported,
+			cibaCompletionHandler is null ? null : jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported,
 		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler?.TokenDeliveryModesSupported,
 		BackChannelUserCodeParameterSupported =
 			cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
