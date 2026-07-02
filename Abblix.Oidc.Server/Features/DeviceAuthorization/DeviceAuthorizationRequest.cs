@@ -47,6 +47,13 @@ public record DeviceAuthorizationRequest(
     public DateTimeOffset? NextPollAt { get; set; }
 
     /// <summary>
+    /// The absolute time when this device authorization request expires (RFC 8628 §3.2 fixed lifetime).
+    /// Seeded by the storage on <c>StoreAsync</c> and used to cap the refreshed cache TTL at the remaining
+    /// lifetime, so regular polling cannot extend the code.
+    /// </summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
     /// Indicates the current status of the device authorization request.
     /// Defaults to Pending, reflecting that the user has not yet completed authentication.
     /// </summary>

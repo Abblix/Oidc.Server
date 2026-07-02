@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -79,7 +80,8 @@ public class UserCodeVerificationServiceTests
             storage.Object,
             rateLimiter.Object,
             normalizer,
-            Mock.Of<IHttpContextAccessor>());
+            Mock.Of<IHttpContextAccessor>(),
+            new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)));
     }
 
     [Theory]
