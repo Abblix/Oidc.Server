@@ -439,7 +439,14 @@ public class TokenExchangeGrantHandler(
         // and delegation alike). Scope: when the client supplies scope in the request use that,
         // otherwise fall back to the subject_token's scope. Resource servers downstream of
         // narrow-at-exchange see only the scopes the client asked for.
-        var scope = request.Scope is { Length: > 0 } ? request.Scope : subject.Scope ?? [];
+        //
+        // The explicit request.Scope path is gated against the requesting client's AllowedScopes by
+        // ScopeValidator in the token pipeline; the fallback path is not — so the inherited scope is
+        // filtered to the client's registered set here, otherwise a broker client would obtain scopes
+        // it was never registered for (RFC 6749 §3.3 — the AS restricts scope by policy).
+        var scope = request.Scope is { Length: > 0 }
+            ? request.Scope
+            : FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
 
         // Delegation act chain (RFC 8693 §4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
@@ -475,5 +482,22 @@ public class TokenExchangeGrantHandler(
         };
 
         return new AuthorizedGrant(authSession, authContext);
+    }
+
+    /// <summary>
+    /// Restricts a scope set inherited from the subject_token to the requesting client's registered
+    /// <see cref="ClientInfo.AllowedScopes"/>. A null or empty allow-list means "no per-client
+    /// restriction" (matching <c>ScopeManager.Validate</c> and the JWT bearer grant), so the inherited
+    /// scope passes through unchanged. Comparison is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// </summary>
+    private static string[] FilterToAllowedScopes(string[]? inheritedScope, string[]? allowedScopes)
+    {
+        if (inheritedScope is not { Length: > 0 })
+            return [];
+
+        if (allowedScopes is not { Length: > 0 })
+            return inheritedScope;
+
+        return Array.FindAll(inheritedScope, scope => Array.IndexOf(allowedScopes, scope) >= 0);
     }
 }
