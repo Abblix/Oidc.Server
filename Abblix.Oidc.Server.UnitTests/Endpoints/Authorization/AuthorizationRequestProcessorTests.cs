@@ -32,7 +32,10 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -634,6 +637,57 @@ public class AuthorizationRequestProcessorTests
         Assert.Same(expectedToken, success.AccessToken);
         Assert.Equal(TokenTypes.Bearer, success.TokenType);
         Assert.Null(success.IdToken);
+    }
+
+    /// <summary>
+    /// RFC 6749 §3.3 / §4.2.2: when the consent decision narrows the grant, the front-channel
+    /// <c>scope</c> parameter of an implicit/hybrid response must advertise the GRANTED scope
+    /// (matching the issued access token), not the broader requested set. Drives the real processor and
+    /// the real <see cref="AuthorizationResponseEncoder"/> end to end.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAndEncode_ImplicitFlowWithNarrowedConsent_EmitsGrantedScopeNotRequested()
+    {
+        // Arrange — request asks for openid profile email; the consent provider grants only openid profile.
+        var request = CreateRequest(
+            responseType: [ResponseTypes.Token],
+            scope: [Scopes.OpenId, Scopes.Profile, Scopes.Email]);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(
+            grantedScopes: [new ScopeDefinition(Scopes.OpenId), new ScopeDefinition(Scopes.Profile)]);
+
+        var accessToken = new EncodedJsonWebToken(new JsonWebToken(), "access_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+        _authSessionService
+            .Setup(s => s.SignInAsync(session))
+            .Returns(Task.CompletedTask);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        var response = await _processor.ProcessAsync(request);
+
+        // Encode through the real response encoder. Query (non-JARM) mode means no response JWT is built,
+        // so the JWT builder is never invoked; iss advertising is disabled to keep the issuer provider idle.
+        var metadata = new Mock<IAuthorizationMetadataProvider>(MockBehavior.Strict);
+        metadata.SetupGet(m => m.AuthorizationResponseIssParameterSupported).Returns(false);
+        var encoder = new AuthorizationResponseEncoder(
+            new Mock<IIssuerProvider>(MockBehavior.Strict).Object,
+            metadata.Object,
+            new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object);
+
+        // Act
+        await encoder.EncodeAsync(response);
+
+        // Assert — the front-channel scope reflects the granted set, not the requested set.
+        var success = Assert.IsType<SuccessfullyAuthenticated>(response);
+        Assert.Equal($"{Scopes.OpenId} {Scopes.Profile}", success.Scope);
     }
 
     /// <summary>
