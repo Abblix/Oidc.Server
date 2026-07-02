@@ -219,15 +219,18 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [InlineData("/.well-known/jwks")]
     public async Task Discovery_and_jwks_are_cors_enabled_like_the_mvc_discovery_controller(string path)
     {
+        // Scope the policy to the single origin the request carries: the test only proves the named policy is
+        // applied to these endpoints, so a concrete origin exercises real reflection without a wildcard.
+        const string browserOrigin = "https://spa.example.com";
         using var corsHost = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddCors(options => options.AddPolicy(
                     OidcConstants.CorsPolicyName,
-                    policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()))));
+                    policy => policy.WithOrigins(browserOrigin).AllowAnyHeader().AllowAnyMethod()))));
         var client = ClientOf(corsHost);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        request.Headers.Add("Origin", "https://spa.example.com");
+        request.Headers.Add("Origin", browserOrigin);
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"),
