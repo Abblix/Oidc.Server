@@ -385,7 +385,23 @@ public static class ServiceCollectionExtensions
         // Register the interface to resolve the composite type
         services.AddAlias<TInterface, TComposite>();
 
+        // Record the composed family so a downstream integrity check can detect a service registered for TInterface
+        // after composition, which would shadow this composite on the last-wins singular resolve.
+        services.RecordComposedFamily(typeof(TInterface), typeof(TComposite));
+
         return services;
+    }
+
+    private static void RecordComposedFamily(this IServiceCollection services, Type serviceType, Type compositeType)
+    {
+        if (services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(ComposedFamilyRegistry))
+                ?.ImplementationInstance is not ComposedFamilyRegistry registry)
+        {
+            registry = new ComposedFamilyRegistry();
+            services.AddSingleton(registry);
+        }
+
+        registry.Record(serviceType, compositeType);
     }
 
     /// <summary>
