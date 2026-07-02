@@ -40,7 +40,6 @@ public partial class LicenseManager
     private volatile License? _currentLicense;
     private readonly List<License> _licenses = new();
     private readonly ReaderWriterLockSlim _rwLock = new();
-    private int _currentLicenseIndex;
 
     /// <summary>
     /// Adds a new license to the application, placing it in the correct position based on its validity period.
@@ -109,13 +108,21 @@ public partial class LicenseManager
             while (IsExpired(currentLicense, utcNow))
             {
                 var newLicense = GenerateActiveLicense(utcNow);
-                if (Interlocked.CompareExchange(ref _currentLicense, newLicense, currentLicense) == currentLicense)
+
+                // Adopt the value the CAS actually witnessed. A lost race must re-test against the winner's
+                // value, not the stale local captured before the loop — otherwise the comparand never matches
+                // again and the loop spins forever at 100% CPU while holding the read lock, blocking every
+                // subsequent writer (AddLicense) permanently.
+                var witnessed = Interlocked.CompareExchange(ref _currentLicense, newLicense, currentLicense);
+                if (witnessed == currentLicense)
                 {
                     return newLicense;
                 }
+
+                currentLicense = witnessed;
             }
 
-            return _currentLicense;
+            return currentLicense;
         }
         finally
         {
@@ -136,16 +143,18 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
+        // Scans from the start every call and mutates no shared cursor: the method runs concurrently under
+        // the read lock, so advancing a shared start index here let racing readers overshoot a valid license
+        // and permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
         License? result = null;
         bool? activeLicenseFound = null;
-        for (var indexCurrent = _currentLicenseIndex; indexCurrent < _licenses.Count; indexCurrent++)
+        for (var indexCurrent = 0; indexCurrent < _licenses.Count; indexCurrent++)
         {
             var license = _licenses[indexCurrent];
             var status = GetLicenseStatus(license, utcNow);
             switch (status)
             {
                 case LicenseStatus.Expired:
-                    Interlocked.Increment(ref _currentLicenseIndex);
                     break;
 
                 case LicenseStatus.Active:
@@ -189,7 +198,6 @@ public partial class LicenseManager
                 continue;
 
             indexCurrent = indexNext;
-            Interlocked.Exchange(ref _currentLicenseIndex, indexNext);
 
             result = AppendLicense(result, nextLicense, nextStatus, utcNow);
             return true;
