@@ -696,4 +696,123 @@ public class TokenRequestProcessorTests
         Assert.NotNull(capturedRefreshContext);
         Assert.Equal(expectedRefreshContextThumbprint, capturedRefreshContext.ProofKeyThumbprint);
     }
+    /// <summary>
+    /// RFC 6749 §4.4.3 and RFC 8693: neither the client_credentials grant nor a token exchange
+    /// may return a refresh token or an ID token, even when offline_access / openid end up in the
+    /// granted scope. The strict mocks make an unexpected refresh/ID mint fail the test.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.TokenExchange)]
+    public async Task ProcessAsync_ClientCredentialsOrTokenExchange_DoesNotIssueRefreshOrIdToken(
+        string grantType)
+    {
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var tokenRequest = new TokenRequest { GrantType = grantType };
+        var authorizedGrant = CreateAuthorizedGrant(scopes);
+        var request = new ValidTokenRequest(
+            tokenRequest,
+            authorizedGrant,
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Null(tokenIssued.RefreshToken);
+        Assert.Null(tokenIssued.IdToken);
+        _refreshTokenService.VerifyNoOtherCalls();
+        _identityTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 6749 §5.2/§6: a refresh request whose scope is disjoint from the granted scope must be
+    /// rejected with invalid_scope rather than answered with a zero-scope access token.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RequestedScopeDisjointFromGrant_ReturnsInvalidScope()
+    {
+        var tokenRequest = new TokenRequest { GrantType = GrantTypes.RefreshToken };
+        var authorizedGrant = CreateAuthorizedGrant([Scopes.OpenId, Scopes.Profile]);
+        var request = new ValidTokenRequest(
+            tokenRequest,
+            authorizedGrant,
+            new ClientInfo(TestConstants.DefaultClientId),
+            [new ScopeDefinition(TestConstants.EmailScope)],
+            []);
+        var emptyScopeContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(emptyScopeContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                emptyScopeContext,
+                request.ClientInfo))
+            .ReturnsAsync(CreateAccessToken());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
+        _accessTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 8707 §2.2: a request for a resource the grant did carry but does not match (empty resource
+    /// intersection over a grant that HELD resources) must be rejected with invalid_target rather than
+    /// issuing a token whose audience silently falls back to the client id.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RequestedResourceDisjointFromGrant_ReturnsInvalidTarget()
+    {
+        var tokenRequest = new TokenRequest { GrantType = GrantTypes.RefreshToken };
+        var grantContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null)
+        {
+            Resources = [new Uri("https://api.example/a")],
+        };
+        var authorizedGrant = new AuthorizedGrant(CreateAuthSession(), grantContext);
+        var request = new ValidTokenRequest(
+            tokenRequest,
+            authorizedGrant,
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            [new ResourceDefinition(new Uri("https://api.example/b"))]);
+        // Empty scope so the pre-fix path issues a clean success (audience falls back to client_id),
+        // making the RED a real invalid_target assertion rather than an incidental id-token mint.
+        var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
+        {
+            Resources = null,
+        };
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(evaluated);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                evaluated,
+                request.ClientInfo))
+            .ReturnsAsync(CreateAccessToken());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        _accessTokenService.VerifyNoOtherCalls();
+    }
 }
