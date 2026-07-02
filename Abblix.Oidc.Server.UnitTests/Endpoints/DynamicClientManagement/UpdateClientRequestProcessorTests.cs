@@ -22,6 +22,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -89,6 +90,45 @@ public class UpdateClientRequestProcessorTests
         // Assert
         Assert.NotNull(saved);
         Assert.Equal(model.Scope, saved.AllowedScopes);
+    }
+
+    /// <summary>
+    /// #27 regression: the update (a full replacement) must map the signed/encrypted response algorithms
+    /// the register path maps, otherwise a resubmitted metadata set is silently reset to ClientInfo defaults
+    /// (id_token → RS256, userinfo/introspection → none). A client registered with a non-default signing
+    /// algorithm would have its subsequent ID tokens fail signature validation after any update (RFC 7592 §2.2).
+    /// </summary>
+    [Fact]
+    public async Task Update_PreservesSignedAndIntrospectionResponseAlgorithms()
+    {
+        // Arrange
+        ClientInfo? saved = null;
+        var (processor, _, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,       // non-default (default RS256)
+            UserInfoSignedResponseAlg = SigningAlgorithms.RS256,      // non-default (default none)
+            IntrospectionSignedResponseAlg = SigningAlgorithms.RS256, // non-default (default none)
+            IntrospectionEncryptedResponseAlg = "RSA-OAEP",
+            IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+        };
+        var existing = new ClientInfo("client-1");
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+
+        // Act
+        await processor.ProcessAsync(request);
+
+        // Assert
+        Assert.NotNull(saved);
+        Assert.Equal(SigningAlgorithms.PS256, saved.IdentityTokenSignedResponseAlgorithm);
+        Assert.Equal(SigningAlgorithms.RS256, saved.UserInfoSignedResponseAlgorithm);
+        Assert.Equal(SigningAlgorithms.RS256, saved.IntrospectionSignedResponseAlgorithm);
+        Assert.Equal("RSA-OAEP", saved.IntrospectionEncryptedResponseAlgorithm);
+        Assert.Equal("A128CBC-HS256", saved.IntrospectionEncryptedResponseEncryption);
     }
 
     /// <summary>
