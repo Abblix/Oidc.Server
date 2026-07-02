@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
@@ -27,6 +28,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,
+        BaseAddress = TestFactory.BaseAddress,
     });
 
     [Fact]
@@ -202,6 +204,39 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         // DELETE (RFC 7592 §2.3): 204 No Content.
         var delete = await SendWithBearerAsync(client, HttpMethod.Delete, registrationClientUri, manageToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.Claims, "{not valid json")]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "9999999999999999")]
+    [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
+    public async Task Malformed_special_format_query_param_is_a_400_not_a_500(string parameter, string badValue)
+    {
+        var client = CreateClient();
+        var discovery = await client.FetchDiscoveryAsync();
+        var (_, challenge) = OidcFlows.Pkce();
+
+        // A well-formed base request plus one hostile special-format field.
+        var query = new Dictionary<string, string>
+        {
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [parameter] = badValue,
+        };
+        var url = OidcFlows.BuildQuery(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query);
+
+        // Under TestServer a BindAsync throw does not translate to an HTTP status — it propagates out of the awaited
+        // call. Pre-fix the converter throws JsonException / CultureNotFoundException / TimeSpan overflow; post-fix
+        // FormValues shapes every one into a BadHttpRequestException carrying the 400 the MVC binder would have
+        // produced. Asserting the thrown type is the genuine red (wrong exception) to green (BadHttpRequestException).
+        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+            () => client.GetAsync(url, TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCodes.Status400BadRequest, ex.StatusCode);
     }
 
     private static async Task<(JsonObject Body, HttpResponseMessage Response)> PostJsonAsync(

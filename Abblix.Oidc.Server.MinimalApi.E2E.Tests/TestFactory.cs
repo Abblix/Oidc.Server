@@ -20,9 +20,16 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// </summary>
 public sealed class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    /// <summary>
+    /// The in-memory TestServer base address. It is HTTPS on purpose: MapOidcEndpoints enforces TLS on the OIDC
+    /// endpoints (mirroring the MVC controllers' [RequireHttps]), so every test client must present Request.IsHttps,
+    /// otherwise the group's HTTPS filter would redirect/refuse it. Every client-options object in the suite sets its
+    /// BaseAddress from here, because WebApplicationFactory overrides ConfigureClient's base with options.BaseAddress
+    /// (whose framework default is http://localhost).
+    /// </summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "In-memory TestServer base address; not a deployment URL.")]
-    private static readonly Uri Base = new("https://localhost");
+    public static readonly Uri BaseAddress = new("https://localhost");
 
     /// <summary>
     /// Eagerly builds the single shared host once, single-threaded, before parallel test methods
@@ -49,5 +56,5 @@ public sealed class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
                     options => options.RequireInitialAccessToken = false)));
     }
 
-    protected override void ConfigureClient(HttpClient client) => client.BaseAddress = Base;
+    protected override void ConfigureClient(HttpClient client) => client.BaseAddress = BaseAddress;
 }

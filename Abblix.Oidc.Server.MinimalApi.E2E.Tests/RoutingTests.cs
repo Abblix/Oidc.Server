@@ -1,8 +1,8 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Mime;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -29,11 +29,8 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// </summary>
 public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactory>
 {
-    [SuppressMessage("Minor Code Smell", "S1075", Justification = "In-memory TestServer base address; not a deployment URL.")]
-    private static readonly Uri Base = new("https://localhost");
-
     private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
-        new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = Base });
+        new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestFactory.BaseAddress });
 
     [Fact]
     public async Task Post_only_endpoint_rejects_get_with_405()
@@ -161,6 +158,144 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         // The discovery document is the host formatter's marker object, not the adapter's metadata.
         Assert.True(discovery["host_override_marker"]?.GetValue<bool>());
         Assert.Null(discovery[ConfigurationResponse.Parameters.Issuer]);
+    }
+
+    [Fact]
+    public async Task Discovery_document_urls_carry_the_route_prefix()
+    {
+        using var prefixed = factory.WithWebHostBuilder(builder =>
+            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, "/oauth"));
+        var client = ClientOf(prefixed);
+
+        // MapOidcEndpoints("/oauth") mounts the token endpoint at /oauth/connect/token, so discovery must advertise
+        // the prefixed URL — a bare /connect/token would 404 every discovery-driven client.
+        var discovery = await client.FetchDiscoveryAsync("/oauth");
+
+        foreach (var key in new[]
+                 {
+                     ConfigurationResponse.Parameters.TokenEndpoint,
+                     ConfigurationResponse.Parameters.AuthorizationEndpoint,
+                     ConfigurationResponse.Parameters.UserInfoEndpoint,
+                     ConfigurationResponse.Parameters.JwksUri,
+                     ConfigurationResponse.Parameters.RegistrationEndpoint,
+                 })
+        {
+            var url = discovery[key]!.GetValue<string>();
+            Assert.StartsWith("/oauth/", new Uri(url).AbsolutePath);
+        }
+    }
+
+    [Fact]
+    public async Task Registration_client_uri_carries_the_route_prefix()
+    {
+        using var prefixed = factory.WithWebHostBuilder(builder =>
+            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, "/oauth"));
+        var client = ClientOf(prefixed);
+
+        // Post directly to the known prefixed path (before the #10 fix the discovery registration_endpoint is wrong,
+        // so we cannot rely on it to find the endpoint). Open DCR: no initial access token needed.
+        var response = await client.PostAsync("/oauth/connect/register", JsonContent.Create(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+            [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
+            [ClientRegistrationRequest.Parameters.ClientName] = "Prefix Test Client",
+        }), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = JsonNode.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        var registrationClientUri = body["registration_client_uri"]!.GetValue<string>();
+
+        Assert.StartsWith("/oauth/connect/register/", new Uri(registrationClientUri).AbsolutePath);
+    }
+
+    [Theory]
+    [InlineData("/.well-known/openid-configuration")]
+    [InlineData("/.well-known/jwks")]
+    public async Task Discovery_and_jwks_are_cors_enabled_like_the_mvc_discovery_controller(string path)
+    {
+        using var corsHost = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddCors(options => options.AddPolicy(
+                    OidcConstants.CorsPolicyName,
+                    policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()))));
+        var client = ClientOf(corsHost);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add("Origin", "https://spa.example.com");
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"),
+            $"{path} returned no Access-Control-Allow-Origin; browser RPs cannot read it cross-origin.");
+    }
+
+    [Theory]
+    [InlineData("/.well-known/openid-configuration")]
+    [InlineData("/.well-known/jwks")]
+    public async Task Every_oidc_response_is_no_store_like_the_mvc_controllers(string path)
+    {
+        var client = ClientOf(factory);
+        var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        Assert.NotNull(response.Headers.CacheControl);
+        Assert.True(response.Headers.CacheControl!.NoStore,
+            $"{path} response is not Cache-Control: no-store; a shared cache may store it.");
+    }
+
+    [Fact]
+    public async Task Post_authorize_prefers_form_over_query_on_a_duplicate_parameter()
+    {
+        var client = ClientOf(factory);
+        var discovery = await client.FetchDiscoveryAsync();
+        var (_, challenge) = OidcFlows.Pkce();
+        const string formState = "STATE_FROM_FORM";
+        const string queryState = "STATE_FROM_QUERY";
+
+        var authorizeEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint);
+        var url = OidcFlows.BuildQuery(authorizeEndpoint, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.State] = queryState,
+        });
+
+        var form = new Dictionary<string, string>
+        {
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.State] = formState,
+        };
+
+        var response = await client.PostAsync(url, new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
+
+        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+            $"/authorize returned {(int)response.StatusCode}, expected a redirect");
+        var echoedState = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query)["state"];
+        Assert.Equal(formState, echoedState);
+    }
+
+    [Fact]
+    public async Task Non_https_token_request_is_refused()
+    {
+        var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("http://localhost"),
+        });
+
+        // Over http the group's HTTPS filter refuses a credential-carrying POST rather than serving it in cleartext,
+        // mirroring the MVC controllers' [RequireHttps]. TestServer honours the request scheme, so Request.IsHttps is
+        // false here.
+        var response = await httpClient.PostAsync("/connect/token", new FormUrlEncodedContent(
+            new Dictionary<string, string> { [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     /// <summary>A stand-in discovery formatter a host registers to prove its registration wins over the adapter's.</summary>

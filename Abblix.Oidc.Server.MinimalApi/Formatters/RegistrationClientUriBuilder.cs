@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Routing;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -34,13 +33,19 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 public sealed class RegistrationClientUriBuilder(
     IHttpContextAccessor httpContextAccessor,
-    IOptions<OidcRouteOptions> routeOptions)
+    LinkGenerator linkGenerator)
 {
     /// <summary>Builds the absolute configuration-endpoint URL for the given client.</summary>
     public Uri Build(string clientId)
     {
-        var request = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
-        var path = routeOptions.Value.RegisterClient.Replace("{clientId}", Uri.EscapeDataString(clientId));
-        return new Uri(request.GetAppUrl() + path, UriKind.Absolute);
+        var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
+
+        // Resolving through the named endpoint keeps the MapOidcEndpoints group prefix (and PathBase) in the URL and
+        // lets LinkGenerator URL-encode the client_id into the {clientId} route slot.
+        var url = linkGenerator.GetUriByName(httpContext, EndpointNames.RegisterClient, new { clientId })
+            ?? throw new InvalidOperationException(
+                "The client configuration endpoint could not be resolved. " +
+                "Ensure the dynamic client registration endpoint is enabled.");
+        return new Uri(url, UriKind.Absolute);
     }
 }
