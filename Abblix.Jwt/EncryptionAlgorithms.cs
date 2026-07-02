@@ -143,7 +143,8 @@ public static class EncryptionAlgorithms
 
 		/// <summary>
 		/// AES-GCM Key Wrap with a 128-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
-		/// Output is laid out as <c>IV (96 bits) || Ciphertext || Authentication Tag (128 bits)</c>.
+		/// The 96-bit IV and 128-bit authentication tag are carried in the JOSE header parameters
+		/// <c>iv</c> and <c>tag</c> (RFC 7518 Section 4.7.1); the JWE Encrypted Key is the wrapped-CEK ciphertext.
 		/// </summary>
 		public const string Aes128Gcmkw = "A128GCMKW";
 
