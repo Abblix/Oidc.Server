@@ -385,6 +385,47 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(["openid", "admin"], grant.Context.Scope);
     }
 
+    /// <summary>
+    /// 2a: when the subject_token carries a scope, an explicitly requested scope is bound to it, so an
+    /// exchange cannot amplify authority beyond the presented token (least-privilege). Here the client
+    /// asks for "read admin" against a subject token that only holds "read"; "admin" is dropped.
+    /// </summary>
+    [Fact]
+    public async Task RequestScope_IntersectedWithSubjectScope_WhenSubjectCarriesScope()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["read"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["read", "admin"] };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.DoesNotContain("admin", grant.Context.Scope);
+        Assert.Equal(["read"], grant.Context.Scope);
+    }
+
+    /// <summary>
+    /// 2a must not break the RFC 8693 id_token → access_token scenario: an id_token subject token carries
+    /// no scope claim, which imposes no scope upper bound, so an explicitly requested scope passes through
+    /// unchanged instead of being intersected down to nothing.
+    /// </summary>
+    [Fact]
+    public async Task RequestScope_PreservedWhenSubjectTokenHasNoScope()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(["api:read"], grant.Context.Scope);
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // PR #135 review findings -- TDD reproduction tests.
     // S1: cross-client subject_token reuse (confused-deputy)
