@@ -25,7 +25,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 
-namespace Abblix.Oidc.Server.MinimalApi.Model;
+namespace Abblix.Oidc.Server.MinimalApi;
 
 /// <summary>
 /// Helpers that turn raw request values into the shapes the OIDC request models expect. They reproduce, in plain code,
@@ -37,13 +37,13 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 internal static class FormValues
 {
     /// <summary>A single value, or null when absent or empty.</summary>
-    public static string? Value(StringValues values) => values.Count == 0 ? null : values.ToString();
+    public static string? Value(StringValues values) => values is { Count: > 0 } ? values.ToString() : null;
 
     /// <summary>A single value read from the form by name.</summary>
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
 
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
-    public static string[]? Strings(StringValues values) => values.Count == 0 ? null : (string[]?)values;
+    public static string[]? Strings(StringValues values) => values is { Count: > 0 } ? (string[]?)values : null;
 
     /// <summary>A repeated form field read by name as an array, or null.</summary>
     public static string[]? Strings(IFormCollection form, string name) => Strings(Get(form, name));
@@ -87,8 +87,11 @@ internal static class FormValues
 
         var uris = new List<Uri>(values.Count);
         foreach (var value in values)
+        {
             if (value is not null && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri))
                 uris.Add(uri);
+        }
+
         return uris.ToArray();
     }
 
@@ -170,28 +173,4 @@ internal static class FormValues
     // Minimal API counterpart of the MVC binder shaping a malformed value into invalid_request.
     private static BadHttpRequestException MalformedValue()
         => new("The request contains a malformed parameter value.", StatusCodes.Status400BadRequest);
-}
-
-/// <summary>
-/// Reads request values from the query string and (when present) the posted form, mirroring the MVC
-/// <c>[FromQueryOrForm]</c> binding source so the authorization request binds from a GET query or a POST form.
-/// </summary>
-internal readonly struct RequestValues(IQueryCollection query, IFormCollection? form)
-{
-    public StringValues this[string name]
-    {
-        get
-        {
-            // Form precedes query on a duplicate key, mirroring the MVC composite value provider order
-            // (FormValueProviderFactory before QueryStringValueProviderFactory). Keeps the two adapters from
-            // authorizing different requests under query/body parameter pollution.
-            if (form is not null && form.TryGetValue(name, out var fromForm) && fromForm.Count > 0)
-                return fromForm;
-
-            if (query.TryGetValue(name, out var fromQuery))
-                return fromQuery;
-
-            return StringValues.Empty;
-        }
-    }
 }
