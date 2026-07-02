@@ -327,11 +327,28 @@ public static class ServiceCollectionExtensions
         var parameterType = typeof(TComposite)
             .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
             .SelectMany(constructor => constructor.GetParameters(), (_, parameterInfo) => parameterInfo.ParameterType)
-            .FirstOrDefault(type => type.IsAssignableFrom(typeof(TInterface[])));
-
-        if (parameterType == null)
-            throw new InvalidOperationException(
+            .FirstOrDefault(type => type.IsAssignableFrom(typeof(TInterface[])))
+            ?? throw new InvalidOperationException(
                 $"The type {typeof(TComposite).FullName} has no public constructor that accepts {typeof(TInterface).FullName}[]");
+
+        // Fail loud when this family has already been composed. A previous Compose registered TComposite as a
+        // concrete descriptor and replaced the individual TInterface leaves with one alias to it. A second run
+        // re-adds the leaves (the originals were physically removed, so TryAddEnumerable no longer dedupes them)
+        // and rebuilds the composite over a snapshot that already holds that alias, so the new composite would
+        // resolve one of its own children back to itself — a self-referential singleton that deadlocks on first
+        // resolve. This happens when an opt-in feature is applied twice (e.g. two registration modules both call
+        // AddBackChannelAuthentication or AddDeviceAuthorization) or a public compose-family method is called
+        // before AddOidcCore, which composes it again. Register every TInterface implementation before
+        // AddOidcCore/AddOidcServices, which composes each family exactly once.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TComposite)))
+        {
+            throw new InvalidOperationException(
+                $"{typeof(TComposite).Name} is already registered, so the {typeof(TInterface).Name} pipeline has " +
+                "already been composed. Composing it a second time would build a self-referential composite that " +
+                $"deadlocks on the first resolve. Register all {typeof(TInterface).Name} implementations before " +
+                "AddOidcCore/AddOidcServices, which composes each family once; do not call the same opt-in feature " +
+                "method (or a compose-family method) twice.");
+        }
 
         var serviceDescriptors = services
             .Where(descriptor => descriptor.ServiceType == typeof(TInterface))
