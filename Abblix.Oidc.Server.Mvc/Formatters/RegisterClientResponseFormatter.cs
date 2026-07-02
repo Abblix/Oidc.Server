@@ -104,6 +104,10 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             JwksUri = success.JwksUri,
             UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
+            // RFC 9701 §6 / RFC 7591 §3.2.1: echo the registered introspection response algorithms.
+            IntrospectionSignedResponseAlg = success.IntrospectionSignedResponseAlg,
+            IntrospectionEncryptedResponseAlg = success.IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEnc = success.IntrospectionEncryptedResponseEnc,
             Contacts = success.Contacts,
             RequestUris = success.RequestUris,
             TlsClientAuthSubjectDn = success.TlsClientAuthSubjectDn,

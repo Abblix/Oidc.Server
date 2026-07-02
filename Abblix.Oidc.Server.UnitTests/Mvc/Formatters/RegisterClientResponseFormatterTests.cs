@@ -23,6 +23,7 @@
 using System;
 using System.Threading.Tasks;
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -132,6 +133,30 @@ public class RegisterClientResponseFormatterTests
         Assert.Equal("CN=client,O=test", wire.TlsClientAuthSubjectDn);
         Assert.NotNull(wire.TlsClientAuthSanDns);
         Assert.Single(wire.TlsClientAuthSanDns);
+    }
+
+    /// <summary>
+    /// #29 regression: RFC 9701 §6 introspection response algorithms set by the register processor
+    /// must survive the core→wire bridge. Before the wire DTO gained these members (and the formatter
+    /// mapped them) a client registering signed/encrypted introspection got a 201 that dropped them,
+    /// violating RFC 7591 §3.2.1's "echo all registered metadata".
+    /// </summary>
+    [Fact]
+    public async Task FormatResponseAsync_IntrospectionResponseAlgorithms_EchoedOnWireShape()
+    {
+        var success = BuildSuccess(dpopBoundAccessTokens: null) with
+        {
+            IntrospectionSignedResponseAlg = SigningAlgorithms.RS256,
+            IntrospectionEncryptedResponseAlg = "RSA-OAEP",
+            IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+        };
+
+        var result = await FormatAsync(success);
+
+        var wire = AssertCreated(result);
+        Assert.Equal(SigningAlgorithms.RS256, wire.IntrospectionSignedResponseAlg);
+        Assert.Equal("RSA-OAEP", wire.IntrospectionEncryptedResponseAlg);
+        Assert.Equal("A128CBC-HS256", wire.IntrospectionEncryptedResponseEnc);
     }
 
     [Fact]
