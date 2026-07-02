@@ -82,7 +82,7 @@ public partial class DPoPTokenEndpointValidator(
         if (committedCertThumbprint is null || AuthenticatesByMutualTls(context.ClientInfo))
             return null;
 
-        var presentedCertThumbprint = context.ClientRequest?.ClientCertificate is { } certificate
+        var presentedCertThumbprint = context is { ClientRequest.ClientCertificate: { } certificate }
             ? Base64Url.EncodeToString(SHA256.HashData(certificate.RawData))
             : null;
 
@@ -200,12 +200,12 @@ public partial class DPoPTokenEndpointValidator(
     /// </summary>
     private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
     {
-        if (context is { AuthorizedGrant.Context.CertificateSha256Thumbprint: not null })
-            return true;
-
-        if (context is { ClientRequest.ClientCertificate: null })
-            return false;
-
-        return AuthenticatesByMutualTls(context.ClientInfo) || context.ClientInfo.TlsClientCertificateBoundAccessTokens;
+        return context switch
+        {
+            { AuthorizedGrant.Context.CertificateSha256Thumbprint: not null } => true,
+            { ClientRequest.ClientCertificate: null } => false,
+            _ => AuthenticatesByMutualTls(context.ClientInfo) ||
+                 context.ClientInfo.TlsClientCertificateBoundAccessTokens,
+        };
     }
 }
