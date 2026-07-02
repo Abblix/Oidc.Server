@@ -206,12 +206,17 @@ public class AuthorizationRequestProcessor(
 			await authSessionService.SignInAsync(authSession);
 		}
 
-		// Initialize a successful authentication result.
+		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
+		// scope set (identical to what the issued token carries) so the response encoder advertises the
+		// granted scope on the front-channel scope parameter, not the broader requested set (RFC 6749 §3.3)
 		var result = new SuccessfullyAuthenticated(
 			model,
 			request.ResponseMode,
 			authSession.SessionId,
-			authSession.AffectedClientIds);
+			authSession.AffectedClientIds)
+		{
+			GrantedScopes = authContext.Scope,
+		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
