@@ -235,6 +235,9 @@ public class JwtEncryptionTests
     /// a random CEK on a length mismatch, so the content decryptor always receives a correct-length key.
     /// </summary>
     [Fact]
+    [SuppressMessage("Security", "S5542:Encryption algorithms should be used with secure mode and padding scheme",
+        Justification = "The test deliberately crafts an RSA1_5/PKCS1 encrypted_key to verify the server's " +
+                        "Bleichenbacher / random-CEK mitigation on the insecure algorithm it must still tolerate.")]
     public async Task Rsa1_5_ValidPaddingWrongLengthCek_StillRunsAeadOnCorrectLengthKey()
     {
         // A spy content decryptor records the CEK length the JWE decryptor hands it and reports the
@@ -283,6 +286,10 @@ public class JwtEncryptionTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
+    [SuppressMessage("Major Code Smell", "S1172:Unused method parameters should be removed",
+        Justification = "Signatures are mandated by IDataEncryptor; this spy records only the CEK length.")]
+    [SuppressMessage("Minor Code Smell", "S2325:Methods and properties that don't access instance data should be static",
+        Justification = "Explicit IDataEncryptor interface implementation cannot be static.")]
     private sealed class CekLengthRecordingEncryptor(int keySizeInBytes) : IDataEncryptor
     {
         public int LastCekLength { get; private set; } = -1;

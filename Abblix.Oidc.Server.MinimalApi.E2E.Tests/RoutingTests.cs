@@ -1,6 +1,7 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Mime;
@@ -29,6 +30,8 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// </summary>
 public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactory>
 {
+    private const string RoutePrefix = "/oauth";
+
     private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
         new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestFactory.BaseAddress });
 
@@ -49,10 +52,10 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Custom_prefix_mounts_all_endpoints_under_the_prefix()
     {
         using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, "/oauth"));
+            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
-        // MapOidcEndpoints("/oauth") mounts the whole surface under the prefix.
+        // MapOidcEndpoints(RoutePrefix) mounts the whole surface under the prefix.
         var underPrefix = await client.GetAsync("/oauth/.well-known/openid-configuration", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, underPrefix.StatusCode);
 
@@ -164,12 +167,12 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Discovery_document_urls_carry_the_route_prefix()
     {
         using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, "/oauth"));
+            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
-        // MapOidcEndpoints("/oauth") mounts the token endpoint at /oauth/connect/token, so discovery must advertise
+        // MapOidcEndpoints(RoutePrefix) mounts the token endpoint at /oauth/connect/token, so discovery must advertise
         // the prefixed URL — a bare /connect/token would 404 every discovery-driven client.
-        var discovery = await client.FetchDiscoveryAsync("/oauth");
+        var discovery = await client.FetchDiscoveryAsync(RoutePrefix);
 
         foreach (var key in new[]
                  {
@@ -189,7 +192,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Registration_client_uri_carries_the_route_prefix()
     {
         using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, "/oauth"));
+            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // Post directly to the known prefixed path (before the #10 fix the discovery registration_endpoint is wrong,
@@ -280,6 +283,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     }
 
     [Fact]
+    [SuppressMessage("Minor Code Smell", "S1075", Justification = "In-memory TestServer http base address; not a deployment URL.")]
     public async Task Non_https_token_request_is_refused()
     {
         var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions

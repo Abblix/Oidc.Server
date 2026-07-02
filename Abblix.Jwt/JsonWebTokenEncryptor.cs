@@ -119,6 +119,11 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     /// Validates and decrypts JWE tokens using decoded byte parts and original string parts.
     /// Implements RFC 7516 (JWE) decryption.
     /// </summary>
+    [SuppressMessage("Major Code Smell", "S3776:Cognitive Complexity of methods should not be too high",
+        Justification = "The complexity is the linear sequence of RFC 7516 §5.2 mandated validation guards " +
+                        "(base64, header JSON, enc/alg presence, decryptor resolution, per-key decryption); " +
+                        "splitting the single decrypt flow would fragment it without improving readability. " +
+                        "Covered by the JwtEncryptionTests decryption suite.")]
     public async Task<Result<string, JwtValidationError>> DecryptAsync(
         string[] jwtParts,
         IAsyncEnumerable<JsonWebKey> decryptionKeys)
