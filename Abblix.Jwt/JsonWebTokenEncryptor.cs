@@ -134,9 +134,20 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             return new JwtValidationError(JwtError.InvalidToken, "Invalid base64url encoding in JWE");
         }
 
-        // Decode header JSON to get algorithms and key ID
+        // Decode header JSON to get algorithms and key ID. A base64url-valid but non-JSON header (e.g. a
+        // truncated object) makes JsonNode.Parse throw JsonException; catch it and map to a typed validation
+        // error so an attacker-crafted JWE fails as invalid_token rather than surfacing as an unhandled 500.
         var headerJson = Encoding.UTF8.GetString(decodedParts[0]);
-        var headerNode = JsonNode.Parse(headerJson);
+        JsonNode? headerNode;
+        try
+        {
+            headerNode = JsonNode.Parse(headerJson);
+        }
+        catch (JsonException)
+        {
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: not valid JSON");
+        }
+
         if (headerNode is not JsonObject headerObject)
             return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: must be a JSON object");
 
