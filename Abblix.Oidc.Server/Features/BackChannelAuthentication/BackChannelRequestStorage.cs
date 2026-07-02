@@ -68,9 +68,13 @@ public class BackChannelRequestStorage(
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId)
 	{
+		// A status read must NOT consume the request. The CIBA grant handler calls this on every poll/ping
+		// to inspect the status and only redeems once, via TryRemoveAsync, on successful token issuance.
+		// Consuming here made every successful poll/ping fail with invalid_grant and let a slow_down poll or
+		// a wrong-client lookup destroy a still-pending authentication.
 		return storage.GetAsync<BackChannelAuthenticationRequest>(
 			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
-			true);
+			removeOnRetrieval: false);
 	}
 
 	/// <summary>
