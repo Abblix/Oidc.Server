@@ -133,6 +133,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>());
 
+        // Fail loud at startup when EnabledEndpoints advertises an opt-in endpoint whose feature services were
+        // never registered by the matching AddX() call, instead of 500-ing on every request to it.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, EnabledEndpointsRegistrationValidator>());
+
         return services
             .AddAlias<IClientInfoProvider, ClientInfoStorage>()
             .AddAlias<IClientInfoManager, ClientInfoStorage>();
@@ -557,6 +562,7 @@ public static class ServiceCollectionExtensions
         // method neither registers the CIBA types nor advertises/validates the endpoint.
         services.AddBackChannelAuthenticationEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.BackChannelAuthentication);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.BackChannelAuthentication);
 
         return services;
     }
@@ -594,6 +600,7 @@ public static class ServiceCollectionExtensions
         // neither registers the device types nor advertises/validates the endpoint.
         services.AddDeviceAuthorizationEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.DeviceAuthorization);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.DeviceAuthorization);
 
         return services;
     }
@@ -611,6 +618,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddCheckSessionEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.CheckSession);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.CheckSession);
         return services;
     }
 
@@ -628,6 +636,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddRevocationEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.Revocation);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.Revocation);
         return services;
     }
 
@@ -645,6 +654,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddIntrospectionEndpoint();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.Introspection);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.Introspection);
         return services;
     }
 
@@ -662,6 +672,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.RegisterClient);
+        services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.RegisterClient);
         return services;
     }
 
