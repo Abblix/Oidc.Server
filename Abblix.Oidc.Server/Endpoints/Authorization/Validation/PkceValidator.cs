@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -73,8 +74,13 @@ public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationCon
 				return context.InvalidRequest("The client is not allowed PKCE plain method");
 			}
 		}
-		else if (profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true))
+		else if ((profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true)) &&
+		         context.Request.ResponseType.HasFlag(ResponseTypes.Code))
 		{
+			// PKCE (RFC 7636) protects the authorization code exchange, so a missing code_challenge is
+			// only a failure when the response_type actually yields a code (authorization code or hybrid).
+			// A pure implicit request (token / id_token, no code) has nothing for a code_challenge to
+			// protect, so it must not be rejected for the absence of one.
 			return context.InvalidRequest("The client requires PKCE code challenge");
 		}
 
