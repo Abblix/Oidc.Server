@@ -346,6 +346,29 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// RFC 7516: a JWE whose header segment is base64url-valid but not valid JSON must fail as
+    /// <see cref="JwtError.InvalidToken"/>, not surface as an unhandled <see cref="System.Text.Json.JsonException"/>
+    /// (HTTP 500). Mirrors the JWS parse path, which already catches malformed header JSON. The decryption-key
+    /// resolver is wired so the input reaches the JWE decrypt path rather than the "no decryption keys" early return.
+    /// </summary>
+    [Fact]
+    public async Task JweWithMalformedHeaderJson_ReturnsInvalidTokenError()
+    {
+        // "{ not json" is valid base64url but not a parseable JSON object.
+        var malformedHeader = EncodeBase64Url("{ not json");
+        var jwe = string.Join('.', malformedHeader, "AAAA", "AAAA", "AAAA", "AAAA");
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey, encryptionKey);
+
+        var result = await validator.ValidateAsync(jwe, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("JWE header", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Symmetric to <see cref="JweWithoutDecryptionKeys_ReturnsInvalidTokenError"/>: a 3-segment
     /// JWS on the issuer-keys trust branch without a ResolveIssuerSigningKeys resolver returns
     /// <see cref="JwtError.InvalidToken"/> rather than throwing
