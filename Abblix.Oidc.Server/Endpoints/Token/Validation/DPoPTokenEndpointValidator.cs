@@ -180,6 +180,17 @@ public partial class DPoPTokenEndpointValidator(
     }
 
     /// <summary>
+    /// Whether the client authenticates with mutual TLS (<c>tls_client_auth</c> /
+    /// <c>self_signed_tls_client_auth</c>). Such a client has already proved possession of its
+    /// certificate as part of authentication, so the RFC 8705 §4 certificate-binding check on a
+    /// certificate-bound grant is redundant for it and is skipped.
+    /// </summary>
+    private static bool AuthenticatesByMutualTls(ClientInfo clientInfo)
+        => clientInfo.TokenEndpointAuthMethod
+            is ClientAuthenticationMethods.TlsClientAuth
+            or ClientAuthenticationMethods.SelfSignedTlsClientAuth;
+
+    /// <summary>
     /// Whether the access token about to be issued will be certificate-bound (RFC 8705 §3), and
     /// therefore sender-constrained via mutual TLS rather than DPoP. Mirrors the binding decision in
     /// TokenAuthorizationContextEvaluator: a binding the grant already carries (e.g. on refresh), or a
@@ -187,30 +198,14 @@ public partial class DPoPTokenEndpointValidator(
     /// certificate-bound tokens. Used to credit the mTLS mechanism when a security profile requires a
     /// sender-constrained token but the client presents no DPoP proof.
     /// </summary>
-    /// <summary>
-    /// Whether the client authenticates with mutual TLS (<c>tls_client_auth</c> /
-    /// <c>self_signed_tls_client_auth</c>). Such a client has already proved possession of its
-    /// certificate as part of authentication, so the RFC 8705 §4 certificate-binding check on a
-    /// certificate-bound grant is redundant for it and is skipped.
-    /// </summary>
-    private static bool AuthenticatesByMutualTls(ClientInfo clientInfo)
-    {
-        return clientInfo.TokenEndpointAuthMethod
-            is ClientAuthenticationMethods.TlsClientAuth
-            or ClientAuthenticationMethods.SelfSignedTlsClientAuth;
-    }
-
     private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
     {
-        if (context.AuthorizedGrant?.Context.CertificateSha256Thumbprint != null)
+        if (context is { AuthorizedGrant.Context.CertificateSha256Thumbprint: not null })
             return true;
 
-        if (context.ClientRequest?.ClientCertificate is null)
+        if (context is { ClientRequest.ClientCertificate: null })
             return false;
 
-        var authMethod = context.ClientInfo.TokenEndpointAuthMethod;
-        return authMethod == ClientAuthenticationMethods.SelfSignedTlsClientAuth
-            || authMethod == ClientAuthenticationMethods.TlsClientAuth
-            || context.ClientInfo.TlsClientCertificateBoundAccessTokens;
+        return AuthenticatesByMutualTls(context.ClientInfo) || context.ClientInfo.TlsClientCertificateBoundAccessTokens;
     }
 }
