@@ -129,8 +129,8 @@ public partial class DPoPTokenEndpointValidator(
 
         if (committed is not null)
         {
-            // RFC 9449 §10: the authorization request committed to a proof-of-possession key via dpop_jkt;
-            // presenting the auth code without the proof is the very attack the carry-over closes.
+            // RFC 9449 §10: the authorization request committed to a proof-of-possession key via the dpop_jkt
+            // parameter, so presenting the auth code without the proof is the very attack the carry-over closes.
             LogProofRequiredButMissing("§10 dpop_jkt carry-over");
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,

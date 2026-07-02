@@ -76,25 +76,8 @@ public static class EndpointRouteBuilderExtensions
         var oidcGroup = endpoints.MapGroup(prefix);
 
         // Mirror the MVC controllers' [RequireHttps]: on a host that also binds HTTP, never serve client credentials
-        // or tokens in cleartext (RFC 6749 §3.2/§10.1). A non-HTTPS GET is redirected to the HTTPS URL; any other
-        // method is refused. Behind a TLS-terminating proxy the host must run ForwardedHeaders so Request.IsHttps
-        // reflects the edge, otherwise this filter blocks all traffic.
-        oidcGroup.AddEndpointFilter(async (context, next) =>
-        {
-            var request = context.HttpContext.Request;
-            if (request.IsHttps)
-                return await next(context);
-
-            if (HttpMethods.IsGet(request.Method))
-            {
-                var target = new UriBuilder(
-                    Uri.UriSchemeHttps, request.Host.Host, request.Host.Port ?? -1,
-                    request.PathBase + request.Path, request.QueryString.Value).Uri;
-                return Results.Redirect(target.AbsoluteUri);
-            }
-
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        });
+        // or tokens in cleartext (RFC 6749 §3.2/§10.1). See RequireHttpsAsync for the redirect/refuse behaviour.
+        oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
         // RFC 6749 §5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
         // introspection, authorize, checksession, discovery, JWKS) carries it — matching the MVC controllers'
@@ -213,6 +196,30 @@ public static class EndpointRouteBuilderExtensions
         }
 
         return oidcGroup;
+    }
+
+    /// <summary>
+    /// Group endpoint filter mirroring the MVC controllers' <c>[RequireHttps]</c>: a non-HTTPS GET is redirected to
+    /// the HTTPS URL and any other non-HTTPS method is refused, so client credentials and tokens are never served in
+    /// cleartext (RFC 6749 §3.2/§10.1). Behind a TLS-terminating proxy the host must run <c>ForwardedHeaders</c> so
+    /// <see cref="HttpRequest.IsHttps"/> reflects the edge, otherwise this filter blocks all traffic.
+    /// </summary>
+    private static async ValueTask<object?> RequireHttpsAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var request = context.HttpContext.Request;
+        if (request.IsHttps)
+            return await next(context);
+
+        if (HttpMethods.IsGet(request.Method))
+        {
+            var target = new UriBuilder(
+                Uri.UriSchemeHttps, request.Host.Host, request.Host.Port ?? -1,
+                request.PathBase + request.Path, request.QueryString.Value).Uri;
+            return Results.Redirect(target.AbsoluteUri);
+        }
+
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
     /// <summary>
