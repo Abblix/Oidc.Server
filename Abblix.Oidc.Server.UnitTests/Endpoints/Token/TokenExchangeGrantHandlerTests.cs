@@ -334,6 +334,57 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(requestScope, grant.Context.Scope);
     }
 
+    /// <summary>
+    /// 2b: when the request omits scope, the handler falls back to the subject_token's scope. The
+    /// explicit request.Scope path is gated against the requesting client's AllowedScopes by
+    /// ScopeValidator in the token pipeline, but the fallback path is not — so an inherited scope the
+    /// broker client was never registered for must be filtered out rather than leaking into the token.
+    /// </summary>
+    [Fact]
+    public async Task InheritedSubjectScope_FilteredToRequestingClientAllowedScopes()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["openid", "profile", "admin"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AllowedScopes = ["openid", "profile"], // NOT registered for "admin"
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken); // no explicit scope -> fallback
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.DoesNotContain("admin", grant.Context.Scope);
+        Assert.Equal(["openid", "profile"], grant.Context.Scope);
+    }
+
+    /// <summary>
+    /// Companion to <see cref="InheritedSubjectScope_FilteredToRequestingClientAllowedScopes"/>: a null
+    /// (tri-state "no per-client restriction") AllowedScopes leaves the inherited scope untouched,
+    /// matching ScopeManager.Validate's treatment of the explicit path. Locks that the 2b filter does
+    /// not over-restrict clients that intentionally run without a scope allow-list.
+    /// </summary>
+    [Fact]
+    public async Task InheritedSubjectScope_WithNullAllowedScopes_PassesThroughUnfiltered()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["openid", "admin"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AllowedScopes = null, // no per-client restriction
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(["openid", "admin"], grant.Context.Scope);
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // PR #135 review findings -- TDD reproduction tests.
     // S1: cross-client subject_token reuse (confused-deputy)
