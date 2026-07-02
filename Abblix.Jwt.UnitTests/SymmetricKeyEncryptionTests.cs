@@ -20,6 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text.Json.Nodes;
+using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -439,5 +443,78 @@ public class SymmetricKeyEncryptionTests
 			ResolveTokenDecryptionKeys = _ => encryptionKey.ToAsync(),
 			ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
 		};
+	}
+	/// <summary>
+	/// RFC 7518 §4.7.1: AES-GCM key wrapping must put the 96-bit IV and 128-bit tag in the JOSE header
+	/// 'iv'/'tag' parameters and return ONLY the wrapped-CEK ciphertext as the encrypted_key. This test
+	/// asserts that wire shape (and that the pair still round-trips), so the previous IV||ct||tag layout
+	/// in the encrypted_key fails it.
+	/// </summary>
+	[Fact]
+	public void AesGcmKeyWrap_EncryptKey_EmitsRfc7518HeaderIvAndTag()
+	{
+		var kek = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+			KeyValue = CryptoRandom.GetRandomBytes(32),
+		};
+		var cek = CryptoRandom.GetRandomBytes(32);
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+		var header = new JsonWebTokenHeader(new JsonObject());
+
+		var encryptedKey = encryptor.EncryptKey(header, kek, cek);
+
+		// Encrypted Key carries only the wrapped-CEK ciphertext (same length as the CEK).
+		Assert.Equal(cek.Length, encryptedKey.Length);
+
+		// IV and tag live in the header, base64url-encoded, 96 and 128 bits respectively.
+		var ivParam = header.Json["iv"]?.GetValue<string>();
+		var tagParam = header.Json["tag"]?.GetValue<string>();
+		Assert.NotNull(ivParam);
+		Assert.NotNull(tagParam);
+		Assert.Equal(12, Base64Url.DecodeFromChars(ivParam).Length);
+		Assert.Equal(16, Base64Url.DecodeFromChars(tagParam).Length);
+
+		// Round-trips: decrypt reads iv/tag from the header and treats encrypted_key as the ciphertext.
+		Assert.True(encryptor.TryDecryptKey(header, kek, encryptedKey, out var recoveredCek));
+		Assert.Equal(cek, recoveredCek);
+	}
+
+	/// <summary>
+	/// RFC 7518 §4.7.1: a wrap produced the standard way by an external JOSE library (encrypted_key =
+	/// ciphertext only, iv/tag in the header) must decrypt. The previous implementation sliced iv/ct/tag
+	/// out of encrypted_key and ignored the header, so it fails this test.
+	/// </summary>
+	[Fact]
+	public void AesGcmKeyWrap_DecryptKey_ReadsRfc7518HeaderIvAndTag()
+	{
+		var keyValue = CryptoRandom.GetRandomBytes(32);
+		var kek = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+			KeyValue = keyValue,
+		};
+		var cek = CryptoRandom.GetRandomBytes(32);
+
+		// Produce a standard RFC 7518 §4.7 wrap exactly as a conformant external producer would.
+		var iv = CryptoRandom.GetRandomBytes(12);
+		var ciphertext = new byte[cek.Length];
+		var tag = new byte[16];
+		using (var aesGcm = new AesGcm(keyValue, tag.Length))
+			aesGcm.Encrypt(iv, cek, ciphertext, tag);
+
+		var header = new JsonWebTokenHeader(new JsonObject
+		{
+			["iv"] = Base64Url.EncodeToString(iv),
+			["tag"] = Base64Url.EncodeToString(tag),
+		});
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+
+		Assert.True(encryptor.TryDecryptKey(header, kek, ciphertext, out var recoveredCek));
+		Assert.Equal(cek, recoveredCek);
 	}
 }

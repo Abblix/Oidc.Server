@@ -100,6 +100,18 @@ public static class JwtClaimTypes
     public const string X509Sha256Thumbprint = "x5t#S256";
 
     /// <summary>
+    /// "iv" header parameter (RFC 7518 Section 4.7.1.1): the base64url-encoded 96-bit Initialization
+    /// Vector used when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
+    /// </summary>
+    public const string KeyWrapInitializationVector = "iv";
+
+    /// <summary>
+    /// "tag" header parameter (RFC 7518 Section 4.7.1.2): the base64url-encoded 128-bit Authentication
+    /// Tag produced when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
+    /// </summary>
+    public const string KeyWrapAuthenticationTag = "tag";
+
+    /// <summary>
     /// "cty" header parameter (RFC 7515 Section 4.1.10): the media type of the JWS payload, used
     /// when the payload itself is a nested JWT or another well-defined media type.
     /// </summary>
