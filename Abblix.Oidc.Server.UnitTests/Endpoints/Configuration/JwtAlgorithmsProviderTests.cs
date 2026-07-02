@@ -169,4 +169,41 @@ public class JwtAlgorithmsProviderTests
 
         Assert.Equal(contentEncryption, result);
     }
+    /// <summary>
+    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: token_endpoint_auth_signing_alg_values_supported MUST
+    /// NOT contain "none". HS* stay because client_secret_jwt keys on the client secret.
+    /// </summary>
+    [Fact]
+    public void TokenEndpointAuthSigningAlgValuesSupported_ExcludesNone_KeepsHmac()
+    {
+        _validator.Setup(v => v.SigningAlgorithmsSupported).Returns(
+            [SigningAlgorithms.None, SigningAlgorithms.RS256, SigningAlgorithms.HS256]);
+
+        var result = CreateProvider().TokenEndpointAuthSigningAlgValuesSupported.ToArray();
+
+        Assert.DoesNotContain(SigningAlgorithms.None, result);
+        Assert.Contains(SigningAlgorithms.RS256, result);
+        Assert.Contains(SigningAlgorithms.HS256, result);
+    }
+
+    /// <summary>
+    /// CIBA Core §7.1.1 requires an asymmetric signature, so
+    /// backchannel_authentication_request_signing_alg_values_supported excludes "none" and every HS*.
+    /// </summary>
+    [Fact]
+    public void BackChannelAuthenticationRequestSigningAlgValuesSupported_ExcludesNoneAndHmac()
+    {
+        _validator.Setup(v => v.SigningAlgorithmsSupported).Returns(
+        [
+            SigningAlgorithms.None,
+            SigningAlgorithms.RS256, SigningAlgorithms.ES256,
+            SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512,
+        ]);
+
+        var result = CreateProvider().BackChannelAuthenticationRequestSigningAlgValuesSupported.ToArray();
+
+        Assert.Equal(
+            new[] { SigningAlgorithms.RS256, SigningAlgorithms.ES256 }.OrderBy(a => a),
+            result.OrderBy(a => a));
+    }
 }
