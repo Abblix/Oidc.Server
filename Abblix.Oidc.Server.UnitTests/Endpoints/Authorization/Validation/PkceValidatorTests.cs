@@ -63,12 +63,13 @@ public class PkceValidatorTests
         string? codeChallengeMethod = null,
         bool? pkceRequired = null,
         bool plainPkceAllowed = false,
-        ClientSecurityProfile? securityProfile = null)
+        ClientSecurityProfile? securityProfile = null,
+        string[]? responseType = null)
     {
         var request = new AuthorizationRequest
         {
             ClientId = ClientId,
-            ResponseType = [ResponseTypes.Code],
+            ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
             CodeChallenge = codeChallenge,
@@ -643,5 +644,58 @@ public class PkceValidatorTests
         var result = await validator.ValidateAsync(context);
 
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A pure implicit request (response_type=token, no authorization code) must not be rejected for a
+    /// missing PKCE code challenge even for a default client (PkceRequired defaults to true): RFC 7636
+    /// PKCE protects the code exchange, and a pure implicit flow issues no code to protect.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PureImplicitToken_WithoutCodeChallenge_ShouldSucceed()
+    {
+        var context = CreateContext(
+            responseType: [ResponseTypes.Token],
+            pkceRequired: null);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A pure implicit request (response_type=id_token, no code) must not be rejected for a missing PKCE
+    /// code challenge even when the client explicitly sets PkceRequired=true: there is no authorization
+    /// code exchange in a pure implicit flow for PKCE (RFC 7636) to apply to.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PureImplicitIdToken_WhenPkceRequired_ShouldSucceed()
+    {
+        var context = CreateContext(
+            responseType: [ResponseTypes.IdToken],
+            pkceRequired: true);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A hybrid request (response_type=code id_token) still returns an authorization code, so PKCE
+    /// enforcement remains in force: a missing code challenge with PKCE required is still rejected. This
+    /// guards the fix from over-loosening to any token-bearing response type.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_HybridWithoutCodeChallenge_WhenRequired_ShouldReturnError()
+    {
+        var context = CreateContext(
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken],
+            pkceRequired: true);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("requires PKCE", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 }
