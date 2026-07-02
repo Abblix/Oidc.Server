@@ -66,9 +66,15 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string ElementsRequiredMarkerName = "ElementsRequiredAttribute";
     private const string RequiredMarkerName = "RequiredAttribute";
 
-    private const string FormValues = "global::Abblix.Oidc.Server.MinimalApi.FormValues";
-    private const string ValidationAttributes = "global::Abblix.Utils.Validation";
-    private const string ValidatableModel = "global::Abblix.Oidc.Server.MinimalApi.Model.IValidatableModel";
+    // The generator emits references to these helper types. Rather than hardcode their fully-qualified names —
+    // which silently rot into broken generated code when a type moves namespace — they are resolved to their live
+    // symbols per compilation (see KnownTypes). Our own helpers are found by simple name within the compiled
+    // assembly, so a namespace move follows automatically; the executable validation attributes live in a
+    // referenced assembly, so one of them anchors the resolution of their shared namespace.
+    private const string FormValuesTypeName = "FormValues";
+    private const string RequestValuesTypeName = "RequestValues";
+    private const string ValidatableModelTypeName = "IValidatableModel";
+    private const string ValidationAttributeAnchor = "Abblix.Utils.Validation.AllowedValuesAttribute";
 
     private static readonly string CompilerServicesNamespace =
         typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -94,6 +100,24 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor HelperTypeNotFound = new(
+        id: "ABXM003",
+        title: "Generator helper type not found",
+        messageFormat: "The helper type '{0}' the generator emits references to could not be resolved in the " +
+                       "compilation, so it was renamed or removed and the generated binders would not compile",
+        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor HelperTypeAmbiguous = new(
+        id: "ABXM004",
+        title: "Generator helper type is ambiguous",
+        messageFormat: "The helper type name '{0}' resolves to more than one type in the compilation, so the " +
+                       "generator cannot pick the one to reference",
+        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -102,9 +126,21 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             predicate: static (node, _) => node is RecordDeclarationSyntax,
             transform: static (ctx, _) => ExtractStub(ctx));
 
+        // The helper types the generator emits references to are resolved once per compilation to their live
+        // symbols; their fully-qualified names then flow into every model. Resolution failures are reported once
+        // here rather than duplicated onto each generated model.
+        var knownTypes = context.CompilationProvider.Select(static (compilation, _) => KnownTypesResult.Resolve(compilation));
+
+        context.RegisterSourceOutput(knownTypes, static (productionContext, resolved) =>
+        {
+            foreach (var diagnostic in resolved.Diagnostics)
+                productionContext.ReportDiagnostic(diagnostic.ToDiagnostic());
+        });
+
         var outputs = stubs
+            .Combine(knownTypes)
             .Combine(context.CompilationProvider)
-            .Select(static (pair, _) => Generate(pair.Left, pair.Right));
+            .Select(static (pair, _) => Generate(pair.Left.Left, pair.Left.Right, pair.Right));
 
         context.RegisterSourceOutput(outputs, static (productionContext, result) =>
         {
@@ -136,8 +172,13 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             LocationInfo.From(context.TargetNode.GetLocation()));
     }
 
-    private static GenerationResult Generate(StubInfo stub, Compilation compilation)
+    private static GenerationResult Generate(StubInfo stub, KnownTypesResult knownTypes, Compilation compilation)
     {
+        // A helper the generator relies on could not be resolved; the diagnostic was already reported once against
+        // the compilation, so emit no source rather than a model that would not compile.
+        if (knownTypes.Types is not { } known)
+            return new GenerationResult($"{stub.Namespace}.{stub.Name}.g.cs", null, new EquatableArray<DiagnosticInfo>([]));
+
         var coreType = compilation.GetTypeByMetadataName(stub.CoreTypeName);
         if (coreType == null)
         {
@@ -147,14 +188,72 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(CoreTypeNotFound, stub.Location, stub.CoreTypeName)]));
         }
 
-        return new ModelEmitter(stub, coreType).Emit();
+        return new ModelEmitter(stub, coreType, known).Emit();
+    }
+
+    /// <summary>The fully-qualified names of the helper types the generator emits references to.</summary>
+    private sealed record KnownTypes(
+        string FormValues, string RequestValues, string ValidatableModel, string ValidationAttributesNamespace);
+
+    /// <summary>
+    /// The resolved <see cref="KnownTypes"/>, or — when a helper type could not be resolved — the diagnostics to
+    /// report. Kept as equatable data so the pipeline re-renders models only when the resolved names actually change.
+    /// </summary>
+    private sealed record KnownTypesResult(KnownTypes? Types, EquatableArray<DiagnosticInfo> Diagnostics)
+    {
+        public static KnownTypesResult Resolve(Compilation compilation)
+        {
+            var diagnostics = new List<DiagnosticInfo>();
+
+            var formValues = ResolveInAssembly(compilation, FormValuesTypeName, diagnostics);
+            var requestValues = ResolveInAssembly(compilation, RequestValuesTypeName, diagnostics);
+            var validatableModel = ResolveInAssembly(compilation, ValidatableModelTypeName, diagnostics);
+
+            // The executable validation attributes live in a referenced assembly, so they cannot be found by the
+            // simple-name search over the compiled source; one of them anchors the resolution of their namespace.
+            var validationAnchor = compilation.GetTypeByMetadataName(ValidationAttributeAnchor);
+            if (validationAnchor == null)
+                diagnostics.Add(new DiagnosticInfo(HelperTypeNotFound, LocationInfo.None, ValidationAttributeAnchor));
+
+            if (formValues == null || requestValues == null || validatableModel == null || validationAnchor == null)
+                return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
+
+            var known = new KnownTypes(
+                formValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                requestValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                validatableModel.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                $"global::{validationAnchor.ContainingNamespace.ToDisplayString()}");
+
+            return new KnownTypesResult(known, new EquatableArray<DiagnosticInfo>([]));
+        }
+
+        private static INamedTypeSymbol? ResolveInAssembly(
+            Compilation compilation, string simpleName, List<DiagnosticInfo> diagnostics)
+        {
+            var matches = compilation
+                .GetSymbolsWithName(name => name == simpleName, SymbolFilter.Type)
+                .OfType<INamedTypeSymbol>()
+                .ToArray();
+
+            switch (matches.Length)
+            {
+                case 1:
+                    return matches[0];
+                case 0:
+                    diagnostics.Add(new DiagnosticInfo(HelperTypeNotFound, LocationInfo.None, simpleName));
+                    return null;
+                default:
+                    diagnostics.Add(new DiagnosticInfo(HelperTypeAmbiguous, LocationInfo.None, simpleName));
+                    return null;
+            }
+        }
     }
 
     /// <summary>
     /// Renders one Minimal API model from its core counterpart: the bound property declarations, the
     /// <c>BindAsync</c> reader and the implicit projection onto the core type.
     /// </summary>
-    private sealed class ModelEmitter(StubInfo stub, INamedTypeSymbol coreType)
+    private sealed class ModelEmitter(StubInfo stub, INamedTypeSymbol coreType, KnownTypes known)
     {
         private readonly StringBuilder _writer = new();
         private readonly List<DiagnosticInfo> _diagnostics = [];
@@ -187,7 +286,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             // When any property carries a translated validation attribute, the model opts into validation by the
             // group-scoped endpoint filter through this marker.
-            var marker = _properties.Any(property => property.Validations.Count > 0) ? $" : {ValidatableModel}" : string.Empty;
+            var marker = _properties.Any(property => property.Validations.Count > 0) ? $" : {known.ValidatableModel}" : string.Empty;
             _writer.AppendLine($"public partial record {stub.Name}{marker}");
             _writer.AppendLine("{");
 
@@ -212,7 +311,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             {
                 case RequestHeaderMarkerName
                     when sourceMarker.ConstructorArguments is [{ Value: string headerName }]:
-                    _assignments.Add((property.Name, $"{FormValues}.Header(request, {Literal(headerName)})"));
+                    _assignments.Add((property.Name, $"{known.FormValues}.Header(request, {Literal(headerName)})"));
                     break;
 
                 case AuthorizationHeaderMarkerName:
@@ -270,7 +369,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         /// <c>this[string] -&gt; StringValues</c> indexer for both the form-only and query-or-form cases). The
         /// wire-format marker selects the value conversion; otherwise the property type does.
         /// </summary>
-        private static string GetBindExpression(IPropertySymbol property, string wireName)
+        private string GetBindExpression(IPropertySymbol property, string wireName)
         {
             var value = $"source[{Literal(wireName)}]";
 
@@ -278,41 +377,41 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             {
                 case SpaceSeparatedStringMarkerName:
                     return IsNonNullableReference(property.Type)
-                        ? $"{FormValues}.SpaceSeparated({value})"
-                        : $"{FormValues}.SpaceSeparatedOrNull({value})";
+                        ? $"{known.FormValues}.SpaceSeparated({value})"
+                        : $"{known.FormValues}.SpaceSeparatedOrNull({value})";
 
                 case TotalSecondsMarkerName:
-                    return $"{FormValues}.Seconds({value})";
+                    return $"{known.FormValues}.Seconds({value})";
 
                 case JsonObjectMarkerName:
                     var elementType = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return $"{FormValues}.Json<{elementType}>({value})";
+                    return $"{known.FormValues}.Json<{elementType}>({value})";
 
                 case CultureListMarkerName:
-                    return $"{FormValues}.Cultures({value})";
+                    return $"{known.FormValues}.Cultures({value})";
             }
 
             if (property.Type is IArrayTypeSymbol array)
             {
                 return array.ElementType.SpecialType == SpecialType.System_String
-                    ? $"{FormValues}.Strings({value})"
-                    : $"{FormValues}.ParseUris({value})";
+                    ? $"{known.FormValues}.Strings({value})"
+                    : $"{known.FormValues}.ParseUris({value})";
             }
 
             if (property.Type.SpecialType == SpecialType.System_String)
             {
                 return IsNonNullableReference(property.Type)
                     ? $"{value}.ToString()"
-                    : $"{FormValues}.Value({value})";
+                    : $"{known.FormValues}.Value({value})";
             }
 
             if (property.Type.Name == "Uri")
-                return $"{FormValues}.ParseUri({value})";
+                return $"{known.FormValues}.ParseUri({value})";
 
             if (IsNullableBoolean(property.Type))
-                return $"{FormValues}.Bool({value})";
+                return $"{known.FormValues}.Bool({value})";
 
-            return $"{FormValues}.Value({value})";
+            return $"{known.FormValues}.Value({value})";
         }
 
         private void EmitProperties()
@@ -346,7 +445,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 _writer.AppendLine(
                     "\t\tvar form = request.HasFormContentType ? await request.ReadFormAsync(context.RequestAborted) : null;");
                 _writer.AppendLine(
-                    "\t\tvar source = new global::Abblix.Oidc.Server.MinimalApi.RequestValues(request.Query, form);");
+                    $"\t\tvar source = new {known.RequestValues}(request.Query, form);");
             }
             else
             {
@@ -395,7 +494,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         /// Translates a core property's declarative validation markers into the executable Minimal API validation
         /// attribute usages emitted onto the generated property, so a <c>Validator</c> pass enforces them.
         /// </summary>
-        private static List<string> CollectValidations(IPropertySymbol property)
+        private List<string> CollectValidations(IPropertySymbol property)
         {
             var validations = new List<string>();
             foreach (var attribute in property.GetAttributes())
@@ -410,18 +509,18 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     switch (attributeClass.Name)
                     {
                         case AllowedValuesMarkerName:
-                            validations.Add($"{ValidationAttributes}.AllowedValues({ExtractStringArrayArgument(attribute)})");
+                            validations.Add($"{known.ValidationAttributesNamespace}.AllowedValues({ExtractStringArrayArgument(attribute)})");
                             break;
 
                         case AbsoluteUriMarkerName:
                             var scheme = attribute.ConstructorArguments is [{ Value: string requireScheme }]
                                 ? $"({Literal(requireScheme)})"
                                 : string.Empty;
-                            validations.Add($"{ValidationAttributes}.AbsoluteUri{scheme}");
+                            validations.Add($"{known.ValidationAttributesNamespace}.AbsoluteUri{scheme}");
                             break;
 
                         case ElementsRequiredMarkerName:
-                            validations.Add($"{ValidationAttributes}.ElementsRequired");
+                            validations.Add($"{known.ValidationAttributesNamespace}.ElementsRequired");
                             break;
                     }
                 }

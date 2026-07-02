@@ -45,7 +45,11 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string GeneratedFromAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.GeneratedFromAttribute";
 	private const string BindsAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.BindsAttribute";
 	private const string SupportsGetPropertyName = "SupportsGet";
-	private const string ValidationAttributesNamespace = "Abblix.Utils.Validation";
+
+	// The executable validation attributes live in a referenced assembly and are emitted by their resolved symbol
+	// (see EmitPropertyAttribute); one of them anchors the resolution of their shared namespace, so a namespace
+	// move follows the type instead of leaving a stale lookup key here.
+	private const string ValidationAttributeAnchor = "Abblix.Utils.Validation.AllowedValuesAttribute";
 	private const string DeclarativeValidationNamespace = "Abblix.Oidc.Server.DeclarativeValidation";
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
@@ -74,7 +78,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "Wire-format marker has no binder",
 		messageFormat: "The declarative marker '{0}' on '{1}.{2}' is realised by no model binder: " +
 		               "no binder in this assembly declares it via [Binds], and no executable attribute " +
-		               "with the same name exists in '" + ValidationAttributesNamespace + "'. " +
+		               "with the same name exists in the validation-attributes namespace. " +
 		               "The parameter would silently stop binding.",
 		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
 		defaultSeverity: DiagnosticSeverity.Error,
@@ -164,6 +168,12 @@ public class MvcModelGenerator : IIncrementalGenerator
 		private readonly List<DiagnosticInfo> _diagnostics = [];
 		private readonly List<string> _mappedProperties = [];
 		private readonly Dictionary<string, INamedTypeSymbol> _binderMap = BuildBinderMap(compilation);
+
+		// The namespace the executable validation attributes live in, derived from the anchor type rather than
+		// hardcoded, so the twin lookup below follows the attributes if they move. Null only if the anchor is
+		// absent, in which case any validation marker fails loud through MarkerWithoutBinder.
+		private readonly string? _validationNamespace =
+			compilation.GetTypeByMetadataName(ValidationAttributeAnchor)?.ContainingNamespace.ToDisplayString();
 
 		public GenerationResult Emit()
 		{
@@ -315,7 +325,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 					// (handled above) or a validation marker mirrored by an executable MVC attribute
 					// with the same name. Anything else is a silent-drop hazard, so fail the build.
 					var executable = compilation.GetTypeByMetadataName(
-						$"{ValidationAttributesNamespace}.{attributeClass.MetadataName}");
+						$"{(_validationNamespace ?? string.Empty)}.{attributeClass.MetadataName}");
 					if (executable != null)
 					{
 						_writer.AppendLine(

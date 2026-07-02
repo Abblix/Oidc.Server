@@ -7,3 +7,5 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 ABXM001 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Core model type referenced by a generation stub could not be resolved
 ABXM002 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Bound core property declares no wire-level parameter name
+ABXM003 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type could not be resolved in the compilation
+ABXM004 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type name resolves to more than one type

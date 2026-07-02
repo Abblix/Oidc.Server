@@ -16,6 +16,9 @@ internal sealed record LocationInfo(
     int EndLine,
     int EndCharacter)
 {
+    /// <summary>A placeholder for a diagnostic that is not tied to a source span (an assembly-wide condition).</summary>
+    public static readonly LocationInfo None = new(string.Empty, 0, 0, 0, 0, 0, 0);
+
     public static LocationInfo From(Location location)
     {
         var lineSpan = location.GetLineSpan();
@@ -30,10 +33,12 @@ internal sealed record LocationInfo(
     }
 
     public Location ToLocation()
-        => Location.Create(
-            FilePath,
-            new TextSpan(SpanStart, SpanLength),
-            new LinePositionSpan(
-                new LinePosition(StartLine, StartCharacter),
-                new LinePosition(EndLine, EndCharacter)));
+        => string.IsNullOrEmpty(FilePath)
+            ? Location.None
+            : Location.Create(
+                FilePath,
+                new TextSpan(SpanStart, SpanLength),
+                new LinePositionSpan(
+                    new LinePosition(StartLine, StartCharacter),
+                    new LinePosition(EndLine, EndCharacter)));
 }
