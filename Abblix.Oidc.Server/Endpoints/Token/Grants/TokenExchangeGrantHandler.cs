@@ -436,17 +436,29 @@ public class TokenExchangeGrantHandler(
         var clientInfo = ctx.ClientInfo;
 
         // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
-        // and delegation alike). Scope: when the client supplies scope in the request use that,
-        // otherwise fall back to the subject_token's scope. Resource servers downstream of
-        // narrow-at-exchange see only the scopes the client asked for.
+        // and delegation alike). Scope handling keeps the exchange least-privilege — the issued token
+        // never carries more authority than either the presented subject_token or the client's own
+        // registration:
         //
-        // The explicit request.Scope path is gated against the requesting client's AllowedScopes by
-        // ScopeValidator in the token pipeline; the fallback path is not — so the inherited scope is
-        // filtered to the client's registered set here, otherwise a broker client would obtain scopes
-        // it was never registered for (RFC 6749 §3.3 — the AS restricts scope by policy).
-        var scope = request.Scope is { Length: > 0 }
-            ? request.Scope
-            : FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
+        // - Explicit request.Scope (2a): already gated against the client's AllowedScopes by
+        //   ScopeValidator in the token pipeline. Additionally bound it to the subject_token's own
+        //   scope WHEN the subject token carries one, so an exchange cannot amplify authority beyond
+        //   the presented token. A subject token without a scope claim (e.g. an id_token) imposes no
+        //   scope upper bound, so the RFC 8693 id_token -> access_token scenario keeps working.
+        // - Fallback to the subject_token's scope (2b): the fallback path does not pass through
+        //   ScopeValidator, so it is filtered to the client's AllowedScopes here — otherwise a broker
+        //   client would obtain scopes it was never registered for (RFC 6749 §3.3).
+        string[] scope;
+        if (request.Scope is { Length: > 0 } requestedScope)
+        {
+            scope = subject.Scope is { Length: > 0 } subjectScope
+                ? IntersectScopes(requestedScope, subjectScope)
+                : requestedScope;
+        }
+        else
+        {
+            scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
+        }
 
         // Delegation act chain (RFC 8693 §4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
@@ -500,4 +512,13 @@ public class TokenExchangeGrantHandler(
 
         return Array.FindAll(inheritedScope, scope => Array.IndexOf(allowedScopes, scope) >= 0);
     }
+
+    /// <summary>
+    /// Intersects the explicitly requested scope with the subject_token's own scope, keeping only the
+    /// requested values the subject token also holds. Caller applies this only when the subject token
+    /// carries a scope; a scopeless subject token (e.g. an id_token) imposes no upper bound. Comparison
+    /// is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// </summary>
+    private static string[] IntersectScopes(string[] requestedScope, string[] subjectScope)
+        => Array.FindAll(requestedScope, scope => Array.IndexOf(subjectScope, scope) >= 0);
 }
