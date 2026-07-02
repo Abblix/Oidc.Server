@@ -148,6 +148,17 @@ public static class DistributedCacheExtensions
 			new () { AbsoluteExpirationRelativeToNow = lockTimeout ?? TimeSpan.FromSeconds(5) },
 			cancellationToken);
 
+		// The value must still exist at the moment we hold the lock. Without this check a caller whose lock
+		// window does not overlap a prior successful removal would still see its own token survive and wrongly
+		// report success — breaking exactly-once removal (two token requests both redeeming the same
+		// device_code / authorization code, RFC 8628 §3.5 / RFC 6749 §4.1.2). The documented contract is
+		// "false if ... the key didn't exist".
+		if (await cache.GetAsync(key, cancellationToken) == null)
+		{
+			await cache.RemoveAsync(lockKey, cancellationToken); // clean up our lock
+			return false;
+		}
+
 		// Remove the value
 		await cache.RemoveAsync(key, cancellationToken);
 

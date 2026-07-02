@@ -260,4 +260,46 @@ public class DistributedCacheExtensionsTests
 		Assert.Equal(value, firstResult);
 		Assert.Null(secondResult);
 	}
+
+	[Fact]
+	public async Task TryRemoveAsync_KeyDoesNotExist_ReturnsFalse()
+	{
+		// The documented contract is "false if ... the key didn't exist". Without a value-existence
+		// check the protocol only verified its own lock token survived and wrongly reported success,
+		// breaking exactly-once removal (RFC 8628 3.5, RFC 6749 4.1.2) across non-overlapping lock windows.
+		var cache = CreateCache();
+
+		var result = await cache.TryRemoveAsync("nonexistent-key", cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.False(result);
+	}
+
+	[Fact]
+	public async Task TryRemoveAsync_KeyExists_RemovesAndReturnsTrue()
+	{
+		var cache = CreateCache();
+		const string key = "present-key";
+		await cache.SetAsync(key, Encoding.UTF8.GetBytes("v"), TestContext.Current.CancellationToken);
+
+		var result = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.True(result);
+		Assert.Null(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryRemoveAsync_SecondSequentialCall_ReturnsFalse()
+	{
+		// Exactly-once: the first removal wins, a second (non-overlapping) removal of the same key must
+		// report false. Pre-fix the second call still saw its own lock token survive and returned true.
+		var cache = CreateCache();
+		const string key = "once-key";
+		await cache.SetAsync(key, Encoding.UTF8.GetBytes("v"), TestContext.Current.CancellationToken);
+
+		var first = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+		var second = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.True(first);
+		Assert.False(second);
+	}
 }
