@@ -43,7 +43,8 @@ internal static class FormValues
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
 
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
-    public static string[]? Strings(StringValues values) => values is { Count: > 0 } ? (string[]?)values : null;
+    public static string[]? Strings(StringValues values)
+        => values is { Count: > 0 } ? values.OfType<string>().ToArray() : null;
 
     /// <summary>A repeated form field read by name as an array, or null.</summary>
     public static string[]? Strings(IFormCollection form, string name) => Strings(Get(form, name));
