@@ -53,7 +53,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	// The namespace of the declarative binding markers is resolved from this anchor marker rather than hardcoded,
 	// so renaming or moving the marker namespace fails the generation loud instead of silently making every
 	// marker-namespace match fall through and dropping the bindings.
-	private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeValidation.SpaceSeparatedStringAttribute";
+	private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeBinding.SpaceSeparatedStringAttribute";
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
 	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";

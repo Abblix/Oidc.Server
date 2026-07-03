@@ -20,12 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value travels on the wire as a JSON document carried inside a single parameter —
-/// e.g. the OIDC <c>claims</c> parameter or RFC 9396 <c>authorization_details</c>. Purely semantic:
-/// it names the wire format and leaves the parsing mechanism to the transport layer.
+/// Declares that the value is the client X.509 certificate presented at the transport layer —
+/// via mutual TLS (RFC 8705) or forwarded by a trusted reverse proxy. Purely semantic: it names
+/// the transport source and leaves the extraction mechanism to the transport layer.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-public class JsonObjectAttribute : Attribute;
+public class ClientCertificateAttribute : Attribute;

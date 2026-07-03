@@ -21,4 +21,4 @@
 // info@abblix.com
 
 global using UriBuilder = Abblix.Utils.UriBuilder;
-global using AllowedValuesAttribute = Abblix.Oidc.Server.DeclarativeValidation.AllowedValuesAttribute;
+global using AllowedValuesAttribute = Abblix.Oidc.Server.DeclarativeBinding.AllowedValuesAttribute;

@@ -45,7 +45,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     // The namespace of the declarative binding markers (source / wire-format / validation) is resolved from this
     // anchor marker rather than hardcoded, so renaming or moving the marker namespace fails the generation loud
     // instead of silently making every marker-namespace match fall through and dropping the bindings.
-    private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeValidation.SpaceSeparatedStringAttribute";
+    private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeBinding.SpaceSeparatedStringAttribute";
     private const string DataAnnotationsNamespace = "System.ComponentModel.DataAnnotations";
     private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
     private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";

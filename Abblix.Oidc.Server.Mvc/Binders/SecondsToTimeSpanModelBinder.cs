@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.Extensions.Primitives;
 

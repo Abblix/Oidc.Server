@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using System.Globalization;
-using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
