@@ -9,3 +9,4 @@ ABXM001 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Core model ty
 ABXM002 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Bound core property declares no wire-level parameter name
 ABXM003 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type could not be resolved in the compilation
 ABXM004 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type name resolves to more than one type
+ABXM005 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Declarative marker on a core property is not recognised by the generator
