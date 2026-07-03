@@ -37,10 +37,11 @@ permissions:
   contents: read
 
 concurrency:
-  # Only the latest develop commit needs to land in the feed; cancel an
-  # in-progress run if a newer commit arrives.
+  # Publishing mutates the package feed — never cancel a run mid-push, or the
+  # feed is left with a partial package set; queue the newer commit's run
+  # instead (--skip-duplicate keeps the re-push idempotent).
   group: publish-dev-builds-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   pack-and-publish:
