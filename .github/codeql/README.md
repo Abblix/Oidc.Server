@@ -12,12 +12,11 @@ GitHub-managed Default Setup remains `not-configured` (verify via `gh api repos/
 
 The custom workflow fires only on:
 
-- `push` to `develop` (default branch)
 - `workflow_dispatch` (manual)
 
-No `pull_request`, no `schedule`. `concurrency: cancel-in-progress: true` cancels stale runs when commits land in quick succession.
+No `push`, no `pull_request`, no `schedule`. The `push`-to-`develop` auto-trigger was **removed (2026-07)**: autobuild of the multi-target (net8/9/10) solution consistently exceeded the autobuild step's 5-minute cap and failed with `analyze` skipped — ~5 min burned per develop push for no result. Before re-enabling any trigger, first raise the autobuild step `timeout-minutes` (compile + analyze needs ~10-15m) or switch to `build-mode: none`. `concurrency: cancel-in-progress: true` still cancels stale manual runs.
 
-Expected billing footprint: ~5-15 minutes per push to `develop`, ~10-15 develops/month historically → **~50-225 min/month**, vs the unbounded ~180m/month under Default Setup.
+Billing footprint: **~0 min/month** while manual-only (was ~50-225 min/month on push; the unbounded ~180m/month of Default Setup is still avoided).
 
 ## Background
 
