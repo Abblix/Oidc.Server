@@ -42,7 +42,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     // so it mirrors the marker identities as constants instead of referencing the types.
     private const string GeneratedFromAttributeName = "Abblix.Oidc.Server.MinimalApi.Attributes.GeneratedFromAttribute";
     private const string SupportsGetPropertyName = "SupportsGet";
-    private const string DeclarativeValidationNamespace = "Abblix.Oidc.Server.DeclarativeValidation";
+    // The namespace of the declarative binding markers (source / wire-format / validation) is resolved from this
+    // anchor marker rather than hardcoded, so renaming or moving the marker namespace fails the generation loud
+    // instead of silently making every marker-namespace match fall through and dropping the bindings.
+    private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeValidation.SpaceSeparatedStringAttribute";
     private const string DataAnnotationsNamespace = "System.ComponentModel.DataAnnotations";
     private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
     private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
@@ -197,7 +200,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     /// <summary>The fully-qualified names of the helper types the generator emits references to.</summary>
     private sealed record KnownTypes(
         string FormValues, string RequestValues, string ValidatableModel,
-        string AllowedValues, string AbsoluteUri, string ElementsRequired);
+        string AllowedValues, string AbsoluteUri, string ElementsRequired,
+        string DeclarativeMarkerNamespace);
 
     /// <summary>
     /// The resolved <see cref="KnownTypes"/>, or — when a helper type could not be resolved — the diagnostics to
@@ -221,8 +225,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var absoluteUri = ResolveExecutable(compilation, AbsoluteUriAttributeName, diagnostics);
             var elementsRequired = ResolveExecutable(compilation, ElementsRequiredAttributeName, diagnostics);
 
+            // The declarative markers are recognised on core models by their namespace; resolve it from an anchor
+            // marker so a rename of the marker namespace fails loud here instead of silently unmatching every marker.
+            var declarativeAnchor = ResolveExecutable(compilation, DeclarativeMarkerAnchor, diagnostics);
+
             if (formValues == null || requestValues == null || validatableModel == null ||
-                allowedValues == null || absoluteUri == null || elementsRequired == null)
+                allowedValues == null || absoluteUri == null || elementsRequired == null || declarativeAnchor == null)
                 return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
 
             var known = new KnownTypes(
@@ -231,7 +239,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 validatableModel.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 EmitName(allowedValues),
                 EmitName(absoluteUri),
-                EmitName(elementsRequired));
+                EmitName(elementsRequired),
+                declarativeAnchor.ContainingNamespace.ToDisplayString());
 
             return new KnownTypesResult(known, new EquatableArray<DiagnosticInfo>([]));
         }
@@ -511,11 +520,11 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _writer.AppendLine("\t};");
         }
 
-        private static string? GetWireFormatMarkerName(IPropertySymbol property)
+        private string? GetWireFormatMarkerName(IPropertySymbol property)
             => property.GetAttributes()
                 .Select(static attribute => attribute.AttributeClass)
-                .Where(static attributeClass =>
-                    attributeClass?.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace)
+                .Where(attributeClass =>
+                    attributeClass?.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace)
                 .Select(static attributeClass => attributeClass!.Name)
                 .FirstOrDefault(static name => name is
                     SpaceSeparatedStringMarkerName or TotalSecondsMarkerName or
@@ -535,7 +544,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     continue;
 
                 var attributeNamespace = attributeClass.ContainingNamespace.ToDisplayString();
-                if (attributeNamespace == DeclarativeValidationNamespace)
+                if (attributeNamespace == known.DeclarativeMarkerNamespace)
                 {
                     switch (attributeClass.Name)
                     {
@@ -582,13 +591,13 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         private static string Literal(string value)
             => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
-        private static AttributeData? TryGetSourceMarker(IPropertySymbol property)
-            => property.GetAttributes().FirstOrDefault(static attribute =>
+        private AttributeData? TryGetSourceMarker(IPropertySymbol property)
+            => property.GetAttributes().FirstOrDefault(attribute =>
                 attribute.AttributeClass is
                 {
                     Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
                 } attributeClass &&
-                attributeClass.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace);
+                attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace);
 
         private static bool IsExcludedFromWire(IPropertySymbol property)
             => property.GetAttributes().Any(static attribute =>
