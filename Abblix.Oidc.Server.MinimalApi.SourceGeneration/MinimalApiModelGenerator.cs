@@ -70,11 +70,14 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     // which silently rot into broken generated code when a type moves namespace — they are resolved to their live
     // symbols per compilation (see KnownTypes). Our own helpers are found by simple name within the compiled
     // assembly, so a namespace move follows automatically; the executable validation attributes live in a
-    // referenced assembly, so one of them anchors the resolution of their shared namespace.
+    // referenced assembly and are each resolved by metadata name, so a rename or move of any one of them fails the
+    // generation loud instead of emitting a dangling reference.
     private const string FormValuesTypeName = "FormValues";
     private const string RequestValuesTypeName = "RequestValues";
     private const string ValidatableModelTypeName = "IValidatableModel";
-    private const string ValidationAttributeAnchor = "Abblix.Utils.Validation.AllowedValuesAttribute";
+    private const string AllowedValuesAttributeName = "Abblix.Utils.Validation.AllowedValuesAttribute";
+    private const string AbsoluteUriAttributeName = "Abblix.Utils.Validation.AbsoluteUriAttribute";
+    private const string ElementsRequiredAttributeName = "Abblix.Utils.Validation.ElementsRequiredAttribute";
 
     private static readonly string CompilerServicesNamespace =
         typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -193,7 +196,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
     /// <summary>The fully-qualified names of the helper types the generator emits references to.</summary>
     private sealed record KnownTypes(
-        string FormValues, string RequestValues, string ValidatableModel, string ValidationAttributesNamespace);
+        string FormValues, string RequestValues, string ValidatableModel,
+        string AllowedValues, string AbsoluteUri, string ElementsRequired);
 
     /// <summary>
     /// The resolved <see cref="KnownTypes"/>, or — when a helper type could not be resolved — the diagnostics to
@@ -210,21 +214,48 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var validatableModel = ResolveInAssembly(compilation, ValidatableModelTypeName, diagnostics);
 
             // The executable validation attributes live in a referenced assembly, so they cannot be found by the
-            // simple-name search over the compiled source; one of them anchors the resolution of their namespace.
-            var validationAnchor = compilation.GetTypeByMetadataName(ValidationAttributeAnchor);
-            if (validationAnchor == null)
-                diagnostics.Add(new DiagnosticInfo(HelperTypeNotFound, LocationInfo.None, ValidationAttributeAnchor));
+            // simple-name search over the compiled source. Each is resolved by metadata name in its own right: they
+            // can be renamed or sub-namespaced one at a time, so anchoring on a single one would let a sibling's
+            // move slip through as a dangling emitted reference.
+            var allowedValues = ResolveExecutable(compilation, AllowedValuesAttributeName, diagnostics);
+            var absoluteUri = ResolveExecutable(compilation, AbsoluteUriAttributeName, diagnostics);
+            var elementsRequired = ResolveExecutable(compilation, ElementsRequiredAttributeName, diagnostics);
 
-            if (formValues == null || requestValues == null || validatableModel == null || validationAnchor == null)
+            if (formValues == null || requestValues == null || validatableModel == null ||
+                allowedValues == null || absoluteUri == null || elementsRequired == null)
                 return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
 
             var known = new KnownTypes(
                 formValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 requestValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 validatableModel.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                $"global::{validationAnchor.ContainingNamespace.ToDisplayString()}");
+                EmitName(allowedValues),
+                EmitName(absoluteUri),
+                EmitName(elementsRequired));
 
             return new KnownTypesResult(known, new EquatableArray<DiagnosticInfo>([]));
+        }
+
+        // An executable validation attribute is emitted by its short name (a C# attribute usage drops the
+        // "Attribute" suffix), qualified with the type's own resolved namespace so a move follows the symbol.
+        private static string EmitName(INamedTypeSymbol attribute)
+        {
+            const string suffix = "Attribute";
+            var name = attribute.Name;
+            var shortName = name.EndsWith(suffix, System.StringComparison.Ordinal)
+                ? name.Substring(0, name.Length - suffix.Length)
+                : name;
+            return $"global::{attribute.ContainingNamespace.ToDisplayString()}.{shortName}";
+        }
+
+        private static INamedTypeSymbol? ResolveExecutable(
+            Compilation compilation, string metadataName, List<DiagnosticInfo> diagnostics)
+        {
+            var symbol = compilation.GetTypeByMetadataName(metadataName);
+            if (symbol == null)
+                diagnostics.Add(new DiagnosticInfo(HelperTypeNotFound, LocationInfo.None, metadataName));
+
+            return symbol;
         }
 
         private static INamedTypeSymbol? ResolveInAssembly(
@@ -509,18 +540,18 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     switch (attributeClass.Name)
                     {
                         case AllowedValuesMarkerName:
-                            validations.Add($"{known.ValidationAttributesNamespace}.AllowedValues({ExtractStringArrayArgument(attribute)})");
+                            validations.Add($"{known.AllowedValues}({ExtractStringArrayArgument(attribute)})");
                             break;
 
                         case AbsoluteUriMarkerName:
                             var scheme = attribute.ConstructorArguments is [{ Value: string requireScheme }]
                                 ? $"({Literal(requireScheme)})"
                                 : string.Empty;
-                            validations.Add($"{known.ValidationAttributesNamespace}.AbsoluteUri{scheme}");
+                            validations.Add($"{known.AbsoluteUri}{scheme}");
                             break;
 
                         case ElementsRequiredMarkerName:
-                            validations.Add($"{known.ValidationAttributesNamespace}.ElementsRequired");
+                            validations.Add($"{known.ElementsRequired}");
                             break;
                     }
                 }
