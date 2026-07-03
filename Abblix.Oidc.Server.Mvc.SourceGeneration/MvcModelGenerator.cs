@@ -106,6 +106,15 @@ public class MvcModelGenerator : IIncrementalGenerator
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
+	private static readonly DiagnosticDescriptor SupportsGetPropertyMissing = new(
+		id: "ABXG005",
+		title: "SupportsGet property not found on the trigger attribute",
+		messageFormat: "The generator reads the '{0}' flag off '{1}' by name, but that attribute declares no such " +
+		               "boolean property, so it was renamed and GET support would silently stop working",
+		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
 	/// <inheritdoc />
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
@@ -177,8 +186,23 @@ public class MvcModelGenerator : IIncrementalGenerator
 				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(MarkerNamespaceNotFound, stub.Location, DeclarativeMarkerAnchor)]));
 		}
 
+		// The generator reads the SupportsGet flag off the trigger attribute by name; verify that boolean property
+		// still exists so a rename fails loud rather than silently dropping GET support.
+		var generatedFrom = compilation.GetTypeByMetadataName(GeneratedFromAttributeName);
+		if (generatedFrom == null || !HasBooleanProperty(generatedFrom, SupportsGetPropertyName))
+		{
+			return new GenerationResult(
+				$"{stub.Namespace}.{stub.Name}.g.cs",
+				null,
+				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(
+					SupportsGetPropertyMissing, stub.Location, SupportsGetPropertyName, GeneratedFromAttributeName)]));
+		}
+
 		return new ModelEmitter(stub, coreType, compilation, declarativeAnchor.ContainingNamespace.ToDisplayString()).Emit();
 	}
+
+	private static bool HasBooleanProperty(INamedTypeSymbol type, string name)
+		=> type.GetMembers(name).OfType<IPropertySymbol>().Any(property => property.Type.SpecialType == SpecialType.System_Boolean);
 
 	/// <summary>
 	/// Renders one MVC model from its core counterpart. The inputs that stay constant across the

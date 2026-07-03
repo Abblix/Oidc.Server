@@ -10,3 +10,4 @@ ABXM002 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Bound core pr
 ABXM003 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type could not be resolved in the compilation
 ABXM004 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Generator helper type name resolves to more than one type
 ABXM005 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Declarative marker on a core property is not recognised by the generator
+ABXM006 | Abblix.Oidc.Server.MinimalApi.SourceGeneration | Error | Trigger attribute declares no boolean SupportsGet property

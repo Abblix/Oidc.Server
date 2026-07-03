@@ -133,6 +133,15 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor SupportsGetPropertyMissing = new(
+        id: "ABXM006",
+        title: "SupportsGet property not found on the trigger attribute",
+        messageFormat: "The generator reads the '{0}' flag off '{1}' by name, but that attribute declares no such " +
+                       "boolean property, so it was renamed and GET support would silently stop working",
+        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -238,8 +247,17 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             // marker so a rename of the marker namespace fails loud here instead of silently unmatching every marker.
             var declarativeAnchor = ResolveExecutable(compilation, DeclarativeMarkerAnchor, diagnostics);
 
+            // The generator reads the SupportsGet flag off the trigger attribute by name; verify the attribute still
+            // declares that boolean property so a rename fails loud here rather than silently dropping GET support.
+            var generatedFrom = compilation.GetTypeByMetadataName(GeneratedFromAttributeName);
+            var supportsGetDeclared = generatedFrom != null && HasBooleanProperty(generatedFrom, SupportsGetPropertyName);
+            if (!supportsGetDeclared)
+                diagnostics.Add(new DiagnosticInfo(
+                    SupportsGetPropertyMissing, LocationInfo.None, SupportsGetPropertyName, GeneratedFromAttributeName));
+
             if (formValues == null || requestValues == null || validatableModel == null ||
-                allowedValues == null || absoluteUri == null || elementsRequired == null || declarativeAnchor == null)
+                allowedValues == null || absoluteUri == null || elementsRequired == null || declarativeAnchor == null ||
+                !supportsGetDeclared)
                 return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
 
             var known = new KnownTypes(
@@ -265,6 +283,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 : name;
             return $"global::{attribute.ContainingNamespace.ToDisplayString()}.{shortName}";
         }
+
+        private static bool HasBooleanProperty(INamedTypeSymbol type, string name)
+            => type.GetMembers(name).OfType<IPropertySymbol>().Any(p => p.Type.SpecialType == SpecialType.System_Boolean);
 
         private static INamedTypeSymbol? ResolveExecutable(
             Compilation compilation, string metadataName, List<DiagnosticInfo> diagnostics)
