@@ -89,11 +89,13 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
+    private const string DiagnosticCategory = "Abblix.Oidc.Server.MinimalApi.SourceGeneration";
+
     private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
         id: "ABXM001",
         title: "Core model type not found",
         messageFormat: "The core model type '{0}' referenced by the generation stub could not be resolved",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
@@ -102,7 +104,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         title: "Bound property has no wire name",
         messageFormat: "The core property '{0}.{1}' declares no wire-level parameter name and is not excluded " +
                        "from serialization, so the generator cannot emit a binding for it",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
@@ -111,7 +113,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         title: "Generator helper type not found",
         messageFormat: "The helper type '{0}' the generator emits references to could not be resolved in the " +
                        "compilation, so it was renamed or removed and the generated binders would not compile",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
@@ -120,7 +122,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         title: "Generator helper type is ambiguous",
         messageFormat: "The helper type name '{0}' resolves to more than one type in the compilation, so the " +
                        "generator cannot pick the one to reference",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
@@ -129,7 +131,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         title: "Declarative marker not recognised",
         messageFormat: "The declarative marker '{0}' on '{1}.{2}' is not recognised by the generator, so it was " +
                        "renamed or added without updating the generator and would silently stop binding or validating",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
@@ -138,7 +140,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         title: "SupportsGet property not found on the trigger attribute",
         messageFormat: "The generator reads the '{0}' flag off '{1}' by name, but that attribute declares no such " +
                        "boolean property, so it was renamed and GET support would silently stop working",
-        category: "Abblix.Oidc.Server.MinimalApi.SourceGeneration",
+        category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 

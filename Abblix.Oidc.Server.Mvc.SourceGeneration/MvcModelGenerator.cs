@@ -68,11 +68,13 @@ public class MvcModelGenerator : IIncrementalGenerator
 		SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
 			SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
-	private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
+	private const string DiagnosticCategory = "Abblix.Oidc.Server.Mvc.SourceGeneration";
+
+		private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
 		id: "ABXG001",
 		title: "Core model type not found",
 		messageFormat: "The core model type '{0}' referenced by the generation stub could not be resolved",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -83,7 +85,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		               "no binder in this assembly declares it via [Binds], and no executable attribute " +
 		               "with the same name exists in the validation-attributes namespace. " +
 		               "The parameter would silently stop binding.",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -92,7 +94,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "Bound property has no wire name",
 		messageFormat: "The core property '{0}.{1}' declares no wire-level parameter name and is not excluded " +
 		               "from serialization, so the generator cannot emit a binding for it",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -102,7 +104,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		messageFormat: "The declarative marker anchor '{0}' could not be resolved, so the generator cannot tell " +
 		               "which attributes are binding markers — it was renamed or moved and every marker would " +
 		               "silently stop binding",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -111,7 +113,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "SupportsGet property not found on the trigger attribute",
 		messageFormat: "The generator reads the '{0}' flag off '{1}' by name, but that attribute declares no such " +
 		               "boolean property, so it was renamed and GET support would silently stop working",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
