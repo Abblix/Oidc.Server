@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 
 /// <summary>
 /// Declares that the model binder realises the given core wire-format marker from
-/// <c>Abblix.Oidc.Server.DeclarativeValidation</c>. The MVC model source generator scans
+/// <c>Abblix.Oidc.Server.DeclarativeBinding</c>. The MVC model source generator scans
 /// the assembly for these declarations to build its marker-to-binder map, so the knowledge
 /// of which binder parses which wire format lives here, next to the binders — the core
 /// markers themselves stay purely semantic and binding-technology-free.

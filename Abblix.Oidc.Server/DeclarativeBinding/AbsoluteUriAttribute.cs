@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Marks a <see cref="Uri"/>-typed property, field, or parameter as having to be an absolute URI.

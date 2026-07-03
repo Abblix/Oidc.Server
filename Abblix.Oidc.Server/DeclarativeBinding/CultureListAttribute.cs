@@ -20,13 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value travels on the wire as an integer number of seconds while the model
-/// exposes it as a <see cref="TimeSpan"/> — e.g. the OIDC <c>max_age</c> and CIBA
-/// <c>requested_expiry</c> parameters. Purely semantic: it names the wire format and leaves
+/// Declares that the value travels on the wire as a space-separated list of BCP 47 language tags
+/// while the model exposes it as an array of cultures — e.g. the OIDC <c>ui_locales</c> and
+/// <c>claims_locales</c> parameters. Purely semantic: it names the wire format and leaves
 /// the parsing mechanism to the transport layer.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-public class TotalSecondsAttribute : Attribute;
+public class CultureListAttribute : Attribute;
