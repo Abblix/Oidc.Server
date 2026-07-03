@@ -183,8 +183,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
                      ConfigurationResponse.Parameters.RegistrationEndpoint,
                  })
         {
-            var url = discovery[key]!.GetValue<string>();
-            Assert.StartsWith("/oauth/", new Uri(url).AbsolutePath);
+            Assert.StartsWith("/oauth/", new Uri(discovery[key]!.GetValue<string>()).AbsolutePath);
         }
     }
 
@@ -277,7 +276,8 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
             [AuthorizationRequest.Parameters.State] = formState,
         };
 
-        var response = await client.PostAsync(url, new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
+        using var content = new FormUrlEncodedContent(form);
+        var response = await client.PostAsync(url, content, TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
             $"/authorize returned {(int)response.StatusCode}, expected a redirect");
@@ -298,9 +298,9 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         // Over http the group's HTTPS filter refuses a credential-carrying POST rather than serving it in cleartext,
         // mirroring the MVC controllers' [RequireHttps]. TestServer honours the request scheme, so Request.IsHttps is
         // false here.
-        var response = await httpClient.PostAsync("/connect/token", new FormUrlEncodedContent(
-            new Dictionary<string, string> { [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials }),
-            TestContext.Current.CancellationToken);
+        using var content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials });
+        var response = await httpClient.PostAsync("/connect/token", content, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
