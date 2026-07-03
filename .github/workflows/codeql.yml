@@ -5,9 +5,12 @@ name: CodeQL
 # weekly schedule or PR triggers via API; only a custom workflow gives
 # full control. See .github/codeql/README.md for the policy and the
 # May 2026 incident that led to the restrictions.
+#
+# The push-to-develop auto-trigger is disabled: autobuild of the
+# multi-target (net8/9/10) solution exceeded the 5-minute step cap and
+# burned ~5m on every develop push with no result. Run on demand via
+# workflow_dispatch (raise the autobuild timeout first — see README).
 on:
-  push:
-    branches: [develop]
   workflow_dispatch:
 
 permissions:
