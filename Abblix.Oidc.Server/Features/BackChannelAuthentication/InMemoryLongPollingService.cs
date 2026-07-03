@@ -57,10 +57,13 @@ public partial class InMemoryLongPollingService(
     : IBackChannelLongPollingService
 {
     /// <summary>
-    /// Dictionary mapping auth_req_id to list of waiting TaskCompletionSource objects.
+    /// Dictionary mapping auth_req_id to the set of waiting TaskCompletionSource objects.
     /// Each auth_req_id can have multiple concurrent waiters (e.g., if client retries).
+    /// A keyed set rather than a bag is used so a single timed-out waiter can remove exactly its
+    /// own entry, which is what prevents unbounded growth for requests that expire without ever
+    /// being notified.
     /// </summary>
-    private readonly ConcurrentDictionary<string, ConcurrentBag<TaskCompletionSource<bool>>> _waiters = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<TaskCompletionSource<bool>, byte>> _waiters = new();
 
     /// <summary>
     /// Waits for a status change notification for the specified authentication request.
@@ -74,8 +77,10 @@ public partial class InMemoryLongPollingService(
         var tcs = new TaskCompletionSource<bool>();
 
         // Register this waiter
-        var waiters = _waiters.GetOrAdd(authenticationRequestId, _ => new ConcurrentBag<TaskCompletionSource<bool>>());
-        waiters.Add(tcs);
+        var waiters = _waiters.GetOrAdd(
+            authenticationRequestId,
+            _ => new ConcurrentDictionary<TaskCompletionSource<bool>, byte>());
+        waiters.TryAdd(tcs, 0);
 
         LogWaitingForStatusChange(authenticationRequestId.Sanitized(), timeout);
 
@@ -105,9 +110,26 @@ public partial class InMemoryLongPollingService(
         }
         finally
         {
-            // Cleanup: Remove this waiter (don't need to signal it anymore)
-            // Note: If bag is empty after removal, it will be cleaned up on next NotifyStatusChangeAsync
+            // A signaled waiter has already completed, so this is a no-op for it; for a timed-out
+            // or cancelled waiter it releases the still-pending task.
             tcs.TrySetCanceled(cancellationToken);
+
+            // Remove this waiter so a request abandoned by the user — one that expires by storage
+            // TTL without ever being notified — does not accumulate task-completion sources and
+            // leak memory in this singleton.
+            waiters.TryRemove(tcs, out _);
+
+            // Drop the now-empty key. The reference-equality overload guarantees a set that a
+            // concurrent waiter has just replaced under the same auth_req_id is never removed by
+            // mistake. A newly arrived waiter that registers in the tiny window between IsEmpty and
+            // TryRemove simply falls back to full-timeout latency for that one poll and then cleans
+            // itself up — no leak, no missed final result, self-healing.
+            if (waiters.IsEmpty)
+            {
+                _waiters.TryRemove(
+                    new KeyValuePair<string, ConcurrentDictionary<TaskCompletionSource<bool>, byte>>(
+                        authenticationRequestId, waiters));
+            }
         }
     }
 
@@ -136,7 +158,7 @@ public partial class InMemoryLongPollingService(
         LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId.Sanitized());
 
         // Signal all waiting tasks
-        foreach (var waiter in waiters)
+        foreach (var waiter in waiters.Keys)
         {
             waiter.TrySetResult(true);
         }

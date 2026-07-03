@@ -89,6 +89,12 @@ public class ReadClientRequestProcessor(
             TlsClientAuthSanUri = client.TlsClientAuth?.SanUris,
             TlsClientAuthSanIp = client.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = client.TlsClientAuth?.SanEmails,
+            // RFC 7592 §3 requires the read response to carry all registered metadata; mirror the
+            // update path so read and update return the identical surface for the same client.
+            DpopBoundAccessTokens = client.RequireDPoP,
+            AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,
+            TokenExchangeSubjectTokenTypes = client.TokenExchangeAllowedSubjectTokenTypes,
+            TokenExchangeAudiences = client.TokenExchangeAllowedAudiences,
         };
     }
 

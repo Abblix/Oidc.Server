@@ -278,6 +278,25 @@ public class LicenseManagerTests
     #region Edge Case Tests
 
     /// <summary>
+    /// #17 regression (deterministic, single-threaded): the license scan must not carry a cached start
+    /// index that can skip a valid license. An expired license is added first; a later-added active license
+    /// that sorts BEFORE it (earlier NotBefore) sits at position 0, ahead of any advanced index. If the scan
+    /// starts from a cached index advanced past position 0, the active license is skipped and the manager
+    /// degrades to "no license" (FreeLicense). It must still return the active license.
+    /// </summary>
+    [Fact]
+    public void ActiveLicenseSortingBeforeAnExpiredOne_IsNotSkipped()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(CreateLicense(-20, -10));   // expired; would advance a cached scan index
+        manager.AddLicense(CreateLicense(-30, 10));    // active, sorts before the expired one (position 0)
+
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
     /// Verifies that TryGetCurrentLicenseLimit returns null when no licenses are added.
     /// </summary>
     [Fact]

@@ -20,12 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value travels on the wire as a single space-separated string while the model
-/// exposes it as an array — e.g. the OAuth 2.0 <c>scope</c> and <c>acr_values</c> parameters.
-/// Purely semantic: it names the wire format and leaves the parsing mechanism to the transport layer.
+/// Declares that the value travels on the wire as an integer number of seconds while the model
+/// exposes it as a <see cref="TimeSpan"/> — e.g. the OIDC <c>max_age</c> and CIBA
+/// <c>requested_expiry</c> parameters. Purely semantic: it names the wire format and leaves
+/// the parsing mechanism to the transport layer.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-public class SpaceSeparatedStringAttribute : Attribute;
+public class TotalSecondsAttribute : Attribute;

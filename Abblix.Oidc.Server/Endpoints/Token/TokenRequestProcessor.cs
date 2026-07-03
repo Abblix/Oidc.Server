@@ -68,6 +68,27 @@ public class TokenRequestProcessor(
 
 		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
+		// RFC 6749 §5.2/§6 and RFC 8707 §2.2: a token request may only narrow what the grant carries,
+		// never reach for scopes or resources it never held. The evaluator intersects requested with
+		// granted; a non-empty request that collapses to an empty intersection means the client asked
+		// for scopes/resources the grant does not cover. Issuing a scopeless token, or one whose audience
+		// silently falls back to the client id, would hand back different authority than was asked for.
+		if (request.Scope is { Length: > 0 } && authContext.Scope is not { Length: > 0 })
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				"The requested scope exceeds the scope granted by the resource owner.");
+		}
+
+		if (request.Resources is { Length: > 0 }
+			&& request.AuthorizedGrant.Context.Resources is { Length: > 0 }
+			&& authContext.Resources is not { Length: > 0 })
+		{
+			return new OidcError(
+				ErrorCodes.InvalidTarget,
+				"The requested resource is not among the resources granted by the resource owner.");
+		}
+
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
@@ -91,7 +112,18 @@ public class TokenRequestProcessor(
 			AuthorizationDetails = authContext.AuthorizationDetails,
 		};
 
-		if (authContext.Scope.HasFlag(Scopes.OfflineAccess))
+		// RFC 6749 §4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
+		// returns neither a refresh token nor an ID token — the exchanged access token is the whole
+		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
+		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
+		// cannot mint a credential these grants must never produce. All user-facing grants
+		// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
+		var grantType = request.Model.GrantType;
+		var mayIssueDerivedTokens =
+			grantType != GrantTypes.ClientCredentials &&
+			grantType != GrantTypes.TokenExchange;
+
+		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OfflineAccess))
 		{
 			var refreshContext = request.AuthorizedGrant.Context with
 			{
@@ -125,7 +157,7 @@ public class TokenRequestProcessor(
 					: null);
 		}
 
-		if (authContext.Scope.HasFlag(Scopes.OpenId))
+		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OpenId))
 		{
 			response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
 				request.AuthorizedGrant.AuthSession,

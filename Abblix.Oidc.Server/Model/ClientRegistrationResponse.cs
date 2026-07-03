@@ -30,7 +30,9 @@ namespace Abblix.Oidc.Server.Model;
 /// The response returned from the client registration endpoint per RFC 7591 §3.2.1 and OIDC Dynamic Client
 /// Registration §3.2, echoing the registered metadata together with server-issued credentials and the URL
 /// of the client configuration endpoint (RFC 7592) for subsequent management operations.
+/// Unregistered metadata is omitted from the JSON per RFC 7591 §3.2.1, not emitted as an explicit null.
 /// </summary>
+[JsonIgnoreNulls]
 public record ClientRegistrationResponse
 {
     /// <summary>
@@ -191,6 +193,24 @@ public record ClientRegistrationResponse
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
+    /// JWS algorithm for signing introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>alg</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>enc</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
     /// Array of contact email addresses for people responsible for this client.
     /// Optional. Per RFC 7591 §2.
     /// </summary>
@@ -348,6 +368,15 @@ public record ClientRegistrationResponse
 
         /// <summary>The <c>userinfo_encrypted_response_enc</c> echoed registration metadata member.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>introspection_signed_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionSignedResponseAlg = "introspection_signed_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_enc</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc";
 
         /// <summary>The <c>contacts</c> echoed registration metadata member.</summary>
         public const string Contacts = "contacts";

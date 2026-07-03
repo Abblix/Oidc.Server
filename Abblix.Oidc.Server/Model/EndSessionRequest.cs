@@ -22,7 +22,7 @@
 
 using System.Globalization;
 using System.Text.Json.Serialization;
-using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.DeclarativeBinding;
 
 
 namespace Abblix.Oidc.Server.Model;

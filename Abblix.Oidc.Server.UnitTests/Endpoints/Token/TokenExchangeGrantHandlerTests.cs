@@ -334,6 +334,98 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(requestScope, grant.Context.Scope);
     }
 
+    /// <summary>
+    /// 2b: when the request omits scope, the handler falls back to the subject_token's scope. The
+    /// explicit request.Scope path is gated against the requesting client's AllowedScopes by
+    /// ScopeValidator in the token pipeline, but the fallback path is not — so an inherited scope the
+    /// broker client was never registered for must be filtered out rather than leaking into the token.
+    /// </summary>
+    [Fact]
+    public async Task InheritedSubjectScope_FilteredToRequestingClientAllowedScopes()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["openid", "profile", "admin"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AllowedScopes = ["openid", "profile"], // NOT registered for "admin"
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken); // no explicit scope -> fallback
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.DoesNotContain("admin", grant.Context.Scope);
+        Assert.Equal(["openid", "profile"], grant.Context.Scope);
+    }
+
+    /// <summary>
+    /// Companion to <see cref="InheritedSubjectScope_FilteredToRequestingClientAllowedScopes"/>: a null
+    /// (tri-state "no per-client restriction") AllowedScopes leaves the inherited scope untouched,
+    /// matching ScopeManager.Validate's treatment of the explicit path. Locks that the 2b filter does
+    /// not over-restrict clients that intentionally run without a scope allow-list.
+    /// </summary>
+    [Fact]
+    public async Task InheritedSubjectScope_WithNullAllowedScopes_PassesThroughUnfiltered()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["openid", "admin"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            AllowedScopes = null, // no per-client restriction
+        };
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(["openid", "admin"], grant.Context.Scope);
+    }
+
+    /// <summary>
+    /// 2a: when the subject_token carries a scope, an explicitly requested scope is bound to it, so an
+    /// exchange cannot amplify authority beyond the presented token (least-privilege). Here the client
+    /// asks for "read admin" against a subject token that only holds "read"; "admin" is dropped.
+    /// </summary>
+    [Fact]
+    public async Task RequestScope_IntersectedWithSubjectScope_WhenSubjectCarriesScope()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: ["read"], AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["read", "admin"] };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.DoesNotContain("admin", grant.Context.Scope);
+        Assert.Equal(["read"], grant.Context.Scope);
+    }
+
+    /// <summary>
+    /// 2a must not break the RFC 8693 id_token → access_token scenario: an id_token subject token carries
+    /// no scope claim, which imposes no scope upper bound, so an explicitly requested scope passes through
+    /// unchanged instead of being intersected down to nothing.
+    /// </summary>
+    [Fact]
+    public async Task RequestScope_PreservedWhenSubjectTokenHasNoScope()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null);
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(["api:read"], grant.Context.Scope);
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // PR #135 review findings -- TDD reproduction tests.
     // S1: cross-client subject_token reuse (confused-deputy)

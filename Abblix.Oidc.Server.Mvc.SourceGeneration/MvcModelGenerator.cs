@@ -45,8 +45,15 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string GeneratedFromAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.GeneratedFromAttribute";
 	private const string BindsAttributeName = "Abblix.Oidc.Server.Mvc.Attributes.BindsAttribute";
 	private const string SupportsGetPropertyName = "SupportsGet";
-	private const string ValidationAttributesNamespace = "Abblix.Utils.Validation";
-	private const string DeclarativeValidationNamespace = "Abblix.Oidc.Server.DeclarativeValidation";
+
+	// The executable validation attributes live in a referenced assembly and are emitted by their resolved symbol
+	// (see EmitPropertyAttribute); one of them anchors the resolution of their shared namespace, so a namespace
+	// move follows the type instead of leaving a stale lookup key here.
+	private const string ValidationAttributeAnchor = "Abblix.Utils.Validation.AllowedValuesAttribute";
+	// The namespace of the declarative binding markers is resolved from this anchor marker rather than hardcoded,
+	// so renaming or moving the marker namespace fails the generation loud instead of silently making every
+	// marker-namespace match fall through and dropping the bindings.
+	private const string DeclarativeMarkerAnchor = "Abblix.Oidc.Server.DeclarativeBinding.SpaceSeparatedStringAttribute";
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
 	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
@@ -61,11 +68,13 @@ public class MvcModelGenerator : IIncrementalGenerator
 		SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
 			SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
-	private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
+	private const string DiagnosticCategory = "Abblix.Oidc.Server.Mvc.SourceGeneration";
+
+		private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
 		id: "ABXG001",
 		title: "Core model type not found",
 		messageFormat: "The core model type '{0}' referenced by the generation stub could not be resolved",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -74,9 +83,9 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "Wire-format marker has no binder",
 		messageFormat: "The declarative marker '{0}' on '{1}.{2}' is realised by no model binder: " +
 		               "no binder in this assembly declares it via [Binds], and no executable attribute " +
-		               "with the same name exists in '" + ValidationAttributesNamespace + "'. " +
+		               "with the same name exists in the validation-attributes namespace. " +
 		               "The parameter would silently stop binding.",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -85,7 +94,26 @@ public class MvcModelGenerator : IIncrementalGenerator
 		title: "Bound property has no wire name",
 		messageFormat: "The core property '{0}.{1}' declares no wire-level parameter name and is not excluded " +
 		               "from serialization, so the generator cannot emit a binding for it",
-		category: "Abblix.Oidc.Server.Mvc.SourceGeneration",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor MarkerNamespaceNotFound = new(
+		id: "ABXG004",
+		title: "Declarative marker namespace not found",
+		messageFormat: "The declarative marker anchor '{0}' could not be resolved, so the generator cannot tell " +
+		               "which attributes are binding markers — it was renamed or moved and every marker would " +
+		               "silently stop binding",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor SupportsGetPropertyMissing = new(
+		id: "ABXG005",
+		title: "SupportsGet property not found on the trigger attribute",
+		messageFormat: "The generator reads the '{0}' flag off '{1}' by name, but that attribute declares no such " +
+		               "boolean property, so it was renamed and GET support would silently stop working",
+		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
@@ -149,8 +177,34 @@ public class MvcModelGenerator : IIncrementalGenerator
 				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(CoreTypeNotFound, stub.Location, stub.CoreTypeName)]));
 		}
 
-		return new ModelEmitter(stub, coreType, compilation).Emit();
+		// Resolve the declarative-marker namespace from its anchor so a rename fails loud here rather than
+		// silently unmatching every marker in the emitter below.
+		var declarativeAnchor = compilation.GetTypeByMetadataName(DeclarativeMarkerAnchor);
+		if (declarativeAnchor == null)
+		{
+			return new GenerationResult(
+				$"{stub.Namespace}.{stub.Name}.g.cs",
+				null,
+				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(MarkerNamespaceNotFound, stub.Location, DeclarativeMarkerAnchor)]));
+		}
+
+		// The generator reads the SupportsGet flag off the trigger attribute by name; verify that boolean property
+		// still exists so a rename fails loud rather than silently dropping GET support.
+		var generatedFrom = compilation.GetTypeByMetadataName(GeneratedFromAttributeName);
+		if (generatedFrom == null || !HasBooleanProperty(generatedFrom, SupportsGetPropertyName))
+		{
+			return new GenerationResult(
+				$"{stub.Namespace}.{stub.Name}.g.cs",
+				null,
+				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(
+					SupportsGetPropertyMissing, stub.Location, SupportsGetPropertyName, GeneratedFromAttributeName)]));
+		}
+
+		return new ModelEmitter(stub, coreType, compilation, declarativeAnchor.ContainingNamespace.ToDisplayString()).Emit();
 	}
+
+	private static bool HasBooleanProperty(INamedTypeSymbol type, string name)
+		=> type.GetMembers(name).OfType<IPropertySymbol>().Any(property => property.Type.SpecialType == SpecialType.System_Boolean);
 
 	/// <summary>
 	/// Renders one MVC model from its core counterpart. The inputs that stay constant across the
@@ -158,12 +212,23 @@ public class MvcModelGenerator : IIncrementalGenerator
 	/// accumulating output — live as fields so the per-property and per-attribute steps receive
 	/// only what varies between calls.
 	/// </summary>
-	private sealed class ModelEmitter(StubInfo stub, INamedTypeSymbol coreType, Compilation compilation)
+	private sealed class ModelEmitter(
+			StubInfo stub, INamedTypeSymbol coreType, Compilation compilation, string declarativeNamespace)
 	{
 		private readonly StringBuilder _writer = new();
 		private readonly List<DiagnosticInfo> _diagnostics = [];
 		private readonly List<string> _mappedProperties = [];
 		private readonly Dictionary<string, INamedTypeSymbol> _binderMap = BuildBinderMap(compilation);
+
+		// The namespace the executable validation attributes live in, derived from the anchor type rather than
+		// hardcoded, so the twin lookup below follows the attributes if they move. Null only if the anchor is
+		// absent, in which case any validation marker fails loud through MarkerWithoutBinder.
+		private readonly string? _validationNamespace =
+			compilation.GetTypeByMetadataName(ValidationAttributeAnchor)?.ContainingNamespace.ToDisplayString();
+
+		// Resolved once in Generate and passed in; the marker-match gates compare against it rather than a
+		// hardcoded namespace so a rename of the marker namespace fails loud instead of silently unmatching.
+		private readonly string _declarativeNamespace = declarativeNamespace;
 
 		public GenerationResult Emit()
 		{
@@ -303,19 +368,19 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			switch (attributeNamespace)
 			{
-				case DeclarativeValidationNamespace
-					when _binderMap.TryGetValue(attributeClass.ToDisplayString(), out var binder):
+				case { } when attributeNamespace == _declarativeNamespace
+					&& _binderMap.TryGetValue(attributeClass.ToDisplayString(), out var binder):
 					_writer.AppendLine(
 						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({binder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
 					return;
 
-				case DeclarativeValidationNamespace:
+				case { } when attributeNamespace == _declarativeNamespace:
 				{
 					// A declarative core attribute is either a wire-format marker realised by a binder
 					// (handled above) or a validation marker mirrored by an executable MVC attribute
 					// with the same name. Anything else is a silent-drop hazard, so fail the build.
 					var executable = compilation.GetTypeByMetadataName(
-						$"{ValidationAttributesNamespace}.{attributeClass.MetadataName}");
+						$"{(_validationNamespace ?? string.Empty)}.{attributeClass.MetadataName}");
 					if (executable != null)
 					{
 						_writer.AppendLine(
@@ -430,17 +495,17 @@ public class MvcModelGenerator : IIncrementalGenerator
 				_ => Convert.ToString(constant.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
 			};
 
-		private static AttributeData? TryGetSourceMarker(IPropertySymbol property)
-			=> property.GetAttributes().FirstOrDefault(static attribute =>
+		private AttributeData? TryGetSourceMarker(IPropertySymbol property)
+			=> property.GetAttributes().FirstOrDefault(attribute =>
 				attribute.AttributeClass is
 				{
 					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
 				} attributeClass &&
-				attributeClass.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace);
+				attributeClass.ContainingNamespace.ToDisplayString() == _declarativeNamespace);
 
-		private static bool HasDeclarativeMarker(IPropertySymbol property)
-			=> property.GetAttributes().Any(static attribute =>
-				attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == DeclarativeValidationNamespace);
+		private bool HasDeclarativeMarker(IPropertySymbol property)
+			=> property.GetAttributes().Any(attribute =>
+				attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == _declarativeNamespace);
 
 		private static bool IsExcludedFromWire(IPropertySymbol property)
 			=> property.GetAttributes().Any(static attribute =>

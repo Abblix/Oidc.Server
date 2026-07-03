@@ -54,6 +54,23 @@ public sealed class JwtAlgorithmsProvider(
 	/// <inheritdoc />
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
 
+	/// <summary>
+	/// RFC 8414 §2 and OpenID Connect Discovery 1.0 §3 both state the value "none" MUST NOT appear
+	/// in token_endpoint_auth_signing_alg_values_supported — a client authenticates by signing a
+	/// JWT assertion, so an unsecured assertion would prove nothing. HS* stay because
+	/// client_secret_jwt legitimately keys on the shared client secret.
+	/// </summary>
+	public IEnumerable<string> TokenEndpointAuthSigningAlgValuesSupported
+		=> jwtValidator.SigningAlgorithmsSupported.Where(alg => alg != SigningAlgorithms.None);
+
+	/// <summary>
+	/// CIBA Core §7.1.1 requires the signed backchannel authentication request to use an asymmetric
+	/// algorithm, so both "none" and the symmetric HS* algorithms are excluded here.
+	/// </summary>
+	public IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported
+		=> jwtValidator.SigningAlgorithmsSupported.Where(
+			alg => alg != SigningAlgorithms.None && !HmacAlgorithms.Contains(alg));
+
 	/// <inheritdoc />
 	public IEnumerable<string> DpopSigningAlgorithmsSupported
 		=> jwtValidator.SigningAlgorithmsSupported.Where(DPoPAlgorithms.Allowed.Contains);

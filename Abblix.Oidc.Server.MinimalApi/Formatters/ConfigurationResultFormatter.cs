@@ -24,12 +24,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Utils;
 using Abblix.Utils.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
@@ -42,8 +42,8 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 public class ConfigurationResultFormatter(
     IOptionsSnapshot<OidcOptions> options,
-    IOptions<OidcRouteOptions> routes,
     IHttpContextAccessor httpContextAccessor,
+    LinkGenerator linkGenerator,
     IJsonWebTokenCreator jwtCreator,
     IAuthServiceKeysProvider serviceKeysProvider,
     TimeProvider clock) : IConfigurationResultFormatter
@@ -62,34 +62,32 @@ public class ConfigurationResultFormatter(
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)
     {
-        var routeOptions = routes.Value;
-
-        var tokenEndpoint = Resolve(routeOptions.Token, OidcEndpoints.Token);
-        var revocationEndpoint = Resolve(routeOptions.Revocation, OidcEndpoints.Revocation);
-        var introspectionEndpoint = Resolve(routeOptions.Introspection, OidcEndpoints.Introspection);
-        var userInfoEndpoint = Resolve(routeOptions.UserInfo, OidcEndpoints.UserInfo);
+        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token);
+        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation);
+        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection);
+        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo);
 
         var modelResponse = new ModelResponse
         {
             Issuer = response.Issuer,
 
-            JwksUri = Resolve(routeOptions.Keys, OidcEndpoints.Keys),
+            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys),
 
-            AuthorizationEndpoint = Resolve(routeOptions.Authorize, OidcEndpoints.Authorize),
+            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize),
             UserInfoEndpoint = userInfoEndpoint,
-            EndSessionEndpoint = Resolve(routeOptions.EndSession, OidcEndpoints.EndSession),
-            CheckSessionIframe = Resolve(routeOptions.CheckSession, OidcEndpoints.CheckSession),
-            PushedAuthorizationRequestEndpoint = Resolve(routeOptions.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
+            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession),
+            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession),
+            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
 
             TokenEndpoint = tokenEndpoint,
             RevocationEndpoint = revocationEndpoint,
             IntrospectionEndpoint = introspectionEndpoint,
 
-            RegistrationEndpoint = Resolve(routeOptions.Register, OidcEndpoints.RegisterClient),
+            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient),
 
-            BackChannelAuthenticationEndpoint = Resolve(routeOptions.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
+            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
 
-            DeviceAuthorizationEndpoint = Resolve(routeOptions.DeviceAuthorization, OidcEndpoints.DeviceAuthorization),
+            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization),
 
             FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
             FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -209,17 +207,19 @@ public class ConfigurationResultFormatter(
     }
 
     /// <summary>
-    /// Resolves the absolute URL for an endpoint route if endpoint path discovery is enabled and the endpoint is
-    /// active. Combines the request's base URL (scheme, host, base path) with the configured route template.
+    /// Resolves the absolute URL for a named endpoint if endpoint path discovery is enabled and the endpoint is
+    /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
+    /// the request's PathBase — the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
     /// </summary>
-    private Uri? Resolve(string routePath, OidcEndpoints enablingFlag)
+    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag)
     {
         if (!options.Value.Discovery.AllowEndpointPathsDiscovery ||
             !options.Value.EnabledEndpoints.HasFlag(enablingFlag))
             return null;
 
-        var request = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
-        return new Uri(request.GetAppUrl() + routePath, UriKind.Absolute);
+        var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
+        var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
+        return url is null ? null : new Uri(url, UriKind.Absolute);
     }
 
     /// <summary>

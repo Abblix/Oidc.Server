@@ -119,6 +119,11 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     /// Validates and decrypts JWE tokens using decoded byte parts and original string parts.
     /// Implements RFC 7516 (JWE) decryption.
     /// </summary>
+    [SuppressMessage("Major Code Smell", "S3776:Cognitive Complexity of methods should not be too high",
+        Justification = "The complexity is the linear sequence of RFC 7516 §5.2 mandated validation guards " +
+                        "(base64, header JSON, enc/alg presence, decryptor resolution, per-key decryption); " +
+                        "splitting the single decrypt flow would fragment it without improving readability. " +
+                        "Covered by the JwtEncryptionTests decryption suite.")]
     public async Task<Result<string, JwtValidationError>> DecryptAsync(
         string[] jwtParts,
         IAsyncEnumerable<JsonWebKey> decryptionKeys)
@@ -134,9 +139,20 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             return new JwtValidationError(JwtError.InvalidToken, "Invalid base64url encoding in JWE");
         }
 
-        // Decode header JSON to get algorithms and key ID
+        // Decode header JSON to get algorithms and key ID. A base64url-valid but non-JSON header (e.g. a
+        // truncated object) makes JsonNode.Parse throw JsonException; catch it and map to a typed validation
+        // error so an attacker-crafted JWE fails as invalid_token rather than surfacing as an unhandled 500.
         var headerJson = Encoding.UTF8.GetString(decodedParts[0]);
-        var headerNode = JsonNode.Parse(headerJson);
+        JsonNode? headerNode;
+        try
+        {
+            headerNode = JsonNode.Parse(headerJson);
+        }
+        catch (JsonException)
+        {
+            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: not valid JSON");
+        }
+
         if (headerNode is not JsonObject headerObject)
             return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: must be a JSON object");
 
@@ -180,14 +196,19 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
                     $"Decryption operation requires private key material, but key (kid={key.KeyId}) contains only public key data.");
             }
 
-            // RFC 7516 §11.5: if CEK decryption fails — wrong key, malformed padding, or an
-            // unregistered key-management 'alg' — substitute a randomly generated CEK of the
-            // correct size and still run the AEAD step. The authentication tag then fails exactly
-            // as it would for a successful-but-wrong CEK, so a decryption failure is processed
-            // identically regardless of its cause. This is what makes RSA1_5 (RSAES-PKCS1-v1_5)
-            // safe to support: it closes the Bleichenbacher/Manger padding oracle by removing the
-            // observable difference between valid and invalid padding.
-            if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey))
+            // RFC 7516 §11.5: substitute a randomly generated CEK of the correct size and still run the
+            // AEAD step when CEK decryption fails — wrong key, malformed padding, or an unregistered
+            // key-management 'alg' — OR when it succeeds with a structurally valid but wrong-length key.
+            // The authentication tag then fails exactly as it would for a successful-but-wrong CEK, so a
+            // decryption failure is processed identically regardless of its cause. The wrong-length case
+            // matters because a content decryptor fast-fails on a length mismatch before doing the
+            // AEAD/HMAC work, whereas a correct-length random CEK runs the full step — leaving that
+            // difference in place would be an observable timing oracle signalling valid PKCS1 padding.
+            // This is what makes RSA1_5 (RSAES-PKCS1-v1_5) safe to support: it closes the
+            // Bleichenbacher/Manger padding oracle by removing the observable difference between valid
+            // and invalid padding.
+            if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey) ||
+                contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
             if (contentDecryptor.TryDecrypt(

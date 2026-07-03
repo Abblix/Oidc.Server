@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Restricts a string-valued (or string-array-valued) property, field, or parameter to a fixed set of

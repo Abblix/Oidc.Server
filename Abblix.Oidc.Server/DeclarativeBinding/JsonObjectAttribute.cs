@@ -20,13 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.DeclarativeValidation;
+namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value is the parsed HTTP <c>Authorization</c> request header — the scheme and
-/// credentials used by transport-level client authentication such as <c>Basic</c> (RFC 7617) or
-/// <c>Bearer</c> (RFC 6750). Purely semantic: it names the transport source and leaves the parsing
-/// mechanism to the transport layer.
+/// Declares that the value travels on the wire as a JSON document carried inside a single parameter —
+/// e.g. the OIDC <c>claims</c> parameter or RFC 9396 <c>authorization_details</c>. Purely semantic:
+/// it names the wire format and leaves the parsing mechanism to the transport layer.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
-public class AuthorizationHeaderAttribute : Attribute;
+public class JsonObjectAttribute : Attribute;

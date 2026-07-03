@@ -25,6 +25,7 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,
+        BaseAddress = TestFactory.BaseAddress,
     });
 
     [Fact]

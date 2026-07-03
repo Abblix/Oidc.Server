@@ -110,14 +110,25 @@ public class AuthorizationCodeGrantHandler(
                 return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is required");
             }
 
-            // Validates the code verifier against the stored code challenge using the appropriate method (plain or S256).
+            // Validates the code verifier against the stored code challenge using the appropriate method.
+            // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 §4.6,
+            // so the comparison is ordinal — case folding would widen the accepted set and weaken the plain method.
             if (!string.Equals(
                     grant.Context.CodeChallenge,
                     CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),
-                    StringComparison.OrdinalIgnoreCase))
+                    StringComparison.Ordinal))
             {
                 return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
             }
+        }
+        else if (!string.IsNullOrEmpty(request.CodeVerifier))
+        {
+            // RFC 9700 (OAuth 2.0 Security BCP) §2.1.1: a code_verifier presented for an authorization code that was
+            // issued without a code_challenge signals a PKCE downgrade / code-injection attempt. Reject it rather
+            // than silently ignore the verifier and issue tokens.
+            return new OidcError(
+                ErrorCodes.InvalidGrant,
+                "Code verifier was not expected for this authorization code");
         }
 
         return grant;
