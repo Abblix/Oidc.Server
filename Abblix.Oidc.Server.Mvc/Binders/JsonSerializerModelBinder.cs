@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
-using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.Extensions.Primitives;
 

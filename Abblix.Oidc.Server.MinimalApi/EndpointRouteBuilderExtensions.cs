@@ -75,6 +75,16 @@ public static class EndpointRouteBuilderExtensions
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var oidcGroup = endpoints.MapGroup(prefix);
 
+        // Mirror the MVC controllers' [RequireHttps]: on a host that also binds HTTP, never serve client credentials
+        // or tokens in cleartext (RFC 6749 §3.2/§10.1). See RequireHttpsAsync for the redirect/refuse behaviour.
+        oidcGroup.AddEndpointFilter(RequireHttpsAsync);
+
+        // RFC 6749 §5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
+        // introspection, authorize, checksession, discovery, JWKS) carries it — matching the MVC controllers'
+        // class-level ResponseCache. Registered before the validation filter so even a validation short-circuit
+        // (400 invalid_request) still ships no-store.
+        oidcGroup.WithNoCache();
+
         // Runs the declarative validation rules carried by the bound request models before each handler, shaping any
         // violation as the OAuth invalid_request response. Group-scoped, so it covers every OIDC endpoint at once and
         // cannot be clobbered by a host's own pipeline configuration.
@@ -84,14 +94,16 @@ public static class EndpointRouteBuilderExtensions
         {
             oidcGroup
                 .MapGet(routes.Configuration, ConfigurationAsync)
-                .WithName(EndpointNames.Configuration);
+                .WithName(EndpointNames.Configuration)
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Keys))
         {
             oidcGroup
                 .MapGet(routes.Keys, KeysAsync)
-                .WithName(EndpointNames.Keys);
+                .WithName(EndpointNames.Keys)
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.CheckSession))
@@ -107,8 +119,7 @@ public static class EndpointRouteBuilderExtensions
             oidcGroup
                 .MapPost(routes.Token, TokenAsync)
                 .WithName(EndpointNames.Token)
-                .RequireCors(OidcConstants.CorsPolicyName)
-                .WithNoCache();
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Revocation))
@@ -160,8 +171,7 @@ public static class EndpointRouteBuilderExtensions
             oidcGroup
                 .MapMethods(routes.EndSession, [HttpMethods.Get, HttpMethods.Post], EndSessionAsync)
                 .WithName(EndpointNames.EndSession)
-                .RequireCors(OidcConstants.CorsPolicyName)
-                .WithNoCache();
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Authorize))
@@ -189,10 +199,34 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Applies the no-store cache headers (RFC 6749 §5.1) to every response of the endpoint through an endpoint filter,
-    /// so the no-cache behavior is a property of the endpoint rather than something each <see cref="IResult"/> opts into
-    /// individually. Runs inside the group's validation filter, so it covers the handler's responses (success and error)
-    /// but not a request short-circuited by validation — matching the previous per-result behavior.
+    /// Group endpoint filter mirroring the MVC controllers' <c>[RequireHttps]</c>: a non-HTTPS GET is redirected to
+    /// the HTTPS URL and any other non-HTTPS method is refused, so client credentials and tokens are never served in
+    /// cleartext (RFC 6749 §3.2/§10.1). Behind a TLS-terminating proxy the host must run <c>ForwardedHeaders</c> so
+    /// <see cref="HttpRequest.IsHttps"/> reflects the edge, otherwise this filter blocks all traffic.
+    /// </summary>
+    private static async ValueTask<object?> RequireHttpsAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var request = context.HttpContext.Request;
+        if (request.IsHttps)
+            return await next(context);
+
+        if (HttpMethods.IsGet(request.Method))
+        {
+            var target = new UriBuilder(
+                Uri.UriSchemeHttps, request.Host.Host, request.Host.Port ?? -1,
+                request.PathBase + request.Path, request.QueryString.Value).Uri;
+            return Results.Redirect(target.AbsoluteUri);
+        }
+
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    /// <summary>
+    /// Applies the no-store cache headers (RFC 6749 §5.1) through an endpoint filter, so the no-cache behavior is a
+    /// property of the endpoint rather than something each <see cref="IResult"/> opts into individually. Applied
+    /// group-wide before the validation filter, so it covers every OIDC response — handler success, handler error, and
+    /// a request short-circuited by validation — matching the MVC controllers' class-level ResponseCache.
     /// </summary>
     [SuppressMessage("SonarLint", "S3241:Methods should not return values that are never used",
         Justification = "Fluent endpoint convention like WithName/RequireCors: it returns the builder to stay " +

@@ -25,7 +25,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 
-namespace Abblix.Oidc.Server.MinimalApi.Model;
+namespace Abblix.Oidc.Server.MinimalApi;
 
 /// <summary>
 /// Helpers that turn raw request values into the shapes the OIDC request models expect. They reproduce, in plain code,
@@ -37,13 +37,14 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 internal static class FormValues
 {
     /// <summary>A single value, or null when absent or empty.</summary>
-    public static string? Value(StringValues values) => values.Count == 0 ? null : values.ToString();
+    public static string? Value(StringValues values) => values is { Count: > 0 } ? values.ToString() : null;
 
     /// <summary>A single value read from the form by name.</summary>
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
 
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
-    public static string[]? Strings(StringValues values) => values.Count == 0 ? null : (string[]?)values;
+    public static string[]? Strings(StringValues values)
+        => values is { Count: > 0 } ? values.OfType<string>().ToArray() : null;
 
     /// <summary>A repeated form field read by name as an array, or null.</summary>
     public static string[]? Strings(IFormCollection form, string name) => Strings(Get(form, name));
@@ -87,8 +88,11 @@ internal static class FormValues
 
         var uris = new List<Uri>(values.Count);
         foreach (var value in values)
+        {
             if (value is not null && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri))
                 uris.Add(uri);
+        }
+
         return uris.ToArray();
     }
 
@@ -99,25 +103,57 @@ internal static class FormValues
     public static TimeSpan? Seconds(StringValues values)
     {
         var value = Value(values);
-        return value is not null && long.TryParse(value, out var seconds) ? TimeSpan.FromSeconds(seconds) : null;
+        if (value is null || !long.TryParse(value, out var seconds))
+            return null;
+
+        // A syntactically valid but out-of-range seconds value overflows TimeSpan. Shape it as a 400 rather than
+        // letting the throw escape BindAsync as a 500 (mirrors the MVC model binder's catch-into-ModelState).
+        try
+        {
+            return TimeSpan.FromSeconds(seconds);
+        }
+        catch (Exception ex) when (ex is ArgumentOutOfRangeException or OverflowException)
+        {
+            throw MalformedValue();
+        }
     }
 
     /// <summary>A single space-separated locale list (e.g. <c>ui_locales</c>) as cultures, or null.</summary>
     public static CultureInfo[]? Cultures(StringValues values)
     {
         var value = Value(values);
-        return string.IsNullOrEmpty(value)
-            ? null
-            : value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        if (string.IsNullOrEmpty(value))
+            return null;
+
+        // An invalid BCP-47 tag throws; shape it as a 400 instead of a 500 escaping BindAsync.
+        try
+        {
+            return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                 .Select(culture => new CultureInfo(culture))
                 .ToArray();
+        }
+        catch (CultureNotFoundException)
+        {
+            throw MalformedValue();
+        }
     }
 
     /// <summary>Deserializes a single field's JSON value (e.g. <c>claims</c>, <c>authorization_details</c>), or null.</summary>
     public static T? Json<T>(StringValues values)
     {
         var value = Value(values);
-        return string.IsNullOrEmpty(value) ? default : JsonSerializer.Deserialize<T>(value);
+        if (string.IsNullOrEmpty(value))
+            return default;
+
+        // Malformed JSON in a single field must be a 400, not a 500 from an uncaught JsonException in BindAsync.
+        try
+        {
+            return JsonSerializer.Deserialize<T>(value);
+        }
+        catch (JsonException)
+        {
+            throw MalformedValue();
+        }
     }
 
     /// <summary>A single boolean value (e.g. <c>confirmed</c>), or null when absent or unparseable.</summary>
@@ -133,25 +169,9 @@ internal static class FormValues
 
     private static StringValues Get(IFormCollection form, string name)
         => form.TryGetValue(name, out var values) ? values : StringValues.Empty;
-}
 
-/// <summary>
-/// Reads request values from the query string and (when present) the posted form, mirroring the MVC
-/// <c>[FromQueryOrForm]</c> binding source so the authorization request binds from a GET query or a POST form.
-/// </summary>
-internal readonly struct RequestValues(IQueryCollection query, IFormCollection? form)
-{
-    public StringValues this[string name]
-    {
-        get
-        {
-            if (query.TryGetValue(name, out var fromQuery) && fromQuery.Count > 0)
-                return fromQuery;
-
-            if (form is not null && form.TryGetValue(name, out var fromForm))
-                return fromForm;
-
-            return StringValues.Empty;
-        }
-    }
+    // A binding-time BadHttpRequestException with a 400 status is rendered by ASP.NET Core as a 400 response, the
+    // Minimal API counterpart of the MVC binder shaping a malformed value into invalid_request.
+    private static BadHttpRequestException MalformedValue()
+        => new("The request contains a malformed parameter value.", StatusCodes.Status400BadRequest);
 }

@@ -92,6 +92,11 @@ public partial class UserCodeRateLimiter(
     /// <inheritdoc />
     public async Task RecordFailureAsync(string userCode, string clientIdentifier)
     {
+        // NOTE: the counter updates below are a non-atomic get-increment-set. Under a highly concurrent
+        // burst of failures the count can undercount (multiple callers read the same value and write
+        // value+1), weakening the backoff and per-IP cap (RFC 8628 §5.2). A precise limit requires a backend
+        // atomic increment (for example Redis INCR) or a CAS loop on a versioned record, which the current
+        // IEntityStorage abstraction does not expose. Tracked as a follow-up
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 

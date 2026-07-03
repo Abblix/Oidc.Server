@@ -255,4 +255,24 @@ public class JsonWebTokenHeader(JsonObject json)
         get => Json.GetProperty<string>(JwtClaimTypes.X509Sha256Thumbprint);
         set => Json.SetProperty(JwtClaimTypes.X509Sha256Thumbprint, value);
     }
+
+    /// <summary>
+    /// The 'iv' header parameter (RFC 7518 §4.7.1.1): base64url-encoded 96-bit Initialization Vector
+    /// used when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
+    /// </summary>
+    public string? KeyWrapInitializationVector
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.KeyWrapInitializationVector);
+        set => Json.SetProperty(JwtClaimTypes.KeyWrapInitializationVector, value);
+    }
+
+    /// <summary>
+    /// The 'tag' header parameter (RFC 7518 §4.7.1.2): base64url-encoded 128-bit GCM authentication tag
+    /// produced when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
+    /// </summary>
+    public string? KeyWrapAuthenticationTag
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.KeyWrapAuthenticationTag);
+        set => Json.SetProperty(JwtClaimTypes.KeyWrapAuthenticationTag, value);
+    }
 }

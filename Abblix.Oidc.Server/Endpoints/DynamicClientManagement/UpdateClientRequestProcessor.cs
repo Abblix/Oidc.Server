@@ -108,6 +108,8 @@ public class UpdateClientRequestProcessor(
             IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
             UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
+            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
+            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
             AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
             AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
             RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
@@ -126,6 +128,24 @@ public class UpdateClientRequestProcessor(
         if (model.AuthorizationSignedResponseAlg.HasValue())
         {
             updatedClient.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
+        }
+
+        // Mirror the register path: these have non-null ClientInfo defaults (id_token → RS256,
+        // userinfo/introspection → none), so a full-replacement update that omits them here would silently
+        // reset a client's registered signing algorithm to the default and break its token signatures.
+        if (model.UserInfoSignedResponseAlg.HasValue())
+        {
+            updatedClient.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
+        }
+
+        if (model.IntrospectionSignedResponseAlg.HasValue())
+        {
+            updatedClient.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
+        }
+
+        if (model.IdTokenSignedResponseAlg.HasValue())
+        {
+            updatedClient.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
         }
 
         // Update logout configuration using wrapper objects

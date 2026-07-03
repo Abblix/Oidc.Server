@@ -158,4 +158,19 @@ public class EndpointOptInTests
 
         Assert.Equal(OidcEndpoints.All, enabled);
     }
+
+    /// <summary>
+    /// Two registration modules both opting into CIBA must fail loud at the second opt-in rather than build the
+    /// self-referential validator composite that deadlocks the first backchannel request. The second
+    /// AddBackChannelAuthentication re-composes IBackChannelAuthenticationContextValidator, which the Compose
+    /// guard now rejects. The collection is never resolved, so the latent deadlock is never reached.
+    /// </summary>
+    [Fact]
+    public void AddBackChannelAuthentication_CalledTwice_IsRejectedInsteadOfDeadlocking()
+    {
+        var services = new ServiceCollection();
+        services.AddBackChannelAuthentication();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddBackChannelAuthentication());
+    }
 }

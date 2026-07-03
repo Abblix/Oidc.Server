@@ -119,6 +119,13 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
     /// </summary>
     public static bool IsPrivateOrReservedAddress(IPAddress address)
     {
+        // Collapse an IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 / ::ffff:169.254.169.254) to its IPv4 form
+        // FIRST — RFC 4291 §2.5.5 — so every rule below, including the loopback check, inspects the embedded IPv4
+        // address. Without this an attacker reaches loopback, cloud metadata or private ranges through the IPv6 arm,
+        // which never inspects the embedded IPv4 address.
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
         // Loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
         if (IPAddress.IsLoopback(address))
             return true;
@@ -128,8 +135,12 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
         return address.AddressFamily switch
         {
             AddressFamily.InterNetwork =>
+                // "This host on this network": 0.0.0.0/8 (0.0.0.0 routes to loopback on Linux)
+                bytes[0] == 0 ||
                 // Private: 10.0.0.0/8
                 bytes[0] == 10 ||
+                // Carrier-grade NAT shared space: 100.64.0.0/10 (RFC 6598)
+                (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) ||
                 // Private: 172.16.0.0/12
                 (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
                 // Private: 192.168.0.0/16
@@ -140,6 +151,8 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
                 bytes[0] >= 224,
 
             AddressFamily.InterNetworkV6 =>
+                // Unspecified address: ::
+                address.Equals(IPAddress.IPv6Any) ||
                 // Link-local: fe80::/10
                 (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) ||
                 // Unique local: fc00::/7

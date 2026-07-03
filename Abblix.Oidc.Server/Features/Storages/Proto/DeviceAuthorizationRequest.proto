@@ -45,4 +45,7 @@ message DeviceAuthorizationRequest {
   // member order and type-specific payload until the user-verification step decides what
   // to grant.
   optional string authorization_details_json = 8;
+
+  // Absolute expiry (RFC 8628 §3.2 fixed lifetime); read to cap the remaining cache TTL
+  optional google.protobuf.Timestamp expires_at = 9;
 }

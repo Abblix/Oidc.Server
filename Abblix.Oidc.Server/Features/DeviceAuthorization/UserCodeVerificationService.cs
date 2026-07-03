@@ -35,11 +35,13 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <param name="rateLimiter">The rate limiter for preventing brute force attacks.</param>
 /// <param name="normalizer">Canonicalizes user-entered codes before lookup (RFC 8628 Section 6.1).</param>
 /// <param name="httpContextAccessor">Accessor for the current HTTP context to retrieve client IP.</param>
+/// <param name="timeProvider">Provides the current time for deriving the request's remaining lifetime.</param>
 public class UserCodeVerificationService(
     IDeviceAuthorizationStorage storage,
     IUserCodeRateLimiter rateLimiter,
     IUserCodeNormalizer normalizer,
-    IHttpContextAccessor httpContextAccessor) : IUserCodeVerificationService
+    IHttpContextAccessor httpContextAccessor,
+    TimeProvider timeProvider) : IUserCodeVerificationService
 {
     /// <inheritdoc />
     public async Task<UserCodeVerificationResult> VerifyAsync(string userCode)
@@ -94,10 +96,16 @@ public class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
+        // An approval landing after the code's fixed lifetime (RFC 8628 §3.2) cannot be redeemed, so treat
+        // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
+        var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
+        if (remaining <= TimeSpan.Zero)
+            return false;
+
         request.Status = DeviceAuthorizationStatus.Authorized;
         request.AuthorizedGrant = authorizedGrant;
 
-        await storage.UpdateAsync(deviceCode, request);
+        await storage.UpdateAsync(deviceCode, request, remaining);
         return true;
     }
 
@@ -114,9 +122,15 @@ public class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
+        // A denial after the code's fixed lifetime (RFC 8628 §3.2) is moot - the code is already unusable, so
+        // treat it as a no-op rather than writing a record with a non-positive cache TTL.
+        var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
+        if (remaining <= TimeSpan.Zero)
+            return false;
+
         request.Status = DeviceAuthorizationStatus.Denied;
 
-        await storage.UpdateAsync(deviceCode, request);
+        await storage.UpdateAsync(deviceCode, request, remaining);
         return true;
     }
 }

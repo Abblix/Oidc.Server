@@ -23,6 +23,7 @@
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -37,13 +38,13 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SigningAlgorithmsValidatorTests
 {
-    private readonly Mock<IJsonWebTokenValidator> _jwtValidator;
+    private readonly Mock<IJwtAlgorithmsProvider> _jwtAlgorithms;
     private readonly SigningAlgorithmsValidator _validator;
 
     public SigningAlgorithmsValidatorTests()
     {
-        _jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
-        _validator = new SigningAlgorithmsValidator(_jwtValidator.Object);
+        _jwtAlgorithms = new Mock<IJwtAlgorithmsProvider>(MockBehavior.Strict);
+        _validator = new SigningAlgorithmsValidator(_jwtAlgorithms.Object);
     }
 
     private ClientRegistrationValidationContext CreateContext(
@@ -69,13 +70,10 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNoAlgorithms_ShouldReturnNull()
     {
-        // Arrange
         var context = CreateContext();
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
@@ -86,17 +84,14 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithSupportedRequestObjectAlg_ShouldReturnNull()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
@@ -107,21 +102,54 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithUnsupportedRequestObjectAlg_ShouldReturnError()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.ES256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// request_object_signing_alg may be "none" (OIDC Core §6.1 — unsigned request objects delivered
+    /// over TLS), so it stays acceptable when the server advertises it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoneRequestObjectAlg_ShouldReturnNull()
+    {
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
+            .Returns([SigningAlgorithms.None, SigningAlgorithms.RS256]);
+
+        var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verifies error when request_object_signing_alg="none" is not advertised.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoneRequestObjectAlgNotSupported_ShouldReturnError()
+    {
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256]);
+
+        var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -131,17 +159,14 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithSupportedBackChannelAuthAlg_ShouldReturnNull()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.ES256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
@@ -152,17 +177,54 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithUnsupportedBackChannelAuthAlg_ShouldReturnError()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported)
             .Returns([SigningAlgorithms.RS256]);
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.PS256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// CIBA Core §7.1.1: "none" is not a valid backchannel_authentication_request_signing_alg —
+    /// the filtered set excludes it, so registration is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoneBackChannelAuthAlg_ShouldReturnError()
+    {
+        _jwtAlgorithms
+            .Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.None);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// CIBA Core §7.1.1 requires an asymmetric signature — a symmetric HS* value is rejected because
+    /// it is not a member of the filtered backchannel set.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithHmacBackChannelAuthAlg_ShouldReturnError()
+    {
+        _jwtAlgorithms
+            .Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.HS256);
+
+        var result = await _validator.ValidateAsync(context);
+
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
@@ -175,17 +237,14 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithSupportedTokenEndpointAuthAlg_ShouldReturnNull()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.TokenEndpointAuthSigningAlgValuesSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
@@ -196,17 +255,34 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithUnsupportedTokenEndpointAuthAlg_ShouldReturnError()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.TokenEndpointAuthSigningAlgValuesSupported)
             .Returns([SigningAlgorithms.RS256]);
 
-        var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.HS256);
+        var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: "none" is not a valid token_endpoint_auth_signing_alg —
+    /// the filtered set excludes it, so registration is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoneTokenEndpointAuthAlg_ShouldReturnError()
+    {
+        _jwtAlgorithms
+            .Setup(p => p.TokenEndpointAuthSigningAlgValuesSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.HS256]);
+
+        var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.None);
+
+        var result = await _validator.ValidateAsync(context);
+
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
@@ -219,9 +295,14 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithAllSupportedAlgorithms_ShouldReturnNull()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256, SigningAlgorithms.PS256]);
+        _jwtAlgorithms
+            .Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256, SigningAlgorithms.PS256]);
+        _jwtAlgorithms
+            .Setup(p => p.TokenEndpointAuthSigningAlgValuesSupported)
             .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256, SigningAlgorithms.PS256]);
 
         var context = CreateContext(
@@ -229,34 +310,29 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.PS256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
     /// <summary>
     /// Verifies error stops at first unsupported algorithm.
-    /// Validation should fail fast on first error.
+    /// Validation should fail fast on first error (request object checked first).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithFirstAlgUnsupported_ShouldReturnErrorForFirst()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns([SigningAlgorithms.ES256]);
 
         var context = CreateContext(
-            requestObjectSigningAlg: SigningAlgorithms.RS256, // Unsupported - should fail here
+            requestObjectSigningAlg: SigningAlgorithms.RS256,
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
     }
@@ -268,17 +344,14 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithDifferentCase_ShouldReturnError()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns(["RS256"]);
 
-        var context = CreateContext(requestObjectSigningAlg: "rs256"); // Different case
+        var context = CreateContext(requestObjectSigningAlg: "rs256");
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
@@ -290,30 +363,23 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithMultipleSupportedAlgs_ShouldValidateCorrectly()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
-            .Returns([
-                SigningAlgorithms.RS256,
-                SigningAlgorithms.RS384,
-                SigningAlgorithms.RS512,
-                SigningAlgorithms.ES256,
-                SigningAlgorithms.ES384,
-                SigningAlgorithms.ES512,
-                SigningAlgorithms.PS256,
-                SigningAlgorithms.PS384,
-                SigningAlgorithms.PS512
-            ]);
+        string[] asymmetric =
+        [
+            SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
+            SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512,
+            SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512
+        ];
+        _jwtAlgorithms.Setup(p => p.SigningAlgorithmsSupported).Returns(asymmetric);
+        _jwtAlgorithms.Setup(p => p.BackChannelAuthenticationRequestSigningAlgValuesSupported).Returns(asymmetric);
+        _jwtAlgorithms.Setup(p => p.TokenEndpointAuthSigningAlgValuesSupported).Returns(asymmetric);
 
         var context = CreateContext(
             requestObjectSigningAlg: SigningAlgorithms.PS512,
             backChannelAuthSigningAlg: SigningAlgorithms.ES384,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
     }
 
@@ -324,82 +390,33 @@ public class SigningAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithCustomAlgorithm_ShouldReturnError()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
         var context = CreateContext(requestObjectSigningAlg: "custom-alg-2024");
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
-    /// Verifies validator checks provider's supported algorithms.
-    /// Ensures proper delegation to JWT validator.
+    /// Verifies validator checks the provider's supported algorithms.
+    /// Ensures proper delegation to the algorithms provider.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldCheckJwtValidatorAlgorithms()
+    public async Task ValidateAsync_ShouldCheckJwtAlgorithms()
     {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
+        _jwtAlgorithms
+            .Setup(p => p.SigningAlgorithmsSupported)
             .Returns([SigningAlgorithms.RS256]);
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        // Act
         await _validator.ValidateAsync(context);
 
-        // Assert
-        _jwtValidator.Verify(v => v.SigningAlgorithmsSupported, Times.Once);
-    }
-
-    /// <summary>
-    /// Verifies validation succeeds with none algorithm.
-    /// Per OAuth 2.0, \"none\" may be supported for unsigned JWTs.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithNoneAlgorithm_ShouldValidate()
-    {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
-            .Returns([SigningAlgorithms.None, SigningAlgorithms.RS256]);
-
-        var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    /// <summary>
-    /// Verifies error when none algorithm not explicitly supported.
-    /// Provider must explicitly advertise \"none\" if accepting unsigned JWTs.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithNoneAlgNotSupported_ShouldReturnError()
-    {
-        // Arrange
-        _jwtValidator
-            .Setup(v => v.SigningAlgorithmsSupported)
-            .Returns([SigningAlgorithms.RS256]);
-
-        var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        _jwtAlgorithms.Verify(p => p.SigningAlgorithmsSupported, Times.Once);
     }
 }

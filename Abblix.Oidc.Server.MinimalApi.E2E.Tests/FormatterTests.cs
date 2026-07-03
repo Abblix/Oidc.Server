@@ -30,6 +30,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,
+        BaseAddress = TestFactory.BaseAddress,
     });
 
     [Fact]

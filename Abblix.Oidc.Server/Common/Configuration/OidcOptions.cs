@@ -108,8 +108,12 @@ public record OidcOptions
 	/// (CheckSession, Revocation, Introspection, dynamic client registration, CIBA and device authorization) are
 	/// off by default and each turned on by its dedicated <c>AddX()</c> opt-in, which registers the feature and
 	/// re-enables the corresponding flag. Leaving them off keeps a server that never opts in from advertising — or
-	/// validating — an endpoint it was never asked to serve. Set this explicitly to <see cref="OidcEndpoints.All"/>
-	/// to restore the previous every-endpoint-on behaviour.
+	/// validating — an endpoint it was never asked to serve. Setting this to <see cref="OidcEndpoints.All"/> only
+	/// re-advertises and routes every endpoint — the handler for each opt-in endpoint (CheckSession, Revocation,
+	/// Introspection, dynamic client registration, CIBA, device authorization) is still registered solely by its
+	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behaviour only when combined with
+	/// all of those opt-in calls. Setting <c>All</c> without them advertises and routes endpoints whose handlers are
+	/// absent, so every request to such an endpoint fails at runtime.
 	/// </summary>
 	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.Base;
 

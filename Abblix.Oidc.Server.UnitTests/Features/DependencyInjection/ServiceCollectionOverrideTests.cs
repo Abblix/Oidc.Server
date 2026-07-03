@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -79,19 +80,17 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public void AddClientAuthentication_InvokedTwice_StrategySetNotDuplicated()
+    public void AddClientAuthentication_InvokedTwice_FailsLoudInsteadOfRecomposing()
     {
-        // TryAddEnumerable dedupes by ImplementationType; repeated library invocation must not
-        // grow the set of default IClientAuthenticator strategies.
+        // A compose-family method composes its pipeline exactly once. Invoking it a second time would rebuild a
+        // self-referential composite that deadlocks on the first resolve, so the shared Compose guard rejects the
+        // second invocation loudly at registration time rather than letting the latent deadlock ship.
         var services = new ServiceCollection();
 
         services.AddClientAuthentication();
-        var firstCount = services.Count(d => d.ServiceType == typeof(IClientAuthenticator));
 
-        services.AddClientAuthentication();
-        var secondCount = services.Count(d => d.ServiceType == typeof(IClientAuthenticator));
-
-        Assert.Equal(firstCount, secondCount);
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddClientAuthentication());
+        Assert.Contains(nameof(IClientAuthenticator), ex.Message);
     }
 
     [Fact]

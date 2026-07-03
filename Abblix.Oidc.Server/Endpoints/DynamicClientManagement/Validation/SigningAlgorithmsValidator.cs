@@ -21,8 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -30,16 +30,21 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// Validates the algorithms a client commits to using on inbound JWTs the server will verify:
 /// <c>request_object_signing_alg</c> (OIDC Core §6.1),
-/// <c>backchannel_authentication_request_signing_alg</c> (CIBA §4), and
-/// <c>token_endpoint_auth_signing_alg</c> (RFC 7591 §2 / OIDC Core §9). Each must appear in
-/// the server's set of supported verification algorithms.
+/// <c>backchannel_authentication_request_signing_alg</c> (CIBA §7.1.1), and
+/// <c>token_endpoint_auth_signing_alg</c> (RFC 7591 §2 / RFC 8414 §2). Each must appear in the
+/// matching set the server advertises in discovery: <c>request_object_signing_alg</c> may be
+/// <c>none</c>, but <c>token_endpoint_auth_signing_alg</c> excludes <c>none</c> and
+/// <c>backchannel_authentication_request_signing_alg</c> excludes both <c>none</c> and the symmetric
+/// HS* algorithms. The same provider feeds the discovery document, so DCR accepts exactly what the
+/// server advertises.
 /// </summary>
-/// <param name="jwtValidator">Source of supported signing algorithms for inbound JWTs.</param>
-public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : SyncClientRegistrationContextValidator
+/// <param name="jwtAlgorithms">Source of the per-parameter supported signing algorithm sets.</param>
+public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Validates the signing algorithms specified in the client registration request.
-    /// This method checks if the requested algorithms are supported by the JWT validator for various purposes.
+    /// Validates the signing algorithms specified in the client registration request against the
+    /// per-parameter supported sets. Each set is read only when its parameter is present, so a
+    /// parameter left unset never touches the corresponding provider property.
     /// </summary>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
@@ -49,31 +54,26 @@ public class SigningAlgorithmsValidator(IJsonWebTokenValidator jwtValidator) : S
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        return Validate(request.RequestObjectSigningAlg, Parameters.RequestObjectSigningAlg)
-            ?? Validate(request.BackChannelAuthenticationRequestSigningAlg, Parameters.BackChannelAuthenticationRequestSigningAlg)
-            ?? Validate(request.TokenEndpointAuthSigningAlg, Parameters.TokenEndpointAuthSigningAlg)
-            ;
-    }
 
-    /// <summary>
-    /// Validates that the JWT validator supports the specified signing algorithm.
-    /// If the algorithm is not supported, it returns a validation error.
-    /// </summary>
-    /// <param name="alg">The signing algorithm to validate.</param>
-    /// <param name="description">
-    /// A description used in the error message to identify which signing algorithm is invalid.</param>
-    /// <returns>
-    /// A <see cref="OidcError"/> if the algorithm is not supported; otherwise, null.
-    /// </returns>
-    private OidcError? Validate(string? alg, string description)
-    {
-        if (alg is not null && !jwtValidator.SigningAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"The signing algorithm for {description} is not supported");
-        }
+        // request_object_signing_alg may legitimately be "none" (OIDC Core §6.1 — an unsigned request
+        // object delivered over TLS), so it is validated against the full supported set.
+        if (request.RequestObjectSigningAlg is { } requestObjectAlg &&
+            !jwtAlgorithms.SigningAlgorithmsSupported.Contains(requestObjectAlg, StringComparer.Ordinal))
+            return NotSupported(Parameters.RequestObjectSigningAlg);
+
+        if (request.BackChannelAuthenticationRequestSigningAlg is { } backChannelAlg &&
+            !jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported.Contains(
+                backChannelAlg, StringComparer.Ordinal))
+            return NotSupported(Parameters.BackChannelAuthenticationRequestSigningAlg);
+
+        if (request.TokenEndpointAuthSigningAlg is { } tokenEndpointAlg &&
+            !jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported.Contains(
+                tokenEndpointAlg, StringComparer.Ordinal))
+            return NotSupported(Parameters.TokenEndpointAuthSigningAlg);
 
         return null;
     }
+
+    private static OidcError NotSupported(string description)
+        => new(ErrorCodes.InvalidRequest, $"The signing algorithm for {description} is not supported");
 }

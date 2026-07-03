@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
-using Abblix.Oidc.Server.DeclarativeValidation;
+using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -30,7 +30,9 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents the response for a successful client read request,
 /// detailing the configuration and metadata of an OAuth or OpenID Connect client.
 /// Per RFC 7592 Section 3, this response includes the registration access token and all registered client metadata.
+/// Unregistered metadata is omitted from the JSON per RFC 7592 §3, not emitted as an explicit null.
 /// </summary>
+[JsonIgnoreNulls]
 public record ReadClientSuccessfulResponse
 {
     /// <summary>
@@ -53,9 +55,11 @@ public record ReadClientSuccessfulResponse
     /// The expiration time of the client secret. Indicates when the client secret will become invalid.
     /// Required if client_secret is issued. Per RFC 7591 Section 3.2.1.
     /// A value of 0 indicates the secret does not expire.
+    /// Serialized as Unix seconds (a JSON number) per RFC 7591 §3.2.1, matching the register-path DTO.
     /// </summary>
     [JsonPropertyOrder(3)]
     [JsonPropertyName(Parameters.ClientSecretExpiresAt)]
+    [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
     public DateTimeOffset? ClientSecretExpiresAt { get; init; }
 
     /// <summary>

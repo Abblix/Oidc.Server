@@ -58,12 +58,15 @@ public interface IDeviceAuthorizationStorage
     Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(string userCode);
 
     /// <summary>
-    /// Updates an existing device authorization request in storage.
+    /// Updates an existing device authorization request in storage, refreshing its cache entry with the
+    /// caller-supplied remaining lifetime.
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="request">The updated device authorization request.</param>
+    /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
+    /// the request's fixed expiry (RFC 8628 §3.2) so that repeated polling cannot extend the code.</param>
     /// <returns>A task that completes when the request is updated.</returns>
-    Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request);
+    Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
     /// <summary>
     /// Removes a device authorization request from storage using its device code.
