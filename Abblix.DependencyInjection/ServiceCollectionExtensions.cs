@@ -430,8 +430,9 @@ public static class ServiceCollectionExtensions
         // from Decompose — no side registry is needed.
         var compositeType = memberArray
             .Where(member => member.IsKeyedService)
-            .Select(member => member.ServiceKey as Type)
-            .FirstOrDefault(serviceKey => serviceKey != null && serviceKey != typeof(TInterface))
+            .Select(member => member.ServiceKey)
+            .OfType<Type>()
+            .FirstOrDefault(serviceKey => serviceKey != typeof(TInterface))
             ?? throw new InvalidOperationException(
                 $"Cannot determine the composite type of the {typeof(TInterface).Name} family: keep at " +
                 "least one member returned by Decompose in the list, or compose the family from scratch " +
@@ -552,8 +553,8 @@ public static class ServiceCollectionExtensions
             .FirstOrDefault(serviceKey => serviceKey != null && serviceKey != interfaceType);
 
     /// <summary>
-    /// Fails loud when the <typeparamref name="TInterface"/> family has already been composed into
-    /// <typeparamref name="TComposite"/>. A second composition would rebuild the composite over a member set
+    /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
+    /// <paramref name="compositeType"/>. A second composition would rebuild the composite over a member set
     /// that already contains the alias to the first composite, so the new composite would resolve one of its
     /// own children back to itself — a self-referential singleton that deadlocks on first resolve. This
     /// happens when an opt-in feature is applied twice (e.g. two registration modules both call
@@ -587,7 +588,9 @@ public static class ServiceCollectionExtensions
     {
         var parameterType = compositeType
             .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
-            .SelectMany(constructor => constructor.GetParameters(), (_, parameterInfo) => parameterInfo.ParameterType)
+            .SelectMany(
+                constructor => constructor.GetParameters(),
+                (_, parameterInfo) => parameterInfo.ParameterType)
             .FirstOrDefault(type => type.IsAssignableFrom(typeof(TInterface[])))
             ?? throw new InvalidOperationException(
                 $"The type {compositeType.FullName} has no public constructor that accepts {typeof(TInterface).FullName}[]");
