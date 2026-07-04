@@ -25,6 +25,7 @@ using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Utils.Json;
@@ -82,6 +83,10 @@ public static class ServiceCollectionExtensions
         // The core resolves request details (base URL, scheme, client IP) through this contract; the adapter
         // supplies the ASP.NET Core HttpContext-backed implementation.
         services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
+
+        // The default authentication-session bridge over the host's cookie authentication scheme,
+        // mirroring the MVC transport. TryAdd lets a host supply its own session service instead.
+        services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
 
         // Flattens a response DTO into name/value pairs for query/fragment/form_post delivery.
         services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
