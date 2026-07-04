@@ -24,12 +24,17 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.MinimalApi;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -136,5 +141,63 @@ public class ServiceCollectionOverrideTests
         var resolved = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         Assert.Same(stub, resolved);
+    }
+
+    [Fact]
+    public void AddOidcMinimalApi_RegistersDefaultAuthSessionService()
+    {
+        // The MVC transport registers AuthenticationSchemeAdapter as the default IAuthSessionService;
+        // the Minimal API transport must mirror it, or a host without its own implementation fails
+        // at request time on every endpoint that touches the authentication session.
+        var services = new ServiceCollection();
+
+        services.AddOidcMinimalApi();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
+        Assert.Equal(typeof(AuthenticationSchemeAdapter), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
+    [Fact]
+    public void AddOidcMinimalApi_HostPreregisteredAuthSessionService_Wins()
+    {
+        var services = new ServiceCollection();
+        var stub = new Mock<IAuthSessionService>().Object;
+        services.AddSingleton(stub);
+
+        services.AddOidcMinimalApi();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddOidcMinimalApi_EveryEndpointOptedIn_GraphValidates()
+    {
+        // The full-surface host: every optional endpoint enabled, and the only contract the host
+        // itself implements is IUserInfoProvider. ValidateOnBuild constructs every registered
+        // descriptor, so a missing default registration anywhere in the adapter or the core
+        // fails here instead of surfacing as an HTTP 500 at request time.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddRouting();
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache();
+        services.AddAuthentication().AddCookie();
+        services.AddSingleton(new Mock<IUserInfoProvider>().Object);
+
+        // Grant-bearing opt-ins precede AddOidcMinimalApi so AddOidcCore composes their grant handlers
+        services.AddDeviceAuthorization();
+        services.AddBackChannelAuthentication();
+        services.AddRevocation();
+        services.AddIntrospection();
+        services.AddCheckSession();
+        services.AddDynamicClientRegistration();
+
+        services.AddOidcMinimalApi(_ => { });
+        services.AddRichAuthorizationRequests();
+
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 }
