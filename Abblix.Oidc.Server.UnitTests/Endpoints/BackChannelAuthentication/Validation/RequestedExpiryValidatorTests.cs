@@ -40,13 +40,13 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Valid
 /// </summary>
 public class RequestedExpiryValidatorTests
 {
-    private readonly Mock<IOptionsSnapshot<OidcOptions>> _options;
+    private readonly Mock<IOptionsMonitor<OidcOptions>> _options;
     private readonly OidcOptions _oidcOptions;
     private readonly RequestedExpiryValidator _validator;
 
     public RequestedExpiryValidatorTests()
     {
-        _options = new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict);
+        _options = new Mock<IOptionsMonitor<OidcOptions>>(MockBehavior.Strict);
         _oidcOptions = new OidcOptions
         {
             BackChannelAuthentication = new BackChannelAuthenticationOptions
@@ -56,7 +56,7 @@ public class RequestedExpiryValidatorTests
             }
         };
 
-        _options.Setup(o => o.Value).Returns(_oidcOptions);
+        _options.Setup(o => o.CurrentValue).Returns(_oidcOptions);
         _validator = new RequestedExpiryValidator(_options.Object);
     }
 
