@@ -124,7 +124,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
-        // Single-use PAR (RFC 9126 §6): decorate the processor so a pushed request_uri is consumed once a
+        // Single-use PAR (RFC 9126 §7.3): decorate the processor so a pushed request_uri is consumed once a
         // terminal success has minted a code or token. Mirrors the session-management decorator and stacks
         // with it; both act independently on a SuccessfullyAuthenticated outcome.
         services.Decorate<IAuthorizationRequestProcessor, PushedAuthorizationRequestProcessorDecorator>();
