@@ -20,26 +20,29 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Collections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.DependencyInjection;
 
 /// <summary>
-/// A live editing cursor over a composed family's members. Returned by
-/// <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/>, it is an <see cref="IList{T}"/> of the
-/// member descriptors backed directly by the service collection: inserting, removing or reordering through it
-/// mutates the family's keyed registrations in place. The composite reads its members via
-/// <c>GetKeyedServices</c> at resolve time, so edits made through the cursor take effect with no separate
-/// recompose step — the members simply differ when the composite is finally resolved.
+/// A live editing cursor over a composed family's members.
+/// Returned by <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/>,
+/// it is an <see cref="IList{T}"/> of the member descriptors backed directly by the service collection:
+/// inserting, removing or reordering through it mutates the family's keyed registrations in place.
+/// The composite reads its members via <c>GetKeyedServices</c> at resolve time,
+/// so edits made through the cursor take effect with no separate recompose step —
+/// the members simply differ when the composite is finally resolved.
 /// </summary>
 /// <remarks>
 /// The position-aware editing methods live here rather than as extension methods so that
-/// <typeparamref name="TInterface"/> is bound by the cursor and never repeated at the call site — only the
-/// anchor type is named (<c>composition.AddAfter&lt;ScopeValidator&gt;(step)</c>). Each returns the cursor, so
-/// edits chain, and each anchor is matched by implementation type, throwing when the anchor is not a member.
+/// <typeparamref name="TInterface"/> is bound by the cursor and never repeated at the call site —
+/// only the anchor type is named (<c>composition.AddAfter&lt;ScopeValidator&gt;(step)</c>).
+/// Each returns the cursor, so edits chain, and each anchor is matched by implementation type,
+/// throwing when the anchor is not a member.
 /// </remarks>
 /// <typeparam name="TInterface">The composed interface type.</typeparam>
-public interface IComposition<TInterface> : IList<ServiceDescriptor>
+public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     where TInterface : class
 {
     /// <summary>Inserts <paramref name="member"/> as the first step of the family.</summary>
@@ -110,51 +113,46 @@ public interface IComposition<TInterface> : IList<ServiceDescriptor>
 /// under the family key and validated to share the family lifetime — a mismatch throws instead of being silently
 /// promoted.
 /// </summary>
-internal sealed class Composition<TInterface> : IComposition<TInterface>
-    where TInterface : class
+internal sealed class Composition<TInterface>(
+    IServiceCollection services,
+    object memberKey,
+    ServiceLifetime lifetime) : IComposition<TInterface> where TInterface : class
 {
-    public Composition(IServiceCollection services, object memberKey, ServiceLifetime lifetime)
-    {
-        _services = services;
-        _memberKey = memberKey;
-        _lifetime = lifetime;
-    }
-
-    private readonly IServiceCollection _services;
-    private readonly object _memberKey;
-    private readonly ServiceLifetime _lifetime;
-
     private bool IsMember(ServiceDescriptor descriptor)
         => descriptor is { IsKeyedService: true } &&
            descriptor.ServiceType == typeof(TInterface) &&
-           Equals(descriptor.ServiceKey, _memberKey);
+           Equals(descriptor.ServiceKey, memberKey);
 
     /// <summary>The collection indices of the family's members, in registration (execution) order.</summary>
     private List<int> MemberIndices()
     {
         var indices = new List<int>();
-        for (var index = 0; index < _services.Count; index++)
+        for (var index = 0; index < services.Count; index++)
         {
-            if (IsMember(_services[index]))
+            if (IsMember(services[index]))
                 indices.Add(index);
         }
         return indices;
     }
 
     /// <summary>
-    /// Re-keys a caller-supplied member under the family key. The member must declare the family lifetime;
-    /// mixing lifetimes inside one composite would let it capture a shorter-lived member, so a mismatch throws.
+    /// Re-keys a caller-supplied member under the family key, at the member's own lifetime. The composite adopts
+    /// the shortest member lifetime, so a member LONGER-lived than the composite is fine (it is simply shared);
+    /// a SHORTER-lived one would make the composite outlive it — a captive — and is rejected here.
     /// </summary>
-    private ServiceDescriptor Keyify(ServiceDescriptor member)
+    private ServiceDescriptor AsFamilyMember(ServiceDescriptor member)
     {
-        if (member.Lifetime != _lifetime)
+        // ServiceLifetime orders Singleton < Scoped < Transient by increasing ephemerality, so a greater value
+        // means shorter-lived. A member shorter-lived than the composite would be captured by it.
+        if (member.Lifetime > lifetime)
         {
             throw new InvalidOperationException(
-                $"Cannot add a {member.Lifetime} member to the {typeof(TInterface).Name} family composed as " +
-                $"{_lifetime}: a composite may not mix member lifetimes. Register the member as {_lifetime}.");
+                $"Cannot add a {member.Lifetime} member to the {typeof(TInterface).Name} family whose composite " +
+                $"is {lifetime}: the composite would outlive this shorter-lived member. Register it as {lifetime} " +
+                "or a longer lifetime.");
         }
 
-        return member.ToKeyedFamilyMember(_memberKey, _lifetime);
+        return member.ToKeyedFamilyMember(memberKey, member.Lifetime);
     }
 
     public int Count => MemberIndices().Count;
@@ -163,25 +161,29 @@ internal sealed class Composition<TInterface> : IComposition<TInterface>
 
     public ServiceDescriptor this[int index]
     {
-        get => _services[MemberIndices()[index]];
-        set => _services[MemberIndices()[index]] = Keyify(value);
+        get => services[MemberIndices()[index]];
+        set => services[MemberIndices()[index]] = AsFamilyMember(value);
     }
 
     public void Insert(int index, ServiceDescriptor item)
     {
-        var keyed = Keyify(item);
+        var keyed = AsFamilyMember(item);
         var indices = MemberIndices();
 
-        var at = index < indices.Count ? indices[index]
-            : indices.Count > 0 ? indices[^1] + 1
-            : _services.Count;
+        int at;
+        if (index < indices.Count)
+            at = indices[index];
+        else if (0 < indices.Count)
+            at = indices[^1] + 1;
+        else
+            at = services.Count;
 
-        _services.Insert(at, keyed);
+        services.Insert(at, keyed);
     }
 
     public void Add(ServiceDescriptor item) => Insert(Count, item);
 
-    public void RemoveAt(int index) => _services.RemoveAt(MemberIndices()[index]);
+    public void RemoveAt(int index) => services.RemoveAt(MemberIndices()[index]);
 
     public bool Remove(ServiceDescriptor item)
     {
@@ -196,7 +198,7 @@ internal sealed class Composition<TInterface> : IComposition<TInterface>
     public void Clear()
     {
         foreach (var index in Enumerable.Reverse(MemberIndices()))
-            _services.RemoveAt(index);
+            services.RemoveAt(index);
     }
 
     public int IndexOf(ServiceDescriptor item)
@@ -204,7 +206,7 @@ internal sealed class Composition<TInterface> : IComposition<TInterface>
         var indices = MemberIndices();
         for (var position = 0; position < indices.Count; position++)
         {
-            if (ReferenceEquals(_services[indices[position]], item))
+            if (ReferenceEquals(services[indices[position]], item))
                 return position;
         }
         return -1;
@@ -215,14 +217,12 @@ internal sealed class Composition<TInterface> : IComposition<TInterface>
     public void CopyTo(ServiceDescriptor[] array, int arrayIndex)
     {
         foreach (var index in MemberIndices())
-            array[arrayIndex++] = _services[index];
+            array[arrayIndex++] = services[index];
     }
 
     public IEnumerator<ServiceDescriptor> GetEnumerator()
-    {
-        foreach (var index in MemberIndices())
-            yield return _services[index];
-    }
+        => MemberIndices().Select(index => services[index]).GetEnumerator();
 
-    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator()
+        => GetEnumerator();
 }

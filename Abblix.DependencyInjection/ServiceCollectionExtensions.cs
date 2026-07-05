@@ -650,20 +650,15 @@ public static class ServiceCollectionExtensions
     {
         var parameterType = ResolveCompositeParameterType(compositeType, typeof(TInterface));
 
-        // A composite may not mix member lifetimes — it would capture a shorter-lived member — so the family
-        // shares one lifetime. A mixed set is a composition error, surfaced loudly rather than silently promoted.
-        var lifetimes = members.Select(descriptor => descriptor.Lifetime).Distinct().ToArray();
-        if (lifetimes.Length > 1)
-        {
-            throw new InvalidOperationException(
-                $"The {typeof(TInterface).Name} family mixes member lifetimes ({string.Join(", ", lifetimes)}). " +
-                "A composite requires all members to share one lifetime — register them uniformly.");
-        }
-        var memberLifetime = lifetimes[0];
-        lifetime = memberLifetime;
+        // The composite adopts the SHORTEST lifetime among its members, so it never outlives one of them —
+        // a composite that outlived a member would capture a shorter-lived service. Members keep their OWN
+        // lifetime: a longer-lived member (a singleton, say) is simply shared across every composite instance,
+        // which is safe (the composite is the shorter-lived one) and cheaper than promoting it. ServiceLifetime
+        // orders Singleton < Scoped < Transient by increasing ephemerality, so Max picks the shortest-lived.
+        lifetime = members.Max(descriptor => descriptor.Lifetime);
 
         foreach (var member in members)
-            services.Add(member.ToKeyedFamilyMember(memberKey, memberLifetime));
+            services.Add(member.ToKeyedFamilyMember(memberKey, member.Lifetime));
 
         return serviceProvider =>
         {

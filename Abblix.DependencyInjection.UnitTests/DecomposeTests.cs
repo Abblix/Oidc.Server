@@ -193,26 +193,75 @@ public class DecomposeTests
     }
 
     [Fact]
-    public void Compose_MixedMemberLifetimes_Throws()
+    public void Compose_MixedMemberLifetimes_ComposesWithCompositeAtShortestLifetime()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep, StepA>();
         services.AddScoped<IPipelineStep, StepB>();
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => services.Compose<IPipelineStep, PipelineComposite>());
-        Assert.Contains(nameof(IPipelineStep), exception.Message);
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        // The composite adopts the shortest member lifetime (Scoped); the singleton member keeps its own and
+        // is shared. No captive dependency, so the scope-validating provider builds and resolves cleanly.
+        var composite = services.Single(descriptor =>
+            descriptor is { IsKeyedService: false } && descriptor.ServiceType == typeof(PipelineComposite));
+        Assert.Equal(ServiceLifetime.Scoped, composite.Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        Assert.Equal("A,B", scope.ServiceProvider.GetRequiredService<IPipelineStep>().Name);
     }
 
     [Fact]
-    public void AddingAMemberOfADifferentLifetime_Throws()
+    public void AddingAShorterLivedMemberThanTheComposite_Throws()
     {
-        var services = ComposedFamily(); // composed as Singleton
+        var services = ComposedFamily(); // all singletons, so the composite is a singleton
 
+        // A scoped member is shorter-lived than the singleton composite — it would be captured — so it is rejected.
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.Decompose<IPipelineStep>()
                 .AddLast(ServiceDescriptor.Scoped<IPipelineStep, StepC>()));
         Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
+    public void AddingALongerLivedMemberThanTheComposite_IsAllowedAndShared()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IPipelineStep, StepA>();
+        services.AddScoped<IPipelineStep, StepB>();
+        services.Compose<IPipelineStep, PipelineComposite>(); // scoped composite
+
+        // A singleton member is longer-lived than the scoped composite — safe, it is simply shared.
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        Assert.Equal("A,B,C", scope.ServiceProvider.GetRequiredService<IPipelineStep>().Name);
+    }
+
+    [Fact]
+    public void SingletonMemberInAScopedComposite_IsSharedAcrossScopes_NotRecreated()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();   // singleton member
+        services.AddScoped<IPipelineStep, StepB>();      // scoped member makes the composite scoped
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope1 = provider.CreateScope();
+        using var scope2 = provider.CreateScope();
+
+        var composite1 = (PipelineComposite)scope1.ServiceProvider.GetRequiredService<IPipelineStep>();
+        var composite2 = (PipelineComposite)scope2.ServiceProvider.GetRequiredService<IPipelineStep>();
+
+        // Each scope gets its own scoped composite and its own scoped StepB...
+        Assert.NotSame(composite1, composite2);
+        Assert.NotSame(composite1.Steps.OfType<StepB>().Single(), composite2.Steps.OfType<StepB>().Single());
+
+        // ...but the singleton StepA is created once and shared — the SAME instance goes into both composites,
+        // not re-created per scoped composite.
+        Assert.Same(composite1.Steps.OfType<StepA>().Single(), composite2.Steps.OfType<StepA>().Single());
     }
 
     [Fact]

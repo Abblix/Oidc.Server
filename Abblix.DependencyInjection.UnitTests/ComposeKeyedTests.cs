@@ -159,15 +159,24 @@ public class ComposeKeyedTests
     }
 
     [Fact]
-    public void ComposeKeyed_MixedMemberLifetimes_Throws()
+    public void ComposeKeyed_MixedMemberLifetimes_ComposesWithCompositeAtShortestLifetime()
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
         services.AddKeyedScoped<IPipelineStep, StepB>(EmailKey);
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey));
-        Assert.Contains(nameof(IPipelineStep), exception.Message);
+        services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey);
+
+        // The keyed composite adopts the shortest member lifetime (Scoped); the singleton member is shared.
+        var composite = services.Single(descriptor =>
+            descriptor is { IsKeyedService: true } &&
+            descriptor.ServiceType == typeof(IPipelineStep) &&
+            Equals(descriptor.ServiceKey, EmailKey));
+        Assert.Equal(ServiceLifetime.Scoped, composite.Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        Assert.Equal("A,B", scope.ServiceProvider.GetRequiredKeyedService<IPipelineStep>(EmailKey).Name);
     }
 
     [Fact]
