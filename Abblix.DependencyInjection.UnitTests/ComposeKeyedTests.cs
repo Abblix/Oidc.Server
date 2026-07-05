@@ -36,7 +36,9 @@ namespace Abblix.DependencyInjection.UnitTests;
 /// </summary>
 public class ComposeKeyedTests
 {
-    private static ServiceCollection NewKeyedFamily(string serviceKey = "email")
+    private const string EmailKey = "email";
+
+    private static ServiceCollection NewKeyedFamily(string serviceKey = EmailKey)
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(serviceKey);
@@ -57,7 +59,7 @@ public class ComposeKeyedTests
         var services = NewKeyedFamily();
 
         using var provider = services.BuildServiceProvider();
-        var composed = provider.GetRequiredKeyedService<IPipelineStep>("email");
+        var composed = provider.GetRequiredKeyedService<IPipelineStep>(EmailKey);
 
         Assert.IsType<PipelineComposite>(composed);
         Assert.Equal("A,B", composed.Name);
@@ -73,14 +75,14 @@ public class ComposeKeyedTests
     public void ComposeKeyed_TwoFamiliesSameInterfaceAndComposite_StayIsolated()
     {
         var services = new ServiceCollection();
-        services.AddKeyedSingleton<IPipelineStep, StepA>("email");
-        services.AddKeyedSingleton<IPipelineStep, StepB>("email");
+        services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
+        services.AddKeyedSingleton<IPipelineStep, StepB>(EmailKey);
         services.AddKeyedSingleton<IPipelineStep, StepC>("sms");
         services.AddKeyedSingleton<IPipelineStep, StepA>("sms");
-        services.ComposeKeyed<IPipelineStep, PipelineComposite>("email");
+        services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey);
         services.ComposeKeyed<IPipelineStep, PipelineComposite>("sms");
 
-        Assert.Equal("A,B", ResolveKeyedName(services, "email"));
+        Assert.Equal("A,B", ResolveKeyedName(services, EmailKey));
         Assert.Equal("C,A", ResolveKeyedName(services, "sms"));
     }
 
@@ -94,7 +96,7 @@ public class ComposeKeyedTests
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.Equal("A,B", provider.GetRequiredKeyedService<IPipelineStep>("email").Name);
+        Assert.Equal("A,B", provider.GetRequiredKeyedService<IPipelineStep>(EmailKey).Name);
         Assert.Equal("C,A", provider.GetRequiredService<IPipelineStep>().Name);
     }
 
@@ -103,7 +105,7 @@ public class ComposeKeyedTests
     {
         var services = NewKeyedFamily();
 
-        var members = services.DecomposeKeyed<IPipelineStep>("email");
+        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
 
         Assert.Equal(
             [typeof(StepA), typeof(StepB)],
@@ -112,20 +114,20 @@ public class ComposeKeyedTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IPipelineStep));
 
         using var provider = services.BuildServiceProvider();
-        Assert.Null(provider.GetKeyedService<IPipelineStep>("email"));
+        Assert.Null(provider.GetKeyedService<IPipelineStep>(EmailKey));
     }
 
     [Fact]
     public void DecomposeKeyed_WithoutPriorCompose_Throws()
     {
         var services = new ServiceCollection();
-        services.AddKeyedSingleton<IPipelineStep, StepA>("email");
+        services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
 
         var ex = Assert.Throws<InvalidOperationException>(
-            () => services.DecomposeKeyed<IPipelineStep>("email"));
+            () => services.DecomposeKeyed<IPipelineStep>(EmailKey));
 
         Assert.Contains(nameof(IPipelineStep), ex.Message);
-        Assert.Contains("email", ex.Message);
+        Assert.Contains(EmailKey, ex.Message);
     }
 
     [Fact]
@@ -133,11 +135,11 @@ public class ComposeKeyedTests
     {
         var services = NewKeyedFamily();
 
-        var members = services.DecomposeKeyed<IPipelineStep>("email");
+        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
         members.Insert(1, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.ComposeKeyed<IPipelineStep>("email", members);
+        services.ComposeKeyed<IPipelineStep>(EmailKey, members);
 
-        Assert.Equal("A,C,B", ResolveKeyedName(services, "email"));
+        Assert.Equal("A,C,B", ResolveKeyedName(services, EmailKey));
     }
 
     [Fact]
@@ -145,23 +147,23 @@ public class ComposeKeyedTests
     {
         var services = NewKeyedFamily();
 
-        services.RecomposeKeyed<IPipelineStep>("email", members =>
+        services.RecomposeKeyed<IPipelineStep>(EmailKey, members =>
         {
             members.RemoveAll(member => member.ResolveImplementationType() == typeof(StepB));
             members.Insert(0, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
         });
 
-        Assert.Equal("C,A", ResolveKeyedName(services, "email"));
+        Assert.Equal("C,A", ResolveKeyedName(services, EmailKey));
     }
 
     [Fact]
     public void ComposeKeyed_SecondTimeForSameKey_Throws()
     {
         var services = NewKeyedFamily();
-        services.AddKeyedSingleton<IPipelineStep, StepC>("email");
+        services.AddKeyedSingleton<IPipelineStep, StepC>(EmailKey);
 
         var ex = Assert.Throws<InvalidOperationException>(
-            () => services.ComposeKeyed<IPipelineStep, PipelineComposite>("email"));
+            () => services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey));
 
         Assert.Contains(nameof(PipelineComposite), ex.Message);
     }
@@ -171,15 +173,15 @@ public class ComposeKeyedTests
     {
         var services = NewKeyedFamily();
 
-        var members = services.DecomposeKeyed<IPipelineStep>("email");
+        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
         members.Add(ServiceDescriptor.Scoped<IPipelineStep, StepC>());
-        services.ComposeKeyed<IPipelineStep>("email", members);
+        services.ComposeKeyed<IPipelineStep>(EmailKey, members);
 
         var compositeDescriptor = Assert.Single(
             services,
             descriptor => descriptor is { IsKeyedService: true } &&
                           descriptor.ServiceType == typeof(IPipelineStep) &&
-                          Equals(descriptor.ServiceKey, "email"));
+                          Equals(descriptor.ServiceKey, EmailKey));
         Assert.Equal(ServiceLifetime.Scoped, compositeDescriptor.Lifetime);
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -187,7 +189,7 @@ public class ComposeKeyedTests
             ValidateScopes = true,
         });
         using var scope = provider.CreateScope();
-        Assert.Equal("A,B,C", scope.ServiceProvider.GetRequiredKeyedService<IPipelineStep>("email").Name);
+        Assert.Equal("A,B,C", scope.ServiceProvider.GetRequiredKeyedService<IPipelineStep>(EmailKey).Name);
     }
 
     /// <summary>
@@ -199,10 +201,10 @@ public class ComposeKeyedTests
     {
         var services = NewKeyedFamily();
 
-        services.RecomposeKeyed<IPipelineStep>("email", members =>
+        services.RecomposeKeyed<IPipelineStep>(EmailKey, members =>
             members.Add(ServiceDescriptor.Singleton<IPipelineStep, StepC>()));
 
-        var reopened = services.DecomposeKeyed<IPipelineStep>("email");
+        var reopened = services.DecomposeKeyed<IPipelineStep>(EmailKey);
 
         Assert.Equal(
             [typeof(StepA), typeof(StepB), typeof(StepC)],
