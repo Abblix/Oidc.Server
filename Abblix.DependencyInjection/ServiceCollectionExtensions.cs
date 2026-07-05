@@ -429,26 +429,6 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Edits a composed family in one call: opens it with <see cref="Decompose{TInterface}"/>, applies
-    /// <paramref name="edit"/> to the live <see cref="IComposition{TInterface}"/> cursor, and returns the
-    /// collection. Because the cursor is live, the edits take effect at resolve with no separate recompose —
-    /// this is a fluent shorthand, not a detach-and-reattach.
-    /// </summary>
-    /// <typeparam name="TInterface">The composed interface type.</typeparam>
-    /// <param name="services">The <see cref="IServiceCollection"/> holding the composed family.</param>
-    /// <param name="edit">Receives the live cursor over the family's members, to edit in place.</param>
-    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
-    /// <exception cref="InvalidOperationException">The family has not been composed.</exception>
-    public static IServiceCollection Recompose<TInterface>(
-        this IServiceCollection services,
-        Action<IComposition<TInterface>> edit)
-        where TInterface : class
-    {
-        edit(services.Decompose<TInterface>());
-        return services;
-    }
-
-    /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
     /// <paramref name="serviceKey"/> into a single composite resolvable under that same key — the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
@@ -540,31 +520,10 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Edits a composed keyed family in one call: opens it with <see cref="DecomposeKeyed{TInterface}"/>,
-    /// applies <paramref name="edit"/> to the live <see cref="IComposition{TInterface}"/> cursor, and returns
-    /// the collection. The cursor is live, so the edits take effect at resolve with no separate recompose.
-    /// </summary>
-    /// <typeparam name="TInterface">The composed interface type.</typeparam>
-    /// <param name="services">The <see cref="IServiceCollection"/> holding the composed family.</param>
-    /// <param name="serviceKey">The service key the family was composed under.</param>
-    /// <param name="edit">Receives the live cursor over the family's members, to edit in place.</param>
-    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
-    /// <exception cref="InvalidOperationException">The family has not been composed under this key.</exception>
-    public static IServiceCollection RecomposeKeyed<TInterface>(
-        this IServiceCollection services,
-        object serviceKey,
-        Action<IComposition<TInterface>> edit)
-        where TInterface : class
-    {
-        edit(services.DecomposeKeyed<TInterface>(serviceKey));
-        return services;
-    }
-
-    /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
     /// <paramref name="compositeType"/> under <paramref name="serviceKey"/> — the keyed sibling of
     /// <see cref="EnsureNotComposed"/>. The sanctioned way to edit an already-composed keyed family is
-    /// <see cref="DecomposeKeyed{TInterface}"/> followed by composing the edited member list.
+    /// <see cref="DecomposeKeyed{TInterface}"/> and editing the live cursor it returns.
     /// </summary>
     private static void EnsureNotComposedKeyed(
         this IServiceCollection services, Type interfaceType, Type compositeType, object serviceKey)
@@ -581,8 +540,7 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException(
                 $"{compositeType.Name} is already composed for the {interfaceType.Name} pipeline keyed by " +
                 $"'{serviceKey}'. Composing it a second time would build a self-referential composite that " +
-                "deadlocks on the first resolve. Call DecomposeKeyed to take the composed family apart and " +
-                "compose the edited member list again.");
+                "deadlocks on the first resolve. Call DecomposeKeyed and edit the live cursor it returns.");
         }
     }
 
@@ -634,7 +592,7 @@ public static class ServiceCollectionExtensions
     /// happens when an opt-in feature is applied twice (e.g. two registration modules both call
     /// AddBackChannelAuthentication or AddDeviceAuthorization) or a public compose-family method is called
     /// before AddOidcCore, which composes it again. The sanctioned way to edit an already-composed family is
-    /// <see cref="Decompose{TInterface}"/> followed by composing the edited member list.
+    /// <see cref="Decompose{TInterface}"/> and editing the live cursor it returns.
     /// </summary>
     private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType, Type compositeType)
     {
@@ -644,8 +602,8 @@ public static class ServiceCollectionExtensions
                 $"{compositeType.Name} is already registered, so the {interfaceType.Name} pipeline has " +
                 "already been composed. Composing it a second time would build a self-referential composite that " +
                 $"deadlocks on the first resolve. Register all {interfaceType.Name} implementations before " +
-                "AddOidcCore/AddOidcServices, which composes each family once, or call Decompose to take the " +
-                "composed family apart and compose the edited member list again.");
+                "AddOidcCore/AddOidcServices, which composes each family once, or call Decompose and edit the " +
+                "live cursor it returns.");
         }
     }
 

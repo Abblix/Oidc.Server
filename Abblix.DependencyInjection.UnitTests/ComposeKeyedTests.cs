@@ -136,13 +136,13 @@ public class ComposeKeyedTests
     }
 
     [Fact]
-    public void RecomposeKeyed_AppliesEditsInOneCall()
+    public void DecomposeKeyed_ChainedEdits_ApplyLive()
     {
         var services = KeyedFamily();
 
-        services.RecomposeKeyed<IPipelineStep>(EmailKey, composition => composition
+        services.DecomposeKeyed<IPipelineStep>(EmailKey)
             .Remove<StepB>()
-            .AddFirst(Step<StepC>()));
+            .AddFirst(Step<StepC>());
 
         Assert.Equal("C,A", ResolveKeyed(services, EmailKey));
     }

@@ -180,17 +180,6 @@ public class DecomposeTests
     }
 
     [Fact]
-    public void Recompose_AppliesEditsInOneCall()
-    {
-        var services = ComposedFamily();
-
-        services.Recompose<IPipelineStep>(composition =>
-            composition.AddAfter<StepA>(Step<StepC>()));
-
-        Assert.Equal("A,C,B", Resolve(services));
-    }
-
-    [Fact]
     public void Decompose_AfterEdit_ReflectsThePriorEdit()
     {
         var services = ComposedFamily();
