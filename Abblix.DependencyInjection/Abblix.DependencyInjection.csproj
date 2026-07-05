@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.DependencyInjection</PackageId>
     <Title>Abblix DependencyInjection</Title>
-    <Description>Enhances .NET applications by extending the .NET Dependency Injection framework. It supports essential patterns such as service aliasing, composite services and decorators, simplifying and enhancing service registration and resolution processes.</Description>
+    <Description>Dependency-injection helpers for .NET: service aliasing, composition, decorators, and keyed registration that lets host registrations win. The DI layer behind Abblix OIDC Server, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.Utils</PackageId>
     <Title>Abblix Utils</Title>
-    <Description>Abblix.Utils is a comprehensive utility library for .NET that enhances data manipulation and processing capabilities across applications. It includes advanced URI and string manipulation tools, cryptographic functionalities, and custom JSON converters to streamline serialization tasks. Key features include handling complex URI components, extending string operations, providing secure random data generation, and implementing custom converters for efficient JSON processing.</Description>
+    <Description>Utility types shared across the Abblix OpenID Connect and OAuth 2.0 libraries: URI and string helpers, secure random generation, and custom JSON converters. Usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

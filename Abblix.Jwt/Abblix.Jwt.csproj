@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.JWT</PackageId>
     <Title>Abblix JWT</Title>
-    <Description>A lightweight, easy-to-use library for working with JSON Web Tokens (JWT) in .NET applications. Features include token validation, custom claims, signature verification, and audience validation, making it an ideal choice for developers looking to secure their .NET applications efficiently.</Description>
+    <Description>A JWT and JOSE toolkit for .NET: token signing, encryption, validation, custom claims, and JSON Web Key handling. The token layer behind Abblix OIDC Server, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

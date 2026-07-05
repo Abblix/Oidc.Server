@@ -13,7 +13,7 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
         <PackageId>Abblix.OIDC.Server.MinimalApi</PackageId>
         <Title>Abblix OIDC Server Minimal API</Title>
-        <Description>The package integrates Abblix's OIDC Server capabilities with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as the MVC integration without taking a dependency on the MVC framework.</Description>
+        <Description>ASP.NET Core Minimal API integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Maps its protocol endpoints as Minimal API route handlers, with no MVC dependency.</Description>
         <Authors>Abblix LLP</Authors>
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
