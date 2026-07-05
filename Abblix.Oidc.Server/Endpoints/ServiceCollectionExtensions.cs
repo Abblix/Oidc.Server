@@ -94,7 +94,11 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>();
         services.TryAddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>();
-        services.TryAddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
+        // Singleton, unlike its scoped neighbours: JwtAlgorithmsProvider is a stateless projection over the
+        // singleton IJsonWebTokenCreator/IJsonWebTokenValidator, so scoping it would only make it a captive
+        // dependency of the singleton client-registration validators (SigningAlgorithmsValidator and
+        // SignedResponseAlgorithmsValidator) that consume it.
+        services.TryAddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
         services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
         services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
         return services;
