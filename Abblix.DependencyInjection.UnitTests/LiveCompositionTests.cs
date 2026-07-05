@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -49,31 +48,5 @@ public class LiveCompositionTests
         using var provider = services.BuildServiceProvider();
 
         Assert.Equal("A,B,C", provider.GetRequiredService<IPipelineStep>().Name);
-    }
-
-    /// <summary>
-    /// Members stay real (keyed) registrations rather than living in a private holder, so the container sees them
-    /// and ValidateOnBuild validates each member's dependency graph at build time — a member with an unregistered
-    /// dependency fails the build up front, not at first resolve.
-    /// </summary>
-    /// <remarks>
-    /// Skipped because ValidateOnBuild is silently suppressed inside the xunit.v3 / Microsoft.Testing.Platform
-    /// test host (the same call throws correctly in a clean console app on MEDI 10.0.8, Debug and Release, at
-    /// shallow and deep stacks — so it is a host quirk, not a container or design defect). The assertion below is
-    /// the real, console-verified behaviour; re-enable if the test host stops suppressing ValidateOnBuild.
-    /// </remarks>
-    [Fact(Skip = "ValidateOnBuild is suppressed in the xunit.v3/MTP test host; verified throwing in a clean console app.")]
-    public void ValidateOnBuild_CatchesAMemberWithAnUnresolvableDependency()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IPipelineStep, StepA>();
-        services.AddSingleton<IPipelineStep, StepNeedingMissingDependency>();
-        services.Compose<IPipelineStep, PipelineComposite>();
-
-        var exception = Record.Exception(
-            () => services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true }));
-
-        Assert.NotNull(exception);
-        Assert.Contains(nameof(IUnregisteredDependency), exception.ToString());
     }
 }

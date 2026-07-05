@@ -44,16 +44,3 @@ internal sealed class PipelineComposite : IPipelineStep
     public IPipelineStep[] Steps { get; }
     public string Name => string.Join(",", Steps.Select(step => step.Name));
 }
-
-/// <summary>An interface no test registers — used to prove build-time dependency validation.</summary>
-internal interface IUnregisteredDependency
-{
-}
-
-/// <summary>A step whose constructor needs an unregistered dependency, so it cannot be built.</summary>
-internal sealed class StepNeedingMissingDependency : IPipelineStep
-{
-    public StepNeedingMissingDependency(IUnregisteredDependency dependency) => Dependency = dependency;
-    public IUnregisteredDependency Dependency { get; }
-    public string Name => "needs-missing";
-}
