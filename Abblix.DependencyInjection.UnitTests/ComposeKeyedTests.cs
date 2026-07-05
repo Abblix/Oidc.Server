@@ -28,17 +28,17 @@ using Xunit;
 namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
-/// Locks the contract of the keyed family API: keyed registrations under a host-chosen service key compose
-/// into a composite resolvable under that same key, member data is stored under a
-/// <see cref="ComposedFamilyKey"/> pairing the service key with the composite type — so same-interface
-/// families under different keys stay isolated — and DecomposeKeyed/ComposeKeyed/RecomposeKeyed mirror the
-/// plain list-editing workflow.
+/// Locks the keyed live-cursor family API: several pipelines of one interface, each composed under its own key,
+/// stay isolated (members keyed by a <see cref="ComposedFamilyKey"/> pairing the service key with the composite
+/// type); DecomposeKeyed returns a live cursor whose edits reach the keyed composite at resolve; and the plain
+/// and keyed families coexist.
 /// </summary>
 public class ComposeKeyedTests
 {
     private const string EmailKey = "email";
+    private const string SmsKey = "sms";
 
-    private static ServiceCollection NewKeyedFamily(string serviceKey = EmailKey)
+    private static ServiceCollection KeyedFamily(string serviceKey = EmailKey)
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(serviceKey);
@@ -47,29 +47,30 @@ public class ComposeKeyedTests
         return services;
     }
 
-    private static string ResolveKeyedName(IServiceCollection services, string serviceKey)
+    private static string ResolveKeyed(IServiceCollection services, string serviceKey)
     {
         using var provider = services.BuildServiceProvider();
         return provider.GetRequiredKeyedService<IPipelineStep>(serviceKey).Name;
     }
 
+    private static ServiceDescriptor Step<TStep>() where TStep : class, IPipelineStep
+        => ServiceDescriptor.Singleton<IPipelineStep, TStep>();
+
     [Fact]
-    public void ComposeKeyed_Once_ComposesMembersUnderTheServiceKey()
+    public void ComposeKeyed_FoldsTheFamilyUnderTheKey()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
 
         using var provider = services.BuildServiceProvider();
-        var composed = provider.GetRequiredKeyedService<IPipelineStep>(EmailKey);
 
-        Assert.IsType<PipelineComposite>(composed);
-        Assert.Equal("A,B", composed.Name);
+        Assert.IsType<PipelineComposite>(provider.GetRequiredKeyedService<IPipelineStep>(EmailKey));
+        Assert.Equal("A,B", provider.GetRequiredKeyedService<IPipelineStep>(EmailKey).Name);
         Assert.Null(provider.GetService<IPipelineStep>());
     }
 
     /// <summary>
-    /// The reason members are keyed by a (service key, composite type) pair: two families of the same
-    /// interface under different keys — even sharing the composite class — must not leak members into
-    /// each other.
+    /// Two families of the same interface and composite class under different keys must not leak members into
+    /// each other — the reason members are keyed by a (service key, composite type) pair.
     /// </summary>
     [Fact]
     public void ComposeKeyed_TwoFamiliesSameInterfaceAndComposite_StayIsolated()
@@ -77,19 +78,19 @@ public class ComposeKeyedTests
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
         services.AddKeyedSingleton<IPipelineStep, StepB>(EmailKey);
-        services.AddKeyedSingleton<IPipelineStep, StepC>("sms");
-        services.AddKeyedSingleton<IPipelineStep, StepA>("sms");
+        services.AddKeyedSingleton<IPipelineStep, StepC>(SmsKey);
+        services.AddKeyedSingleton<IPipelineStep, StepA>(SmsKey);
         services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey);
-        services.ComposeKeyed<IPipelineStep, PipelineComposite>("sms");
+        services.ComposeKeyed<IPipelineStep, PipelineComposite>(SmsKey);
 
-        Assert.Equal("A,B", ResolveKeyedName(services, EmailKey));
-        Assert.Equal("C,A", ResolveKeyedName(services, "sms"));
+        Assert.Equal("A,B", ResolveKeyed(services, EmailKey));
+        Assert.Equal("C,A", ResolveKeyed(services, SmsKey));
     }
 
     [Fact]
     public void ComposeKeyed_PlainFamilyOfSameInterface_Coexists()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
         services.AddSingleton<IPipelineStep, StepC>();
         services.AddSingleton<IPipelineStep, StepA>();
         services.Compose<IPipelineStep, PipelineComposite>();
@@ -101,20 +102,15 @@ public class ComposeKeyedTests
     }
 
     [Fact]
-    public void DecomposeKeyed_ReturnsMembersInOrderAndStripsFamily()
+    public void DecomposeKeyed_ExposesMembersInOrder()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
 
-        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
+        var composition = services.DecomposeKeyed<IPipelineStep>(EmailKey);
 
         Assert.Equal(
             [typeof(StepA), typeof(StepB)],
-            members.Select(member => member.ResolveImplementationType()).ToArray());
-
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IPipelineStep));
-
-        using var provider = services.BuildServiceProvider();
-        Assert.Null(provider.GetKeyedService<IPipelineStep>(EmailKey));
+            composition.Select(member => member.ResolveImplementationType()).ToArray());
     }
 
     [Fact]
@@ -123,86 +119,62 @@ public class ComposeKeyedTests
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
 
-        var ex = Assert.Throws<InvalidOperationException>(
+        var exception = Assert.Throws<InvalidOperationException>(
             () => services.DecomposeKeyed<IPipelineStep>(EmailKey));
-
-        Assert.Contains(nameof(IPipelineStep), ex.Message);
-        Assert.Contains(EmailKey, ex.Message);
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
+        Assert.Contains(EmailKey, exception.Message);
     }
 
     [Fact]
-    public void ComposeKeyed_WithEditedMembers_InsertsStepBetween()
+    public void DecomposeKeyed_AddAfter_IsVisibleAtResolve_WithNoRecompose()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
 
-        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
-        members.Insert(1, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.ComposeKeyed<IPipelineStep>(EmailKey, members);
+        services.DecomposeKeyed<IPipelineStep>(EmailKey).AddAfter<StepA>(Step<StepC>());
 
-        Assert.Equal("A,C,B", ResolveKeyedName(services, EmailKey));
+        Assert.Equal("A,C,B", ResolveKeyed(services, EmailKey));
     }
 
     [Fact]
-    public void RecomposeKeyed_WithModifyAction_AppliesEditsInOneCall()
+    public void RecomposeKeyed_AppliesEditsInOneCall()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
 
-        services.RecomposeKeyed<IPipelineStep>(EmailKey, members =>
-        {
-            members.RemoveAll(member => member.ResolveImplementationType() == typeof(StepB));
-            members.Insert(0, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        });
+        services.RecomposeKeyed<IPipelineStep>(EmailKey, composition => composition
+            .Remove<StepB>()
+            .AddFirst(Step<StepC>()));
 
-        Assert.Equal("C,A", ResolveKeyedName(services, EmailKey));
+        Assert.Equal("C,A", ResolveKeyed(services, EmailKey));
     }
 
     [Fact]
     public void ComposeKeyed_SecondTimeForSameKey_Throws()
     {
-        var services = NewKeyedFamily();
+        var services = KeyedFamily();
         services.AddKeyedSingleton<IPipelineStep, StepC>(EmailKey);
 
-        var ex = Assert.Throws<InvalidOperationException>(
+        var exception = Assert.Throws<InvalidOperationException>(
             () => services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey));
-
-        Assert.Contains(nameof(PipelineComposite), ex.Message);
+        Assert.Contains(nameof(PipelineComposite), exception.Message);
     }
 
     [Fact]
-    public void ComposeKeyed_WithScopedMember_PromotesCompositeToScoped()
+    public void ComposeKeyed_MixedMemberLifetimes_Throws()
     {
-        var services = NewKeyedFamily();
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
+        services.AddKeyedScoped<IPipelineStep, StepB>(EmailKey);
 
-        var members = services.DecomposeKeyed<IPipelineStep>(EmailKey);
-        members.Add(ServiceDescriptor.Scoped<IPipelineStep, StepC>());
-        services.ComposeKeyed<IPipelineStep>(EmailKey, members);
-
-        var compositeDescriptor = Assert.Single(
-            services,
-            descriptor => descriptor is { IsKeyedService: true } &&
-                          descriptor.ServiceType == typeof(IPipelineStep) &&
-                          Equals(descriptor.ServiceKey, EmailKey));
-        Assert.Equal(ServiceLifetime.Scoped, compositeDescriptor.Lifetime);
-
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
-        {
-            ValidateScopes = true,
-        });
-        using var scope = provider.CreateScope();
-        Assert.Equal("A,B,C", scope.ServiceProvider.GetRequiredKeyedService<IPipelineStep>(EmailKey).Name);
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.ComposeKeyed<IPipelineStep, PipelineComposite>(EmailKey));
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
     }
 
-    /// <summary>
-    /// The cycle is repeatable and the member keys are self-describing: a recomposed keyed family can be
-    /// decomposed again and reflects the earlier edits.
-    /// </summary>
     [Fact]
-    public void DecomposeKeyed_AfterRecompose_ReturnsEditedFamily()
+    public void DecomposeKeyed_AfterEdit_ReflectsThePriorEdit()
     {
-        var services = NewKeyedFamily();
-
-        services.RecomposeKeyed<IPipelineStep>(EmailKey, members =>
-            members.Add(ServiceDescriptor.Singleton<IPipelineStep, StepC>()));
+        var services = KeyedFamily();
+        services.DecomposeKeyed<IPipelineStep>(EmailKey).AddLast(Step<StepC>());
 
         var reopened = services.DecomposeKeyed<IPipelineStep>(EmailKey);
 

@@ -23,302 +23,217 @@
 using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Abblix.DependencyInjection.UnitTests;
 
-internal interface IPipelineStep
-{
-    string Name { get; }
-}
-
-internal sealed class StepA : IPipelineStep { public string Name => "A"; }
-internal sealed class StepB : IPipelineStep { public string Name => "B"; }
-internal sealed class StepC : IPipelineStep { public string Name => "C"; }
-
 /// <summary>
-/// Composite over <see cref="IPipelineStep"/> that reports its children in execution order,
-/// so tests can assert the exact family composition after Decompose/Compose round-trips.
-/// </summary>
-internal sealed class PipelineComposite : IPipelineStep
-{
-    public PipelineComposite(IPipelineStep[] steps) => Steps = steps;
-    public IPipelineStep[] Steps { get; }
-    public string Name => string.Join(",", Steps.Select(step => step.Name));
-}
-
-/// <summary>
-/// Locks the contract of the family recomposition API: Compose keeps the family as keyed descriptor data,
-/// Decompose returns that data as an editable member list, and the single-generic Compose overload rebuilds the family from
-/// the edited list without the host ever naming the composite type — insertion at any position, removal and reordering are plain list operations.
+/// Locks the plain live-cursor family API: <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/>
+/// folds a family into one composite; <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/> returns a
+/// live <see cref="IComposition{TInterface}"/> cursor whose edits reach the composite at resolve with no recompose;
+/// and <see cref="CompositionExtensions"/> adds position-aware sugar. Mixed member lifetimes fail loudly.
 /// </summary>
 public class DecomposeTests
 {
-    private static ServiceCollection NewComposedFamily()
+    private static ServiceCollection ComposedFamily()
     {
         var services = new ServiceCollection();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepB>());
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddSingleton<IPipelineStep, StepB>();
         services.Compose<IPipelineStep, PipelineComposite>();
         return services;
     }
 
-    private static string ResolveComposedName(IServiceCollection services, bool validateScopes = false)
+    private static string Resolve(IServiceCollection services)
     {
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
-        {
-            ValidateScopes = validateScopes,
-        });
-        using var scope = provider.CreateScope();
-        return scope.ServiceProvider.GetRequiredService<IPipelineStep>().Name;
+        using var provider = services.BuildServiceProvider();
+        return provider.GetRequiredService<IPipelineStep>().Name;
     }
 
-    /// <summary>
-    /// The structural contract of the keyed-family rework: composition moves the leaves into keyed
-    /// registrations whose service key is the composite type — the descriptors themselves are the family
-    /// registry — while the plain resolve still yields only the composite.
-    /// </summary>
-    [Fact]
-    public void Compose_Once_KeepsLeavesAsKeyedFamilyData()
-    {
-        var services = NewComposedFamily();
+    private static ServiceDescriptor Step<TStep>() where TStep : class, IPipelineStep
+        => ServiceDescriptor.Singleton<IPipelineStep, TStep>();
 
-        var keyedLeaves = services
-            .Where(descriptor => descriptor is { IsKeyedService: true } &&
-                                 descriptor.ServiceType == typeof(IPipelineStep) &&
-                                 Equals(descriptor.ServiceKey, typeof(PipelineComposite)))
-            .ToArray();
-        Assert.Equal(2, keyedLeaves.Length);
+    [Fact]
+    public void Compose_FoldsTheFamilyIntoOneComposite()
+    {
+        var services = ComposedFamily();
 
         using var provider = services.BuildServiceProvider();
-        var plainResolved = provider.GetServices<IPipelineStep>().ToArray();
-        var single = Assert.Single(plainResolved);
-        Assert.IsType<PipelineComposite>(single);
+
+        Assert.IsType<PipelineComposite>(provider.GetRequiredService<IPipelineStep>());
+        Assert.Equal("A,B", provider.GetRequiredService<IPipelineStep>().Name);
     }
 
     [Fact]
-    public void Compose_Once_CompositeReceivesLeavesInRegistrationOrder()
+    public void Compose_HidesMembersFromPluralResolution()
     {
-        var services = NewComposedFamily();
-
-        Assert.Equal("A,B", ResolveComposedName(services));
-    }
-
-    [Fact]
-    public void Decompose_ComposedFamily_ReturnsMembersInOrderAndStripsFamily()
-    {
-        var services = NewComposedFamily();
-
-        var members = services.Decompose<IPipelineStep>();
-
-        Assert.Equal(
-            [typeof(StepA), typeof(StepB)],
-            members.Select(member => member.ResolveImplementationType()).ToArray());
-
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IPipelineStep));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(PipelineComposite));
+        var services = ComposedFamily();
 
         using var provider = services.BuildServiceProvider();
-        Assert.Null(provider.GetService<IPipelineStep>());
+
+        // Plural resolution yields a single element — the composite; members are keyed, invisible to plain resolve.
+        Assert.Single(provider.GetServices<IPipelineStep>());
     }
 
     [Fact]
     public void Decompose_WithoutPriorCompose_Throws()
     {
         var services = new ServiceCollection();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
+        services.AddSingleton<IPipelineStep, StepA>();
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => services.Decompose<IPipelineStep>());
-
-        Assert.Contains(nameof(IPipelineStep), ex.Message);
+        var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
     }
 
     [Fact]
-    public void Compose_WithEditedMembers_InsertsStepBetween()
+    public void Decompose_ExposesMembersInExecutionOrder()
     {
-        var services = NewComposedFamily();
+        var services = ComposedFamily();
 
-        var members = services.Decompose<IPipelineStep>();
-        members.Insert(1, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.Compose<IPipelineStep>(members);
+        var composition = services.Decompose<IPipelineStep>();
 
-        Assert.Equal("A,C,B", ResolveComposedName(services));
-    }
-
-    [Fact]
-    public void Compose_WithEditedMembers_RemovesStep()
-    {
-        var services = NewComposedFamily();
-
-        var members = services.Decompose<IPipelineStep>();
-        members.RemoveAll(member => member.ResolveImplementationType() == typeof(StepA));
-        services.Compose<IPipelineStep>(members);
-
-        Assert.Equal("B", ResolveComposedName(services));
-    }
-
-    [Fact]
-    public void Compose_WithReorderedMembers_ReversesExecutionOrder()
-    {
-        var services = NewComposedFamily();
-
-        var members = services.Decompose<IPipelineStep>();
-        members.Reverse();
-        services.Compose<IPipelineStep>(members);
-
-        Assert.Equal("B,A", ResolveComposedName(services));
-    }
-
-    /// <summary>
-    /// Reordering is not limited to wholesale reversal: an arbitrary single-member move lands exactly
-    /// where the list says, and the new order survives a further decompose/compose cycle.
-    /// </summary>
-    [Fact]
-    public void Recompose_MovingMemberToFront_ChangesExecutionOrder()
-    {
-        var services = new ServiceCollection();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepB>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.Compose<IPipelineStep, PipelineComposite>();
-
-        services.Recompose<IPipelineStep>(members =>
-        {
-            var last = members[^1];
-            members.RemoveAt(members.Count - 1);
-            members.Insert(0, last);
-        });
-
-        Assert.Equal("C,A,B", ResolveComposedName(services));
-
-        var reopened = services.Decompose<IPipelineStep>();
         Assert.Equal(
-            [typeof(StepC), typeof(StepA), typeof(StepB)],
-            reopened.Select(member => member.ResolveImplementationType()).ToArray());
+            [typeof(StepA), typeof(StepB)],
+            composition.Select(member => member.ResolveImplementationType()).ToArray());
     }
 
     [Fact]
-    public void Compose_WithEmptyMembers_Throws()
+    public void AddLast_IsVisibleAtResolve_WithNoRecompose()
     {
-        var services = NewComposedFamily();
+        var services = ComposedFamily();
 
-        services.Decompose<IPipelineStep>();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => services.Compose<IPipelineStep>(Array.Empty<ServiceDescriptor>()));
-
-        Assert.Contains(nameof(IPipelineStep), ex.Message);
+        Assert.Equal("A,B,C", Resolve(services));
     }
 
-    /// <summary>
-    /// The composite type travels in the service keys of the members returned by Decompose; a list built
-    /// entirely of new plain descriptors carries no composite type and must fail loud instead of guessing.
-    /// </summary>
     [Fact]
-    public void Compose_WithOnlyNewMembers_ThrowsExplainingUnknownComposite()
+    public void AddFirst_PrependsTheStep()
     {
-        var services = NewComposedFamily();
-        services.Decompose<IPipelineStep>();
+        var services = ComposedFamily();
 
-        var newcomers = new[] { ServiceDescriptor.Singleton<IPipelineStep, StepC>() };
+        services.Decompose<IPipelineStep>().AddFirst(Step<StepC>());
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => services.Compose<IPipelineStep>(newcomers));
-
-        Assert.Contains(nameof(IPipelineStep), ex.Message);
-        Assert.Contains(nameof(ServiceCollectionExtensions.Decompose), ex.Message);
+        Assert.Equal("C,A,B", Resolve(services));
     }
 
-    /// <summary>
-    /// Family members registered through typed-factory descriptors (the shape
-    /// <see cref="ServiceCollectionExtensions.TryAddEnumerableAlias{TService,TImplementation}"/> produces,
-    /// used by the authorization-grant family) must survive the round-trip: their implementation type stays
-    /// derivable for list editing, and the alias keeps sharing the instance with the concrete registration.
-    /// </summary>
     [Fact]
-    public void Decompose_FactoryRegisteredMember_KeepsIdentityAcrossRecompose()
+    public void AddAfter_InsertsRightAfterTheAnchor()
     {
-        var services = new ServiceCollection();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
-        services.TryAddSingleton<StepB>();
-        services.TryAddEnumerableAlias<IPipelineStep, StepB>();
-        services.Compose<IPipelineStep, PipelineComposite>();
+        var services = ComposedFamily();
 
-        var members = services.Decompose<IPipelineStep>();
-        var anchorIndex = members.FindIndex(member => member.ResolveImplementationType() == typeof(StepB));
-        members.Insert(anchorIndex + 1, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.Compose<IPipelineStep>(members);
+        services.Decompose<IPipelineStep>().AddAfter<StepA>(Step<StepC>());
 
-        using var provider = services.BuildServiceProvider();
-        var composite = Assert.IsType<PipelineComposite>(provider.GetRequiredService<IPipelineStep>());
-
-        Assert.Equal("A,B,C", composite.Name);
-        Assert.Same(provider.GetRequiredService<StepB>(), composite.Steps[1]);
+        Assert.Equal("A,C,B", Resolve(services));
     }
 
-    /// <summary>
-    /// The composite takes the shortest lifetime among the members it is composed from, and the interface
-    /// alias follows — a scoped member must not end up captured inside a singleton composite.
-    /// </summary>
     [Fact]
-    public void Compose_WithScopedMember_PromotesCompositeAndAliasToScoped()
+    public void AddBefore_InsertsRightBeforeTheAnchor()
     {
-        var services = NewComposedFamily();
+        var services = ComposedFamily();
 
-        var members = services.Decompose<IPipelineStep>();
-        members.Add(ServiceDescriptor.Scoped<IPipelineStep, StepC>());
-        services.Compose<IPipelineStep>(members);
+        services.Decompose<IPipelineStep>().AddBefore<StepB>(Step<StepC>());
 
-        var compositeDescriptor = Assert.Single(
-            services, descriptor => descriptor.ServiceType == typeof(PipelineComposite));
-        Assert.Equal(ServiceLifetime.Scoped, compositeDescriptor.Lifetime);
-
-        var aliasDescriptor = Assert.Single(
-            services,
-            descriptor => descriptor is { IsKeyedService: false } &&
-                          descriptor.ServiceType == typeof(IPipelineStep));
-        Assert.Equal(ServiceLifetime.Scoped, aliasDescriptor.Lifetime);
-
-        Assert.Equal("A,B,C", ResolveComposedName(services, validateScopes: true));
+        Assert.Equal("A,C,B", Resolve(services));
     }
 
-    /// <summary>
-    /// Recompose is the one-call shorthand: decompose, hand the list to the action, compose it back
-    /// into the same composite type.
-    /// </summary>
     [Fact]
-    public void Recompose_WithModifyAction_AppliesEditsInOneCall()
+    public void Remove_DropsTheMember()
     {
-        var services = NewComposedFamily();
+        var services = ComposedFamily();
 
-        services.Recompose<IPipelineStep>(members =>
-        {
-            members.RemoveAll(member => member.ResolveImplementationType() == typeof(StepB));
-            members.Insert(0, ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        });
+        services.Decompose<IPipelineStep>().Remove<StepA>();
 
-        Assert.Equal("C,A", ResolveComposedName(services));
+        Assert.Equal("B", Resolve(services));
     }
 
-    /// <summary>
-    /// The cycle is repeatable: a recomposed family can be decomposed again and reflects the earlier edits.
-    /// </summary>
     [Fact]
-    public void Decompose_AfterRecompose_ReturnsEditedFamily()
+    public void Replace_SwapsTheMemberKeepingPosition()
     {
-        var services = NewComposedFamily();
+        var services = ComposedFamily();
 
-        var members = services.Decompose<IPipelineStep>();
-        members.RemoveAll(member => member.ResolveImplementationType() == typeof(StepB));
-        members.Add(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
-        services.Compose<IPipelineStep>(members);
+        services.Decompose<IPipelineStep>().Replace<StepA>(Step<StepC>());
+
+        Assert.Equal("C,B", Resolve(services));
+    }
+
+    [Fact]
+    public void Edits_Chain_OnTheSameCursor()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>()
+            .AddFirst(Step<StepC>())
+            .AddAfter<StepA>(Step<StepC>());
+
+        Assert.Equal("C,A,C,B", Resolve(services));
+    }
+
+    [Fact]
+    public void AddAfter_UnknownAnchor_Throws()
+    {
+        var services = ComposedFamily();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>().AddAfter<StepC>(Step<StepC>()));
+        Assert.Contains(nameof(StepC), exception.Message);
+    }
+
+    [Fact]
+    public void Recompose_AppliesEditsInOneCall()
+    {
+        var services = ComposedFamily();
+
+        services.Recompose<IPipelineStep>(composition =>
+            composition.AddAfter<StepA>(Step<StepC>()));
+
+        Assert.Equal("A,C,B", Resolve(services));
+    }
+
+    [Fact]
+    public void Decompose_AfterEdit_ReflectsThePriorEdit()
+    {
+        var services = ComposedFamily();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
 
         var reopened = services.Decompose<IPipelineStep>();
 
         Assert.Equal(
-            [typeof(StepA), typeof(StepC)],
+            [typeof(StepA), typeof(StepB), typeof(StepC)],
             reopened.Select(member => member.ResolveImplementationType()).ToArray());
+    }
+
+    [Fact]
+    public void Compose_MixedMemberLifetimes_Throws()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddScoped<IPipelineStep, StepB>();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Compose<IPipelineStep, PipelineComposite>());
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
+    public void AddingAMemberOfADifferentLifetime_Throws()
+    {
+        var services = ComposedFamily(); // composed as Singleton
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>()
+                .AddLast(ServiceDescriptor.Scoped<IPipelineStep, StepC>()));
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
+    public void Compose_SecondTimeForSameFamily_Throws()
+    {
+        var services = ComposedFamily();
+        services.AddSingleton<IPipelineStep, StepC>();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Compose<IPipelineStep, PipelineComposite>());
+        Assert.Contains(nameof(PipelineComposite), exception.Message);
     }
 }
