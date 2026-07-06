@@ -358,7 +358,7 @@ public class DecomposeTests
         composition.Clear();
 
         // The composite still resolves; it simply has no steps left.
-        Assert.Equal(0, composition.Count);
+        Assert.Empty(composition);
         Assert.Equal("", Resolve(services));
     }
 

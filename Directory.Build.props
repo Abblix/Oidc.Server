@@ -5,6 +5,13 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
+  <!-- Treat all compiler and analyzer warnings as errors so the build stays clean and regressions
+       surface at build time instead of in review. Test projects keep MTP0001 / xUnit1051 as plain
+       warnings via the IsTestProject NoWarn block below. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
        from git tags. The latest tag (e.g. v2.2) sets the base; commits since the tag bump
        the patch and append the height + pre-release suffix.

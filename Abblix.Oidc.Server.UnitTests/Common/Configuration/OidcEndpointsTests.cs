@@ -41,11 +41,11 @@ public class OidcEndpointsTests
     [Fact]
     public void Base_is_the_always_on_core_set()
     {
-        var expected = OidcEndpoints.Configuration | OidcEndpoints.Keys | OidcEndpoints.Authorize |
+        var alwaysOn = OidcEndpoints.Configuration | OidcEndpoints.Keys | OidcEndpoints.Authorize |
                        OidcEndpoints.Token | OidcEndpoints.UserInfo | OidcEndpoints.EndSession |
                        OidcEndpoints.PushedAuthorizationRequest;
 
-        Assert.Equal(expected, OidcEndpoints.Base);
+        Assert.Equal(OidcEndpoints.Base, alwaysOn);
     }
 
     [Fact]

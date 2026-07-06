@@ -414,7 +414,7 @@ public class DPoPTokenEndpointValidatorTests
                 RequireDPoP = clientRequiresDPoP,
                 SecurityProfile = securityProfile,
                 TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
-                TokenEndpointAuthMethod = tokenEndpointAuthMethod,
+                TokenEndpointAuthMethod = tokenEndpointAuthMethod!,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),
         };

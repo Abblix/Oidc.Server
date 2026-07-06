@@ -79,10 +79,10 @@ public class ReadClientRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.True(response.DpopBoundAccessTokens);
-        Assert.Equal(["payment_initiation"], response.AuthorizationDetailsTypes);
+        Assert.Equal(["payment_initiation"], response.AuthorizationDetailsTypes!);
         Assert.Equal(
             ["urn:ietf:params:oauth:token-type:access_token"],
-            response.TokenExchangeSubjectTokenTypes);
-        Assert.Equal(["https://api.example.com"], response.TokenExchangeAudiences);
+            response.TokenExchangeSubjectTokenTypes!);
+        Assert.Equal(["https://api.example.com"], response.TokenExchangeAudiences!);
     }
 }

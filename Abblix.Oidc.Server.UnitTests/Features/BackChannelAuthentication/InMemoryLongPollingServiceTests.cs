@@ -68,7 +68,8 @@ public class InMemoryLongPollingServiceTests
 
         var completed = await service.WaitForStatusChangeAsync(
             "auth_req_abandoned",
-            TimeSpan.FromMilliseconds(50));
+            TimeSpan.FromMilliseconds(50),
+            TestContext.Current.CancellationToken);
 
         Assert.False(completed);
         Assert.Empty(Waiters(service));
@@ -95,14 +96,15 @@ public class InMemoryLongPollingServiceTests
 
         var timedOut = await service.WaitForStatusChangeAsync(
             authReqId,
-            TimeSpan.FromMilliseconds(50));
+            TimeSpan.FromMilliseconds(50),
+            TestContext.Current.CancellationToken);
         Assert.False(timedOut);
 
         Assert.Equal(1, InnerWaiterCount(service, authReqId));
 
         // Release the persistent waiter (WhenAny returns the cancelled timeout task, so the method
         // returns false rather than throwing) and confirm the key is then dropped.
-        cts.Cancel();
+        await cts.CancelAsync();
         Assert.False(await persistentWait);
         Assert.Empty(Waiters(service));
     }
