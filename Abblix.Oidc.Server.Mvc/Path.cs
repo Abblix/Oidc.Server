@@ -116,6 +116,13 @@ public static class Path
     public const string Configuration = "[" + RoutePrefix + ":configuration?" + WellKnown + "/openid-configuration]";
 
     /// <summary>
+    /// Path for the OAuth 2.0 Authorization Server Metadata document per RFC 8414 Section 3.
+    /// Serves the same metadata as <see cref="Configuration"/> at the oauth-authorization-server well-known suffix,
+    /// so a client that queries only that suffix still resolves the provider's metadata.
+    /// </summary>
+    public const string OAuthAuthorizationServer = "[" + RoutePrefix + ":oauth_authorization_server?" + WellKnown + "/oauth-authorization-server]";
+
+    /// <summary>
     /// Path for the JSON Web Key Set (JWKS) endpoint per OpenID Connect Discovery Section 4.
     /// </summary>
     public const string Keys = "[" + RoutePrefix + ":jwks?" + WellKnown + "/jwks]";

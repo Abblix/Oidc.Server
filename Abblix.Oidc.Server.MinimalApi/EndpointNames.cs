@@ -48,5 +48,6 @@ internal static class EndpointNames
     public const string Register = Prefix + nameof(Register);
     public const string RegisterClient = Prefix + nameof(RegisterClient);
     public const string Configuration = Prefix + nameof(Configuration);
+    public const string OAuthAuthorizationServer = Prefix + nameof(OAuthAuthorizationServer);
     public const string Keys = Prefix + nameof(Keys);
 }

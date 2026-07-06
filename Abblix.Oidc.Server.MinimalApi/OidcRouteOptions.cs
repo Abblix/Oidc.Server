@@ -79,4 +79,10 @@ public sealed class OidcRouteOptions
 
     /// <summary>The JSON Web Key Set endpoint (OpenID Connect Discovery 4).</summary>
     public string Keys { get; set; } = "/.well-known/jwks";
+
+    /// <summary>
+    /// The OAuth 2.0 Authorization Server Metadata document (RFC 8414 §3) — the same metadata served at
+    /// <see cref="Configuration"/>, also exposed at the oauth-authorization-server suffix.
+    /// </summary>
+    public string OAuthAuthorizationServer { get; set; } = "/.well-known/oauth-authorization-server";
 }
