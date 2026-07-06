@@ -32,17 +32,6 @@
     <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- MTP0001 is raised by Microsoft.Testing.Platform when VSTest-specific MSBuild
-       properties (VSTestTestAdapterPath, VSTestTestCaseFilter) are set by the .NET
-       SDK's test-project defaults. MTP ignores them; the warning is informational. -->
-  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
-    <!-- MTP0001 is informational noise from MTP; xUnit1051 is a style nudge (use
-         TestContext.Current.CancellationToken) which does not affect correctness and
-         only applies inside test projects. Both stay warnings (not errors) so test
-         projects compile cleanly under TreatWarningsAsErrors. -->
-    <NoWarn>$(NoWarn);MTP0001;xUnit1051</NoWarn>
-  </PropertyGroup>
-
   <!-- SonarCloud's C# ruleset runs locally at build time via this analyzer.
        Closes the feedback loop so Sonar findings surface in `dotnet build`
        instead of waiting for a CI scan. PrivateAssets=all keeps the analyzer
