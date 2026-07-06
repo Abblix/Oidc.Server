@@ -111,13 +111,15 @@ public class NonceValidatorTests
     }
 
     /// <summary>
-    /// OIDC Core 1.0 §3.3.2.11: nonce is REQUIRED for every Hybrid Flow combination, including
-    /// code token — no id_token is returned from the authorization endpoint, but the one minted
-    /// later from the code must carry the nonce binding. Previously only response types containing
-    /// id_token were checked.
+    /// Verifies that ValidateAsync accepts the code token hybrid combination without nonce.
+    /// Nonce is REQUIRED only when the response_type delivers an id_token from the authorization
+    /// endpoint (OIDC Core 1.0 errata, Nonce Implementation Notes). code token returns no id_token
+    /// there, so nonce stays optional exactly as in pure code flow. The certification module
+    /// oidcc-ensure-request-without-nonce-succeeds-for-code-flow sends this very combination
+    /// without nonce and requires the authorization to succeed.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_CodeTokenResponseTypeWithoutNonce_ShouldReturnError()
+    public async Task ValidateAsync_CodeTokenResponseTypeWithoutNonce_ShouldSucceed()
     {
         // Arrange
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.Token], nonce: null);
@@ -126,8 +128,7 @@ public class NonceValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Null(result);
     }
 
     /// <summary>

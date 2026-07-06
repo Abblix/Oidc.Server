@@ -51,15 +51,17 @@ public class NonceValidator : SyncAuthorizationContextValidatorBase
         var request = context.Request;
         var responseType = request.ResponseType.NotNull(nameof(request.ResponseType));
 
-        // OIDC Core 1.0: the nonce is REQUIRED whenever an ID token is delivered from the
-        // authorization endpoint (§3.2.2.1, response_type contains id_token) and in EVERY Hybrid
-        // Flow combination (§3.3.2.11) — including "code token", where no id_token is returned
-        // directly but the one minted later from the code must still carry the nonce binding.
-        var idTokenRequested = responseType.Contains(ResponseTypes.IdToken);
-        var hybridCodeToken = responseType.Contains(ResponseTypes.Code) &&
-                              responseType.Contains(ResponseTypes.Token);
-
-        if ((idTokenRequested || hybridCodeToken) && string.IsNullOrEmpty(request.Nonce))
+        // The nonce is REQUIRED exactly when the response_type delivers an id_token from the
+        // authorization endpoint, i.e. when it contains id_token (OIDC Core 1.0 §3.2.2.1 for
+        // implicit, §3.3.2.11 for hybrid, as clarified by the Core errata "Nonce Implementation
+        // Notes" and OIDC issues 972 and 1052): the nonce binds the front-channel id_token to the
+        // client session. The "code token" combination is nominally a hybrid flow, yet it returns
+        // NO id_token from the authorization endpoint, so the nonce stays OPTIONAL for it exactly
+        // as in pure code flow (§3.1.2.1). Do not re-add a blanket "every hybrid combination
+        // requires nonce" clause: that reading slipped in once and breaks OIDF certification,
+        // whose module oidcc-ensure-request-without-nonce-succeeds-for-code-flow sends
+        // response_type=code token without a nonce and requires the authorization to succeed.
+        if (responseType.Contains(ResponseTypes.IdToken) && string.IsNullOrEmpty(request.Nonce))
         {
             return context.InvalidRequest(
                 $"Nonce is required for the requested {Parameters.ResponseType}, as specified in OpenID Connect Core 1.0.");
