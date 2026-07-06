@@ -266,4 +266,13 @@ public static class JwtClaimTypes
     /// and can help relying parties understand the strength and nature of the authentication.
     /// </summary>
     public const string AuthenticationMethodReferences = IanaClaimTypes.Amr;
+
+    /// <summary>
+    /// "rt_family" — Abblix private claim (RFC 7519 Section 4.3) binding every refresh token derived from one
+    /// authorization grant into a single lineage: a first-issued token starts a new family, and each rotation
+    /// carries the same value forward. It lets a detected replay revoke the whole family in one registry write.
+    /// No IANA-registered claim captures per-grant refresh-token lineage, and this token is self-issued and
+    /// self-validated, never shown to third parties. See RFC 9700 Section 4.14.2.
+    /// </summary>
+    public const string RefreshTokenFamily = "rt_family";
 }

@@ -75,9 +75,23 @@ public class TokenStatusValidatorDecorator(
 
 		if (result.TryGetSuccess(out var token) && token.Payload.JwtId is { } jwtId)
 		{
+			// Refresh tokens carry a family id (Payload.RefreshTokenFamily); other token types leave it null, so
+			// the family logic below is inert for them. A revoked family is a kill switch that outlives any
+			// single token: once one member's replay trips it, every member — including the currently active
+			// one — is rejected here on its next use (RFC 9700 §4.14.2).
+			var familyId = token.Payload.RefreshTokenFamily;
+
+			if (familyId is not null && await tokenRegistry.GetStatusAsync(familyId) == JsonWebTokenStatus.Revoked)
+				return new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked");
+
 			switch (await tokenRegistry.GetStatusAsync(jwtId))
 			{
 				case JsonWebTokenStatus.Used:
+					// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
+					// so revoke the whole family; the active token dies with it on its next use.
+					if (familyId is not null && token.Payload.ExpiresAt is { } familyExpiresAt)
+						await tokenRegistry.SetStatusAsync(familyId, JsonWebTokenStatus.Revoked, familyExpiresAt);
+
 					return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 
 				case JsonWebTokenStatus.Revoked:

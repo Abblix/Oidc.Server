@@ -76,18 +76,25 @@ public class RefreshTokenService(
 		ClientInfo clientInfo,
 		JsonWebToken? refreshToken)
 	{
-		if (!clientInfo.RefreshToken.AllowReuse &&
-		    refreshToken is { Payload: { JwtId: { } jwtId, ExpiresAt: {} expiresAt }})
-		{
-			// Revokes used refresh token to prevent its reuse
-			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
-		}
-
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
-		expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
+		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 		if (expiresAt < now)
 			return null;
+
+		if (!clientInfo.RefreshToken.AllowReuse &&
+		    refreshToken is { Payload: { JwtId: { } previousJwtId, ExpiresAt: { } previousExpiresAt } })
+		{
+			// Rotation marks the previous token Used ("superseded"), not Revoked ("killed"). A later
+			// presentation of a superseded token is the replay signal that TokenStatusValidatorDecorator
+			// turns into a whole-family revocation (RFC 9700 §4.14.2). Running this only after the expiry
+			// check means a refused renewal never consumes the presented token.
+			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
+		}
+
+		// A first-issued token starts a new family; a rotation carries the existing family forward. The family
+		// ties every refresh token of one authorization grant into a lineage a detected replay can revoke whole.
+		var familyId = refreshToken?.Payload.RefreshTokenFamily ?? tokenIdGenerator.GenerateTokenId();
 
 		var newToken = new JsonWebToken
 		{
@@ -108,6 +115,7 @@ public class RefreshTokenService(
 		};
 		authSession.ApplyTo(newToken.Payload);
 		authContext.ApplyTo(newToken.Payload);
+		newToken.Payload.RefreshTokenFamily = familyId;
 
 		return new EncodedJsonWebToken(newToken, await jwtFormatter.FormatAsync(newToken));
 	}

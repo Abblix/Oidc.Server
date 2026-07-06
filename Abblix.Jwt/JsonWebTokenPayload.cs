@@ -182,6 +182,21 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
+	/// Binds this refresh token to the lineage of every refresh token derived from one authorization grant.
+	/// A first-issued token starts a new family; each rotation carries the value forward, so a detected replay
+	/// can revoke the whole family in one registry write (RFC 9700 Section 4.14.2).
+	/// </summary>
+	/// <remarks>
+	/// Present only on refresh tokens (<c>rt+jwt</c>); absent (null) on all other token types, which leaves
+	/// the family cascade in the token-status validator inert for them.
+	/// </remarks>
+	public string? RefreshTokenFamily
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.RefreshTokenFamily);
+		set => Json.SetProperty(JwtClaimTypes.RefreshTokenFamily, value);
+	}
+
+	/// <summary>
 	/// Represents the time when the authentication occurred, facilitating checks against token freshness
 	/// and replay attacks.
 	/// </summary>
