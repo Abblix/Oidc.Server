@@ -274,4 +274,100 @@ public class DecomposeTests
             () => services.Compose<IPipelineStep, PipelineComposite>());
         Assert.Contains(nameof(PipelineComposite), exception.Message);
     }
+
+    [Fact]
+    public void IsReadOnly_IsFalse()
+    {
+        var services = ComposedFamily();
+
+        Assert.False(services.Decompose<IPipelineStep>().IsReadOnly);
+    }
+
+    [Fact]
+    public void Count_ReflectsTheMemberCount()
+    {
+        var services = ComposedFamily();
+
+        Assert.Equal(2, services.Decompose<IPipelineStep>().Count);
+    }
+
+    [Fact]
+    public void IndexOf_FindsAMemberByImplementationType_FromAFreshPlainDescriptor()
+    {
+        var services = ComposedFamily();
+
+        var composition = services.Decompose<IPipelineStep>();
+
+        // Step<T>() builds a fresh plain descriptor, not the re-keyed instance stored in the family; matching is by
+        // implementation type, so it still resolves to the member's position, and a non-member yields -1.
+        Assert.Equal(0, composition.IndexOf(Step<StepA>()));
+        Assert.Equal(1, composition.IndexOf(Step<StepB>()));
+        Assert.Equal(-1, composition.IndexOf(Step<StepC>()));
+    }
+
+    [Fact]
+    public void Contains_MatchesAMemberByImplementationType()
+    {
+        var services = ComposedFamily();
+
+        var composition = services.Decompose<IPipelineStep>();
+
+        Assert.True(composition.Contains(Step<StepA>()));
+        Assert.False(composition.Contains(Step<StepC>()));
+    }
+
+    [Fact]
+    public void Remove_ByPlainDescriptor_DropsTheMatchingMember()
+    {
+        var services = ComposedFamily();
+
+        Assert.True(services.Decompose<IPipelineStep>().Remove(Step<StepA>()));
+
+        Assert.Equal("B", Resolve(services));
+    }
+
+    [Fact]
+    public void Remove_ByNonMemberDescriptor_ReturnsFalseAndChangesNothing()
+    {
+        var services = ComposedFamily();
+
+        Assert.False(services.Decompose<IPipelineStep>().Remove(Step<StepC>()));
+
+        Assert.Equal("A,B", Resolve(services));
+    }
+
+    [Fact]
+    public void CopyTo_CopiesMembersInExecutionOrder()
+    {
+        var services = ComposedFamily();
+
+        var target = new ServiceDescriptor[2];
+        services.Decompose<IPipelineStep>().CopyTo(target, 0);
+
+        Assert.Equal(
+            [typeof(StepA), typeof(StepB)],
+            target.Select(descriptor => descriptor.ResolveImplementationType()).ToArray());
+    }
+
+    [Fact]
+    public void Clear_RemovesEveryMember()
+    {
+        var services = ComposedFamily();
+
+        var composition = services.Decompose<IPipelineStep>();
+        composition.Clear();
+
+        // The composite still resolves; it simply has no steps left.
+        Assert.Equal(0, composition.Count);
+        Assert.Equal("", Resolve(services));
+    }
+
+    [Fact]
+    public void Insert_WithIndexPastMemberCount_Throws()
+    {
+        var services = ComposedFamily();
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => services.Decompose<IPipelineStep>().Insert(99, Step<StepC>()));
+    }
 }

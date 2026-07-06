@@ -167,8 +167,12 @@ internal sealed class Composition<TInterface>(
 
     public void Insert(int index, ServiceDescriptor item)
     {
-        var keyed = AsFamilyMember(item);
         var indices = MemberIndices();
+        if (index < 0 || index > indices.Count)
+            throw new ArgumentOutOfRangeException(
+                nameof(index), index, $"Index must be between 0 and {indices.Count}, the member count.");
+
+        var keyed = AsFamilyMember(item);
 
         int at;
         if (index < indices.Count)
@@ -201,12 +205,16 @@ internal sealed class Composition<TInterface>(
             services.RemoveAt(index);
     }
 
+    // Match by implementation type, not by reference or descriptor value: a member is stored as a re-keyed copy of
+    // the descriptor the caller passed to Insert/Add, so neither the original reference nor a plain-vs-keyed value
+    // compare would find it. Implementation type is the identity the typed AddAfter<T>/Remove<T> methods use too.
     public int IndexOf(ServiceDescriptor item)
     {
+        var target = item.ResolveImplementationType();
         var indices = MemberIndices();
         for (var position = 0; position < indices.Count; position++)
         {
-            if (ReferenceEquals(services[indices[position]], item))
+            if (services[indices[position]].ResolveImplementationType() == target)
                 return position;
         }
         return -1;
