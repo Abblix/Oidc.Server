@@ -53,4 +53,13 @@ public enum FlowTypes
 	/// </summary>
 	/// <remarks>https://openid.net/specs/openid-connect-core-1_0.html#HybridFlowSteps</remarks>
 	Hybrid = AuthorizationCode | Implicit,
+
+	/// <summary>
+	/// The <c>none</c> response type flow (OAuth 2.0 Multiple Response Type Encoding Practices §4): the
+	/// authorization request runs to completion but the response carries no authorization code and no
+	/// tokens. A distinct non-zero value so it never collides with <c>default(FlowTypes)</c>, which the
+	/// flow detector uses as its "no flow detected" sentinel; it does not combine with the token-part
+	/// flags above.
+	/// </summary>
+	None = 1 << 2,
 }

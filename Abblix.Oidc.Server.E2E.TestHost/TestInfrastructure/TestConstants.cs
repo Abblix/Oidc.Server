@@ -58,6 +58,11 @@ public static class TestConstants
     /// used to verify RFC 8707 resource indicators reach the issued access token's audience.</summary>
     public const string ClientCredentialsClientId = "e2e-client-credentials";
 
+    /// <summary>Client restricted to the OAuth 2.0 <c>none</c> response type (OAuth 2.0 Multiple
+    /// Response Type Encoding Practices §4): the authorization endpoint authorizes the request but
+    /// returns no code or token — only state and iss.</summary>
+    public const string NoneResponseTypeClientId = "e2e-none-response-type";
+
     /// <summary>Shared secret across every pre-seeded client.</summary>
     public const string ConfidentialClientSecret = "e2e-secret";
 

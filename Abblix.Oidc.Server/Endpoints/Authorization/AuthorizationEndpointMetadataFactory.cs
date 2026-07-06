@@ -53,6 +53,7 @@ public static class AuthorizationEndpointMetadataFactory
 			[ResponseTypes.Code],
 			[ResponseTypes.Token],
 			[ResponseTypes.IdToken],
+			[ResponseTypes.None],
 			[ResponseTypes.Code, ResponseTypes.Token],
 			[ResponseTypes.Code, ResponseTypes.IdToken],
 			[ResponseTypes.Token, ResponseTypes.IdToken],
