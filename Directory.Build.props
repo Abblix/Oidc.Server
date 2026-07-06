@@ -5,6 +5,13 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
+  <!-- Treat all compiler and analyzer warnings as errors so the build stays clean and regressions
+       surface at build time instead of in review. Test projects keep MTP0001 / xUnit1051 as plain
+       warnings via the IsTestProject NoWarn block below. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
        from git tags. The latest tag (e.g. v2.2) sets the base; commits since the tag bump
        the patch and append the height + pre-release suffix.
@@ -24,17 +31,6 @@
   <ItemGroup>
     <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>
-
-  <!-- MTP0001 is raised by Microsoft.Testing.Platform when VSTest-specific MSBuild
-       properties (VSTestTestAdapterPath, VSTestTestCaseFilter) are set by the .NET
-       SDK's test-project defaults. MTP ignores them; the warning is informational. -->
-  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
-    <!-- MTP0001 is informational noise from MTP; xUnit1051 is a style nudge (use
-         TestContext.Current.CancellationToken) which does not affect correctness and
-         only applies inside test projects. Both stay warnings (not errors) so test
-         projects compile cleanly under TreatWarningsAsErrors. -->
-    <NoWarn>$(NoWarn);MTP0001;xUnit1051</NoWarn>
-  </PropertyGroup>
 
   <!-- SonarCloud's C# ruleset runs locally at build time via this analyzer.
        Closes the feedback loop so Sonar findings surface in `dotnet build`
