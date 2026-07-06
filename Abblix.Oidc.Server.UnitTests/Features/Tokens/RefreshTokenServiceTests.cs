@@ -54,6 +54,7 @@ public class RefreshTokenServiceTests
     private const string UserId = "user_456";
     private const string SessionId = "session_789";
     private const string TokenId = "token_abc123";
+    private const string GrantId = "grant_xyz789";
     private const string OldTokenId = "old_token_xyz";
     private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InJ0K2p3dCJ9.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
 
@@ -72,6 +73,9 @@ public class RefreshTokenServiceTests
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
 
+        var grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
+        grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(GrantId);
+
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
@@ -80,6 +84,7 @@ public class RefreshTokenServiceTests
             issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
+            grantIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object);
     }
@@ -248,12 +253,14 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that when renewing a token with AllowReuse=false, the old refresh token is revoked.
-    /// Per OAuth 2.0 security best practices, refresh token rotation prevents token reuse attacks.
-    /// The old token's JwtId is registered as revoked in the token registry until its expiration.
+    /// Verifies that when rotating a token (AllowReuse=false), the previous refresh token is marked
+    /// <see cref="JsonWebTokenStatus.Used"/> — superseded, not killed. Per the RFC 9700 Section 4.14.2
+    /// rotation model, a later replay of a superseded token is the breach signal that
+    /// <see cref="TokenStatusValidatorDecorator"/> escalates into a whole-family revocation. Marking it
+    /// Revoked here would lose that signal by collapsing "superseded by rotation" into "explicitly killed".
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_WithRenewalAndNoReuse_ShouldRevokeOldToken()
+    public async Task CreateRefreshToken_WithRenewalAndNoReuse_ShouldMarkOldTokenSuperseded()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -276,7 +283,7 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Revoked, oldTokenExpiry))
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry))
             .Returns(Task.CompletedTask);
 
         _jwtFormatter
@@ -288,8 +295,79 @@ public class RefreshTokenServiceTests
 
         // Assert
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Revoked, oldTokenExpiry),
+            r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry),
             Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that a first-issued refresh token starts a new token family: the
+    /// <c>grant_id</c> claim (<see cref="JsonWebTokenPayload.GrantId"/>) is populated so that
+    /// every token later rotated from it shares one lineage a detected replay can revoke whole
+    /// (RFC 9700 Section 4.14.2).
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_NewToken_ShouldStartNewFamily()
+    {
+        // Arrange
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo();
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
+            .Callback<JsonWebToken>(jwt => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        // Act
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, refreshToken: null);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Equal(GrantId, capturedToken!.Payload.GrantId);
+    }
+
+    /// <summary>
+    /// Verifies that rotation carries the existing token family forward: the new token inherits the previous
+    /// token's <c>grant_id</c> value instead of starting a fresh lineage. This is what lets a replay detected
+    /// on any single token cascade to the whole grant per the RFC 9700 Section 4.14.2 implementation note.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_WithRenewal_ShouldCarryFamilyForward()
+    {
+        // Arrange
+        const string grantId = "grant_root_001";
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AllowReuse = true, // isolate family propagation from the rotation status write
+            AbsoluteExpiresIn = TimeSpan.FromHours(10),
+        });
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-2),
+                ExpiresAt = _currentTime.AddHours(8),
+                GrantId = grantId,
+            }
+        };
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
+            .Callback<JsonWebToken>(jwt => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        // Act
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Equal(grantId, capturedToken!.Payload.GrantId);
     }
 
     /// <summary>
@@ -430,6 +508,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,
             SlidingExpiresIn = slidingExpiry,
+            AllowReuse = true, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -481,6 +560,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,  // 8 hours from IssuedAt
             SlidingExpiresIn = slidingExpiry,    // 10 hours from IssuedAt
+            AllowReuse = true, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -674,6 +754,17 @@ public class RefreshTokenServiceTests
         Assert.True(result.TryGetSuccess(out var grant));
         var refreshGrant = Assert.IsType<Abblix.Oidc.Server.Endpoints.Token.Interfaces.RefreshTokenAuthorizedGrant>(grant);
         Assert.Same(refreshToken, refreshGrant.RefreshToken);
+    }
+
+    /// <summary>
+    /// Verifies the secure-by-default policy: an unconfigured <see cref="RefreshTokenOptions"/> rotates
+    /// (AllowReuse=false). A host that does not explicitly opt a client into multi-use refresh tokens gets
+    /// rotation with family revocation out of the box, satisfying RFC 9700 Section 2.2.2 for public clients.
+    /// </summary>
+    [Fact]
+    public void RefreshTokenOptions_DefaultAllowReuse_ShouldBeFalse()
+    {
+        Assert.False(new RefreshTokenOptions().AllowReuse);
     }
 
     private static AuthSession CreateAuthSession() => new(

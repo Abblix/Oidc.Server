@@ -45,12 +45,14 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="issuerProvider">Provider for the issuer claim in tokens.</param>
 /// <param name="clock">Time provider for token timestamps.</param>
 /// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
+/// <param name="grantIdGenerator">Generator for unique refresh-token grant identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
 public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
+	IGrantIdGenerator grantIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry) : IRefreshTokenService
 {
@@ -76,18 +78,25 @@ public class RefreshTokenService(
 		ClientInfo clientInfo,
 		JsonWebToken? refreshToken)
 	{
-		if (!clientInfo.RefreshToken.AllowReuse &&
-		    refreshToken is { Payload: { JwtId: { } jwtId, ExpiresAt: {} expiresAt }})
-		{
-			// Revokes used refresh token to prevent its reuse
-			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
-		}
-
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
-		expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
+		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 		if (expiresAt < now)
 			return null;
+
+		if (!clientInfo.RefreshToken.AllowReuse &&
+		    refreshToken is { Payload: { JwtId: { } previousJwtId, ExpiresAt: { } previousExpiresAt } })
+		{
+			// Rotation marks the previous token Used ("superseded"), not Revoked ("killed"). A later
+			// presentation of a superseded token is the replay signal that TokenStatusValidatorDecorator
+			// turns into a whole-family revocation (RFC 9700 §4.14.2). Running this only after the expiry
+			// check means a refused renewal never consumes the presented token.
+			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
+		}
+
+		// A first-issued token starts a new grant lineage; a rotation carries the existing grant id forward. The
+		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
+		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
 		var newToken = new JsonWebToken
 		{
@@ -104,6 +113,7 @@ public class RefreshTokenService(
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 				Audiences = [clientInfo.ClientId],
+				GrantId = grantId,
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
