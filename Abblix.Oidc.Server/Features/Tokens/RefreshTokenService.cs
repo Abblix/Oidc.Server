@@ -45,12 +45,14 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="issuerProvider">Provider for the issuer claim in tokens.</param>
 /// <param name="clock">Time provider for token timestamps.</param>
 /// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
+/// <param name="grantIdGenerator">Generator for unique refresh-token grant identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
 public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
+	IGrantIdGenerator grantIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry) : IRefreshTokenService
 {
@@ -92,9 +94,9 @@ public class RefreshTokenService(
 			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
 		}
 
-		// A first-issued token starts a new family; a rotation carries the existing family forward. The family
-		// ties every refresh token of one authorization grant into a lineage a detected replay can revoke whole.
-		var familyId = refreshToken?.Payload.RefreshTokenFamily ?? tokenIdGenerator.GenerateTokenId();
+		// A first-issued token starts a new grant lineage; a rotation carries the existing grant id forward. The
+		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
+		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
 		var newToken = new JsonWebToken
 		{
@@ -111,11 +113,11 @@ public class RefreshTokenService(
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
 				Audiences = [clientInfo.ClientId],
+				GrantId = grantId,
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
 		authContext.ApplyTo(newToken.Payload);
-		newToken.Payload.RefreshTokenFamily = familyId;
 
 		return new EncodedJsonWebToken(newToken, await jwtFormatter.FormatAsync(newToken));
 	}

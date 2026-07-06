@@ -40,7 +40,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 public class TokenStatusValidatorDecoratorTests
 {
     private const string ActiveJwtId = "rt_jti_active";
-    private const string FamilyId = "rt_family_001";
+    private const string GrantId = "grant_001";
     private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
     private readonly Mock<ITokenRegistry> _registry = new(MockBehavior.Strict);
@@ -60,18 +60,18 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
     {
-        SetupInnerReturns(RefreshToken(FamilyId));
-        _registry.Setup(r => r.GetStatusAsync(FamilyId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        SetupInnerReturns(RefreshToken(GrantId));
+        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
         _registry
-            .Setup(r => r.SetStatusAsync(FamilyId, JsonWebTokenStatus.Revoked, Expiry))
+            .Setup(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, Expiry))
             .Returns(Task.CompletedTask);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
-        _registry.Verify(r => r.SetStatusAsync(FamilyId, JsonWebTokenStatus.Revoked, Expiry), Times.Once);
+        _registry.Verify(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, Expiry), Times.Once);
     }
 
     /// <summary>
@@ -83,8 +83,8 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_ActiveTokenOfRevokedFamily_IsRejected()
     {
-        SetupInnerReturns(RefreshToken(FamilyId));
-        _registry.Setup(r => r.GetStatusAsync(FamilyId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
+        SetupInnerReturns(RefreshToken(GrantId));
+        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
 
@@ -100,9 +100,9 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_LiveRefreshToken_PassesThrough()
     {
-        var token = RefreshToken(FamilyId);
+        var token = RefreshToken(GrantId);
         SetupInnerReturns(token);
-        _registry.Setup(r => r.GetStatusAsync(FamilyId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
@@ -119,7 +119,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_UsedTokenWithoutFamily_RejectsWithoutTouchingAnyFamily()
     {
-        SetupInnerReturns(RefreshToken(family: null));
+        SetupInnerReturns(RefreshToken(grantId: null));
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
 
         var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
@@ -139,13 +139,13 @@ public class TokenStatusValidatorDecoratorTests
             .ReturnsAsync(success);
     }
 
-    private static JsonWebToken RefreshToken(string? family) => new()
+    private static JsonWebToken RefreshToken(string? grantId) => new()
     {
         Payload =
         {
             JwtId = ActiveJwtId,
             ExpiresAt = Expiry,
-            RefreshTokenFamily = family,
+            GrantId = grantId,
         }
     };
 }

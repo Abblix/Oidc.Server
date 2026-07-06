@@ -54,6 +54,7 @@ public class RefreshTokenServiceTests
     private const string UserId = "user_456";
     private const string SessionId = "session_789";
     private const string TokenId = "token_abc123";
+    private const string GrantId = "grant_xyz789";
     private const string OldTokenId = "old_token_xyz";
     private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InJ0K2p3dCJ9.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
 
@@ -72,6 +73,9 @@ public class RefreshTokenServiceTests
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
 
+        var grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
+        grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(GrantId);
+
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
@@ -80,6 +84,7 @@ public class RefreshTokenServiceTests
             issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
+            grantIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object);
     }
@@ -296,7 +301,7 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// Verifies that a first-issued refresh token starts a new token family: the
-    /// <c>rt_family</c> claim (<see cref="JsonWebTokenPayload.RefreshTokenFamily"/>) is populated so that
+    /// <c>grant_id</c> claim (<see cref="JsonWebTokenPayload.GrantId"/>) is populated so that
     /// every token later rotated from it shares one lineage a detected replay can revoke whole
     /// (RFC 9700 Section 4.14.2).
     /// </summary>
@@ -319,19 +324,19 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.False(string.IsNullOrEmpty(capturedToken!.Payload.RefreshTokenFamily));
+        Assert.Equal(GrantId, capturedToken!.Payload.GrantId);
     }
 
     /// <summary>
     /// Verifies that rotation carries the existing token family forward: the new token inherits the previous
-    /// token's <c>rt_family</c> value instead of starting a fresh lineage. This is what lets a replay detected
+    /// token's <c>grant_id</c> value instead of starting a fresh lineage. This is what lets a replay detected
     /// on any single token cascade to the whole grant per the RFC 9700 Section 4.14.2 implementation note.
     /// </summary>
     [Fact]
     public async Task CreateRefreshToken_WithRenewal_ShouldCarryFamilyForward()
     {
         // Arrange
-        const string familyId = "family_root_001";
+        const string grantId = "grant_root_001";
         var authSession = CreateAuthSession();
         var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
@@ -347,7 +352,7 @@ public class RefreshTokenServiceTests
                 JwtId = OldTokenId,
                 IssuedAt = _currentTime.AddHours(-2),
                 ExpiresAt = _currentTime.AddHours(8),
-                RefreshTokenFamily = familyId,
+                GrantId = grantId,
             }
         };
 
@@ -362,7 +367,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(familyId, capturedToken!.Payload.RefreshTokenFamily);
+        Assert.Equal(grantId, capturedToken!.Payload.GrantId);
     }
 
     /// <summary>

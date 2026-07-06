@@ -240,6 +240,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IClientIdGenerator, ClientIdGenerator>();
         services.TryAddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.TryAddSingleton<ITokenIdGenerator, TokenIdGenerator>();
+        services.TryAddSingleton<IGrantIdGenerator, GrantIdGenerator>();
         services.TryAddSingleton<ISessionIdGenerator, SessionIdGenerator>();
         return services;
     }

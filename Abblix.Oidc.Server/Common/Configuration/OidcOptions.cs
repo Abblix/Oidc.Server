@@ -237,6 +237,14 @@ public record OidcOptions
 	public int TokenIdLength { get; set; } = 64;
 
 	/// <summary>
+	/// Specifies the length, in random bytes, of the refresh-token grant identifier (the <c>grant_id</c>
+	/// claim). The grant id binds every refresh token of one authorization grant into a single lineage for
+	/// rotation and family revocation (RFC 9700 Section 4.14.2), so it must carry enough entropy to make the
+	/// identifier unguessable.
+	/// </summary>
+	public int GrantIdLength { get; set; } = 64;
+
+	/// <summary>
 	/// Determines whether the OIDC server requires Pushed Authorization Requests (PAR).
 	/// </summary>
 	public bool RequirePushedAuthorizationRequests { get; set; } = false;
