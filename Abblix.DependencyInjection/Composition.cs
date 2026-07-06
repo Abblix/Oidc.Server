@@ -63,7 +63,7 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> AddBefore<TExisting>(ServiceDescriptor member)
         where TExisting : TInterface
     {
-        Insert(IndexOfAnchor(typeof(TExisting), nameof(AddBefore)), member);
+        Insert(IndexOf(typeof(TExisting), nameof(AddBefore)), member);
         return this;
     }
 
@@ -71,7 +71,7 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> AddAfter<TExisting>(ServiceDescriptor member)
         where TExisting : TInterface
     {
-        Insert(IndexOfAnchor(typeof(TExisting), nameof(AddAfter)) + 1, member);
+        Insert(IndexOf(typeof(TExisting), nameof(AddAfter)) + 1, member);
         return this;
     }
 
@@ -79,7 +79,7 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> Remove<TExisting>()
         where TExisting : TInterface
     {
-        RemoveAt(IndexOfAnchor(typeof(TExisting), nameof(Remove)));
+        RemoveAt(IndexOf(typeof(TExisting), nameof(Remove)));
         return this;
     }
 
@@ -87,12 +87,12 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> Replace<TExisting>(ServiceDescriptor member)
         where TExisting : TInterface
     {
-        this[IndexOfAnchor(typeof(TExisting), nameof(Replace))] = member;
+        this[IndexOf(typeof(TExisting), nameof(Replace))] = member;
         return this;
     }
 
     /// <summary>The position of the member whose implementation type is <paramref name="anchor"/>, or a loud throw.</summary>
-    private int IndexOfAnchor(Type anchor, string operation)
+    private int IndexOf(Type anchor, string operation)
     {
         for (var index = 0; index < Count; index++)
         {
