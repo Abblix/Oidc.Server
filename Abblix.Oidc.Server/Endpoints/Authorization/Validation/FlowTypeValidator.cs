@@ -176,14 +176,20 @@ public partial class FlowTypeValidator(
         out FlowTypes flowType,
         out string responseMode)
     {
+        var none = responseType.HasFlag(ResponseTypes.None);
         var code = responseType.HasFlag(ResponseTypes.Code);
         var token = responseType.ReturnsTokenFromAuthorization();
 
-        (var result, flowType, responseMode) = (code, token) switch
+        // OAuth 2.0 Multiple Response Type Encoding Practices §4: `none` MUST stand alone — it cannot be
+        // combined with code, token or id_token. A none+anything request matches no case below, so
+        // detection fails and the caller returns unsupported_response_type. The none flow defaults to
+        // the query response mode (§4) and carries no credentials.
+        (var result, flowType, responseMode) = (none, code, token) switch
         {
-            (code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
-            (code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
-            (code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
+            (none: true, code: false, token: false) => (true, FlowTypes.None, ResponseModes.Query),
+            (none: false, code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
+            (none: false, code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
+            (none: false, code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
             _ => (false, default, null!)
         };
 

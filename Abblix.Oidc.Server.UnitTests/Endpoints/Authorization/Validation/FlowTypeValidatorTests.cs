@@ -749,4 +749,69 @@ public class FlowTypeValidatorTests
         Assert.Null(result);
         Assert.Equal(FlowTypes.Implicit, context.FlowType);
     }
+
+    private static FlowTypeValidator NoneEnabledValidator()
+    {
+        var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
+        IAuthorizationResponseBuilder[] processors =
+        [
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
+        ];
+        return new FlowTypeValidator(logger.Object, processors, ProfileOptions());
+    }
+
+    /// <summary>
+    /// With the none response type opted in (its builder registered), <c>response_type=none</c> is
+    /// detected as the none flow with the query default response mode (OAuth 2.0 Multiple Response Type
+    /// Encoding Practices §4).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoneResponseType_WhenEnabled_ShouldDetectNoneFlow()
+    {
+        var validator = NoneEnabledValidator();
+        var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.Null(result);
+        Assert.Equal(FlowTypes.None, context.FlowType);
+        Assert.Equal(ResponseModes.Query, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// OAuth 2.0 Multiple Response Type Encoding Practices §4: <c>none</c> MUST stand alone. A
+    /// <c>none code</c> request matches no flow and is rejected with <c>unsupported_response_type</c>,
+    /// even though both parts have registered builders.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoneCombinedWithCode_ShouldReturnError()
+    {
+        var validator = NoneEnabledValidator();
+        var context = CreateContext(
+            [ResponseTypes.None, ResponseTypes.Code],
+            [[ResponseTypes.None, ResponseTypes.Code]]);
+
+        var result = await validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
+
+    /// <summary>
+    /// Without <c>EnableNoneResponseType()</c> the none processor is absent, so <c>response_type=none</c>
+    /// is rejected at the server-level support gate with <c>unsupported_response_type</c> — even when the
+    /// client is configured to allow it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoneResponseType_WhenDisabled_FailsWithUnsupportedResponseType()
+    {
+        // The shared _validator registers only Code/Token/IdToken (no None).
+        var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
 }
