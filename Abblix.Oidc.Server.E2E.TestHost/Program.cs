@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.NoneResponseType;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -71,6 +72,18 @@ builder.Services.AddOidcServices(options =>
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
+
+        // Client restricted to the none response type (OAuth 2.0 Multiple Response Type Encoding
+        // Practices §4): /authorize authorizes the request but returns no code or token, so the
+        // client carries no grant type and requires no PKCE.
+        new ClientInfo(TestConstants.NoneResponseTypeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            RedirectUris = [redirect],
+            AllowedResponseTypes = [[ResponseTypes.None]],
+            PkceRequired = false,
+        },
     ];
 
     // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
@@ -125,6 +138,10 @@ builder.Services.AddOidcServices(options =>
 
 builder.Services.AddRichAuthorizationRequests();
 builder.Services.AddAuthorizationDetailValidator<PaymentInitiationValidator>(TestConstants.PaymentInitiationType);
+
+// Opt into the OAuth 2.0 none response type (OAuth 2.0 Multiple Response Type Encoding Practices §4)
+// so the none-response-type client can drive the credential-less authorization flow end-to-end.
+builder.Services.EnableNoneResponseType();
 
 // Test-mode service replacements: turn the host into a non-interactive
 // OIDC provider that auto-authenticates the canonical e2e subject and

@@ -102,4 +102,26 @@ public class AuthorizationEndpointMetadataFactoryTests
             },
             ImplicitFlowEnabled().ResponseTypesSupported);
     }
+
+    /// <summary>
+    /// With the none response builder registered (<c>EnableNoneResponseType()</c>), the discovery
+    /// document advertises the <c>none</c> response type alongside the others.
+    /// </summary>
+    [Fact]
+    public void Create_ResponseTypesSupported_WhenNoneEnabled_ContainsNone()
+    {
+        var metadata = AuthorizationEndpointMetadataFactory.Create(
+            [Builder(ResponseTypes.Code), Builder(ResponseTypes.None)]);
+
+        Assert.Contains(ResponseTypes.None, metadata.ResponseTypesSupported);
+    }
+
+    /// <summary>
+    /// Without the none response builder, <c>none</c> is absent from <c>response_types_supported</c>.
+    /// </summary>
+    [Fact]
+    public void Create_ResponseTypesSupported_WhenNoneDisabled_OmitsNone()
+    {
+        Assert.DoesNotContain(ResponseTypes.None, ImplicitFlowDisabled().ResponseTypesSupported);
+    }
 }

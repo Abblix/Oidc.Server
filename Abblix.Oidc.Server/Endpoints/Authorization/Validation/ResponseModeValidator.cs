@@ -79,7 +79,8 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 				ResponseModes.QueryJwt => ResponseModes.Query,
 				ResponseModes.FragmentJwt => ResponseModes.Fragment,
 				ResponseModes.FormPostJwt => ResponseModes.FormPost,
-				ResponseModes.Jwt => flowType == FlowTypes.AuthorizationCode ? ResponseModes.Query : ResponseModes.Fragment,
+				ResponseModes.Jwt when flowType == FlowTypes.AuthorizationCode => ResponseModes.Query,
+				ResponseModes.Jwt => ResponseModes.Fragment,
 				_ => responseMode,
 			};
 		}
@@ -88,6 +89,9 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 		{
 			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
+			// The none response type returns no credentials, so every delivery mode is safe — including
+			// query, which OAuth 2.0 Multiple Response Type Encoding Practices §4 makes its default.
+			FlowTypes.None => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
 		};
 	}
