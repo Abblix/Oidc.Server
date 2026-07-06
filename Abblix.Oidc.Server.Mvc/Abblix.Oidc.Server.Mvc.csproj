@@ -13,12 +13,12 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
         <PackageId>Abblix.OIDC.Server.MVC</PackageId>
         <Title>Abblix OIDC Server Model-View-Controller</Title>
-        <Description>The package integrates Abblix's OIDC Server capabilities with ASP.NET MVC, offering seamless support for OpenID Connect in MVC applications. It enables fast and easy implementation of secure OpenID Connect protocols, ensuring security features are accessible within the MVC framework.</Description>
+        <Description>ASP.NET Core MVC integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Exposes its protocol endpoints through MVC controllers and routing.</Description>
         <Authors>Abblix LLP</Authors>
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageTags>Abblix OIDC OpenID OpenID-Connect Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET IdentityServer Federation Claims WebApi DPoP Proof-of-Possession</PackageTags>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore MVC dotnet Federation Claims WebApi DPoP PAR JARM Token-Exchange FAPI Proof-of-Possession</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

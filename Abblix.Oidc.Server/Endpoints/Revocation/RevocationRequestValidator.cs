@@ -75,24 +75,20 @@ public partial class RevocationRequestValidator(
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest)
 	{
-		// Authenticate the client making the revocation request.
+		// Authenticate the client making the revocation request. Public clients (auth method
+		// "none") are deliberately allowed through: RFC 7009 §5 states a revocation request
+		// "must contain a valid client_id, in the case of a public client, or valid client
+		// credentials, in the case of a confidential client", and the spec's own security
+		// analysis dismisses the guessed-client_id threat — a guessed token is worth far more
+		// used than revoked. The protection the spec actually mandates is the token-ownership
+		// check below. Do not re-add a public-client rejection here: it slipped in once and
+		// left every SPA and native client unable to revoke its own refresh token on logout.
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
-		switch (clientInfo)
+		if (clientInfo == null)
 		{
-			case null:
-				return new OidcError(
-					ErrorCodes.InvalidClient,
-					"The client is not authorized");
-
-			// RFC 7009 §2.1 (referencing the OAuth 2.0 client-authentication requirements): the
-			// revocation endpoint must authenticate the client. A public client (auth method "none")
-			// presents only its client_id, which is not a credential — reject it even though "none" is
-			// valid at the token endpoint.
-			case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None}:
-				LogPublicClientRejected(clientInfo.ClientId);
-				return new OidcError(
-					ErrorCodes.InvalidClient,
-					"The client is not authorized");
+			return new OidcError(
+				ErrorCodes.InvalidClient,
+				"The client is not authorized");
 		}
 
 		var result = await jwtValidator.ValidateAsync(revocationRequest.Token);

@@ -602,6 +602,56 @@ public class TokenExchangeGrantHandlerTests
     }
 
     [Fact]
+    public async Task Resource_rejected_when_not_in_declared_audience_allowlist()
+    {
+        // RFC 8707 resource values land in the issued token's aud claim exactly like RFC 8693
+        // audience values do, so a client restricted to api1 must not escape to api2 simply by
+        // renaming the parameter from audience to resource.
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        clientInfo.TokenExchangeAllowedAudiences = ["https://api1.example.com"];
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            Resources = [new Uri("https://api2.example.com")],
+        };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        Assert.Contains("api2.example.com", error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task Resource_and_audience_propagate_when_both_in_declared_allowlist()
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            JwtTokenType = JwtTypes.AccessToken,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        clientInfo.TokenExchangeAllowedAudiences = ["https://api1.example.com", "https://api2.example.com"];
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            Audiences = ["https://api1.example.com"],
+            Resources = [new Uri("https://api2.example.com")],
+        };
+
+        var result = await handler.AuthorizeAsync(request, clientInfo);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(request.Audiences, grant.Context.Audiences);
+        Assert.Equal(request.Resources, grant.Context.Resources);
+    }
+
+    [Fact]
     public async Task S2_Resource_parameter_propagates_to_AuthorizationContext()
     {
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)

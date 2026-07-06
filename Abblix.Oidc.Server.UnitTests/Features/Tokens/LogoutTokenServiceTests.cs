@@ -163,6 +163,31 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
+    /// Back-Channel Logout §2.4: "A Logout Token MUST be signed" and none "MUST NOT be used" —
+    /// even when the client legally registered id_token_signed_response_alg=none (allowed for
+    /// response types that return no ID Token from the authorization endpoint), the logout token
+    /// must fall back to RS256, the algorithm every OIDC client is required to support.
+    /// </summary>
+    [Fact]
+    public async Task CreateLogoutTokenAsync_NoneIdTokenAlgorithm_FallsBackToRs256()
+    {
+        // Arrange
+        var clientInfo = CreateClientInfo();
+        clientInfo.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.None;
+        var logoutContext = CreateLogoutContext();
+
+        JsonWebToken? capturedToken = null;
+        SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
+
+        // Act
+        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
+    }
+
+    /// <summary>
     /// Verifies that CreateLogoutTokenAsync sets correct issuer claim.
     /// Per OpenID Connect Back-Channel Logout Section 2.4, issuer must match authorization server issuer.
     /// </summary>

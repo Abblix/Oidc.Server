@@ -91,9 +91,12 @@ public partial class LogoutTokenService(
                 // ID Token, so the client's ID Token signing algorithm is the default; a host may
                 // diverge per client via the explicit LogoutTokenSignedResponseAlgorithm override.
                 // The previous hardcoded RS256 produced tokens an ES256/PS256-registered client
-                // would reject on signature-algorithm verification.
-                Algorithm = clientInfo.LogoutTokenSignedResponseAlgorithm
-                            ?? clientInfo.IdentityTokenSignedResponseAlgorithm,
+                // would reject on signature-algorithm verification. The same §2.4 also demands
+                // "A Logout Token MUST be signed" and that none "MUST NOT be used": a client whose
+                // response types return no ID Token from the authorization endpoint may legally
+                // register id_token_signed_response_alg=none, so that value cannot be inherited
+                // here — fall back to RS256, which every OIDC client is required to support.
+                Algorithm = ResolveSigningAlgorithm(clientInfo),
             },
             Payload =
             {
@@ -128,4 +131,11 @@ public partial class LogoutTokenService(
 
         return new EncodedJsonWebToken(logoutToken, jwt);
     }
+
+    private static string ResolveSigningAlgorithm(ClientInfo clientInfo)
+        => (clientInfo.LogoutTokenSignedResponseAlgorithm ?? clientInfo.IdentityTokenSignedResponseAlgorithm) switch
+        {
+            SigningAlgorithms.None => SigningAlgorithms.RS256,
+            var algorithm => algorithm,
+        };
 }

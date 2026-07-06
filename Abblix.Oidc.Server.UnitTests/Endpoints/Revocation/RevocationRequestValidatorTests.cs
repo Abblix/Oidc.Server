@@ -142,12 +142,14 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies that a public client (token_endpoint_auth_method = none) is rejected. The revocation
-    /// endpoint must authenticate the client (RFC 7009 §2.1); a client_id alone is not a credential,
-    /// so the token is never even validated.
+    /// RFC 7009 §5: "a client's request must contain a valid client_id, in the case of a public
+    /// client, or valid client credentials, in the case of a confidential client" — a public
+    /// client revoking its own token is protocol-legal, and the token-ownership check is the
+    /// protection the spec actually mandates. Rejecting public clients here would leave SPA and
+    /// native clients unable to revoke their refresh tokens on logout.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithPublicClient_ShouldReturnInvalidClientError()
+    public async Task ValidateAsync_WithPublicClient_ShouldValidateToken()
     {
         // Arrange
         var revocationRequest = CreateRevocationRequest();
@@ -156,18 +158,22 @@ public class RevocationRequestValidatorTests
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
         };
+        var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
             .Returns(Task.FromResult<ClientInfo?>(publicClient));
 
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+
         // Act
         var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
 
         // Assert
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
-        _jwtValidator.VerifyNoOtherCalls();
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Equal(token, validRequest.Token);
     }
 
     /// <summary>

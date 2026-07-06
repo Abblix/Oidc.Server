@@ -9,6 +9,7 @@
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
 [![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Abblix.OIDC.Server)](https://www.nuget.org/packages/Abblix.OIDC.Server)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
@@ -24,16 +25,13 @@
 [![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server)
 [![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
 
-🔥 Why OIDC Server is the best choice for authentication — find out in our [presentation](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf) 📑
+**Add a certified OpenID Connect provider to your own ASP.NET Core app — one you embed and own end to end, not a separate server to run and operate.**
 
-## Abblix Account
-
-💎 [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications — everything your users need, integrated into your website in minutes.
-
-👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service — all delivered by Abblix Account — fit into a client website.
+📑 For the full picture, see the [technical overview](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf).
 
 ## Table of Contents
 - [About](#-about)
+- [Quickstart](#-quickstart)
 - [What's New](#-whats-new)
 - [Certification](#-certification)
 - [How to Install](#-how-to-install)
@@ -45,13 +43,41 @@
 
 ## 🚀 About
 
-**Abblix OIDC Server** is a .NET library designed to provide comprehensive support for OAuth2 and OpenID Connect on the server side. It adheres to high standards of flexibility, reusability, and reliability, utilizing well-known software design patterns, including modular and hexagonal architectures. These patterns ensure the following benefits:
+**Abblix OIDC Server** turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- **Modularity**: Different parts of the library can function independently, enhancing the library's modularity and allowing for easier maintenance and updates.
-- **Testability**: Improved separation of concerns makes the code more testable.
-- **Maintainability**: Clear structure and separation facilitate better management of the codebase.
+- **Certified to the letter** — every OpenID profile, 634 conformance tests passed, zero skipped and zero warnings.
+- **A library you own, not a server you run** — the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
+- **Current with the modern security stack** — DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
+- **Engineering you can audit** — 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
+- **Modern .NET, minimal friction** — targets .NET 8, 9, and 10, with drop-in adapters for both MVC and Minimal API.
 
-The library also supports Dependency Injection through the standard .NET DI container, aiding in the organization and management of code. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints — one for MVC controllers and routing, and one for Minimal API endpoint routing — so you can adopt whichever hosting model your application already uses, without taking a dependency on the other.
+Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints — one for MVC controllers and routing, one for Minimal API endpoint routing — so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
+
+## ⚡ Quickstart
+
+Install the adapter for your hosting model and register the server in `Program.cs`:
+
+```shell
+dotnet add package Abblix.OIDC.Server.MVC
+```
+
+```csharp
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Mvc;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllersWithViews();
+
+// Turn your ASP.NET Core app into an OpenID Connect provider
+builder.Services.AddOidcServices(options =>
+{
+    options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
+    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig) };
+});
+```
+
+That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store — the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
 
 ## ✨ What's New
 
@@ -174,6 +200,12 @@ Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
 
 To better understand the Abblix OIDC Server product, we recommend visiting our [Documentation](https://docs.abblix.com/docs) site. There, you will find useful information about the product and the OpenID Connect standard.
+
+## 💎 Abblix Account
+
+Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications — everything your users need, integrated into your website in minutes.
+
+👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service — all delivered by Abblix Account — fit into a client website.
 
 ## 🤝 Feedback and Contributions
 

@@ -338,16 +338,29 @@ public class TokenExchangeGrantHandler(
     /// client could mint a token for any target service it names. The allowlist is default-deny: an
     /// <c>audience</c> is accepted only when the client declares a non-empty
     /// <see cref="ClientInfo.TokenExchangeAllowedAudiences"/> that contains every requested value.
-    /// A request without <c>audience</c> passes through. Rejections use <c>invalid_target</c>
-    /// (RFC 8693 §2.2.1: the AS is unwilling to issue a token for the requested target service).
+    /// RFC 8707 <c>resource</c> values reach the <c>aud</c> claim through the exact same path
+    /// (see <c>AuthorizationContextExtensions.ApplyTo</c>), so a declared allowlist gates them too —
+    /// otherwise renaming <c>audience</c> to <c>resource</c> would bypass the constraint entirely.
+    /// A client without a declared allowlist keeps the asymmetric defaults: <c>audience</c> is
+    /// default-deny because no other gate exists for logical service names, while <c>resource</c>
+    /// stays subject to the global resource registry (<c>ResourceValidator</c> has already checked
+    /// it earlier in the token pipeline). A request without either parameter passes through.
+    /// Rejections use <c>invalid_target</c> (RFC 8693 §2.2.1: the AS is unwilling to issue a token
+    /// for the requested target service).
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateAudiences(ValidationContext ctx)
     {
-        if (ctx.Request.Audiences is not { Length: > 0 } audiences)
+        var audiences = ctx.Request.Audiences ?? [];
+        var resources = ctx.Request.Resources ?? [];
+
+        if (audiences.Length == 0 && resources.Length == 0)
             return ctx;
 
         if (ctx.ClientInfo.TokenExchangeAllowedAudiences is not { Length: > 0 } allowlist)
         {
+            if (audiences.Length == 0)
+                return ctx;
+
             return new OidcError(
                 ErrorCodes.InvalidTarget,
                 "The client is not permitted to request an audience for token exchange.");
@@ -355,16 +368,17 @@ public class TokenExchangeGrantHandler(
 
         var allowed = new HashSet<string>(allowlist, StringComparer.Ordinal);
         var disallowed = audiences
-            .Where(audience => !allowed.Contains(audience))
+            .Concat(Array.ConvertAll(resources, resource => resource.OriginalString))
+            .Where(target => !allowed.Contains(target))
             .ToArray();
 
         if (disallowed.Length > 0)
         {
-            // Report every disallowed audience, not just the first: a client fixing its request
+            // Report every disallowed target, not just the first: a client fixing its request
             // should not have to re-submit and rediscover the rejected values one round-trip at a time.
             return new OidcError(
                 ErrorCodes.InvalidTarget,
-                $"The following audiences are not in the client's allow list: {string.Join(", ", disallowed)}.");
+                $"The following target services are not in the client's allow list: {string.Join(", ", disallowed)}.");
         }
 
         return ctx;

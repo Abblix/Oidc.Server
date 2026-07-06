@@ -34,6 +34,18 @@ public class ParametersProvider : IParametersProvider
     /// <inheritdoc />
     public IEnumerable<(string name, string? value)> GetParameters(object obj)
         => JsonSerializer.SerializeToElement(obj).EnumerateObject()
-            .Select(property => (property.Name, property.Value.GetString()))
+            .Select(property => (property.Name, ToParameterValue(property.Value)))
             .ToArray();
+
+    // A parameter value is a string on the wire, but a property may serialize to any JSON kind — for example
+    // expires_in serializes as a number. JsonElement.GetString() only accepts String and Null and throws on every
+    // other kind, so non-string values render through their raw JSON text instead (a number as its digits, a boolean
+    // as true/false). JSON null maps to a null value that downstream query/fragment/form encoders drop.
+    private static string? ToParameterValue(JsonElement value)
+        => value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Null => null,
+            _ => value.GetRawText(),
+        };
 }

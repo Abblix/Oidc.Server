@@ -84,6 +84,25 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
+    /// Custom-scheme redirect URIs of native clients (RFC 8252 §7.1) carry no meaningful host:
+    /// the single-slash form parses with an empty Host, and the authority form puts an arbitrary
+    /// path-like segment there — either would merge unrelated clients into one shared sector,
+    /// giving them identical pairwise subjects and defeating the isolation pairwise subject
+    /// types exist to provide (OIDC Core §8.1). The client_id fallback applies instead.
+    /// </summary>
+    [Theory]
+    [InlineData("com.example.one:/oauth2redirect", "com.example.two:/oauth2redirect")]
+    [InlineData("app-one://callback", "app-two://callback")]
+    public void Convert_CustomSchemeRedirectUri_FallsBackToClientId(string redirectUriA, string redirectUriB)
+    {
+        var converter = CreateConverter();
+        var clientA = CreatePairwiseClient("client-a", redirectUris: [new Uri(redirectUriA)]);
+        var clientB = CreatePairwiseClient("client-b", redirectUris: [new Uri(redirectUriB)]);
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
     /// Different sectors must produce unlinkable identifiers for the same subject — the core
     /// privacy property of pairwise subject types.
     /// </summary>

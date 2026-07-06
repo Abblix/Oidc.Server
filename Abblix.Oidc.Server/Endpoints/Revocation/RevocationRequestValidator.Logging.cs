@@ -39,10 +39,4 @@ partial class RevocationRequestValidator
 		Level = LogLevel.Warning,
 		Message = "The token validation failed: {@Error}")]
 	private partial void LogTokenValidationFailed(JwtValidationError Error);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.RevocationRequestValidator.PublicClientRejected,
-		Level = LogLevel.Warning,
-		Message = "Revocation rejected for public client {ClientId}: 'none' authentication does not satisfy RFC 7009 §2.1")]
-	private partial void LogPublicClientRejected(Sanitized ClientId);
 }
