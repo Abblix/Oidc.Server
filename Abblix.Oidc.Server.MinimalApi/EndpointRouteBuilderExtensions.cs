@@ -96,6 +96,13 @@ public static class EndpointRouteBuilderExtensions
                 .MapGet(routes.Configuration, ConfigurationAsync)
                 .WithName(EndpointNames.Configuration)
                 .RequireCors(OidcConstants.CorsPolicyName);
+
+            // RFC 8414 §3: the same Authorization Server Metadata document, also served at the
+            // oauth-authorization-server suffix so a client that queries only that suffix still resolves it.
+            oidcGroup
+                .MapGet(routes.OAuthAuthorizationServer, ConfigurationAsync)
+                .WithName(EndpointNames.OAuthAuthorizationServer)
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.Keys))

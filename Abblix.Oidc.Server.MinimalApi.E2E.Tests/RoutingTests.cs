@@ -215,6 +215,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
 
     [Theory]
     [InlineData("/.well-known/openid-configuration")]
+    [InlineData("/.well-known/oauth-authorization-server")]
     [InlineData("/.well-known/jwks")]
     public async Task Discovery_and_jwks_are_cors_enabled_like_the_mvc_discovery_controller(string path)
     {
@@ -238,6 +239,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
 
     [Theory]
     [InlineData("/.well-known/openid-configuration")]
+    [InlineData("/.well-known/oauth-authorization-server")]
     [InlineData("/.well-known/jwks")]
     public async Task Every_oidc_response_is_no_store_like_the_mvc_controllers(string path)
     {
@@ -303,6 +305,31 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var response = await httpClient.PostAsync("/connect/token", content, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Oauth_authorization_server_suffix_serves_the_same_metadata_as_openid_configuration()
+    {
+        var client = ClientOf(factory);
+
+        // RFC 8414 §3 lets the Authorization Server Metadata be published under the oauth-authorization-server
+        // suffix as well as openid-configuration. Abblix serves the identical document at both, so a client that
+        // queries only oauth-authorization-server resolves the same issuer and endpoints.
+        var oidc = JsonNode.Parse(await client.GetStringAsync(
+            "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!.AsObject();
+
+        var response = await client.GetAsync(
+            "/.well-known/oauth-authorization-server", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var oauth = JsonNode.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(
+            oidc[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>(),
+            oauth[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
+        Assert.Equal(
+            oidc[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>(),
+            oauth[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
     }
 
     /// <summary>A stand-in discovery formatter a host registers to prove its registration wins over the adapter's.</summary>

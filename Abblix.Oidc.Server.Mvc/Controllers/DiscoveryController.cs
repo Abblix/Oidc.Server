@@ -73,6 +73,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// <returns>A task that results in an action result containing the provider's configuration details
 	/// in JSON format.</returns>
 	[HttpGet(Path.Configuration)]
+	[HttpGet(Path.OAuthAuthorizationServer)]
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[EnabledBy(OidcEndpoints.Configuration)]
