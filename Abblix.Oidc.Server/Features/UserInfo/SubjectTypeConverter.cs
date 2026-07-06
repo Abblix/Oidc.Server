@@ -79,9 +79,20 @@ public class SubjectTypeConverter(PairwiseSubjectSettings? settings = null) : IS
         // Affects only statically configured clients: DCR-registered pairwise clients always get
         // SectorIdentifier computed at registration time. client_id remains the last resort for
         // clients with no redirect URIs at all (e.g. pure client_credentials configurations).
-        var sector = clientInfo.SectorIdentifier
-            ?? clientInfo.RedirectUris?.FirstOrDefault()?.Host
-            ?? clientInfo.ClientId;
+        // The host is meaningful only for http(s) redirect URIs — the web clients Core §8.1 had
+        // in mind. Native custom-scheme redirects (RFC 8252 §7.1) must not reach the host branch:
+        // the single-slash form (com.example.app:/oauth2redirect) parses with an EMPTY host, and
+        // the authority form (app-one://callback) puts an arbitrary path-like segment into Host —
+        // either way unrelated clients would silently share one sector and derive identical
+        // pairwise subjects for the same user, defeating the isolation this subject type exists
+        // to provide. Such clients keep per-client isolation via the client_id fallback.
+        var redirectUri = clientInfo.RedirectUris?.FirstOrDefault();
+        var redirectHost =
+            redirectUri != null &&
+            (redirectUri.Scheme == Uri.UriSchemeHttp || redirectUri.Scheme == Uri.UriSchemeHttps)
+                ? redirectUri.Host
+                : null;
+        var sector = clientInfo.SectorIdentifier ?? redirectHost ?? clientInfo.ClientId;
         var data = Encoding.UTF8.GetBytes($"{HttpUtility.UrlEncode(sector)}&{HttpUtility.UrlEncode(subject)}");
         var algorithm = settings.HashAlgorithm;
         var salt = System.Convert.FromBase64String(settings.Salt);
