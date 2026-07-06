@@ -23,19 +23,11 @@
 namespace Abblix.DependencyInjection;
 
 /// <summary>
-/// Records the (service, composite) pairs produced by
-/// <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/>. A downstream integrity check reads
-/// this to verify each composed singular still resolves to its composite and was not shadowed by a service
-/// registered for the same contract after composition — which the last-wins singular resolve would otherwise
-/// return, silently dropping the composed pipeline.
+/// The service key that members of a composed keyed family are stored under: pairs the family's original
+/// service key with the composite type. The pairing keeps same-interface families under different keys
+/// isolated (even when they share the composite class) and keeps the descriptors self-describing — both
+/// the original key and the composite type are recoverable from any member, so no side registry exists.
 /// </summary>
-public sealed class ComposedFamilyRegistry
-{
-    private readonly List<(Type Service, Type Composite)> _families = [];
-
-    /// <summary>Records that <paramref name="serviceType"/> was composed into <paramref name="compositeType"/>.</summary>
-    public void Record(Type serviceType, Type compositeType) => _families.Add((serviceType, compositeType));
-
-    /// <summary>The composed families recorded so far.</summary>
-    public IReadOnlyList<(Type Service, Type Composite)> Families => _families;
-}
+/// <param name="ServiceKey">The service key the family was composed under.</param>
+/// <param name="CompositeType">The composite type the family was composed into.</param>
+public sealed record ComposedFamilyKey(object ServiceKey, Type CompositeType);

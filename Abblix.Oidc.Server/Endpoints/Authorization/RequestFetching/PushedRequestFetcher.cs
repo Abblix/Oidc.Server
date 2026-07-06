@@ -70,7 +70,7 @@ public class PushedRequestFetcher(
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            // Do not consume the request_uri here. RFC 9126 §6 says request_uri SHOULD be
+            // Do not consume the request_uri here. RFC 9126 §7.3 says request_uri SHOULD be
             // one-time-use, and the natural moment to consume is at authorization-code
             // issuance — not at the first /authorize fetch. Consuming on fetch makes any
             // multi-step UI flow brittle: page refresh during login, back-button after

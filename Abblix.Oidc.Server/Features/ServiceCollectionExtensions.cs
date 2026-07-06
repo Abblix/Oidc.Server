@@ -138,11 +138,6 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, EnabledEndpointsRegistrationValidator>());
 
-        // Fail loud at startup when a composed singular pipeline (client auth, token/authorization/... validators)
-        // was shadowed by a registration added after AddOidcCore, instead of silently dropping the built-in pipeline.
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IHostedService, ComposedPipelineIntegrityService>());
-
         return services
             .AddAlias<IClientInfoProvider, ClientInfoStorage>()
             .AddAlias<IClientInfoManager, ClientInfoStorage>();

@@ -94,7 +94,11 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddScoped<IAuthorizationMetadataProvider, AuthorizationMetadataProvider>();
         services.TryAddScoped<IScopesAndClaimsProvider, ScopesAndClaimsProvider>();
-        services.TryAddScoped<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
+        // Singleton, unlike its scoped neighbours: JwtAlgorithmsProvider is a stateless projection over the
+        // singleton IJsonWebTokenCreator/IJsonWebTokenValidator, so scoping it would only make it a captive
+        // dependency of the singleton client-registration validators (SigningAlgorithmsValidator and
+        // SignedResponseAlgorithmsValidator) that consume it.
+        services.TryAddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
         services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
         services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
         return services;
@@ -120,7 +124,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
-        // Single-use PAR (RFC 9126 §6): decorate the processor so a pushed request_uri is consumed once a
+        // Single-use PAR (RFC 9126 §7.3): decorate the processor so a pushed request_uri is consumed once a
         // terminal success has minted a code or token. Mirrors the session-management decorator and stacks
         // with it; both act independently on a SuccessfullyAuthenticated outcome.
         services.Decorate<IAuthorizationRequestProcessor, PushedAuthorizationRequestProcessorDecorator>();
