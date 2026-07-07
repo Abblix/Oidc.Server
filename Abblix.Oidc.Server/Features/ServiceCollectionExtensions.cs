@@ -39,6 +39,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResponseObject;
@@ -435,6 +436,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
+        services.TryAddSingleton<IAuthorizationValueReuseDetector, AuthorizationValueReuseDetector>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         return services;
     }

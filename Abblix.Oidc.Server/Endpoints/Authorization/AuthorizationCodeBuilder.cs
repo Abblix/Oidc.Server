@@ -23,7 +23,9 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -36,7 +38,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// <c>authorization_code</c> in <see cref="GrantTypesSupported"/> so the discovery
 /// endpoint and registration-time gates aggregate it transparently.
 /// </summary>
-public class AuthorizationCodeBuilder(IAuthorizationCodeService authorizationCodeService)
+public class AuthorizationCodeBuilder(
+    IAuthorizationCodeService authorizationCodeService,
+    IAuthorizationValueReuseDetector reuseDetector)
     : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
@@ -57,5 +61,14 @@ public class AuthorizationCodeBuilder(IAuthorizationCodeService authorizationCod
         result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
             authorizedGrant,
             request.ClientInfo.AuthorizationCodeExpiresIn);
+
+        // Record this transaction's replay-protection values so a later reuse of a constant code_challenge
+        // or nonce by the same client is detected (RFC 9700 §2.1.1). Doing it here — once per issued code —
+        // means the same request re-processed across a login or consent redirect is not flagged.
+        var context = authorizedGrant.Context;
+        if (context.CodeChallenge is { } codeChallenge)
+            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge);
+        if (context.Nonce is { } nonce)
+            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce);
     }
 }

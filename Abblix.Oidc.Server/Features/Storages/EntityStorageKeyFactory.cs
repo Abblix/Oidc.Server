@@ -99,4 +99,8 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
     public string RegistrationAccessTokenKey(string clientId)
         => $"Abblix.Oidc.Server:RegistrationAccessToken:{clientId}";
+
+    /// <inheritdoc />
+    public string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash)
+        => $"Abblix.Oidc.Server:{clientId}:Reuse:{valueKind}:{valueHash}";
 }

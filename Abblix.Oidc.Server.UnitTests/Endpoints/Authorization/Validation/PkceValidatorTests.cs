@@ -29,6 +29,8 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.ReusePrevention;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
@@ -52,8 +54,36 @@ public class PkceValidatorTests
     }
 
     private static PkceValidator CreateValidator(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
+        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None,
+        IAuthorizationValueReuseDetector? reuseDetector = null)
+        => new(
+            Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }),
+            reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
+
+    /// <summary>
+    /// Verifies that a code_challenge the client already used for a previously issued authorization code is
+    /// rejected when reuse detection is enabled — a code_challenge must be transaction-specific (RFC 9700
+    /// Section 2.1.1). A structurally valid S256 challenge would otherwise pass.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithReusedCodeChallenge_ShouldFail()
+    {
+        // Arrange
+        var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
+        reuseDetector
+            .Setup(d => d.IsReusedAsync(ClientId, It.IsAny<string>(), CodeChallengeS256))
+            .ReturnsAsync(true);
+        var validator = CreateValidator(reuseDetector: reuseDetector.Object);
+        var context = CreateContext(
+            codeChallenge: CodeChallengeS256,
+            codeChallengeMethod: CodeChallengeMethods.S256);
+
+        // Act
+        var result = await validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+    }
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.

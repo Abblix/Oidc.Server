@@ -316,4 +316,17 @@ public record OidcOptions
 	/// individual metadata flags, so existing deployments are unaffected.
 	/// </summary>
 	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
+
+	/// <summary>
+	/// Enables detection of a client reusing a constant PKCE <c>code_challenge</c> or OpenID Connect
+	/// <c>nonce</c> across authorization requests, which defeats the transaction-binding those values provide
+	/// (RFC 9700 Section 2.1.1 encourages the authorization server to make a reasonable effort to detect and
+	/// prevent it). When set, the server records each value at the moment it issues an authorization code and
+	/// rejects a later authorization request from the same client that repeats a value within this interval.
+	/// Recording at code issuance — not on every authorization request — means re-processing one request
+	/// across a login or consent redirect is not flagged. Left <c>null</c> (the default) the check is off:
+	/// a conforming client generates a fresh value per request and is never affected, but a client that
+	/// incorrectly reuses a value across separate authorizations would then be rejected, so it is opt-in.
+	/// </summary>
+	public TimeSpan? PkceAndNonceReuseDetectionInterval { get; set; }
 }
