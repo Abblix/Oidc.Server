@@ -25,8 +25,10 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
+using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -39,7 +41,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="options">Provides the server-wide default security profile a client inherits when it
 /// states none, which tightens PKCE enforcement (mandatory PKCE, S256-only) under a profile.</param>
-public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
+/// <param name="reuseDetector">Detects a client repeating a code_challenge across authorization requests
+/// when reuse detection is enabled (RFC 9700 Section 2.1.1).</param>
+public class PkceValidator(
+	IOptions<OidcOptions> options,
+	IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
 	/// <summary>
 	/// Validates the PKCE-related parameters in the authorization request against the client's
@@ -51,11 +57,11 @@ public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationCon
 	/// An AuthorizationRequestValidationError if the validation fails due to non-compliance with PKCE requirements,
 	/// or null if the request is valid. Refer to Section 4.3 of RFC 7636 for more details.
 	/// </returns>
-	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+	public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
 	{
 		var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
 
-		if (context.Request.CodeChallenge.HasValue())
+		if (context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue())
 		{
 			// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 			// rejected — including plain and the non-standard S512 — before the per-client plain check,
@@ -72,6 +78,13 @@ public class PkceValidator(IOptions<OidcOptions> options) : SyncAuthorizationCon
 			    !context.ClientInfo.PlainPkceAllowed)
 			{
 				return context.InvalidRequest("The client is not allowed PKCE plain method");
+			}
+
+			// A code_challenge must be transaction-specific (RFC 9700 §2.1.1). When reuse detection is on,
+			// reject a value this client already used for a previously issued authorization code.
+			if (await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
+			{
+				return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
 			}
 		}
 		else if ((profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true)) &&

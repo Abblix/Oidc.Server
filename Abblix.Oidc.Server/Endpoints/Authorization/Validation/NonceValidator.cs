@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 
@@ -34,7 +35,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// synchronous validation.
 /// Refer to RFC 6749 and OpenID Connect Core 1.0 for more details on authorization request parameters.
 /// </summary>
-public class NonceValidator : SyncAuthorizationContextValidatorBase
+public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Validates the nonce in the authorization request as per OpenID Connect Core 1.0 specifications.
@@ -46,7 +47,7 @@ public class NonceValidator : SyncAuthorizationContextValidatorBase
     /// when the response type includes an ID token, as by OpenID Connect Core 1.0;
     /// otherwise, null indicating successful validation.
     /// </returns>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
         var request = context.Request;
         var responseType = request.ResponseType.NotNull(nameof(request.ResponseType));
@@ -65,6 +66,14 @@ public class NonceValidator : SyncAuthorizationContextValidatorBase
         {
             return context.InvalidRequest(
                 $"Nonce is required for the requested {Parameters.ResponseType}, as specified in OpenID Connect Core 1.0.");
+        }
+
+        // A nonce must be transaction-specific (RFC 9700 §2.1.1). When reuse detection is on, reject a
+        // value this client already used for a previously issued authorization code.
+        if (request.Nonce is { } nonce && !string.IsNullOrEmpty(nonce) &&
+            await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.Nonce, nonce))
+        {
+            return context.InvalidRequest("The nonce must be unique per authorization request");
         }
 
         return null;

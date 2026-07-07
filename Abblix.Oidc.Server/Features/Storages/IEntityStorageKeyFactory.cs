@@ -90,4 +90,14 @@ public interface IEntityStorageKeyFactory
     /// <param name="clientId">The identifier of the registered client.</param>
     /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
     string RegistrationAccessTokenKey(string clientId);
+
+    /// <summary>
+    /// Generates a storage key for reuse detection of an authorization request value (a PKCE
+    /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
+    /// </summary>
+    /// <param name="clientId">The client the value belongs to.</param>
+    /// <param name="valueKind">A discriminator for the value's role, so distinct kinds never collide.</param>
+    /// <param name="valueHash">A hash of the value; the raw value is never part of the key.</param>
+    /// <returns>A formatted storage key for the recorded value.</returns>
+    string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash);
 }

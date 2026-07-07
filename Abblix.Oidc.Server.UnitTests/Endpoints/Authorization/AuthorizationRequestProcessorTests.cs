@@ -47,6 +47,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization;
@@ -94,7 +95,7 @@ public class AuthorizationRequestProcessorTests
             _consentsProvider.Object,
             _timeProvider,
             [
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
