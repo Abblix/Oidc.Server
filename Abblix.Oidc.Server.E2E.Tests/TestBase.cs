@@ -24,6 +24,12 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// </summary>
 public abstract class TestBase(TestFactory factory)
 {
+    /// <summary>
+    /// The shared test host factory, exposed for tests that need to build an isolated host variant
+    /// (for example to turn on an opt-in option) via <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/>.
+    /// </summary>
+    protected TestFactory Factory => factory;
+
     protected HttpClient CreateClient()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
