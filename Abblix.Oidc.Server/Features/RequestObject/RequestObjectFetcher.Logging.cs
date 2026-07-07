@@ -38,4 +38,10 @@ partial class RequestObjectFetcher
         Level = LogLevel.Warning,
         Message = "The request object for {ClientId} is signed with {Algorithm}, but the client registered {RequiredAlgorithm}")]
     private partial void LogSigningAlgorithmMismatch(string ClientId, string? Algorithm, string RequiredAlgorithm);
+
+    [LoggerMessage(
+        EventId = LogEvents.Misc.RequestObjectFetcher.ParametersOutsideRequestObjectIgnored,
+        Level = LogLevel.Warning,
+        Message = "Strict request-object processing (RFC 9101) ignored these parameters passed outside the request object: {Parameters}")]
+    private partial void LogParametersOutsideRequestObjectIgnored(string Parameters);
 }

@@ -45,6 +45,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequirePushedAuthorizationRequests);
         Assert.False(requirements.RequireSenderConstrainedTokens);
         Assert.False(requirements.RequireCodeResponseTypeOnly);
+        Assert.False(requirements.RequireStrictRequestObjectProcessing);
     }
 
     [Fact]
@@ -57,6 +58,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequirePushedAuthorizationRequests);
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireStrictRequestObjectProcessing);
     }
 
     [Theory]

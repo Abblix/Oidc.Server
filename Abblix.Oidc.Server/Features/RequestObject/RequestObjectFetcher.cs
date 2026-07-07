@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -77,25 +78,67 @@ public partial class RequestObjectFetcher(
 
         var validationResult = await ValidateAsync(requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
-            async payload =>
+            async validated =>
             {
-                // RFC 9101 §5 strict mode: the authorization request is exactly the request object,
-                // so the payload binds onto a fresh model and parameters passed outside the object
-                // are ignored (the OAuth-syntax client_id/response_type duplicates are still
-                // cross-checked against the result by the authorization-endpoint adapter). The
-                // default keeps the OIDC Core §6.1 merge semantics, binding the payload over the
-                // outer request.
-                var target = options.Value.IgnoreParametersOutsideRequestObject
-                    ? Activator.CreateInstance<T>()
-                    : request;
+                var (payload, client) = validated;
+
+                // Strict RFC 9101 §6.3 processing — only the request object's parameters are used and anything
+                // passed outside it is ignored — applies when the host turns it on globally or the client's
+                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core §6.1 merge
+                // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
+                // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
+                var strict = options.Value.IgnoreParametersOutsideRequestObject
+                    || SecurityProfileRequirements.For(client, options.Value.DefaultSecurityProfile)
+                        .RequireStrictRequestObjectProcessing;
+                var target = strict ? Activator.CreateInstance<T>() : request;
 
                 var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
                 if (updatedRequest == null)
                     return InvalidRequestObject("Unable to bind request object");
 
+                if (strict)
+                    WarnAboutIgnoredOutsideParameters(request, requestObject, payload);
+
                 return updatedRequest;
             }
         );
+    }
+
+    /// <summary>
+    /// In strict mode (RFC 9101 §6.3) parameters passed outside the request object are silently dropped.
+    /// This surfaces them as a warning so an operator can see a client sending parameters that never take
+    /// effect. A parameter is reported only when it is absent from the object, is not the parameter that
+    /// carries the object itself, and differs from the request model's default (so it was actually supplied).
+    /// </summary>
+    private void WarnAboutIgnoredOutsideParameters<T>(T request, string? requestObject, JsonObject payload)
+        where T : class
+    {
+        var outer = JsonSerializer.SerializeToNode(request)?.AsObject();
+        if (outer is null)
+            return;
+
+        var defaults = JsonSerializer.SerializeToNode(Activator.CreateInstance<T>())?.AsObject();
+
+        var ignored = new List<string>();
+        foreach (var (name, value) in outer)
+        {
+            // Carried by the object as well — used, not dropped.
+            if (payload.ContainsKey(name))
+                continue;
+
+            // The parameter that carries the request object itself is expected to be outside it.
+            if (value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject)
+                continue;
+
+            // Left at its type default — the client did not actually supply it.
+            if (JsonNode.DeepEquals(value, defaults?[name]))
+                continue;
+
+            ignored.Add(name);
+        }
+
+        if (ignored.Count > 0)
+            LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
     }
 
     /// <summary>
@@ -113,7 +156,7 @@ public partial class RequestObjectFetcher(
     /// This method uses the configured OIDC options to determine whether the JWT must be signed and validates
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
-    private async Task<Result<JsonObject, OidcError>> ValidateAsync(
+    private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
         string requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
@@ -136,7 +179,7 @@ public partial class RequestObjectFetcher(
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
         var result = await tokenValidator.ValidateAsync(requestObject, validationOptions);
 
-        return result.Match<Result<JsonObject, OidcError>>(
+        return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>
             {
                 // RFC 9101 §10.5: a client registered with require_signed_request_object committed
@@ -164,7 +207,7 @@ public partial class RequestObjectFetcher(
                         "The request object signing algorithm does not match the client's registered algorithm");
                 }
 
-                return validJwt.Token.Payload.Json;
+                return (validJwt.Token.Payload.Json, validJwt.Client);
             },
             error => InvalidRequestObject(error));
     }

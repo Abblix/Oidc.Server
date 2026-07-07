@@ -256,11 +256,19 @@ public record OidcOptions
 	public bool RequireSignedRequestObject { get; set; } = false;
 
 	/// <summary>
-	/// Switches request-object processing to the strict RFC 9101 §5 semantics: when a request
-	/// object is used, the authorization request is exactly the content of the object and any
-	/// parameter passed outside it is ignored instead of merged. The default (off) keeps the
-	/// OpenID Connect Core §6.1 merge semantics, where parameters outside the object complement
-	/// the ones inside. FAPI-style OAuth-only deployments enable this switch.
+	/// Governs how a request object resolves a parameter that appears both inside the object and in the
+	/// OAuth query syntax — a choice between two specifications. When <c>false</c> (the default), request-object
+	/// processing follows the OpenID Connect Core §6.1 merge semantics: the object's values supersede those
+	/// passed outside it, but a parameter passed only outside the object is still used. Set to <c>true</c> for
+	/// the strict RFC 9101 §6.3 rule, where the authorization request is exactly the content of the object and
+	/// any parameter passed outside it is ignored ("the authorization server MUST only use the parameters in
+	/// the Request Object"). The strict rule suits FAPI-style OAuth deployments; as an OpenID Provider the
+	/// server defaults to the merge behaviour, since strict processing would drop parameters that existing
+	/// OpenID Connect clients commonly pass outside the object. A client held to the FAPI 2.0 security profile
+	/// is processed strictly regardless of this global default.
+	/// This switch affects only parameter exclusivity; the other RFC 9101 §6.3 requirement — that a
+	/// <c>client_id</c> or <c>response_type</c> present both inside and outside the object be identical — is
+	/// enforced in both modes and cannot be turned off.
 	/// </summary>
 	public bool IgnoreParametersOutsideRequestObject { get; set; } = false;
 
