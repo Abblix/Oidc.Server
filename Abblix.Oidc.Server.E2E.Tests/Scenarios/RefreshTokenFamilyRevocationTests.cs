@@ -55,10 +55,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
 
         // A normal refresh rotates rt1 -> rt2: rt1 becomes superseded (marked Used) and rt2 is now the
         // legitimately active token of the family. This also proves rotation works end-to-end.
-        var rotated = await RefreshAsync(client, discovery, rt1);
-        var rotatedBody = await ReadJsonAsync(rotated);
-        Assert.True(rotated.IsSuccessStatusCode, $"first refresh should rotate, got {(int)rotated.StatusCode}: {rotatedBody}");
-        var rt2 = rotatedBody[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var rt2 = await RotateAsync(client, discovery, rt1);
         Assert.NotEqual(rt1, rt2); // rotation actually minted a new token
 
         // THEFT: the stolen rt1 is replayed after it was rotated. The AS cannot tell an attacker from a
@@ -70,6 +67,32 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         // rt2 is now rejected too. The active token an attacker would be holding dies with the family.
         var afterCascade = await RefreshAsync(client, discovery, rt2);
         await AssertInvalidGrantAsync(afterCascade);
+    }
+
+    [Fact]
+    public async Task Replaying_the_oldest_token_revokes_a_multi_generation_family()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // Build a three-generation lineage rt1 -> rt2 -> rt3. Each rotation supersedes its predecessor and
+        // carries the same grant_id forward, so rt1, rt2 and rt3 all belong to one family; rt3 is active.
+        var initial = await ObtainRefreshTokenAsync(client, discovery);
+        var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var rt2 = await RotateAsync(client, discovery, rt1);
+        var rt3 = await RotateAsync(client, discovery, rt2);
+        Assert.NotEqual(rt1, rt2);
+        Assert.NotEqual(rt2, rt3);
+        Assert.NotEqual(rt1, rt3);
+
+        // Replaying rt1 — superseded two generations ago — is still the breach signal that revokes the whole
+        // family, not merely the token replayed (RFC 9700 Section 4.14.2).
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt1));
+
+        // Every member of the lineage is now dead: the already-superseded rt2 and, crucially, the still-active
+        // rt3 — the token an attacker who had rotated forward would be holding.
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt3));
     }
 
     /// <summary>
@@ -112,6 +135,18 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
+
+    /// <summary>
+    /// Refreshes with <paramref name="refreshToken"/>, asserts the rotation succeeded, and returns the newly
+    /// issued refresh token — the next member of the same grant family.
+    /// </summary>
+    private static async Task<string> RotateAsync(HttpClient client, DiscoveryDocument discovery, string refreshToken)
+    {
+        var response = await RefreshAsync(client, discovery, refreshToken);
+        var body = await ReadJsonAsync(response);
+        Assert.True(response.IsSuccessStatusCode, $"refresh should rotate, got {(int)response.StatusCode}: {body}");
+        return body[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+    }
 
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
