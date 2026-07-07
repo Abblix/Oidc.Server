@@ -23,7 +23,7 @@
 using Abblix.Oidc.Server.Endpoints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.NoneResponseType;
+namespace Abblix.Oidc.Server.Features.NoneResponse;
 
 /// <summary>
 /// DI extensions that opt the host into the OAuth 2.0 <c>none</c> response type.
