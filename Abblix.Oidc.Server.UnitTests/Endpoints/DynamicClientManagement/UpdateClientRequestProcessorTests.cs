@@ -49,7 +49,7 @@ public class UpdateClientRequestProcessorTests
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
             .Setup(m => m.UpdateClientAsync(It.IsAny<ClientInfo>()))
-            .Callback<ClientInfo>(onSave)
+            .Callback(onSave)
             .Returns(Task.CompletedTask);
 
         var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
