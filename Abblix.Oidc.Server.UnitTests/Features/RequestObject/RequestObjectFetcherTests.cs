@@ -22,8 +22,10 @@
 
 using System;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -96,6 +98,62 @@ public class RequestObjectFetcherTests
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);
+
+    // A request type with wire-named JSON keys, mirroring how real request models bind, so strict
+    // RFC 9101 §6.3 processing can be exercised where parameter names line up with the object's claims.
+    private record JarTestRequest
+    {
+        [JsonPropertyName("client_id")] public string? ClientId { get; init; }
+        [JsonPropertyName("state")] public string? State { get; init; }
+        [JsonPropertyName("request")] public string? Request { get; init; }
+    }
+
+    /// <summary>
+    /// A client held to the FAPI 2.0 security profile is processed under the strict RFC 9101 §6.3 rule even
+    /// when the global default stays merge: a parameter passed outside the request object that the object does
+    /// not carry is dropped, and the drop is reported as a warning.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_FapiProfileClient_ProcessesStrictlyAndWarnsOnOutsideParameter()
+    {
+        // Arrange — the global default stays merge; the FAPI profile is what forces strict for this client.
+        Assert.False(_oidcOptions.IgnoreParametersOutsideRequestObject);
+        _logger.Setup(l => l.IsEnabled(LogLevel.Warning)).Returns(true);
+        var fetcher = CreateFetcher();
+
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
+        var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
+        var payload = new JsonObject { ["client_id"] = "c1" };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = new JsonWebTokenPayload(payload),
+        };
+        var fapiClient = new ClientInfo("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, fapiClient));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
+            .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
+
+        // Act
+        var result = await fetcher.FetchAsync(request, jwt);
+
+        // Assert — the payload bound onto a fresh model (the outside-only state is gone) and the drop was logged.
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.NotSame(request, value);
+        Assert.Null(value!.State);
+        _logger.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.Is<EventId>(e => e.Id == LogEvents.Misc.RequestObjectFetcher.ParametersOutsideRequestObjectIgnored),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
 
     /// <summary>
     /// Verifies that null requestObject returns original request unchanged.

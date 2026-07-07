@@ -82,6 +82,14 @@ public sealed record SecurityProfileRequirements
     /// </summary>
     public bool RequireCodeResponseTypeOnly { get; init; }
 
+    /// <summary>
+    /// The profile requires strict RFC 9101 §6.3 request-object processing: only the parameters inside the
+    /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
+    /// Core §6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
+    /// Enforced by <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    public bool RequireStrictRequestObjectProcessing { get; init; }
+
     private static readonly SecurityProfileRequirements NoneRequirements = new();
 
     private static readonly SecurityProfileRequirements Fapi2Requirements = new()
@@ -91,6 +99,7 @@ public sealed record SecurityProfileRequirements
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
         RequireCodeResponseTypeOnly = true,
+        RequireStrictRequestObjectProcessing = true,
     };
 
     /// <summary>
