@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.NoneResponse;
+using Abblix.Oidc.Server.Features.NoneFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;

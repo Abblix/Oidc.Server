@@ -24,7 +24,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
-namespace Abblix.Oidc.Server.Features.NoneResponse;
+namespace Abblix.Oidc.Server.Features.NoneFlow;
 
 /// <summary>
 /// Builds the <c>none</c> response-type component of an authorization endpoint success response
