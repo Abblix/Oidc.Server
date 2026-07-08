@@ -799,7 +799,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// Without <c>EnableNoneResponseType()</c> the none processor is absent, so <c>response_type=none</c>
+    /// Without <c>EnableNoneFlow()</c> the none processor is absent, so <c>response_type=none</c>
     /// is rejected at the server-level support gate with <c>unsupported_response_type</c> — even when the
     /// client is configured to allow it.
     /// </summary>

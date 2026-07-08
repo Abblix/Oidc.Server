@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.NoneResponse;
 /// request without returning any credentials, so this builder contributes nothing to the running
 /// <see cref="SuccessfullyAuthenticated"/> result — the authorization endpoint returns only
 /// <c>state</c> and, when advertised, <c>iss</c> (RFC 9207). Registered by opt-in through
-/// <c>EnableNoneResponseType()</c>. Unlike the other response types it declares no grant type, because
+/// <c>EnableNoneFlow()</c>. Unlike the other response types it declares no grant type, because
 /// it issues no code or token to be exchanged later.
 /// </summary>
 public class NoneResponseBuilder : IAuthorizationResponseBuilder

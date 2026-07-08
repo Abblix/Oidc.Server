@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// OAuth 2.0 Multiple Response Type Encoding Practices §4 (none response type) end-to-end: a
 /// <c>response_type=none</c> request authorizes the flow and redirects back to <c>redirect_uri</c>
 /// carrying only <c>state</c> and <c>iss</c> (RFC 9207) — no authorization code, access token, or
-/// id_token. The host opts into the response type via <c>EnableNoneResponseType()</c>.
+/// id_token. The host opts into the response type via <c>EnableNoneFlow()</c>.
 /// </summary>
 public class NoneResponseTypeTests(TestFactory factory) : TestBase(factory)
 {
