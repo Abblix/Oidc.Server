@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.NoneResponse;
+using Abblix.Oidc.Server.Features.NoneFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -141,7 +141,7 @@ builder.Services.AddAuthorizationDetailValidator<PaymentInitiationValidator>(Tes
 
 // Opt into the OAuth 2.0 none response type (OAuth 2.0 Multiple Response Type Encoding Practices §4)
 // so the none-response-type client can drive the credential-less authorization flow end-to-end.
-builder.Services.EnableNoneResponseType();
+builder.Services.EnableNoneFlow();
 
 // Test-mode service replacements: turn the host into a non-interactive
 // OIDC provider that auto-authenticates the canonical e2e subject and

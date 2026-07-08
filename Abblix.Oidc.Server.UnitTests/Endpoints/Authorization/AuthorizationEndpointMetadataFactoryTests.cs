@@ -104,7 +104,7 @@ public class AuthorizationEndpointMetadataFactoryTests
     }
 
     /// <summary>
-    /// With the none response builder registered (<c>EnableNoneResponseType()</c>), the discovery
+    /// With the none response builder registered (<c>EnableNoneFlow()</c>), the discovery
     /// document advertises the <c>none</c> response type alongside the others.
     /// </summary>
     [Fact]

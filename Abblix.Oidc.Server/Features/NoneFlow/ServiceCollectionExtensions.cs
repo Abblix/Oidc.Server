@@ -23,7 +23,7 @@
 using Abblix.Oidc.Server.Endpoints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.NoneResponse;
+namespace Abblix.Oidc.Server.Features.NoneFlow;
 
 /// <summary>
 /// DI extensions that opt the host into the OAuth 2.0 <c>none</c> response type.
@@ -45,7 +45,7 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to register the processor in.</param>
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-    public static IServiceCollection EnableNoneResponseType(this IServiceCollection services)
+    public static IServiceCollection EnableNoneFlow(this IServiceCollection services)
     {
         // NoneResponseBuilder has no dependencies, so it stays a singleton (the default lifetime).
         services.AddAuthorizationResponseProcessor<NoneResponseBuilder>();
