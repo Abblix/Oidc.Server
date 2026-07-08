@@ -33,6 +33,9 @@ namespace Abblix.Jwt.Signing;
 internal sealed class NoneSigner : IDataSigner<JsonWebKey>
 {
 	/// <inheritdoc />
+	public string Algorithm => SigningAlgorithms.None;
+
+	/// <inheritdoc />
 	public byte[] Sign(JsonWebKey key, byte[] data) => [];
 
 	/// <inheritdoc />

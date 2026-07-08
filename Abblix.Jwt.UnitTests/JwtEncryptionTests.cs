@@ -294,6 +294,8 @@ public class JwtEncryptionTests
     {
         public int LastCekLength { get; private set; } = -1;
 
+        public string Algorithm => EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
+
         public int KeySizeInBytes { get; } = keySizeInBytes;
 
         public EncryptedData Encrypt(byte[] cek, byte[] plaintext, byte[] additionalAuthenticatedData)

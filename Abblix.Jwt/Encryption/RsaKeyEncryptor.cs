@@ -42,6 +42,9 @@ namespace Abblix.Jwt.Encryption;
 /// </remarks>
 internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm) : IKeyEncryptor<RsaJsonWebKey>
 {
+	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
 	private readonly RSAEncryptionPadding _padding = algorithm switch
 	{
 		// - Section 4.3: RSA-OAEP uses RSAES-OAEP with default parameters (SHA-1)

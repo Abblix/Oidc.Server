@@ -21,8 +21,13 @@
 // info@abblix.com
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
+
+using Abblix.Jwt;
+using Abblix.Jwt.Encryption;
+using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -199,5 +204,185 @@ public class ServiceCollectionOverrideTests
 
         using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+    }
+
+    // A signing algorithm the library does not ship (secp256k1); models a host bringing its own signer.
+    private const string HostSigningAlgorithm = "ES256K";
+
+    // A key-management algorithm the library does not ship (ECDH-ES); models a host bringing its own encryptor.
+    private const string HostKeyManagementAlgorithm = "ECDH-ES";
+
+    [Fact]
+    public void AddJsonWebTokens_HostPreregisteredKeyedSigner_Wins()
+    {
+        // Issue #224: a host pre-registers an alternative signer (e.g. HSM-backed) under a built-in
+        // algorithm key. The library registration must not shadow it.
+        var services = new ServiceCollection();
+        var stub = new HostRsaSigner();
+        services.AddKeyedSingleton<IDataSigner<RsaJsonWebKey>>(SigningAlgorithms.RS256, stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(
+            services,
+            d => d.ServiceType == typeof(IDataSigner<RsaJsonWebKey>) &&
+                 Equals(d.ServiceKey, SigningAlgorithms.RS256));
+        Assert.Same(stub, descriptor.KeyedImplementationInstance);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostPreregisteredCreator_Wins()
+    {
+        var services = new ServiceCollection();
+        var stub = new Mock<IJsonWebTokenCreator>().Object;
+        services.AddSingleton(stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenCreator));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_InvokedTwice_DefaultsRegisteredOnce()
+    {
+        var services = new ServiceCollection();
+
+        services.AddJsonWebTokens();
+        services.AddJsonWebTokens();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenCreator));
+        Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenValidator));
+        Assert.Single(
+            services,
+            d => d.ServiceType == typeof(IDataSigner<RsaJsonWebKey>) &&
+                 Equals(d.ServiceKey, SigningAlgorithms.RS256));
+        Assert.Single(
+            services,
+            d => d.ServiceType == typeof(IKeyEncryptor<RsaJsonWebKey>) &&
+                 Equals(d.ServiceKey, EncryptionAlgorithms.KeyManagement.RsaOaep256));
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostRegisteredSigningAlgorithm_IsAdvertised()
+    {
+        // Issue #224: an algorithm the host registers under its own 'alg' key participates in signing,
+        // so discovery must advertise it in the *_signing_alg_values_supported lists.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+        services.AddKeyedSingleton<IDataSigner<EllipticCurveJsonWebKey>>(
+            HostSigningAlgorithm, new HostEllipticCurveSigner());
+
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Contains(
+            HostSigningAlgorithm,
+            provider.GetRequiredService<IJsonWebTokenCreator>().SignedResponseAlgorithmsSupported);
+        Assert.Contains(
+            HostSigningAlgorithm,
+            provider.GetRequiredService<IJsonWebTokenValidator>().SigningAlgorithmsSupported);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostRegisteredKeyManagementAlgorithm_IsAdvertised()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+        services.AddKeyedSingleton<IKeyEncryptor<EllipticCurveJsonWebKey>>(
+            HostKeyManagementAlgorithm, new HostEllipticCurveKeyEncryptor());
+
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Contains(
+            HostKeyManagementAlgorithm,
+            provider.GetRequiredService<IJsonWebTokenValidator>().EncryptionAlgorithmsSupported);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_DefaultAlgorithms_AdvertisedInRegistrationOrder()
+    {
+        // Parity guard for the discovery lists: the advertised defaults keep the exact content and
+        // order the accumulate-at-registration providers produced, so published discovery documents
+        // do not churn.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(
+            [
+                SigningAlgorithms.None,
+                SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
+                SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512,
+                SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512,
+                SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512,
+            ],
+            provider.GetRequiredService<IJsonWebTokenCreator>().SignedResponseAlgorithmsSupported);
+
+        var validator = provider.GetRequiredService<IJsonWebTokenValidator>();
+        Assert.Equal(
+            [
+                EncryptionAlgorithms.KeyManagement.RsaOaep,
+                EncryptionAlgorithms.KeyManagement.RsaOaep256,
+                EncryptionAlgorithms.KeyManagement.Rsa1_5,
+                EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
+                EncryptionAlgorithms.KeyManagement.Aes192Gcmkw,
+                EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+                EncryptionAlgorithms.KeyManagement.Dir,
+            ],
+            validator.EncryptionAlgorithmsSupported);
+        Assert.Equal(
+            [
+                EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+                EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384,
+                EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
+                EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
+                EncryptionAlgorithms.ContentEncryption.Aes192Gcm,
+                EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            ],
+            validator.EncryptionMethodsSupported);
+    }
+
+    private sealed class HostRsaSigner : IDataSigner<RsaJsonWebKey>
+    {
+        public string Algorithm => SigningAlgorithms.RS256;
+
+        public byte[] Sign(RsaJsonWebKey key, byte[] data) => [];
+
+        public bool Verify(RsaJsonWebKey key, byte[] data, byte[] signature) => false;
+    }
+
+    private sealed class HostEllipticCurveSigner : IDataSigner<EllipticCurveJsonWebKey>
+    {
+        public string Algorithm => HostSigningAlgorithm;
+
+        public byte[] Sign(EllipticCurveJsonWebKey key, byte[] data) => [];
+
+        public bool Verify(EllipticCurveJsonWebKey key, byte[] data, byte[] signature) => false;
+    }
+
+    private sealed class HostEllipticCurveKeyEncryptor : IKeyEncryptor<EllipticCurveJsonWebKey>
+    {
+        public string Algorithm => HostKeyManagementAlgorithm;
+
+        public byte[] EncryptKey(JsonWebTokenHeader header, EllipticCurveJsonWebKey encryptionKey, byte[] keyToEncrypt)
+            => [];
+
+        public bool TryDecryptKey(
+            JsonWebTokenHeader header,
+            EllipticCurveJsonWebKey decryptingKey,
+            byte[] encryptedKey,
+            [NotNullWhen(true)] out byte[]? decryptedKey)
+        {
+            decryptedKey = null;
+            return false;
+        }
     }
 }

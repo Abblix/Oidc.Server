@@ -35,6 +35,9 @@ internal sealed class RsaSigner(string algorithm) : IDataSigner<RsaJsonWebKey>
 	private readonly (HashAlgorithmName hashAlgorithm, RSASignaturePadding padding) _parameters = GetAlgorithmParameters(algorithm);
 
 	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
+	/// <inheritdoc />
 	public byte[] Sign(RsaJsonWebKey rsaKey, byte[] data)
 	{
 		using var rsa = rsaKey.ToRsa();

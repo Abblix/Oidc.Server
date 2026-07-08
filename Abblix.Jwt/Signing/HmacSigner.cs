@@ -40,6 +40,9 @@ namespace Abblix.Jwt.Signing;
 internal sealed class HmacSigner(string algorithm) : IDataSigner<OctetJsonWebKey>
 {
 	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
+	/// <inheritdoc />
 	public byte[] Sign(OctetJsonWebKey octetKey, byte[] data)
 	{
 		var keyValue = octetKey.KeyValue;

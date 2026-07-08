@@ -1,39 +1,46 @@
+using Abblix.Jwt.Encryption;
+
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Abblix.Jwt;
 
 /// <summary>
 /// Provides access to the collections of JWE algorithms supported by the JWT infrastructure.
-/// Tracks key-management and content-encryption algorithms as the corresponding encryptors are
-/// registered in the dependency injection container.
+/// Projects both sets — key-management algorithms (the JWE <c>alg</c>, e.g. "RSA-OAEP-256") and
+/// content-encryption algorithms (the JWE <c>enc</c>, e.g. "A256GCM") — from the live keyed
+/// <see cref="IKeyEncryptor{TJsonWebKey}"/> and <see cref="IDataEncryptor"/> registrations, so
+/// discovery always reflects exactly the encryptors the host currently has registered — including
+/// algorithms the host added or replaced — with no registration-time bookkeeping to keep in sync.
 /// </summary>
 /// <remarks>
-/// The provider maintains two lists — key-management algorithms (the JWE <c>alg</c>, e.g.
-/// "RSA-OAEP-256") and content-encryption algorithms (the JWE <c>enc</c>, e.g. "A256GCM") — populated
-/// during service registration via <see cref="AddKeyManagement"/> and <see cref="AddContentEncryption"/>,
-/// and exposed via <see cref="KeyManagementAlgorithms"/> and <see cref="ContentEncryptionAlgorithms"/>
-/// for discovery.
+/// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenEncryptor"/>: an
+/// encryptor registered for any other <see cref="JsonWebKey"/> subtype is unreachable at run time,
+/// so it is deliberately not advertised. The enumeration order (RSA, EC, octet) preserves the order
+/// the built-in algorithms have always appeared in published discovery documents.
 /// </remarks>
-internal class EncryptionAlgorithmsProvider
+internal sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvider)
 {
-    private readonly List<string> _keyManagementAlgorithms = [];
-    private readonly List<string> _contentEncryptionAlgorithms = [];
-
     /// <summary>
     /// Gets the supported JWE key-management algorithms (the <c>alg</c> values, e.g. "RSA-OAEP-256").
     /// </summary>
-    public IEnumerable<string> KeyManagementAlgorithms => _keyManagementAlgorithms;
+    public IEnumerable<string> KeyManagementAlgorithms =>
+        KeyManagementAlgorithmsFor<RsaJsonWebKey>()
+            .Concat(KeyManagementAlgorithmsFor<EllipticCurveJsonWebKey>())
+            .Concat(KeyManagementAlgorithmsFor<OctetJsonWebKey>())
+            .Distinct();
 
     /// <summary>
     /// Gets the supported JWE content-encryption algorithms (the <c>enc</c> values, e.g. "A256GCM").
     /// </summary>
-    public IEnumerable<string> ContentEncryptionAlgorithms => _contentEncryptionAlgorithms;
+    public IEnumerable<string> ContentEncryptionAlgorithms =>
+        serviceProvider
+            .GetKeyedServices<IDataEncryptor>(KeyedService.AnyKey)
+            .Select(encryptor => encryptor.Algorithm)
+            .Distinct();
 
-    /// <summary>
-    /// Adds a key-management algorithm to the collection of supported algorithms.
-    /// </summary>
-    public void AddKeyManagement(string algorithm) => _keyManagementAlgorithms.Add(algorithm);
-
-    /// <summary>
-    /// Adds a content-encryption algorithm to the collection of supported algorithms.
-    /// </summary>
-    public void AddContentEncryption(string algorithm) => _contentEncryptionAlgorithms.Add(algorithm);
+    private IEnumerable<string> KeyManagementAlgorithmsFor<TJsonWebKey>()
+        where TJsonWebKey : JsonWebKey
+        => serviceProvider
+            .GetKeyedServices<IKeyEncryptor<TJsonWebKey>>(KeyedService.AnyKey)
+            .Select(encryptor => encryptor.Algorithm);
 }

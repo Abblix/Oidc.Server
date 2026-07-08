@@ -31,6 +31,14 @@ namespace Abblix.Jwt.Encryption;
 internal interface IDataEncryptor
 {
 	/// <summary>
+	/// The JWE content-encryption algorithm identifier this encryptor implements (e.g. "A256GCM").
+	/// Must equal the DI key the encryptor is registered under: discovery enumerates the keyed
+	/// registrations and projects this value into the <c>*_encryption_enc_values_supported</c> lists,
+	/// so a mismatch would advertise an algorithm name the dispatch cannot resolve.
+	/// </summary>
+	string Algorithm { get; }
+
+	/// <summary>
 	/// Gets the required Content Encryption Key (CEK) size in bytes for this algorithm.
 	/// </summary>
 	int KeySizeInBytes { get; }
