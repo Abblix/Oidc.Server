@@ -278,6 +278,53 @@ public static class ServiceCollectionExtensions
         where TService : class
         where TSource : class
     {
+        services.Add(services.BuildKeyedAliasDescriptor<TService, TSource>(serviceKey, sourceKey));
+        return services;
+    }
+
+    /// <summary>
+    /// Creates a keyed alias registration for <typeparamref name="TService"/> under
+    /// <paramref name="serviceKey"/> — unless that (service type, key) pair is already
+    /// registered. Sister of <see cref="AddKeyedAlias{TService,TSource}"/> with <c>TryAdd</c>
+    /// semantics on the alias identity: a pre-existing registration under the same key wins,
+    /// mirroring <see cref="TryAddAlias{TService,TImplementation}"/> for keyed seams and
+    /// keeping the library-wide "host pre-registration wins" convention.
+    /// </summary>
+    /// <typeparam name="TService">The service type for the alias registration.</typeparam>
+    /// <typeparam name="TSource">The source service type that is already registered.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
+    /// <param name="serviceKey">The service key to associate with the alias.</param>
+    /// <param name="sourceKey">The service key of the source registration. Use null for non-keyed source.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no registration is found for <typeparamref name="TSource"/> with the specified <paramref name="sourceKey"/>.
+    /// </exception>
+    public static IServiceCollection TryAddKeyedAlias<TService, TSource>(
+        this IServiceCollection services,
+        object? serviceKey,
+        object? sourceKey = null)
+        where TService : class
+        where TSource : class
+    {
+        services.TryAdd(services.BuildKeyedAliasDescriptor<TService, TSource>(serviceKey, sourceKey));
+        return services;
+    }
+
+    /// <summary>
+    /// Builds the keyed alias <see cref="ServiceDescriptor"/> shared by
+    /// <see cref="AddKeyedAlias{TService,TSource}"/> and
+    /// <see cref="TryAddKeyedAlias{TService,TSource}"/>: locates the most recent
+    /// registration of <typeparamref name="TSource"/> under <paramref name="sourceKey"/>
+    /// and clones it with <typeparamref name="TService"/> and <paramref name="serviceKey"/>
+    /// as the new service identity.
+    /// </summary>
+    private static ServiceDescriptor BuildKeyedAliasDescriptor<TService, TSource>(
+        this IServiceCollection services,
+        object? serviceKey,
+        object? sourceKey)
+        where TService : class
+        where TSource : class
+    {
         // Find the most recent keyed registration of TSource
         var source = services.LastOrDefault(s =>
             (s.ServiceType == typeof(TSource) || s.ImplementationType == typeof(TSource)) &&
@@ -287,9 +334,7 @@ public static class ServiceCollectionExtensions
                 $"Register it first before creating an alias.");
 
         // Clone the descriptor with TService as the new ServiceType and serviceKey
-        services.Add(source.CloneKeyed(typeof(TService), serviceKey));
-
-        return services;
+        return source.CloneKeyed(typeof(TService), serviceKey);
     }
 
     /// <summary>
