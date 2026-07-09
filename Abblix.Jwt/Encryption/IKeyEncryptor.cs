@@ -41,6 +41,14 @@ public interface IKeyEncryptor<in TJsonWebKey>
 	where TJsonWebKey: JsonWebKey
 {
 	/// <summary>
+	/// The JWE key-management algorithm identifier this encryptor implements (e.g. "RSA-OAEP-256").
+	/// Must equal the DI key the encryptor is registered under: discovery enumerates the keyed
+	/// registrations and projects this value into the <c>*_encryption_alg_values_supported</c> lists,
+	/// so a mismatch would advertise an algorithm name the dispatch cannot resolve.
+	/// </summary>
+	string Algorithm { get; }
+
+	/// <summary>
 	/// Encrypts a Content Encryption Key (CEK) using the configured key management algorithm.
 	/// Used when creating JWE tokens to protect the CEK with the recipient's public key.
 	/// </summary>

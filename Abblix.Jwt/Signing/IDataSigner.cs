@@ -28,6 +28,14 @@ namespace Abblix.Jwt.Signing;
 public interface IDataSigner<in TJsonWebKey> where TJsonWebKey : JsonWebKey
 {
 	/// <summary>
+	/// The JWS signing algorithm identifier this signer implements (e.g. "RS256", "ES384").
+	/// Must equal the DI key the signer is registered under: discovery enumerates the keyed
+	/// registrations and projects this value into the <c>*_signing_alg_values_supported</c> lists,
+	/// so a mismatch would advertise an algorithm name the dispatch cannot resolve.
+	/// </summary>
+	string Algorithm { get; }
+
+	/// <summary>
 	/// Signs the provided data using the configured algorithm and specified key.
 	/// </summary>
 	/// <param name="key">The key to use for signing.</param>

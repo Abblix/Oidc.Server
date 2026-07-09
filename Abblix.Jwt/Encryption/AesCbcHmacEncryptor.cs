@@ -41,6 +41,9 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IDataEncryptor
 	private readonly int _keySize = GetKeySize(algorithm);
 
 	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
+	/// <inheritdoc />
 	public int KeySizeInBytes => _keySize * 2;
 
 	/// <inheritdoc />

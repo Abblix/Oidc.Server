@@ -53,6 +53,10 @@ internal sealed class DirectKeyAgreement : IKeyEncryptor<OctetJsonWebKey>
 				nameof(algorithm));
 		}
 	}
+
+	/// <inheritdoc />
+	public string Algorithm => EncryptionAlgorithms.KeyManagement.Dir;
+
 	/// <inheritdoc />
 	/// <remarks>
 	/// For direct key agreement, the symmetric key IS the Content Encryption Key.

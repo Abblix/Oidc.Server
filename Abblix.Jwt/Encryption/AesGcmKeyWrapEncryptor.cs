@@ -43,6 +43,9 @@ namespace Abblix.Jwt.Encryption;
 /// </remarks>
 internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyEncryptor<OctetJsonWebKey>
 {
+	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
 	private readonly int _keySize = algorithm switch
 	{
 		// A128GCMKW uses 128-bit (16-byte) AES key

@@ -37,6 +37,9 @@ internal sealed class EcdsaSigner(string algorithm) : IDataSigner<EllipticCurveJ
 	private readonly (HashAlgorithmName hashAlgorithm, int signatureLength) _parameters = GetAlgorithmParameters(algorithm);
 
 	/// <inheritdoc />
+	public string Algorithm => algorithm;
+
+	/// <inheritdoc />
 	public byte[] Sign(EllipticCurveJsonWebKey ecKey, byte[] data)
 	{
 		var signature = new byte[_parameters.signatureLength];
