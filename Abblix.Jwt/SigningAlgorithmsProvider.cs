@@ -29,8 +29,7 @@ internal sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider
             .Concat(AlgorithmsFor<OctetJsonWebKey>())
             .Distinct();
 
-    private IEnumerable<string> AlgorithmsFor<TJsonWebKey>()
-        where TJsonWebKey : JsonWebKey
+    private IEnumerable<string> AlgorithmsFor<TJsonWebKey>() where TJsonWebKey : JsonWebKey
         => serviceProvider
             .GetKeyedServices<IDataSigner<TJsonWebKey>>(KeyedService.AnyKey)
             .Select(signer => signer.Algorithm);

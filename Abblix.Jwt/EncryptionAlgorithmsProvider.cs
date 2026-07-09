@@ -32,14 +32,13 @@ internal sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvi
     /// <summary>
     /// Gets the supported JWE content-encryption algorithms (the <c>enc</c> values, e.g. "A256GCM").
     /// </summary>
-    public IEnumerable<string> ContentEncryptionAlgorithms =>
-        serviceProvider
+    public IEnumerable<string> ContentEncryptionAlgorithms
+        => serviceProvider
             .GetKeyedServices<IDataEncryptor>(KeyedService.AnyKey)
             .Select(encryptor => encryptor.Algorithm)
             .Distinct();
 
-    private IEnumerable<string> KeyManagementAlgorithmsFor<TJsonWebKey>()
-        where TJsonWebKey : JsonWebKey
+    private IEnumerable<string> KeyManagementAlgorithmsFor<TJsonWebKey>() where TJsonWebKey : JsonWebKey
         => serviceProvider
             .GetKeyedServices<IKeyEncryptor<TJsonWebKey>>(KeyedService.AnyKey)
             .Select(encryptor => encryptor.Algorithm);
