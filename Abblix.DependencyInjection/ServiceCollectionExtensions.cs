@@ -69,6 +69,32 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds <typeparamref name="TService"/> as a SHARED-instance alias for the existing
+    /// <typeparamref name="TImplementation"/> registration — unless <typeparamref name="TService"/>
+    /// is already registered. Sister of <see cref="AddAlias{TService,TImplementation}"/> with
+    /// <c>TryAdd</c> semantics on the alias service type: a host pre-registration of the aliased
+    /// contract wins, which keeps the library-wide "host pre-registration wins" convention on
+    /// singular seams whose library default is routed through an alias. Use plain
+    /// <see cref="AddAlias{TService,TImplementation}"/> only where the alias must be added
+    /// unconditionally (e.g. composition machinery that appends to an enumerable set).
+    /// </summary>
+    /// <typeparam name="TService">The service type to register the alias under.</typeparam>
+    /// <typeparam name="TImplementation">The implementation type already registered as a
+    /// concrete (or as another service) in the service collection.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no registration is found for <typeparamref name="TImplementation"/>.
+    /// </exception>
+    public static IServiceCollection TryAddAlias<TService, TImplementation>(this IServiceCollection services)
+        where TImplementation : class, TService
+        where TService : class
+    {
+        services.TryAdd(services.BuildAliasDescriptor<TService, TImplementation>());
+        return services;
+    }
+
+    /// <summary>
     /// Adds <typeparamref name="TService"/> to an enumerable strategy set as a SHARED-instance
     /// alias for the existing <typeparamref name="TImplementation"/> registration. Sister of
     /// <see cref="AddAlias{TService,TImplementation}"/>: same semantic of «route this service

@@ -31,8 +31,11 @@ using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -129,6 +132,59 @@ public class ServiceCollectionOverrideTests
         services.AddDPoP();
 
         Assert.Single(services, d => d.ServiceType == typeof(IProofValidator));
+    }
+
+    [Fact]
+    public void AddClientInformation_HostPreregisteredClientInfoProvider_Wins()
+    {
+        // Issue #226: the alias registrations must honor a host pre-registration the same
+        // way TryAdd* seams do — "store clients in your own database" is the flagship case.
+        var services = new ServiceCollection();
+        var stub = new Mock<IClientInfoProvider>().Object;
+        services.AddSingleton<IClientInfoProvider>(stub);
+
+        services.AddClientInformation();
+
+        var descriptors = services
+            .Where(d => d.ServiceType == typeof(IClientInfoProvider))
+            .ToList();
+
+        Assert.Single(descriptors);
+        Assert.Same(stub, descriptors[0].ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddClientInformation_HostPreregisteredClientInfoManager_Wins()
+    {
+        var services = new ServiceCollection();
+        var stub = new Mock<IClientInfoManager>().Object;
+        services.AddSingleton<IClientInfoManager>(stub);
+
+        services.AddClientInformation();
+
+        var descriptors = services
+            .Where(d => d.ServiceType == typeof(IClientInfoManager))
+            .ToList();
+
+        Assert.Single(descriptors);
+        Assert.Same(stub, descriptors[0].ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddAuthorizationEndpoint_HostPreregisteredAuthorizationHandler_Wins()
+    {
+        var services = new ServiceCollection();
+        var stub = new Mock<IAuthorizationHandler>().Object;
+        services.AddSingleton<IAuthorizationHandler>(stub);
+
+        services.AddAuthorizationEndpoint();
+
+        var descriptors = services
+            .Where(d => d.ServiceType == typeof(IAuthorizationHandler))
+            .ToList();
+
+        Assert.Single(descriptors);
+        Assert.Same(stub, descriptors[0].ImplementationInstance);
     }
 
     [Fact]
