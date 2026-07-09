@@ -98,7 +98,7 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
     /// <param name="values">The string values to parse.</param>
     /// <returns>An enumerable of <see cref="CultureInfo"/>.</returns>
     private static IEnumerable<CultureInfo> GetCultureInfos(StringValues values) =>
-        from value in values
+        from value in values.OfType<string>()
         from culture in value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         select new CultureInfo(culture);
 }
