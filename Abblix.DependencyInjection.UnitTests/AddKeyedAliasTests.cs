@@ -33,6 +33,8 @@ namespace Abblix.DependencyInjection.UnitTests;
 /// </summary>
 public class AddKeyedAliasTests
 {
+	private const string TestKey = "test-key";
+
 	/// <summary>
 	/// Verifies that resolving keyed aliases from different interfaces returns the same instance.
 	/// </summary>
@@ -41,7 +43,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 
 		services.AddKeyedSingleton<ServiceA>(key);
 		services.AddKeyedAlias<IPrimaryService, ServiceA>(key, key);
@@ -119,7 +121,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 		var preregistered = new ServiceA();
 
 		services.AddKeyedSingleton<IPrimaryService>(key, preregistered);
@@ -144,7 +146,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 
 		services.AddKeyedSingleton<ServiceA>(key);
 
@@ -200,7 +202,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 
 		switch (lifetime)
 		{
