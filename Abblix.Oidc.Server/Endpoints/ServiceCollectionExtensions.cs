@@ -143,7 +143,8 @@ public static class ServiceCollectionExtensions
         // IAuthorizationResponseBuilder now contributes its own grant types directly to the
         // IGrantTypeInformer set, so the IGrantTypeInformer chain stays Singleton-friendly
         // (every contributor is Singleton — no captive-dep risk for Singleton consumers).
-        return services.AddAlias<IAuthorizationHandler, AuthorizationHandler>();
+        // TryAddAlias keeps the host-first contract on this seam (issue #226).
+        return services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
     }
 
     /// <summary>

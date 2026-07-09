@@ -33,6 +33,8 @@ namespace Abblix.DependencyInjection.UnitTests;
 /// </summary>
 public class AddKeyedAliasTests
 {
+	private const string TestKey = "test-key";
+
 	/// <summary>
 	/// Verifies that resolving keyed aliases from different interfaces returns the same instance.
 	/// </summary>
@@ -41,7 +43,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 
 		services.AddKeyedSingleton<ServiceA>(key);
 		services.AddKeyedAlias<IPrimaryService, ServiceA>(key, key);
@@ -111,6 +113,85 @@ public class AddKeyedAliasTests
 	}
 
 	/// <summary>
+	/// Verifies that TryAddKeyedAlias honors a pre-existing registration of the alias
+	/// service type under the same key: the earlier registration wins and the alias is skipped.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_WhenAliasKeyAlreadyRegistered_PreregistrationWins()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+		var preregistered = new ServiceA();
+
+		services.AddKeyedSingleton<IPrimaryService>(key, preregistered);
+		services.AddKeyedSingleton<ServiceA>(key);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+
+		// Assert - the pre-registration stays the only (IPrimaryService, key) descriptor
+		Assert.Single(services, d => d.ServiceType == typeof(IPrimaryService) && Equals(d.ServiceKey, key));
+
+		var serviceProvider = services.BuildServiceProvider();
+		Assert.Same(preregistered, serviceProvider.GetRequiredKeyedService<IPrimaryService>(key));
+	}
+
+	/// <summary>
+	/// Verifies that with no prior registration TryAddKeyedAlias behaves exactly like
+	/// AddKeyedAlias: the alias resolves to the same instance as the source registration.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_WhenAbsent_RegistersAlias()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+
+		services.AddKeyedSingleton<ServiceA>(key);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Assert
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key));
+	}
+
+	/// <summary>
+	/// Verifies that TryAddKeyedAlias deduplicates on the (service type, key) pair, not the
+	/// service type alone: an alias under a different key is still added.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_DifferentKey_StillAdds()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key1 = "key1";
+		const string key2 = "key2";
+
+		services.AddKeyedSingleton<ServiceA>(key1);
+		services.AddKeyedSingleton<ServiceA>(key2);
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key1, key1);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key2, key2);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Assert - both keys resolve, each through its own source
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key1),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key1));
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key2),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key2));
+	}
+
+	/// <summary>
 	/// Verifies that AddKeyedAlias preserves the lifetime of the original registration.
 	/// </summary>
 	[Theory]
@@ -121,7 +202,7 @@ public class AddKeyedAliasTests
 	{
 		// Arrange
 		var services = new ServiceCollection();
-		const string key = "test-key";
+		const string key = TestKey;
 
 		switch (lifetime)
 		{
