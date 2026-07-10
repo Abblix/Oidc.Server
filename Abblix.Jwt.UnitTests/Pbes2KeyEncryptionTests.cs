@@ -45,6 +45,8 @@ public class Pbes2KeyEncryptionTests
 		var services = new ServiceCollection();
 		services.AddSingleton(TimeProvider.System);
 		services.AddLogging();
+		// PBES2 is deliberately not part of the AddJsonWebTokens defaults — a host opts in explicitly
+		services.AddPbes2KeyManagement();
 		services.AddJsonWebTokens();
 		return services.BuildServiceProvider();
 	}
@@ -133,11 +135,12 @@ public class Pbes2KeyEncryptionTests
 	/// <summary>
 	/// The 'p2c' iteration count is attacker-controlled on inbound tokens. Values above the hard
 	/// cap must be rejected before any PBKDF2 work — otherwise a single crafted token demands an
-	/// arbitrary amount of computation (denial of service by iteration count). Values below the
+	/// arbitrary amount of computation (the CVE-2022-36083 class of denial of service; the cap of
+	/// 10,000 is the remediation consensus across JOSE implementations). Values below the
 	/// RFC 7518 §4.8.1.2 recommended minimum signal a downgrade and are rejected as well.
 	/// </summary>
 	[Theory]
-	[InlineData(1_000_001)]     // above the DoS cap
+	[InlineData(10_001)]        // above the DoS cap
 	[InlineData(int.MaxValue)]  // pathological
 	[InlineData(999)]           // below the spec minimum
 	[InlineData(0)]
@@ -204,7 +207,11 @@ public class Pbes2KeyEncryptionTests
 
 		Assert.NotNull(header.Pbes2SaltInput);
 		Assert.True(Base64Url.DecodeFromChars(header.Pbes2SaltInput).Length >= 8);
-		Assert.True(header.Pbes2IterationCount >= 1000);
+
+		// The outbound default must pass this library's own inbound bounds — and stay under the
+		// post-advisory inbound caps of the wider JOSE ecosystem, so produced tokens decrypt anywhere.
+		Assert.NotNull(header.Pbes2IterationCount);
+		Assert.InRange(header.Pbes2IterationCount.Value, 1000, 10_000);
 
 		Assert.True(encryptor.TryDecryptKey(header, passwordKey, encryptedKey, out var recoveredCek));
 		Assert.Equal(cek, recoveredCek);

@@ -358,6 +358,30 @@ public class ServiceCollectionOverrideTests
             provider.GetRequiredService<IJsonWebTokenValidator>().EncryptionAlgorithmsSupported);
     }
 
+    /// <summary>
+    /// PBES2 is deliberately absent from the <c>AddJsonWebTokens</c> defaults (the 'p2c' header of an
+    /// inbound token dictates pre-authentication PBKDF2 work — the CVE-2022-36083 class of denial of
+    /// service), and a host that opts in via <c>AddPbes2KeyManagement</c> gets the family registered
+    /// and advertised.
+    /// </summary>
+    [Fact]
+    public void AddPbes2KeyManagement_OptsInPbes2Algorithms()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+
+        services.AddPbes2KeyManagement();
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+        var advertised = provider.GetRequiredService<IJsonWebTokenValidator>().EncryptionAlgorithmsSupported.ToList();
+
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW, advertised);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW, advertised);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW, advertised);
+    }
+
     [Fact]
     public void AddJsonWebTokens_DefaultAlgorithms_AdvertisedInRegistrationOrder()
     {
@@ -399,9 +423,6 @@ public class ServiceCollectionOverrideTests
                 EncryptionAlgorithms.KeyManagement.Aes192KW,
                 EncryptionAlgorithms.KeyManagement.Aes256KW,
                 EncryptionAlgorithms.KeyManagement.Dir,
-                EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
-                EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW,
-                EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW,
             ],
             validator.EncryptionAlgorithmsSupported);
         Assert.Equal(
