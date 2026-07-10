@@ -382,6 +382,28 @@ public class ServiceCollectionOverrideTests
         Assert.Contains(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW, advertised);
     }
 
+    /// <summary>
+    /// RSA1_5 is deliberately absent from the <c>AddJsonWebTokens</c> defaults (NIST SP 800-131A Rev. 2
+    /// disallows PKCS#1 v1.5 key transport), and a host interoperating with a legacy peer opts in via
+    /// <c>AddRsaPkcs1KeyManagement</c>.
+    /// </summary>
+    [Fact]
+    public void AddRsaPkcs1KeyManagement_OptsInRsa1_5()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+
+        services.AddRsaPkcs1KeyManagement();
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(
+            EncryptionAlgorithms.KeyManagement.Rsa1_5,
+            provider.GetRequiredService<IJsonWebTokenValidator>().EncryptionAlgorithmsSupported);
+    }
+
     [Fact]
     public void AddJsonWebTokens_DefaultAlgorithms_AdvertisedInRegistrationOrder()
     {
@@ -411,7 +433,6 @@ public class ServiceCollectionOverrideTests
             [
                 EncryptionAlgorithms.KeyManagement.RsaOaep,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
-                EncryptionAlgorithms.KeyManagement.Rsa1_5,
                 EncryptionAlgorithms.KeyManagement.EcdhEs,
                 EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
                 EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW,

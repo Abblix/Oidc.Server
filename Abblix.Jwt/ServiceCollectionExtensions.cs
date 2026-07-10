@@ -66,16 +66,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<EncryptionAlgorithmsProvider>();
 
         // Register key encryptors by algorithm.
-        // RSA-OAEP and RSA-OAEP-256 are the recommended algorithms. RSA1_5 (RSAES-PKCS1-v1_5) is
-        // kept for backward compatibility despite RFC 8725 §3.2's advice to prefer RSAES-OAEP: its
-        // padding would otherwise make the decryption endpoint a Bleichenbacher oracle. That oracle
-        // is closed in JsonWebTokenEncryptor.DecryptAsync by the RFC 7516 §11.5 mitigation — a CEK
-        // that fails to decrypt is replaced with a random CEK and the AEAD step still runs, so a
-        // decryption failure is processed identically regardless of padding validity.
+        // RSA-OAEP and RSA-OAEP-256 are the recommended algorithms; RSA1_5 is opt-in via
+        // AddRsaPkcs1KeyManagement (NIST SP 800-131A Rev. 2 disallows PKCS#1 v1.5 key transport).
         services
             .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep)
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256)
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5);
+            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         // AES-GCM Key Wrap (symmetric key encryption with GCM)
         services
@@ -133,6 +128,22 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Enables the RSA1_5 (RSAES-PKCS1-v1_5) key management algorithm (RFC 7518 Section 4.2) for
+    /// both producing and consuming JWE tokens. It is deliberately not part of
+    /// <see cref="AddJsonWebTokens"/>: NIST SP 800-131A Rev. 2 disallows RSA key transport with
+    /// PKCS#1 v1.5 padding after 2023, and RFC 8725 §3.2 prescribes preferring RSAES-OAEP —
+    /// interoperating with a legacy peer that still requires it is an explicit hosting decision.
+    /// The padding's Bleichenbacher decryption oracle stays closed for opted-in hosts by the
+    /// RFC 7516 §11.5 mitigation in <see cref="JsonWebTokenEncryptor"/>: a CEK that fails to
+    /// decrypt is replaced with a random CEK and the AEAD step still runs, so a decryption
+    /// failure is processed identically regardless of padding validity.
+    /// </summary>
+    /// <param name="services">The service collection to register the encryptor in.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddRsaPkcs1KeyManagement(this IServiceCollection services)
+        => services.AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5);
 
     /// <summary>
     /// Enables the PBES2 password-based key management algorithms (PBES2-HS256+A128KW,
