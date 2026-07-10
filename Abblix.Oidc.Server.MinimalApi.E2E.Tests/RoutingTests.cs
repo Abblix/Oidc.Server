@@ -307,6 +307,28 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/.well-known/openid-configuration")]
+    [InlineData("/.well-known/oauth-authorization-server")]
+    [InlineData("/.well-known/jwks")]
+    [SuppressMessage("Minor Code Smell", "S1075", Justification = "In-memory TestServer http base address; not a deployment URL.")]
+    public async Task Non_https_metadata_get_is_redirected_to_https(string path)
+    {
+        var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("http://localhost"),
+        });
+
+        // Discovery and JWKS are gated on HTTPS like every other endpoint: over cleartext a man-in-the-middle could
+        // rewrite the advertised endpoints or signing keys, so the group's HTTPS filter redirects the GET to the https
+        // URL rather than serving metadata in the clear. TestServer honours the request scheme, so IsHttps is false.
+        var response = await httpClient.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(Uri.UriSchemeHttps, response.Headers.Location!.Scheme);
+    }
+
     [Fact]
     public async Task Oauth_authorization_server_suffix_serves_the_same_metadata_as_openid_configuration()
     {
