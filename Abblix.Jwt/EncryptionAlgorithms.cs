@@ -40,7 +40,9 @@ public static class EncryptionAlgorithms
 		/// RSAES-PKCS1-v1_5 key encryption (RFC 7518 Section 4.2). Backed by .NET <c>RSA</c>
 		/// with <c>RSAEncryptionPadding.Pkcs1</c>.
 		/// Kept for interoperability with legacy peers; OAEP variants should be preferred
-		/// because PKCS#1 v1.5 padding is vulnerable to chosen-ciphertext attacks (Bleichenbacher).
+		/// because PKCS#1 v1.5 padding is vulnerable to chosen-ciphertext attacks (Bleichenbacher)
+		/// and NIST SP 800-131A Rev. 2 disallows it for key transport.
+		/// Opt-in: enabled by <c>AddRsaPkcs1KeyManagement</c>, not by default.
 		/// </summary>
 		public const string Rsa1_5 = "RSA1_5";
 

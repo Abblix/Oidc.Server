@@ -68,6 +68,9 @@ public class InteropTests
 		var services = new ServiceCollection();
 		services.AddSingleton(TimeProvider.System);
 		services.AddLogging();
+		// RSA1_5 is deliberately not part of the AddJsonWebTokens defaults — the legacy-interop
+		// theories below opt in explicitly
+		services.AddRsaPkcs1KeyManagement();
 		services.AddJsonWebTokens();
 		return services.BuildServiceProvider();
 	}

@@ -51,6 +51,9 @@ public class JwtEncryptionTests
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
+        // RSA1_5 is deliberately not part of the AddJsonWebTokens defaults — the legacy-interop
+        // round-trip and Bleichenbacher-mitigation tests below opt in explicitly
+        services.AddRsaPkcs1KeyManagement();
         services.AddJsonWebTokens();
         return services.BuildServiceProvider();
     }
@@ -146,9 +149,10 @@ public class JwtEncryptionTests
     }
 
     /// <summary>
-    /// Verifies RSA1_5 (RSAES-PKCS1-v1_5) round-trips: it is kept for backward compatibility, and a
-    /// JWE encrypted with it decrypts correctly. The Bleichenbacher oracle that PKCS1-v1.5 would
-    /// otherwise expose is closed by the RFC 7516 §11.5 random-CEK mitigation (see
+    /// Verifies RSA1_5 (RSAES-PKCS1-v1_5) round-trips once a host opts in via
+    /// <c>AddRsaPkcs1KeyManagement</c> (this class's service provider does): a JWE encrypted with it
+    /// decrypts correctly and the algorithm is advertised. The Bleichenbacher oracle that PKCS1-v1.5
+    /// would otherwise expose is closed by the RFC 7516 §11.5 random-CEK mitigation (see
     /// <see cref="TamperedEncryptedKey_IsRejected_Uniformly"/>).
     /// </summary>
     [Fact]
