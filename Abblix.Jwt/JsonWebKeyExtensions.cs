@@ -220,6 +220,19 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to an ECDiffieHellman object for ECDH key agreement
+	/// operations (e.g. the ECDH-ES family of JWE key management algorithms).
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECDiffieHellman object based on the provided EllipticCurveJsonWebKey.</returns>
+	public static ECDiffieHellman ToEcdh(this EllipticCurveJsonWebKey key)
+	{
+		var ecdh = ECDiffieHellman.Create();
+		ecdh.ImportParameters(key.ToEcParameters());
+		return ecdh;
+	}
+
+	/// <summary>
 	/// Converts an EllipticCurveJsonWebKey to ECParameters,
 	/// which represent the key parameters used in ECDSA cryptographic operations.
 	/// Supports P-256, P-384, and P-521 curves as defined in NIST standards.

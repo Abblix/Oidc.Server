@@ -83,9 +83,28 @@ public static class ServiceCollectionExtensions
             .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192Gcmkw)
             .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
 
+        // AES Key Wrap (RFC 3394 symmetric key wrapping)
+        services
+            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128KW)
+            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192KW)
+            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256KW);
+
         // Direct Key Agreement (no key encryption)
         services
             .AddKeyEncryptor<OctetJsonWebKey, DirectKeyAgreement>(EncryptionAlgorithms.KeyManagement.Dir);
+
+        // ECDH-ES key agreement: direct (the derived key is the CEK) and with RFC 3394 key wrapping
+        services
+            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEs)
+            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW)
+            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW)
+            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW);
+
+        // PBES2 password-based key encryption (PBKDF2 + RFC 3394 key wrapping)
+        services
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW)
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW)
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW);
 
         // Register content encryptors by algorithm
         services

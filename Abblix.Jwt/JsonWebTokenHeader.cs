@@ -23,6 +23,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Abblix.Jwt;
 
@@ -274,5 +275,83 @@ public class JsonWebTokenHeader(JsonObject json)
     {
         get => Json.GetProperty<string>(JwtClaimTypes.KeyWrapAuthenticationTag);
         set => Json.SetProperty(JwtClaimTypes.KeyWrapAuthenticationTag, value);
+    }
+
+    /// <summary>
+    /// The 'epk' header parameter (RFC 7518 §4.6.1.1): the originator's ephemeral public key for
+    /// ECDH-ES key agreement, carried as a JWK with public members only. Returns null when absent.
+    /// </summary>
+    /// <exception cref="JsonException">Thrown when 'epk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
+    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
+        Justification = "The 'epk' comes from an untrusted JWE header. Returning null on a malformed JWK would make " +
+                        "'producer sent garbage' indistinguishable from 'parameter absent'; the ECDH-ES decryptor " +
+                        "must observe the difference to reject the token instead of skipping key agreement.")]
+    public JsonWebKey? EphemeralPublicKey
+    {
+        get => Json.TryGetPropertyValue(JwtClaimTypes.EphemeralPublicKey, out var node) && node is JsonObject obj
+            ? obj.Deserialize<JsonWebKey>()
+            : null;
+        set
+        {
+            if (value is not null)
+                Json[JwtClaimTypes.EphemeralPublicKey] = JsonSerializer.SerializeToNode(value, EphemeralKeySerializerOptions);
+            else
+                Json.Remove(JwtClaimTypes.EphemeralPublicKey);
+        }
+    }
+
+    /// <summary>
+    /// Serializer options for the 'epk' header parameter: absent JWK members must be omitted, not
+    /// written as JSON nulls — the wire form carries only the members the ephemeral key actually has
+    /// (kty, crv, x, y), matching what conformant JOSE peers emit and expect.
+    /// </summary>
+    private static readonly JsonSerializerOptions EphemeralKeySerializerOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    /// <summary>
+    /// The 'apu' header parameter (RFC 7518 §4.6.1.2): base64url-encoded Agreement PartyUInfo
+    /// (producer information) fed into the Concat KDF during ECDH-ES key agreement.
+    /// </summary>
+    public string? AgreementPartyUInfo
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.AgreementPartyUInfo);
+        set => Json.SetProperty(JwtClaimTypes.AgreementPartyUInfo, value);
+    }
+
+    /// <summary>
+    /// The 'apv' header parameter (RFC 7518 §4.6.1.3): base64url-encoded Agreement PartyVInfo
+    /// (recipient information) fed into the Concat KDF during ECDH-ES key agreement.
+    /// </summary>
+    public string? AgreementPartyVInfo
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.AgreementPartyVInfo);
+        set => Json.SetProperty(JwtClaimTypes.AgreementPartyVInfo, value);
+    }
+
+    /// <summary>
+    /// The 'p2s' header parameter (RFC 7518 §4.8.1.1): the base64url-encoded PBES2 salt input.
+    /// Per the spec it must decode to at least 8 octets; the PBES2 decryptor enforces that bound.
+    /// </summary>
+    public string? Pbes2SaltInput
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.Pbes2SaltInput);
+        set => Json.SetProperty(JwtClaimTypes.Pbes2SaltInput, value);
+    }
+
+    /// <summary>
+    /// The 'p2c' header parameter (RFC 7518 §4.8.1.2): the PBKDF2 iteration count for PBES2.
+    /// Returns null when absent or when the value is not representable as a positive 32-bit integer —
+    /// a count beyond int.MaxValue could never pass the decryptor's denial-of-service cap anyway.
+    /// </summary>
+    public int? Pbes2IterationCount
+    {
+        get => Json.TryGetPropertyValue(JwtClaimTypes.Pbes2IterationCount, out var node)
+               && node is JsonValue value
+               && value.TryGetValue<int>(out var count)
+            ? count
+            : null;
+        set => Json.SetProperty(JwtClaimTypes.Pbes2IterationCount, value);
     }
 }

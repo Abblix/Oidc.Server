@@ -41,14 +41,6 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         // Resolve content encryptor to get required CEK size
         var contentEncryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(contentEncryptionAlgorithm);
 
-        // Generate Content Encryption Key (CEK)
-        // For "dir" (Direct Key Agreement), the CEK IS the shared symmetric key
-        // For other algorithms, generate a random CEK
-        var cek = keyEncryptionAlgorithm == EncryptionAlgorithms.KeyManagement.Dir
-            ? (encryptionKey as OctetJsonWebKey)?.KeyValue
-                ?? throw new InvalidOperationException("Direct key agreement (dir) requires an OctetJsonWebKey with KeyValue")
-            : CryptoRandom.GetRandomBytes(contentEncryptor.KeySizeInBytes);
-
         var header = new JsonWebTokenHeader(new JsonObject())
         {
             Algorithm = keyEncryptionAlgorithm,
@@ -57,8 +49,12 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             KeyId = encryptionKey.KeyId
         };
 
-        // Encrypt CEK with key encryptor (may modify header for ECDH-ES)
-        var encryptedKey = EncryptKey(header, encryptionKey, keyEncryptionAlgorithm, cek);
+        // The key encryptor both produces the CEK and protects it. Key-wrapping algorithms return a
+        // random CEK; "dir" returns the shared key itself; ECDH-ES derives the CEK from the
+        // ephemeral-static agreement. Either step may add algorithm parameters to the header
+        // ('epk' for ECDH-ES, 'iv'/'tag' for AES-GCM key wrap, 'p2s'/'p2c' for PBES2).
+        var (cek, encryptedKey) = EncryptKey(
+            header, encryptionKey, keyEncryptionAlgorithm, contentEncryptor.KeySizeInBytes);
 
         // Encode header AFTER key encryption (in case it was modified)
         var headerEncoded = EncodeJson(header.Json);
@@ -96,9 +92,13 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     }
 
     /// <summary>
-    /// Encrypts a Content Encryption Key using the appropriate key encryptor.
+    /// Produces the Content Encryption Key and encrypts it using the appropriate key encryptor.
     /// </summary>
-    private byte[] EncryptKey(JsonWebTokenHeader header, JsonWebKey key, string algorithm, byte[] cek)
+    private (byte[] cek, byte[] encryptedKey) EncryptKey(
+        JsonWebTokenHeader header,
+        JsonWebKey key,
+        string algorithm,
+        int cekSizeInBytes)
     {
         return key switch
         {
@@ -108,10 +108,11 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             _ => throw new InvalidOperationException($"No key encryptor registered for key type: {key.GetType().Name}")
         };
 
-        byte[] EncryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
+        (byte[], byte[]) EncryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
             var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
-            return keyEncryptor.EncryptKey(header, jwk, cek);
+            var cek = keyEncryptor.GenerateContentEncryptionKey(header, jwk, cekSizeInBytes);
+            return (cek, keyEncryptor.EncryptKey(header, jwk, cek));
         }
     }
 
