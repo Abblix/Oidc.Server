@@ -100,12 +100,6 @@ public static class ServiceCollectionExtensions
             .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW)
             .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW);
 
-        // PBES2 password-based key encryption (PBKDF2 + RFC 3394 key wrapping)
-        services
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW)
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW)
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW);
-
         // Register content encryptors by algorithm
         services
             .AddContentEncryptor<AesCbcHmacEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256)
@@ -139,6 +133,26 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Enables the PBES2 password-based key management algorithms (PBES2-HS256+A128KW,
+    /// PBES2-HS384+A192KW, PBES2-HS512+A256KW; RFC 7518 Section 4.8) for both producing and
+    /// consuming JWE tokens. They are deliberately not part of <see cref="AddJsonWebTokens"/>:
+    /// the 'p2c' header of an inbound token dictates PBKDF2 work performed before any
+    /// authentication of the token (the CVE-2022-36083 class of denial of service), and because
+    /// JWE decryption keys are matched by key identifier, an octet key configured for another
+    /// key-management algorithm could otherwise be driven into the PBKDF2 path by an
+    /// attacker-chosen 'alg' header. Accepting password-based key management is therefore an
+    /// explicit hosting decision. The iteration count of an inbound token is bounded to
+    /// [1000, 10,000] even when enabled.
+    /// </summary>
+    /// <param name="services">The service collection to register the PBES2 encryptors in.</param>
+    /// <returns>The service collection for method chaining.</returns>
+    public static IServiceCollection AddPbes2KeyManagement(this IServiceCollection services)
+        => services
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW)
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW)
+            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW);
 
     /// <summary>
     /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension

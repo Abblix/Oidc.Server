@@ -49,16 +49,13 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyEncryptor<OctetJ
 	public string Algorithm => algorithm;
 
 	/// <summary>
-	/// The PBKDF2 pseudorandom function, the derived KEK size and the default outbound iteration
-	/// count for this algorithm. The defaults follow the OWASP Password Storage recommendations
-	/// for PBKDF2 (600k for HMAC-SHA-256, 210k for the SHA-2 512-block-size family), well under
-	/// the inbound cap.
+	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
 	/// </summary>
-	private readonly (HashAlgorithmName Prf, int KekSize, int DefaultIterationCount) _parameters = algorithm switch
+	private readonly (HashAlgorithmName Prf, int KekSize) _parameters = algorithm switch
 	{
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16, 600_000),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW => (HashAlgorithmName.SHA384, 24, 210_000),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => (HashAlgorithmName.SHA512, 32, 210_000),
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16),
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW => (HashAlgorithmName.SHA384, 24),
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => (HashAlgorithmName.SHA512, 32),
 		_ => throw new ArgumentException($"Unsupported PBES2 algorithm: {algorithm}", nameof(algorithm))
 	};
 
@@ -71,9 +68,16 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyEncryptor<OctetJ
 	// RFC 7518 §4.8.1.2: "A minimum iteration count of 1000 is RECOMMENDED" — enforced on inbound tokens.
 	private const int MinIterationCount = 1000;
 
-	// Hard upper bound on the inbound iteration count: 'p2c' is attacker-controlled, and without a cap
-	// a single crafted token could demand an arbitrary amount of PBKDF2 work before any authentication.
-	private const int MaxIterationCount = 1_000_000;
+	// Hard upper bound on the inbound iteration count: 'p2c' is attacker-controlled, and without a cap a
+	// single crafted token demands an arbitrary amount of PBKDF2 work before any authentication of the
+	// token (the CVE-2022-36083 class of denial of service). 10,000 is the remediation consensus across
+	// JOSE implementations; a legitimate producer has no reason to exceed it, because for PBES2 in JOSE
+	// the primary security control is the entropy of the password, not the iteration count.
+	private const int MaxIterationCount = 10_000;
+
+	// The outbound iteration count: the largest common power of two under the post-advisory inbound caps
+	// of the JOSE ecosystem (10,000 here and elsewhere), so tokens this library produces decrypt anywhere.
+	private const int DefaultIterationCount = 8192;
 
 	/// <inheritdoc />
 	/// <remarks>
@@ -86,12 +90,11 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyEncryptor<OctetJ
 			throw new InvalidOperationException("PBES2 requires an OctetJsonWebKey with a non-empty password value");
 
 		var saltInput = CryptoRandom.GetRandomBytes(SaltInputSize);
-		var iterationCount = _parameters.DefaultIterationCount;
 
 		header.Pbes2SaltInput = Base64Url.EncodeToString(saltInput);
-		header.Pbes2IterationCount = iterationCount;
+		header.Pbes2IterationCount = DefaultIterationCount;
 
-		var kek = DeriveKek(password, saltInput, iterationCount);
+		var kek = DeriveKek(password, saltInput, DefaultIterationCount);
 		return AesKeyWrap.Wrap(kek, keyToEncrypt);
 	}
 
