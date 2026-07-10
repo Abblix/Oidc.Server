@@ -27,6 +27,7 @@
 - **JWK Thumbprint**: [RFC 7638](https://datatracker.ietf.org/doc/html/rfc7638)
 - **JSON Web Algorithms (JWA)**: [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)
 - **JSON Web Token (JWT)**: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)
+- **AES Key Wrap**: [RFC 3394](https://datatracker.ietf.org/doc/html/rfc3394) (NIST SP 800-38F key wrapping, backing the A128/192/256KW, ECDH-ES+A*KW and PBES2 families)
 
 ## Installation
 
