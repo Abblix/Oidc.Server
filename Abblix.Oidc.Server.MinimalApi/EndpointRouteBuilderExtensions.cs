@@ -75,8 +75,13 @@ public static class EndpointRouteBuilderExtensions
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var oidcGroup = endpoints.MapGroup(prefix);
 
-        // Mirror the MVC controllers' [RequireHttps]: on a host that also binds HTTP, never serve client credentials
-        // or tokens in cleartext (RFC 6749 §3.2/§10.1). See RequireHttpsAsync for the redirect/refuse behaviour.
+        // Gate every OIDC endpoint on HTTPS, the public discovery and JWKS metadata included. This mirrors the
+        // [RequireHttps] carried by every MVC controller (DiscoveryController included): the credential- and
+        // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 §3.2/§10.1), and the metadata must
+        // not be readable over plain HTTP either — a man-in-the-middle could rewrite the advertised endpoints or
+        // jwks_uri and steer clients onto attacker infrastructure. A host that genuinely needs an ungated route —
+        // a liveness/health probe — maps it outside MapOidcEndpoints; the library gates all of its own endpoints
+        // without exception. See RequireHttpsAsync for the redirect/refuse behaviour.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
         // RFC 6749 §5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,

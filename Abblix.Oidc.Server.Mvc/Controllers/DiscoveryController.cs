@@ -51,6 +51,10 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// <see href="https://openid.net/specs/openid-connect-discovery-1_0.html"/>.
 /// </remarks>
 [ApiController]
+// Discovery and JWKS are public, unauthenticated metadata, but they are still gated on HTTPS like the credential-
+// bearing controllers: over cleartext a man-in-the-middle could rewrite the advertised endpoints or jwks_uri and
+// steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
+[RequireHttps]
 [ReturnsOidcInvalidRequest]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
