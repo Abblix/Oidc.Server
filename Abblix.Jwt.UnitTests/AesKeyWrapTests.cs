@@ -46,6 +46,11 @@ public class AesKeyWrapTests
 	}
 
 	/// <summary>
+	/// The 128-bit KEK of the RFC 3394 §4.1 vector, shared with the negative tests below.
+	/// </summary>
+	private const string Kek128Hex = "000102030405060708090A0B0C0D0E0F";
+
+	/// <summary>
 	/// The six complete known-answer vectors of RFC 3394 §4.1–§4.6, covering every
 	/// KEK-size × key-data-size combination the specification defines.
 	/// </summary>
@@ -53,7 +58,7 @@ public class AesKeyWrapTests
 	{
 		// §4.1: 128 bits of Key Data with a 128-bit KEK
 		{
-			"000102030405060708090A0B0C0D0E0F",
+			Kek128Hex,
 			"00112233445566778899AABBCCDDEEFF",
 			"1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5"
 		},
@@ -114,7 +119,7 @@ public class AesKeyWrapTests
 	[Fact]
 	public void TryUnwrap_AnySingleByteTampered_Fails()
 	{
-		var kek = Convert.FromHexString("000102030405060708090A0B0C0D0E0F");
+		var kek = Convert.FromHexString(Kek128Hex);
 		var wrapped = Convert.FromHexString("1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5");
 
 		for (var position = 0; position < wrapped.Length; position++)
@@ -146,7 +151,7 @@ public class AesKeyWrapTests
 	[InlineData(25)] // not a multiple of 8
 	public void TryUnwrap_InvalidWrappedKeyLength_Fails(int length)
 	{
-		var kek = Convert.FromHexString("000102030405060708090A0B0C0D0E0F");
+		var kek = Convert.FromHexString(Kek128Hex);
 
 		Assert.False(AesKeyWrap.TryUnwrap(kek, new byte[length], out var keyData));
 		Assert.Null(keyData);
@@ -158,7 +163,7 @@ public class AesKeyWrapTests
 	[InlineData(20)] // not a multiple of 8
 	public void Wrap_InvalidKeyDataLength_Throws(int length)
 	{
-		var kek = Convert.FromHexString("000102030405060708090A0B0C0D0E0F");
+		var kek = Convert.FromHexString(Kek128Hex);
 
 		Assert.Throws<ArgumentException>(() => AesKeyWrap.Wrap(kek, new byte[length]));
 	}
