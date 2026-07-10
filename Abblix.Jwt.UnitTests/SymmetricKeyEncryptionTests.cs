@@ -209,6 +209,8 @@ public class SymmetricKeyEncryptionTests
 	/// <summary>
 	/// Tests that Direct Key Agreement requires the shared key to match the CEK size.
 	/// Per RFC 7518 Section 4.5: "the symmetric key value MUST be the same as the CEK".
+	/// The mismatch is rejected by the "dir" key encryptor itself with a message naming the
+	/// key-configuration cause, before the content encryptor is ever invoked.
 	/// </summary>
 	[Fact]
 	public async Task DirectKeyAgreement_WrongKeySize_ThrowsException()
@@ -222,7 +224,7 @@ public class SymmetricKeyEncryptionTests
 		};
 
 		// Act & Assert
-		await Assert.ThrowsAsync<ArgumentException>(() =>
+		await Assert.ThrowsAsync<InvalidOperationException>(() =>
 			TestSymmetricEncryption(
 				EncryptionAlgorithms.KeyManagement.Dir,
 				EncryptionAlgorithms.ContentEncryption.Aes256Gcm,

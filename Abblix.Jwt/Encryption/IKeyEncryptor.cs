@@ -22,6 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
+using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -47,6 +48,24 @@ public interface IKeyEncryptor<in TJsonWebKey>
 	/// so a mismatch would advertise an algorithm name the dispatch cannot resolve.
 	/// </summary>
 	string Algorithm { get; }
+
+	/// <summary>
+	/// Produces the Content Encryption Key the content encryption step will use, before it is
+	/// protected by <see cref="EncryptKey"/>. Key-wrapping and key-transport algorithms use the
+	/// default implementation — a fresh random CEK. Algorithms where the CEK is determined by the
+	/// key material itself override it: direct encryption ("dir") returns the shared symmetric key,
+	/// and direct key agreement (ECDH-ES) derives the CEK from the ephemeral-static agreement,
+	/// recording the agreement parameters (e.g. "epk") in the header.
+	/// </summary>
+	/// <param name="header">The JWE header; agreement-based algorithms add their parameters to it.</param>
+	/// <param name="encryptionKey">The JSON Web Key the JWE is being encrypted with.</param>
+	/// <param name="keySizeInBytes">The CEK size required by the content encryption algorithm.</param>
+	/// <returns>The CEK to encrypt the JWE payload with.</returns>
+	byte[] GenerateContentEncryptionKey(
+		JsonWebTokenHeader header,
+		TJsonWebKey encryptionKey,
+		int keySizeInBytes)
+		=> CryptoRandom.GetRandomBytes(keySizeInBytes);
 
 	/// <summary>
 	/// Encrypts a Content Encryption Key (CEK) using the configured key management algorithm.

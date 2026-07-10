@@ -59,33 +59,22 @@ public static class EncryptionAlgorithms
 		public const string RsaOaep256 = "RSA-OAEP-256";
 
 		/// <summary>
-		/// AES Key Wrap with 128-bit key.
-		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 128-bit key.
+		/// AES Key Wrap with a 128-bit key (RFC 7518 Section 4.4). The CEK is wrapped with the
+		/// RFC 3394 AES Key Wrap construction over the platform AES-ECB primitive; the wrap's own
+		/// integrity check register protects the wrapped key, so no extra header parameters are used.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string Aes128KW = "A128KW";
 
 		/// <summary>
-		/// AES Key Wrap with 192-bit key.
-		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 192-bit key.
+		/// AES Key Wrap with a 192-bit key (RFC 7518 Section 4.4). See <see cref="Aes128KW"/>.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string Aes192KW = "A192KW";
 
 		/// <summary>
-		/// AES Key Wrap with 256-bit key.
-		/// This algorithm uses the AES Key Wrap algorithm (RFC 3394) with a 256-bit key.
+		/// AES Key Wrap with a 256-bit key (RFC 7518 Section 4.4). See <see cref="Aes128KW"/>.
+		/// Recommended choice when a peer requires plain AES Key Wrap; otherwise prefer
+		/// <see cref="Aes256Gcmkw"/> for authenticated wrapping with a random IV.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Waiting for native .NET support of RFC 3394 (plain AES Key Wrap).
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string Aes256KW = "A256KW";
 
 		/// <summary>
@@ -96,49 +85,29 @@ public static class EncryptionAlgorithms
 		public const string Dir = "dir";
 
 		/// <summary>
-		/// Elliptic Curve Diffie-Hellman Ephemeral Static key agreement.
-		/// This algorithm uses ECDH-ES to establish a shared secret for key encryption.
+		/// Elliptic Curve Diffie-Hellman Ephemeral Static key agreement in Direct Key Agreement mode
+		/// (RFC 7518 Section 4.6). The CEK is derived from the ephemeral-static agreement via the
+		/// Concat KDF (computed natively by <c>ECDiffieHellman.DeriveKeyFromHash</c>) and the JWE
+		/// Encrypted Key is empty. Supports the NIST curves P-256, P-384 and P-521.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Requires custom implementation of Concat KDF (NIST SP 800-56A).
-		/// While .NET provides native ECDiffieHellman, the Concat KDF key derivation is not available.
-		/// </remarks>
 		public const string EcdhEs = "ECDH-ES";
 
 		/// <summary>
-		/// ECDH-ES with AES Key Wrap using 128-bit key.
-		/// Combines ECDH-ES key agreement with AES-128 Key Wrap.
+		/// ECDH-ES key agreement wrapping the CEK with AES-128 Key Wrap (RFC 7518 Section 4.6).
+		/// The agreement derives a 128-bit KEK that wraps a random CEK per RFC 3394.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Requires both:
-		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
-		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string EcdhEsAes128KW = "ECDH-ES+A128KW";
 
 		/// <summary>
-		/// ECDH-ES with AES Key Wrap using 192-bit key.
-		/// Combines ECDH-ES key agreement with AES-192 Key Wrap.
+		/// ECDH-ES key agreement wrapping the CEK with AES-192 Key Wrap (RFC 7518 Section 4.6).
+		/// See <see cref="EcdhEsAes128KW"/>.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Requires both:
-		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
-		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string EcdhEsAes192KW = "ECDH-ES+A192KW";
 
 		/// <summary>
-		/// ECDH-ES with AES Key Wrap using 256-bit key.
-		/// Combines ECDH-ES key agreement with AES-256 Key Wrap.
+		/// ECDH-ES key agreement wrapping the CEK with AES-256 Key Wrap (RFC 7518 Section 4.6).
+		/// See <see cref="EcdhEsAes128KW"/>. Recommended choice for EC-key-based JWE deployments.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: Requires both:
-		/// 1. Custom Concat KDF (NIST SP 800-56A) for ECDH key derivation
-		/// 2. Native .NET support of RFC 3394 (plain AES Key Wrap)
-		/// .NET 10 provides RFC 5649 (AES Key Wrap with Padding) which is a different algorithm.
-		/// </remarks>
 		public const string EcdhEsAes256KW = "ECDH-ES+A256KW";
 
 		/// <summary>
@@ -160,28 +129,23 @@ public static class EncryptionAlgorithms
 		public const string Aes256Gcmkw = "A256GCMKW";
 
 		/// <summary>
-		/// PBES2 with HMAC SHA-256 and AES-128 Key Wrap (RFC 7518 Section 4.8).
+		/// PBES2 with HMAC SHA-256 and AES-128 Key Wrap (RFC 7518 Section 4.8). The KEK is derived
+		/// from a password with PBKDF2 (native <c>Rfc2898DeriveBytes.Pbkdf2</c>) using the
+		/// 'p2s'/'p2c' header parameters, then wraps the CEK per RFC 3394. Inbound iteration counts
+		/// are bounded to keep an attacker-supplied token from demanding arbitrary PBKDF2 work.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED: requires PBKDF2 plus AES Key Wrap (RFC 3394), neither of which
-		/// is exposed natively by .NET in the form RFC 7518 mandates.
-		/// </remarks>
 		public const string Pbes2HmacSha256Aes128KW = "PBES2-HS256+A128KW";
 
 		/// <summary>
 		/// PBES2 with HMAC SHA-384 and AES-192 Key Wrap (RFC 7518 Section 4.8).
+		/// See <see cref="Pbes2HmacSha256Aes128KW"/>.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED. See <see cref="Pbes2HmacSha256Aes128KW"/>.
-		/// </remarks>
 		public const string Pbes2HmacSha384Aes192KW = "PBES2-HS384+A192KW";
 
 		/// <summary>
 		/// PBES2 with HMAC SHA-512 and AES-256 Key Wrap (RFC 7518 Section 4.8).
+		/// See <see cref="Pbes2HmacSha256Aes128KW"/>.
 		/// </summary>
-		/// <remarks>
-		/// NOT CURRENTLY SUPPORTED. See <see cref="Pbes2HmacSha256Aes128KW"/>.
-		/// </remarks>
 		public const string Pbes2HmacSha512Aes256KW = "PBES2-HS512+A256KW";
 	}
 

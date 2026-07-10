@@ -112,6 +112,36 @@ public static class JwtClaimTypes
     public const string KeyWrapAuthenticationTag = "tag";
 
     /// <summary>
+    /// "epk" header parameter (RFC 7518 Section 4.6.1.1): the ephemeral public key created by the
+    /// originator for ECDH-ES key agreement, represented as a JWK containing only public members.
+    /// </summary>
+    public const string EphemeralPublicKey = "epk";
+
+    /// <summary>
+    /// "apu" header parameter (RFC 7518 Section 4.6.1.2): base64url-encoded Agreement PartyUInfo
+    /// (information about the producer) fed into the Concat KDF during ECDH-ES key agreement.
+    /// </summary>
+    public const string AgreementPartyUInfo = "apu";
+
+    /// <summary>
+    /// "apv" header parameter (RFC 7518 Section 4.6.1.3): base64url-encoded Agreement PartyVInfo
+    /// (information about the recipient) fed into the Concat KDF during ECDH-ES key agreement.
+    /// </summary>
+    public const string AgreementPartyVInfo = "apv";
+
+    /// <summary>
+    /// "p2s" header parameter (RFC 7518 Section 4.8.1.1): the base64url-encoded PBES2 salt input,
+    /// at least 8 octets, combined with the algorithm name into the PBKDF2 salt.
+    /// </summary>
+    public const string Pbes2SaltInput = "p2s";
+
+    /// <summary>
+    /// "p2c" header parameter (RFC 7518 Section 4.8.1.2): the PBKDF2 iteration count for PBES2
+    /// key derivation, a positive JSON integer.
+    /// </summary>
+    public const string Pbes2IterationCount = "p2c";
+
+    /// <summary>
     /// "cty" header parameter (RFC 7515 Section 4.1.10): the media type of the JWS payload, used
     /// when the payload itself is a nested JWT or another well-defined media type.
     /// </summary>

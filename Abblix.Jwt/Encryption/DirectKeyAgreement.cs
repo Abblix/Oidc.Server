@@ -59,6 +59,32 @@ internal sealed class DirectKeyAgreement : IKeyEncryptor<OctetJsonWebKey>
 
 	/// <inheritdoc />
 	/// <remarks>
+	/// Per RFC 7518 Section 4.5 the shared symmetric key IS the Content Encryption Key —
+	/// no random CEK is generated, so the shared key must be exactly the size the content
+	/// encryption algorithm requires. A mismatch is a key-configuration error and is rejected
+	/// here rather than downstream, where the message would not name the actual cause.
+	/// </remarks>
+	public byte[] GenerateContentEncryptionKey(
+		JsonWebTokenHeader header,
+		OctetJsonWebKey sharedKey,
+		int keySizeInBytes)
+	{
+		var cek = sharedKey.KeyValue
+		          ?? throw new InvalidOperationException(
+			          "Direct key agreement (dir) requires an OctetJsonWebKey with KeyValue");
+
+		if (cek.Length != keySizeInBytes)
+		{
+			throw new InvalidOperationException(
+				$"Direct key agreement (dir) requires the shared symmetric key to match the content " +
+				$"encryption key size. Expected {keySizeInBytes} bytes, actual: {cek.Length} bytes.");
+		}
+
+		return cek;
+	}
+
+	/// <inheritdoc />
+	/// <remarks>
 	/// For direct key agreement, the symmetric key IS the Content Encryption Key.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// This method validates the key and returns an empty array.
