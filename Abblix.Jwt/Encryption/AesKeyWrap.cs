@@ -44,6 +44,10 @@ namespace Abblix.Jwt.Encryption;
 /// Microsoft.IdentityModel implementation of the same construction: wraps produced by either
 /// implementation unwrap on the other.
 /// </remarks>
+// TODO: switch to the platform implementation when the BCL ships plain RFC 3394 key wrap (as of
+// .NET 10 it exposes only RFC 5649, Aes.EncryptKeyWrapPadded/DecryptKeyWrapPadded). The known-answer
+// vectors in AesKeyWrapTests pin the construction byte-exact, so they survive the swap and prove the
+// replacement — the tests assert the RFC vectors, not implementation details, precisely for this.
 internal static class AesKeyWrap
 {
     // 64-bit semiblock size per RFC 3394 §2; all lengths in this construction are multiples of it.
