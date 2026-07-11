@@ -17,7 +17,9 @@ jobs:
     # rather than the sum of all of them. The aggregate gate job below keeps a single required check.
     name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    # 5 minutes per shard: the slowest shard runs ~3m14s, so this keeps ample headroom while
+    # catching a runaway sooner than the previous single-job wall did.
+    timeout-minutes: 5
     strategy:
       # Report every shard's result; do not cancel siblings when one fails.
       fail-fast: false
