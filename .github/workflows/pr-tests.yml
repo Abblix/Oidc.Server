@@ -20,6 +20,8 @@ jobs:
     # 5 minutes per shard: the slowest shard runs ~3m14s, so this keeps ample headroom while
     # catching a runaway sooner than the previous single-job wall did.
     timeout-minutes: 5
+    permissions:
+      contents: read
     strategy:
       # Report every shard's result; do not cancel siblings when one fails.
       fail-fast: false
@@ -103,6 +105,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    # The gate only inspects shard results; it never touches the repo or the GITHUB_TOKEN.
+    permissions: {}
     steps:
       - name: Fail if any shard failed
         if: needs.test-shard.result != 'success'
