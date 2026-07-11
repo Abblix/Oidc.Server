@@ -56,6 +56,14 @@ public class ResponseJwtBuilder(
 
         var now = timeProvider.GetUtcNow();
 
+        // No 'typ' header is set on purpose. The JARM specification defines none for the authorization
+        // response, and RFC 7519 Section 5.1 makes 'typ' OPTIONAL. The explicit-typing benefit of
+        // RFC 8725 Section 3.11 comes from a DISTINCT media type that disambiguates one token class from
+        // another (as RFC 9101 Section 10.8 registers 'oauth-authz-req+jwt' for request objects); a
+        // generic 'JWT' distinguishes nothing. And there is no confusion vector to close here: the
+        // response is consumed by the client, never re-validated by this server against other token
+        // classes, unlike the id_token_hint path where token-type pinning matters. Do not add a generic
+        // 'typ' back without a registered JARM media type and a concrete threat it addresses.
         var token = new JsonWebToken
         {
             Header = { Algorithm = clientInfo.AuthorizationSignedResponseAlgorithm },
