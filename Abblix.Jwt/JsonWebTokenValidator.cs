@@ -229,31 +229,26 @@ internal class JsonWebTokenValidator(
 
         // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
         // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
-        switch (algorithm)
+        return algorithm switch
         {
-            case SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens):
-                return new JwtValidationError(
-                    JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed");
+            SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens) =>
+                new JwtValidationError(JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed"),
+            
+            SigningAlgorithms.None when jwtParts[2].HasValue()
+                => new JwtValidationError(JwtError.MalformedToken, "Unsigned token must have empty signature"),
 
-            case SigningAlgorithms.None when jwtParts[2].HasValue():
-                return new JwtValidationError(
-                    JwtError.MalformedToken, "Unsigned token must have empty signature");
+            // Reached only by alg "none" when signatures are not required — accept the unsigned token.
+            SigningAlgorithms.None => token,
 
-            case not SigningAlgorithms.None when parameters.Options.HasAnyFlag(
-                    ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey):
-                break;
+            // Two trust-model branches selected by the caller via UseEmbeddedVerificationKey:
+            // either the JOSE header's 'jwk' is the signing key (DPoP-style proofs), or the
+            // payload's 'iss' selects keys via the resolver delegate (id_token-style flows).
+            // The selection is binary; mixing leads to attacker-controlled trust escalation.
+            _ when parameters.Options.HasFlag(ValidationOptions.UseEmbeddedVerificationKey)
+                => await ValidateEmbeddedKeyAsync(token, jwtParts),
 
-            default:
-                return token;
-        }
-
-        // Two trust-model branches selected by the caller via UseEmbeddedVerificationKey:
-        // either the JOSE header's 'jwk' is the signing key (DPoP-style proofs), or the
-        // payload's 'iss' selects keys via the resolver delegate (id_token-style flows).
-        // The selection is binary; mixing leads to attacker-controlled trust escalation.
-        return parameters.Options.HasFlag(ValidationOptions.UseEmbeddedVerificationKey)
-            ? await ValidateEmbeddedKeyAsync(token, jwtParts)
-            : await ValidateIssuerSignatureAsync(token, jwtParts, parameters);
+            _ => await ValidateIssuerSignatureAsync(token, jwtParts, parameters)
+        };
     }
 
     /// <summary>
