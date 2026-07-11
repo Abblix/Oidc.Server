@@ -12,11 +12,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Unit tests
+  test-shard:
+    # One shard per test project, run in parallel so the wall-clock is the slowest single project
+    # rather than the sum of all of them. The aggregate gate job below keeps a single required check.
+    name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # 6 minutes: the suite grew past the 5-minute wall on slow runners as more E2E tests landed.
     timeout-minutes: 6
+    strategy:
+      # Report every shard's result; do not cancel siblings when one fails.
+      fail-fast: false
+      matrix:
+        project:
+          - Abblix.DependencyInjection.UnitTests
+          - Abblix.Jwt.UnitTests
+          - Abblix.Oidc.Server.AspNetCore.UnitTests
+          - Abblix.Oidc.Server.E2E.Tests
+          - Abblix.Oidc.Server.MinimalApi.E2E.Tests
+          - Abblix.Oidc.Server.Mvc.UnitTests
+          - Abblix.Oidc.Server.UnitTests
+          - Abblix.Utils.UnitTests
+    env:
+      PROJECT: ${{ matrix.project }}
     steps:
       # harden-runner in audit mode: this workflow restores/builds/tests
       # untrusted fork-PR code, so capture baseline egress for later review.
@@ -51,31 +67,41 @@ jobs:
 
         timeout-minutes: 3
       - name: Restore
-        run: dotnet restore Abblix.Oidc.slnx
-
-        timeout-minutes: 3
-      - name: Build
-        run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
+        run: dotnet restore "$PROJECT/$PROJECT.csproj"
 
         timeout-minutes: 3
       - name: Test
+        # --no-restore reuses the cached restore; the project's dependency closure still builds here,
+        # so allow more room than the 3-minute step baseline for the largest shard.
         run: |
-          dotnet test Abblix.Oidc.slnx --configuration Release --no-build -- \
+          dotnet test "$PROJECT/$PROJECT.csproj" --configuration Release --no-restore -- \
             --report-trx --report-trx-filename test-results.trx \
             --coverage --coverage-output-format cobertura \
             --results-directory ./TestResults
 
-      # `dotnet test Abblix.Oidc.slnx -- --results-directory ./TestResults` resolves
-      # the relative path PER TEST PROJECT (each MTP runner uses its own working
-      # directory), not at solution root. Files land at <Project>/TestResults/.
-        timeout-minutes: 3
+      # `dotnet test <project> -- --results-directory ./TestResults` resolves the relative path from
+      # the project working directory, so files land at <Project>/TestResults/.
+        timeout-minutes: 5
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-results
+          name: test-results-${{ matrix.project }}
           path: |
             **/TestResults/*.trx
             **/TestResults/**/*.cobertura.xml
           retention-days: 7
         timeout-minutes: 3
+
+  test:
+    # Single required status check that aggregates the shards: it succeeds only when every shard did.
+    # Keeping the "Unit tests" name preserves the existing branch-protection required check.
+    name: Unit tests
+    needs: test-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Fail if any shard failed
+        if: needs.test-shard.result != 'success'
+        run: exit 1
