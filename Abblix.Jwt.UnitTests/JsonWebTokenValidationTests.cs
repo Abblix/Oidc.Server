@@ -504,6 +504,36 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// RFC 8725 §3.1/§3.3: a signed token (alg != none) must ALWAYS have its signature verified,
+    /// even when the caller requests neither <see cref="ValidationOptions.RequireSignedTokens"/> nor
+    /// <see cref="ValidationOptions.ValidateIssuerSigningKey"/>. A token signed with one key must not
+    /// be accepted when only a different key resolves — otherwise a signed-but-unverified token is
+    /// silently trusted.
+    /// </summary>
+    [Fact]
+    public async Task SignedToken_WithoutSignatureFlags_StillVerifiesSignature()
+    {
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+
+        // Clear BOTH signature flags; keep issuer/audience/lifetime so signature is the only gate left.
+        var parameters = new ValidationParameters
+        {
+            Options = ValidationOptions.Default & ~ValidationOptions.RequireValidSignedTokens,
+            ValidateIssuer = _ => Task.FromResult(true),
+            ValidateAudience = _ => Task.FromResult(true),
+            ResolveIssuerSigningKeys = _ => WrongSigningKey.ToAsync(),
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _),
+            "A signed token verified against the wrong key must be rejected, not silently accepted.");
+    }
+
+    /// <summary>
     /// Verifies that unsigned JWTs validate when ValidationOptions.RequireSignedTokens is disabled.
     /// Tests acceptance of unsecured JWTs (algorithm: none) per RFC 7515 Section 8.
     /// Warning: Accepting unsigned tokens in production is a severe security risk.

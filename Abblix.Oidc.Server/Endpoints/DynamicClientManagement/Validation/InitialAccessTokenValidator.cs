@@ -65,10 +65,12 @@ public class InitialAccessTokenValidator(
         }
 
         // Skip audience validation: initial access tokens authorize registration at the issuer itself,
-        // so no audience claim is set or expected.
+        // so no audience claim is set or expected. Clearing RequireValidAudience drops BOTH the
+        // presence requirement and the value check; clearing only ValidateAudience would leave
+        // RequireAudience set, and an initial access token carries no 'aud', so it would be rejected.
         var result = await jwtValidator.ValidateAsync(
             header.Parameter,
-            ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
+            ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
         if (result.TryGetFailure(out var error))
             return new OidcError(ErrorCodes.InvalidToken, error.ErrorDescription);

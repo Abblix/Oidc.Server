@@ -240,6 +240,10 @@ public class InitialAccessTokenValidatorTests
         await _validator.ValidateAsync(context);
 
         Assert.NotNull(capturedOptions);
-        Assert.Equal(ValidationOptions.Default & ~ValidationOptions.ValidateAudience, capturedOptions);
+
+        // The whole RequireValidAudience pair (RequireAudience | ValidateAudience) must be cleared:
+        // an initial access token carries no 'aud', so leaving RequireAudience set would reject it.
+        Assert.Equal(ValidationOptions.Default & ~ValidationOptions.RequireValidAudience, capturedOptions);
+        Assert.False(capturedOptions.Value.HasFlag(ValidationOptions.RequireAudience));
     }
 }

@@ -247,7 +247,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_WithValidIdTokenHint_ShouldReturnNull()
     {
         // Arrange
-        var token = new JsonWebToken { Payload = { Audiences = ["test-client"] } };
+        var token = new JsonWebToken
+        {
+            Header = { Type = JwtTypes.IdToken },
+            Payload = { Audiences = ["test-client"] },
+        };
 
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
@@ -264,6 +268,35 @@ public class UserIdentityValidatorTests
     }
 
     /// <summary>
+    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
+    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
+    /// hint) must be rejected even when its audience matches the requesting client.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_IdTokenHintWrongType_ShouldReturnInvalidRequest()
+    {
+        // Arrange
+        var token = new JsonWebToken
+        {
+            Header = { Type = JwtTypes.AccessToken },
+            Payload = { Audiences = ["test-client"] },
+        };
+
+        _idTokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+
+        var context = CreateContext(idTokenHint: "access-token-as-hint");
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
     /// Verifies error when id_token_hint has wrong audience.
     /// ID token must be issued for the requesting client.
     /// </summary>
@@ -271,7 +304,11 @@ public class UserIdentityValidatorTests
     public async Task ValidateAsync_IdTokenHintWrongAudience_ShouldReturnInvalidRequest()
     {
         // Arrange
-        var token = new JsonWebToken { Payload = { Audiences = ["different-client"] } };
+        var token = new JsonWebToken
+        {
+            Header = { Type = JwtTypes.IdToken },
+            Payload = { Audiences = ["different-client"] },
+        };
 
         _idTokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))

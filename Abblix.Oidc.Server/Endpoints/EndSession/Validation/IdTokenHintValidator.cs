@@ -53,6 +53,13 @@ public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IEndS
 
             var idToken = result.GetSuccess();
 
+            // RFC 8725 §3.12: pin the token class. The id_token_hint MUST be an ID Token; without this
+            // check another own-issued token whose audience matches (an access or refresh token) would
+            // be accepted here, since the audience/signature checks alone do not distinguish the class.
+            if (idToken.Header.Type != JwtTypes.IdToken)
+                return new OidcError(
+                    ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
+
             var audiences = idToken.Payload.Audiences;
             if (!request.ClientId.HasValue())
             {

@@ -62,6 +62,7 @@ public class IdTokenHintValidatorTests
     private static JsonWebToken CreateValidIdToken(params string[] audiences)
     {
         var token = new JsonWebToken();
+        token.Header.Type = JwtTypes.IdToken;
         token.Payload.Audiences = audiences;
         return token;
     }
@@ -167,6 +168,33 @@ public class IdTokenHintValidatorTests
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("missing", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
+    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
+    /// hint) must be rejected even when its audience matches the requesting client.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext("access_token_as_hint");
+        var accessToken = CreateValidIdToken(TestConstants.DefaultClientId);
+        accessToken.Header.Type = JwtTypes.AccessToken;
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(
+                "access_token_as_hint",
+                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+            .ReturnsAsync(accessToken);
+
+        // Act
+        var error = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
