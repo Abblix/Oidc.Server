@@ -52,7 +52,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// </summary>
 public class RegisterClientHandlerIntegrationTests
 {
-    private static IServiceProvider BuildProvider(Action<IServiceCollection>? configure = null)
+    private static IServiceProvider BuildProvider(
+        Action<IServiceCollection>? configure = null,
+        Action<OidcOptions>? configureOptions = null)
     {
         var services = new ServiceCollection();
 
@@ -93,6 +95,8 @@ public class RegisterClientHandlerIntegrationTests
             // sees the request — masking the very behaviour we want to verify.
             opts.RequireInitialAccessToken = false;
 
+            // A test that exercises the initial access token gate re-enables it here.
+            configureOptions?.Invoke(opts);
         });
 
         return services.BuildServiceProvider();
@@ -339,6 +343,37 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True(stored.RequirePushedAuthorizationRequests);
         Assert.True(stored.RequireSignedRequestObject);
         Assert.True(stored.TlsClientCertificateBoundAccessTokens);
+    }
+
+    /// <summary>
+    /// RFC 7591 §3: with the initial access token gate enabled, a client presenting a token minted
+    /// by this server's own <see cref="IInitialAccessTokenService"/> must be allowed to register.
+    /// The minted token carries no <c>aud</c> (registration authorizes at the issuer itself), so this
+    /// exercises the mint-side and validate-side option sets composing end to end: the validator must
+    /// not require an audience the mint deliberately omits.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WithMintedInitialAccessToken_Succeeds()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var initialAccessTokenService = provider.GetRequiredService<IInitialAccessTokenService>();
+        var timeProvider = provider.GetRequiredService<TimeProvider>();
+
+        var token = await initialAccessTokenService.IssueTokenAsync(
+            subject: "registration-portal",
+            issuedAt: timeProvider.GetUtcNow(),
+            expiresIn: TimeSpan.FromHours(1));
+
+        var request = CreateRequest() with
+        {
+            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token),
+        };
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out _),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
     }
 
     /// <summary>
