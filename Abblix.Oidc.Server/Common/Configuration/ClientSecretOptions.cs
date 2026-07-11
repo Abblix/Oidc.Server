@@ -28,10 +28,13 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 public record ClientSecretOptions
 {
     /// <summary>
-    /// The length of the generated client secret.
-    /// Specifies the number of characters in the secret. Default value is 16.
+    /// The length of the generated client secret, in characters.
+    /// The default is 32: a client authenticating with <c>client_secret_jwt</c> (OpenID Connect
+    /// Core §9) uses the secret's UTF-8 bytes as the HMAC key, and RFC 7518 §3.2 requires an HS256
+    /// key of at least 32 bytes. A host whose clients sign with HS384 or HS512 should raise this to
+    /// 48 or 64 respectively so the derived key meets that algorithm's floor.
     /// </summary>
-    public int Length { get; init; } = 16;
+    public int Length { get; init; } = 32;
 
     /// <summary>
     /// The expiration duration for the client secret.
