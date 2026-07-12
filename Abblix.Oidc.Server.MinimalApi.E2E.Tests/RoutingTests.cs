@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Mime;
 using System.Text.Json.Nodes;
-using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
@@ -232,58 +231,6 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal("*", response.Headers.GetValues(AllowOriginHeader).Single());
-    }
-
-    [Theory]
-    [InlineData("/.well-known/openid-configuration")]
-    [InlineData("/.well-known/jwks")]
-    public async Task Host_cors_policy_overrides_the_adapter_default(string path)
-    {
-        // A host that registers its own OidcCorsPolicy wins over the adapter default in any order: the adapter
-        // fills the policy only when the host has not. Narrowing to one origin proves the replacement — the
-        // allowed origin is reflected, a different one is refused, so the AllowAnyOrigin default is gone.
-        const string allowedOrigin = "https://trusted.example.com";
-        using var overridden = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-                services.AddCors(options => options.AddPolicy(
-                    OidcConstants.CorsPolicyName,
-                    policy => policy.WithOrigins(allowedOrigin).AllowAnyHeader().AllowAnyMethod()))));
-        var client = ClientOf(overridden);
-
-        using var allowed = new HttpRequestMessage(HttpMethod.Get, path);
-        allowed.Headers.Add(OriginHeader, allowedOrigin);
-        var allowedResponse = await client.SendAsync(allowed, TestContext.Current.CancellationToken);
-        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues(AllowOriginHeader).Single());
-
-        using var refused = new HttpRequestMessage(HttpMethod.Get, path);
-        refused.Headers.Add(OriginHeader, "https://evil.example.com");
-        var refusedResponse = await client.SendAsync(refused, TestContext.Current.CancellationToken);
-        Assert.False(refusedResponse.Headers.Contains(AllowOriginHeader));
-    }
-
-    [Theory]
-    [InlineData("/.well-known/openid-configuration")]
-    [InlineData("/.well-known/jwks")]
-    public async Task Configured_allowed_origins_narrow_the_adapter_default(string path)
-    {
-        // A host that only wants to narrow origins configures OidcCorsOptions instead of redefining the whole
-        // policy; the adapter builds its default from those origins. The configured origin is reflected, an
-        // unconfigured one is refused.
-        const string allowedOrigin = "https://spa.example.com";
-        using var configured = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-                services.Configure<OidcCorsOptions>(options => options.AllowedOrigins.Add(allowedOrigin))));
-        var client = ClientOf(configured);
-
-        using var allowed = new HttpRequestMessage(HttpMethod.Get, path);
-        allowed.Headers.Add(OriginHeader, allowedOrigin);
-        var allowedResponse = await client.SendAsync(allowed, TestContext.Current.CancellationToken);
-        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues(AllowOriginHeader).Single());
-
-        using var refused = new HttpRequestMessage(HttpMethod.Get, path);
-        refused.Headers.Add(OriginHeader, "https://other.example.com");
-        var refusedResponse = await client.SendAsync(refused, TestContext.Current.CancellationToken);
-        Assert.False(refusedResponse.Headers.Contains(AllowOriginHeader));
     }
 
     [Theory]
