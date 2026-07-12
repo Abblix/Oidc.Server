@@ -18,6 +18,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class CorsPolicyTests(TestFactory factory) : TestBase(factory)
 {
+    private const string OriginHeader = "Origin";
+    private const string AllowOriginHeader = "Access-Control-Allow-Origin";
+
     private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
         new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestServerAddress.BaseAddress });
 
@@ -33,10 +36,10 @@ public class CorsPolicyTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        request.Headers.Add("Origin", "https://spa.example.com");
+        request.Headers.Add(OriginHeader, "https://spa.example.com");
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        Assert.Equal("*", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("*", response.Headers.GetValues(AllowOriginHeader).Single());
     }
 
     [Theory]
@@ -56,14 +59,14 @@ public class CorsPolicyTests(TestFactory factory) : TestBase(factory)
         var client = ClientOf(overridden);
 
         using var allowed = new HttpRequestMessage(HttpMethod.Get, path);
-        allowed.Headers.Add("Origin", allowedOrigin);
+        allowed.Headers.Add(OriginHeader, allowedOrigin);
         var allowedResponse = await client.SendAsync(allowed, TestContext.Current.CancellationToken);
-        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues(AllowOriginHeader).Single());
 
         using var refused = new HttpRequestMessage(HttpMethod.Get, path);
-        refused.Headers.Add("Origin", "https://evil.example.com");
+        refused.Headers.Add(OriginHeader, "https://evil.example.com");
         var refusedResponse = await client.SendAsync(refused, TestContext.Current.CancellationToken);
-        Assert.False(refusedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.False(refusedResponse.Headers.Contains(AllowOriginHeader));
     }
 
     [Theory]
@@ -81,13 +84,13 @@ public class CorsPolicyTests(TestFactory factory) : TestBase(factory)
         var client = ClientOf(configured);
 
         using var allowed = new HttpRequestMessage(HttpMethod.Get, path);
-        allowed.Headers.Add("Origin", allowedOrigin);
+        allowed.Headers.Add(OriginHeader, allowedOrigin);
         var allowedResponse = await client.SendAsync(allowed, TestContext.Current.CancellationToken);
-        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal(allowedOrigin, allowedResponse.Headers.GetValues(AllowOriginHeader).Single());
 
         using var refused = new HttpRequestMessage(HttpMethod.Get, path);
-        refused.Headers.Add("Origin", "https://other.example.com");
+        refused.Headers.Add(OriginHeader, "https://other.example.com");
         var refusedResponse = await client.SendAsync(refused, TestContext.Current.CancellationToken);
-        Assert.False(refusedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.False(refusedResponse.Headers.Contains(AllowOriginHeader));
     }
 }

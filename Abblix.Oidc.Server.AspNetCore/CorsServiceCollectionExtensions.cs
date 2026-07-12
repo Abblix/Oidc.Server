@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,12 @@ public static class CorsServiceCollectionExtensions
 internal sealed class ConfigureOidcCorsPolicy(IOptions<OidcCorsOptions> corsOptions)
     : IPostConfigureOptions<CorsOptions>
 {
+    [SuppressMessage("Security", "S5122:Authorizing an entire domain for CORS is security-sensitive",
+        Justification =
+            "Deliberate default. The OIDC metadata endpoints (discovery, JWKS) are public by design, and the " +
+            "token and userinfo endpoints authenticate through headers, not cookies. The policy sends no " +
+            "credentials, so any origin may read these responses without a CSRF-via-cookie risk. A host that " +
+            "needs tighter origins configures OidcCorsOptions or replaces the policy.")]
     public void PostConfigure(string? name, CorsOptions options)
     {
         // The OIDC policy is global, so it belongs on the default CorsOptions instance. Skip named variants,
