@@ -27,6 +27,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" />
+    <!-- The adapter embeds Abblix.Oidc.Server.AspNetCore into its package (PrivateAssets=all), so its public
+         types (OidcCorsOptions) reach real consumers but not this ProjectReference-based test transitively.
+         Reference it directly so the CORS tests can configure OidcCorsOptions. -->
+    <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

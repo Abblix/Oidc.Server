@@ -127,6 +127,12 @@ public static class ServiceCollectionExtensions
                 .WithAddedModifier(JsonIgnoreNullsModifier.Apply);
         });
 
+        // Every OIDC endpoint is tagged with RequireCors(OidcConstants.CorsPolicyName). The MVC host inherited
+        // CORS services from AddControllersWithViews; AddOidcCors gives the Minimal API host the same reach and
+        // the shared, host-overridable default policy the endpoints require, so app.UseCors() no longer throws
+        // for missing services. See AddOidcCors for the supplement/override contract.
+        services.AddOidcCors();
+
         return services;
     }
 }
