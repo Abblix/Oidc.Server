@@ -31,6 +31,8 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactory>
 {
     private const string RoutePrefix = "/oauth";
+    private const string OriginHeader = "Origin";
+    private const string AllowOriginHeader = "Access-Control-Allow-Origin";
 
     private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
         new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestFactory.BaseAddress });
@@ -217,24 +219,18 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [InlineData("/.well-known/openid-configuration")]
     [InlineData("/.well-known/oauth-authorization-server")]
     [InlineData("/.well-known/jwks")]
-    public async Task Discovery_and_jwks_are_cors_enabled_like_the_mvc_discovery_controller(string path)
+    public async Task Discovery_and_jwks_are_cors_enabled_by_the_adapter_default(string path)
     {
-        // Scope the policy to the single origin the request carries: the test only proves the named policy is
-        // applied to these endpoints, so a concrete origin exercises real reflection without a wildcard.
-        const string browserOrigin = "https://spa.example.com";
-        using var corsHost = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-                services.AddCors(options => options.AddPolicy(
-                    OidcConstants.CorsPolicyName,
-                    policy => policy.WithOrigins(browserOrigin).AllowAnyHeader().AllowAnyMethod()))));
-        var client = ClientOf(corsHost);
+        // No host CORS configuration: the adapter's own AddOidcCors registration must already make the metadata
+        // endpoints readable cross-origin so a browser RP works out of the box. The default allows any origin,
+        // so the response reflects "*".
+        var client = ClientOf(factory);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        request.Headers.Add("Origin", browserOrigin);
+        request.Headers.Add(OriginHeader, "https://spa.example.com");
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"),
-            $"{path} returned no Access-Control-Allow-Origin; browser RPs cannot read it cross-origin.");
+        Assert.Equal("*", response.Headers.GetValues(AllowOriginHeader).Single());
     }
 
     [Theory]

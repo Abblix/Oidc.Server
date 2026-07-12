@@ -137,10 +137,11 @@ builder.Services.Replace(ServiceDescriptor.Singleton<IUserClaimsProvider, Static
 
 builder.Services.AddAuthentication().AddCookie();
 
-// The MVC host received CORS and authorization services transitively through AddControllersWithViews.
-// The Minimal API host has no MVC, so it registers the two the request pipeline below relies on directly.
+// The MVC host received authorization services transitively through AddControllersWithViews; the Minimal
+// API host has no MVC, so it registers what the pipeline below relies on directly. CORS is no longer among
+// them: AddOidcMinimalApi registers the OidcCorsPolicy its endpoints require, matching the MVC adapter,
+// so app.UseCors() below resolves that policy without a manual AddCors here.
 builder.Services.AddAuthorization();
-builder.Services.AddCors();
 
 // The MVC host received IMemoryCache transitively through AddControllersWithViews; the Minimal API
 // host registers it (and the distributed cache) directly, per the documented host caching responsibility.

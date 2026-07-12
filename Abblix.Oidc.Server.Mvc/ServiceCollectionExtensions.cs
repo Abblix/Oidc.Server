@@ -128,6 +128,11 @@ public static class ServiceCollectionExtensions
 			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
 		});
 
+		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
+		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same
+		// policy and supplement/override contract as the Minimal API adapter. See AddOidcCors.
+		services.AddOidcCors();
+
 	    return services;
     }
 
