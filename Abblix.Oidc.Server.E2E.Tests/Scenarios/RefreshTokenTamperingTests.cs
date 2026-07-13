@@ -112,37 +112,14 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// Drives a plain auth-code flow with <c>offline_access</c> for the confidential client and returns
-    /// the genuine refresh token together with the client and discovery document used to obtain it.
+    /// Obtains a genuine refresh token (confidential client, auth-code flow with <c>offline_access</c>)
+    /// via the shared helper, returning it together with the client and discovery document used to get it.
     /// </summary>
     private async Task<(HttpClient Client, DiscoveryDocument Discovery, string RefreshToken)> ObtainGenuineRefreshTokenAsync()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
-        var (verifier, challenge) = GeneratePkcePair();
-
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}",
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-
-        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
         return (client, discovery, refreshToken);
     }

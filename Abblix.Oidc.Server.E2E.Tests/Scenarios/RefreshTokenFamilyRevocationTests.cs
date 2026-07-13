@@ -50,7 +50,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
 
         // A legitimate auth-code flow with offline_access issues the first refresh token of a new family
         // (rt1). The test client does not set AllowReuse, so it rotates by default (the secure default).
-        var initial = await ObtainRefreshTokenAsync(client, discovery);
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         // A normal refresh rotates rt1 -> rt2: rt1 becomes superseded (marked Used) and rt2 is now the
@@ -77,7 +77,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
 
         // Build a three-generation lineage rt1 -> rt2 -> rt3. Each rotation supersedes its predecessor and
         // carries the same grant_id forward, so rt1, rt2 and rt3 all belong to one family; rt3 is active.
-        var initial = await ObtainRefreshTokenAsync(client, discovery);
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
         var rt2 = await RotateAsync(client, discovery, rt1);
         var rt3 = await RotateAsync(client, discovery, rt2);
@@ -93,37 +93,6 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         // rt3 — the token an attacker who had rotated forward would be holding.
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt3));
-    }
-
-    /// <summary>
-    /// Drives a plain (non-PAR) auth-code flow with <c>offline_access</c> for the confidential client and
-    /// returns the token response, whose <c>refresh_token</c> is the first member of a fresh family.
-    /// </summary>
-    private static async Task<JsonObject> ObtainRefreshTokenAsync(HttpClient client, DiscoveryDocument discovery)
-    {
-        var (verifier, challenge) = GeneratePkcePair();
-
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}",
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-
-        return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
     }
 
     private static async Task<HttpResponseMessage> RefreshAsync(

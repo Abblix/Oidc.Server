@@ -40,6 +40,9 @@ public class JsonWebTokenValidationTests
     private const string IssuerUri = "https://issuer.example.com";
     private const string TestAudience = "test-audience";
 
+    // alg=none JOSE header, shared by the unsigned-token and alg-stripping tests.
+    private const string NoneAlgHeaderJson = """{"alg":"none","typ":"JWT"}""";
+
     private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
     private static readonly JsonWebKey encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
     private static readonly JsonWebKey WrongSigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
@@ -744,7 +747,7 @@ public class JsonWebTokenValidationTests
     {
         // Create a JWT manually with an invalid exp claim (negative value triggers ArgumentOutOfRangeException)
         // Negative Unix timestamps represent dates before 1970 which can exceed valid DateTimeOffset range
-        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var header = EncodeBase64Url(NoneAlgHeaderJson);
         var payload = EncodeBase64Url(
             $$"""
             {
@@ -783,7 +786,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenWithOutOfRangeIssuedAt_FailsValidationGracefully()
     {
-        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var header = EncodeBase64Url(NoneAlgHeaderJson);
         var payload = EncodeBase64Url(
             $$"""
             {
@@ -825,7 +828,7 @@ public class JsonWebTokenValidationTests
         // Unix timestamp for year 10,001 would exceed DateTimeOffset.MaxValue
         var farFutureTimestamp = 253402300800L; // Year 10,000
 
-        var header = EncodeBase64Url(@"{""alg"":""none"",""typ"":""JWT""}");
+        var header = EncodeBase64Url(NoneAlgHeaderJson);
         var payload = EncodeBase64Url(
             $$"""
             {
@@ -1480,35 +1483,17 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.1 (alg-stripping): a header carrying no 'alg' at all must be rejected as
+    /// RFC 8725 §3.1 (alg-stripping): a header that declares no 'alg' — whether it carries other
+    /// parameters (<c>{"typ":"JWT"}</c>) or is the empty object (<c>{}</c>) — must be rejected as
     /// <see cref="JwtError.InvalidAlgorithm"/>, never treated as an implicit unsigned token. RFC 7515
     /// §4.1.1 makes 'alg' REQUIRED.
     /// </summary>
-    [Fact]
-    public async Task Jws_WithMissingAlgHeader_RejectedAsInvalidAlgorithm()
+    [Theory]
+    [InlineData("""{"typ":"JWT"}""")]
+    [InlineData("{}")]
+    public async Task Jws_WithNoAlgInHeader_RejectedAsInvalidAlgorithm(string headerJson)
     {
-        var header = EncodeBase64Url("""{"typ":"JWT"}""");
-        var payload = EncodeBase64Url($$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","sub":"test-user"}""");
-        var jwt = $"{header}.{payload}.";
-
-        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
-        var parameters = CreateValidationParameters(SigningKey);
-
-        var result = await validator.ValidateAsync(jwt, parameters);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
-    }
-
-    /// <summary>
-    /// An empty JOSE header object <c>{}</c> likewise declares no 'alg' and must be rejected as
-    /// <see cref="JwtError.InvalidAlgorithm"/>. Guards the degenerate alg-stripping case where an
-    /// attacker blanks the entire header.
-    /// </summary>
-    [Fact]
-    public async Task Jws_WithEmptyHeaderObject_RejectedAsInvalidAlgorithm()
-    {
-        var header = EncodeBase64Url("{}");
+        var header = EncodeBase64Url(headerJson);
         var payload = EncodeBase64Url($$"""{"iss":"{{IssuerUri}}","aud":"{{TestAudience}}","sub":"test-user"}""");
         var jwt = $"{header}.{payload}.";
 
@@ -1534,7 +1519,7 @@ public class JsonWebTokenValidationTests
         var parts = signedJwt.Split('.');
 
         // Rewrite the header to alg=none, keep the original (signed) payload, drop the signature.
-        var strippedHeader = EncodeBase64Url("""{"alg":"none","typ":"JWT"}""");
+        var strippedHeader = EncodeBase64Url(NoneAlgHeaderJson);
         var downgraded = $"{strippedHeader}.{parts[1]}.";
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
