@@ -161,6 +161,35 @@ public class AuthServiceJwtFormatterTests
         _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<bool>()), Times.Never);
     }
 
+    /// <summary>
+    /// Verifies that turning encryption off (<c>Encrypt = false</c>) while the encryption algorithm and key id
+    /// remain configured still yields a signed-only JWS and does not resolve the encryption keys: the flag alone
+    /// disables encryption, so a host can flip it back on later without re-entering the settings.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_EncryptDisabledWithSettingsRetained_SignsOnly()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+
+        var disabledButConfigured = new ServiceJwtEncryption(
+            Encrypt: false,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            KeyId: "enc-key",
+            ContentEnc);
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(token, disabledButConfigured);
+
+        Assert.Null(capturedEncryptionKey);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<bool>()), Times.Never);
+    }
+
     // Encryption
 
     /// <summary>
@@ -289,22 +318,32 @@ public class AuthServiceJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that a policy asking for encryption while no encryption key is configured fails loudly at
-    /// issuance rather than silently downgrading to a signed-only token.
+    /// Verifies that a policy asking for encryption while no encryption key is configured falls back to a
+    /// signed-only JWS rather than failing, matching the behavior of prior versions a host keeps by leaving
+    /// encryption on without configuring a key.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_Encrypt_WithNoEncryptionKey_Throws()
+    public async Task FormatAsync_Encrypt_WithNoEncryptionKey_SignsOnly()
     {
         var token = TokenWith();
         SetupSigningKeys(_signingKeyRS256);
         SetupEncryptionKeys();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _formatter.FormatAsync(token, Encrypt()));
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        var result = await _formatter.FormatAsync(token, Encrypt());
+
+        Assert.Equal(EncodedJwt, result);
+        Assert.Null(capturedEncryptionKey);
     }
 
     /// <summary>
-    /// Verifies that a pinned encryption <c>kid</c> that matches no configured key fails loudly.
+    /// Verifies that a pinned encryption <c>kid</c> that matches no configured key fails loudly rather than
+    /// silently downgrading: pinning a key is an explicit intent, so a missing pinned key is a misconfiguration.
     /// </summary>
     [Fact]
     public async Task FormatAsync_Encrypt_WithUnknownPinnedEncryptionKeyId_Throws()

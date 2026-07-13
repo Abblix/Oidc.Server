@@ -66,8 +66,8 @@ public sealed class ServiceTokensAlgorithmsValidator(
                     $"registered signing algorithms ({string.Join(", ", signingAlgorithms)}).");
             }
 
-            var encryptionAlgorithm = token.Encryption?.Algorithm;
-            if (encryptionAlgorithm is not null && !keyManagementAlgorithms.Contains(encryptionAlgorithm))
+            var encryptionAlgorithm = token.Encryption.Algorithm;
+            if (token.Encrypt && encryptionAlgorithm is not null && !keyManagementAlgorithms.Contains(encryptionAlgorithm))
             {
                 results.Add(
                     $"ServiceTokens.{tokenType}.Encryption.Algorithm '{encryptionAlgorithm}' is not among the " +

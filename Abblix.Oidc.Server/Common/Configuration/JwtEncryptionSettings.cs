@@ -23,9 +23,9 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// The encryption settings for a JWT the authorization server issues for itself. Reused, one instance per
-/// service token type. The mere presence of this block on a token type is the opt-in to encrypt that type:
-/// without it the token is signed only.
+/// How a JWT the authorization server issues for itself is encrypted. Reused, one instance per service token
+/// type. Whether the token is encrypted at all is governed by <see cref="ServiceTokenOptions.Encrypt"/>; this
+/// block only selects the key-management algorithm and key used when it is.
 /// </summary>
 /// <remarks>
 /// The content-encryption algorithm (the JWE <c>enc</c>) is not per-key, so it is not carried here; it stays

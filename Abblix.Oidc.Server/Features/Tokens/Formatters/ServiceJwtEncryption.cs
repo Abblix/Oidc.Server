@@ -33,7 +33,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <see cref="OidcOptions.ServiceTokens"/>.
 /// </summary>
 /// <param name="Encrypt">Whether to encrypt the token. <c>false</c> yields a signed-only JWS and the
-/// server's encryption keys are not even resolved.</param>
+/// server's encryption keys are not even resolved. <c>true</c> encrypts when a server encryption key is
+/// available and otherwise falls back to a signed-only JWS (the behavior of prior versions).</param>
 /// <param name="KeyManagementAlgorithm">The JWE key-management <c>alg</c>, or <c>null</c> to derive it from
 /// the selected encryption key's declared <c>alg</c> (RFC 7517 Section 4.4), falling back to
 /// <c>RSA-OAEP-256</c>.</param>
@@ -68,13 +69,9 @@ public sealed record ServiceJwtEncryption(
         => FromSettings(options.ServiceTokens.InitialAccessToken, options);
 
     private static ServiceJwtEncryption FromSettings(ServiceTokenOptions token, OidcOptions options)
-    {
-        var encryption = token.Encryption;
-
-        return new ServiceJwtEncryption(
-            encryption != null,
-            encryption?.Algorithm,
-            encryption?.KeyId,
+        => new(
+            token.Encrypt,
+            token.Encryption.Algorithm,
+            token.Encryption.KeyId,
             options.DefaultContentEncryptionAlgorithm);
-    }
 }

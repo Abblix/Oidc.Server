@@ -93,21 +93,19 @@ public class AuthServiceJwtFormatter(
 		var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
 			.FirstByAlgorithmAsync(token.Header.Algorithm, token.Header.KeyId);
 
-		// Signed only: do not even resolve the server's encryption keys, mirroring the client formatter's
-		// JARM signed-only branch.
+		// Opt-out: this token type is configured signed only, so the server's encryption keys are not even
+		// resolved, mirroring the client formatter's JARM signed-only branch.
 		if (!encryption.Encrypt)
 			return await jwtCreator.IssueAsync(token, signingCredentials);
 
-		// Encryption is an explicit opt-in for this token type, so a missing key is a configuration error
-		// rather than a silent fall-through to a signed-only token.
+		// Encrypt when a server encryption key is available, otherwise fall back to a signed-only JWS (the
+		// behavior of prior versions a host keeps by leaving Encrypt on). A pinned key id that matches no
+		// configured key still fails loudly inside the selector.
 		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
 			.FirstByAlgorithmAsync(algorithm: null, encryption.KeyId);
 
 		if (encryptingCredentials is null)
-			throw new InvalidOperationException(
-				"Service token encryption is configured but no encryption key was found. " +
-				"Ensure OidcOptions.EncryptionKeys contains a usable key" +
-				(encryption.KeyId is null ? "." : $" with kid '{encryption.KeyId}'."));
+			return await jwtCreator.IssueAsync(token, signingCredentials);
 
 		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 §4.4), else the default.
 		var keyEncryptionAlgorithm = encryption.KeyManagementAlgorithm

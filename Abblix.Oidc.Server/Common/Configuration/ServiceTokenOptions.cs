@@ -36,8 +36,18 @@ public record ServiceTokenOptions
     public JwtSigningSettings Signing { get; set; } = new();
 
     /// <summary>
-    /// The encryption settings. <c>null</c> (the default) means the token is signed only; setting this block
-    /// opts the token type in to being encrypted as a JWE to the server's own encryption key.
+    /// Whether to encrypt this token type to the server's own encryption key. <c>true</c> (the default)
+    /// encrypts it whenever a server encryption key is configured and otherwise signs it only, matching the
+    /// behavior of prior versions. Set to <c>false</c> to keep the token signed only even when an encryption
+    /// key exists — for example to keep the access token readable by external resource servers that validate
+    /// it against the published key set.
     /// </summary>
-    public JwtEncryptionSettings? Encryption { get; set; }
+    public bool Encrypt { get; set; } = true;
+
+    /// <summary>
+    /// How this token type is encrypted when <see cref="Encrypt"/> is on and a server encryption key is
+    /// available: the JWE key-management algorithm and the key to use. Left at its defaults it derives the
+    /// algorithm from the selected key and takes the first configured encryption key.
+    /// </summary>
+    public JwtEncryptionSettings Encryption { get; set; } = new();
 }

@@ -26,35 +26,36 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// The per-type signing and encryption settings for the four JWTs the authorization server issues for itself.
 /// Grouping the four here keeps them together and avoids a name clash with the per-client
 /// <see cref="Features.ClientInformation.ClientInfo.RefreshToken"/> (which governs lifetime and reuse, a
-/// different concern). Each token type defaults to signed-only RS256; a host encrypts a specific type by
-/// setting that type's <see cref="ServiceTokenOptions.Encryption"/> block.
+/// different concern). Each token type signs with RS256 and, when a server encryption key is configured, is
+/// encrypted to it by default, as in prior versions; a host disables encryption for a specific type by
+/// setting that type's <see cref="ServiceTokenOptions.Encrypt"/> to <c>false</c>.
 /// </summary>
 public record ServiceTokensOptions
 {
     /// <summary>
-    /// Settings for the access token. Because the access token is forwarded to external resource servers,
-    /// which hold only the signing public key, leaving <see cref="ServiceTokenOptions.Encryption"/> unset
-    /// (signed only) is the safe default; encrypting it to the server's own key would make those servers
-    /// unable to read it.
+    /// Settings for the access token. Like the other service tokens it is encrypted to the server's own key
+    /// when one is configured. A host whose access token is validated by external resource servers against
+    /// the published key set (which hold only the signing public key) sets
+    /// <see cref="ServiceTokenOptions.Encrypt"/> to <c>false</c> so the token stays a readable signed JWS.
     /// </summary>
     public ServiceTokenOptions AccessToken { get; set; } = new();
 
     /// <summary>
-    /// Settings for the refresh token. The refresh token is a server round-trip value (issued, stored
-    /// opaquely by the holder, presented back and validated by the server), so encrypting it to the
-    /// server's own key is safe and can protect its contents at rest when the encryption block is set.
+    /// Settings for the refresh token. A server round-trip value (issued, stored opaquely by the holder,
+    /// presented back and validated by the server), so encrypting it to the server's own key both protects
+    /// its contents at rest and is read back by the server itself.
     /// </summary>
     public ServiceTokenOptions RefreshToken { get; set; } = new();
 
     /// <summary>
-    /// Settings for the registration access token (RFC 7592). A server round-trip value, so encrypting it
-    /// to the server's own key is safe when the encryption block is set.
+    /// Settings for the registration access token (RFC 7592). A server round-trip value, read back only by
+    /// the server, so encrypting it to the server's own key is safe.
     /// </summary>
     public ServiceTokenOptions RegistrationAccessToken { get; set; } = new();
 
     /// <summary>
-    /// Settings for the initial access token (RFC 7591 Section 3). A server round-trip value, so encrypting
-    /// it to the server's own key is safe when the encryption block is set.
+    /// Settings for the initial access token (RFC 7591 Section 3). A server round-trip value, read back only
+    /// by the server, so encrypting it to the server's own key is safe.
     /// </summary>
     public ServiceTokenOptions InitialAccessToken { get; set; } = new();
 }

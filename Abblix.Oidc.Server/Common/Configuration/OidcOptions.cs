@@ -165,11 +165,12 @@ public record OidcOptions
 
 	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
-	/// registration access and initial access tokens). Each type signs with RS256 and is signed only by
-	/// default; a host encrypts a specific type by setting that type's
-	/// <see cref="ServiceTokenOptions.Encryption"/> block. This makes outbound service-token encryption an
-	/// explicit per-type choice: populating <see cref="EncryptionKeys"/> for an inbound need (such as
-	/// decrypting client-sent encrypted request objects) no longer encrypts any outbound service token.
+	/// registration access and initial access tokens). Each type signs with RS256 and, when a server
+	/// <see cref="EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
+	/// A host controls each type independently: it can pin the signing algorithm or key, choose the
+	/// key-management algorithm or encryption key, or disable encryption for a specific type by setting that
+	/// type's <see cref="ServiceTokenOptions.Encrypt"/> to <c>false</c> (for example to keep the access token
+	/// readable by external resource servers).
 	/// </summary>
 	public ServiceTokensOptions ServiceTokens { get; set; } = new();
 
