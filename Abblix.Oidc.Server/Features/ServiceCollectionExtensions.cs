@@ -144,6 +144,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, EnabledEndpointsRegistrationValidator>());
 
+        // Fail loud at startup when a ServiceTokens signing or encryption algorithm is not one the registered
+        // signers/encryptors can produce, instead of failing per-request at token issuance.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) — same host-first contract as TryAdd* seams.
         return services

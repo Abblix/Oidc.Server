@@ -57,6 +57,9 @@ public class AuthServiceJwtFormatter(
 	/// that is ready for use in authenticating and authorizing service operations, including access tokens,
 	/// refresh tokens and Registration Access Tokens.
 	/// </remarks>
+	[Obsolete("Use FormatAsync(JsonWebToken, ServiceJwtEncryption) with an explicit encryption policy. " +
+	          "This overload encrypts implicitly whenever any service encryption key exists and is kept for " +
+	          "backward compatibility.")]
 	public async Task<string> FormatAsync(JsonWebToken token)
 	{
 		// Select the appropriate signing key based on the JWT specified algorithm
@@ -79,5 +82,43 @@ public class AuthServiceJwtFormatter(
 			encryptingCredentials,
 			keyEncryptionAlgorithm,
 			contentEncryptionAlgorithm);
+	}
+
+	/// <inheritdoc />
+	public async Task<string> FormatAsync(JsonWebToken token, ServiceJwtEncryption encryption)
+	{
+		// The signing algorithm and any pinned signing-key id live in the token header, placed there by the
+		// issuing service from its ServiceTokens.<Type>.Signing settings. The signer restamps the header kid
+		// from the chosen key, so passing the header kid here only selects which signing key is used.
+		var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
+			.FirstByAlgorithmAsync(token.Header.Algorithm, token.Header.KeyId);
+
+		// Signed only: do not even resolve the server's encryption keys, mirroring the client formatter's
+		// JARM signed-only branch.
+		if (!encryption.Encrypt)
+			return await jwtCreator.IssueAsync(token, signingCredentials);
+
+		// Encryption is an explicit opt-in for this token type, so a missing key is a configuration error
+		// rather than a silent fall-through to a signed-only token.
+		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
+			.FirstByAlgorithmAsync(algorithm: null, encryption.KeyId);
+
+		if (encryptingCredentials is null)
+			throw new InvalidOperationException(
+				"Service token encryption is configured but no encryption key was found. " +
+				"Ensure OidcOptions.EncryptionKeys contains a usable key" +
+				(encryption.KeyId is null ? "." : $" with kid '{encryption.KeyId}'."));
+
+		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 §4.4), else the default.
+		var keyEncryptionAlgorithm = encryption.KeyManagementAlgorithm
+			?? encryptingCredentials.Algorithm
+			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+		return await jwtCreator.IssueAsync(
+			token,
+			signingCredentials,
+			encryptingCredentials,
+			keyEncryptionAlgorithm,
+			encryption.ContentEncryptionAlgorithm);
 	}
 }

@@ -31,24 +31,27 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
 /// <summary>
-/// Unit tests for <see cref="AuthServiceJwtFormatter"/> verifying JWT formatting, signing, and encryption
-/// for tokens issued by the authentication service per RFC 7519 (JWT), RFC 7515 (JWS), and RFC 7516 (JWE).
-/// Tests cover signing key selection, optional encryption, and error handling.
+/// Unit tests for <see cref="AuthServiceJwtFormatter"/> verifying JWT formatting, signing and encryption
+/// for tokens the authorization server issues for itself, per RFC 7519 (JWT), RFC 7515 (JWS) and RFC 7516
+/// (JWE). The tests exercise the explicit <see cref="ServiceJwtEncryption"/> policy overload — signed only,
+/// encrypt with a key-derived or explicit key-management algorithm, signing- and encryption-key pinning by
+/// <c>kid</c>, and the missing-key error — plus the retained implicit legacy path.
 /// </summary>
 public class AuthServiceJwtFormatterTests
 {
     private const string EncodedJwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature";
+    private const string ContentEnc = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
 
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator;
     private readonly Mock<IAuthServiceKeysProvider> _keysProvider;
     private readonly AuthServiceJwtFormatter _formatter;
 
     private readonly JsonWebKey _signingKeyRS256;
+    private readonly JsonWebKey _signingKeyRS256Alt;
     private readonly JsonWebKey _signingKeyRS384;
     private readonly JsonWebKey _encryptionKey;
 
@@ -61,552 +64,306 @@ public class AuthServiceJwtFormatterTests
         _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, options);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+        _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
-        _encryptionKey = new RsaJsonWebKey { KeyId = "enc-key", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
+        _encryptionKey = new RsaJsonWebKey
+        {
+            KeyId = "enc-key",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
+        };
     }
 
-    #region Signing Key Selection Tests
+    private static ServiceJwtEncryption SignedOnly => new(
+        Encrypt: false, KeyManagementAlgorithm: null, KeyId: null, ContentEnc);
+
+    private static ServiceJwtEncryption Encrypt(string? keyManagementAlgorithm = null, string? keyId = null) => new(
+        Encrypt: true, keyManagementAlgorithm, keyId, ContentEnc);
+
+    private void SetupSigningKeys(params JsonWebKey[] keys) =>
+        _keysProvider.Setup(p => p.GetSigningKeys(true)).Returns(keys.ToAsyncEnumerable());
+
+    private void SetupEncryptionKeys(params JsonWebKey[] keys) =>
+        _keysProvider.Setup(p => p.GetEncryptionKeys(false)).Returns(keys.ToAsyncEnumerable());
+
+    private static JsonWebToken TokenWith(string algorithm = SigningAlgorithms.RS256, string? keyId = null) => new()
+    {
+        Header = { Algorithm = algorithm, KeyId = keyId },
+        Payload = { Subject = "user123" },
+    };
+
+    // Signing key selection
 
     /// <summary>
-    /// Verifies that FormatAsync selects signing key matching JWT header algorithm.
-    /// Per RFC 7515 Section 4.1.1, alg header parameter identifies signing algorithm.
-    /// Critical for security - ensures correct key is used for token signatures.
+    /// Verifies that the signing key is chosen by the token header algorithm (RFC 7515 Section 4.1.1), so
+    /// each service-token type is signed with the algorithm its issuing service placed in the header.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_WithRS256Algorithm_ShouldSelectMatchingSigningKey()
+    public async Task FormatAsync_SelectsSigningKeyByHeaderAlgorithm()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
+        var token = TokenWith(SigningAlgorithms.RS384);
+        SetupSigningKeys(_signingKeyRS256, _signingKeyRS384);
 
         JsonWebKey? capturedSigningKey = null;
-        JsonWebKey? capturedEncryptionKey = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, _signingKeyRS384 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, enc, _, _) =>
-            {
-                capturedSigningKey = sig;
-                capturedEncryptionKey = enc;
-            })
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Same(_signingKeyRS256, capturedSigningKey);
-    }
-
-    /// <summary>
-    /// Verifies that FormatAsync selects RS384 signing key when specified in JWT header.
-    /// Ensures formatter correctly handles multiple available signing algorithms.
-    /// </summary>
-    [Fact]
-    public async Task FormatAsync_WithRS384Algorithm_ShouldSelectMatchingSigningKey()
-    {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS384 },
-            Payload = { Subject = "user123" }
-        };
-
-        JsonWebKey? capturedSigningKey = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, _signingKeyRS384 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), null, It.IsAny<string>(), It.IsAny<string>()))
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        await _formatter.FormatAsync(token);
+        await _formatter.FormatAsync(token, SignedOnly);
 
-        // Assert
         Assert.Same(_signingKeyRS384, capturedSigningKey);
     }
 
     /// <summary>
-    /// Verifies that FormatAsync throws when no signing key matches JWT algorithm.
-    /// Critical security requirement - prevents token issuance with unsupported/misconfigured algorithms.
-    /// FirstByAlgorithmAsync returns null when no match found, causing IssueAsync to fail.
+    /// Verifies that a pinned signing <c>kid</c> selects that exact key among several sharing the algorithm,
+    /// letting a host rotate or pin the signing key deterministically (RFC 7517 Section 4.4, RFC 7515 Section 4.1.4).
     /// </summary>
     [Fact]
-    public async Task FormatAsync_WithNoMatchingSigningKey_ShouldThrow()
+    public async Task FormatAsync_WithPinnedSigningKeyId_SelectsThatKey()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS512 },
-            Payload = { Subject = "user123" }
-        };
+        var token = TokenWith(SigningAlgorithms.RS256, keyId: "sig-rs256-alt");
+        SetupSigningKeys(_signingKeyRS256, _signingKeyRS256Alt);
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, _signingKeyRS384 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        // IssueAsync will be called with null signing key, which should fail
+        JsonWebKey? capturedSigningKey = null;
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("Signing key is required"));
-
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(token));
-    }
-
-    /// <summary>
-    /// Verifies that FormatAsync requests only public signing keys (activeOnly=true).
-    /// Ensures only currently active signing keys are used for token generation.
-    /// </summary>
-    [Fact]
-    public async Task FormatAsync_ShouldRequestActiveSigningKeys()
-    {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), null, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        await _formatter.FormatAsync(token);
+        await _formatter.FormatAsync(token, SignedOnly);
 
-        // Assert
-        _keysProvider.Verify(p => p.GetSigningKeys(true), Times.Once);
+        Assert.Same(_signingKeyRS256Alt, capturedSigningKey);
     }
 
-    #endregion
-
-    #region Encryption Tests
+    // Signed only
 
     /// <summary>
-    /// Verifies that FormatAsync uses encryption key when available.
-    /// Per RFC 7516, JWE provides confidentiality protection for JWTs.
-    /// Important for sensitive tokens (refresh tokens, private claims).
+    /// Verifies that a signed-only policy issues a JWS with no encryption key, and — mirroring the client
+    /// formatter's JARM signed-only branch — does not even resolve the server's encryption keys. The strict
+    /// mock has no <c>GetEncryptionKeys</c> setup, so any attempt to resolve them would fail the test.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_WithEncryptionKeyAvailable_ShouldUseEncryption()
+    public async Task FormatAsync_SignedOnly_IssuesJwsWithoutResolvingEncryptionKeys()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
 
         JsonWebKey? capturedEncryptionKey = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(new[] { _encryptionKey }.ToAsyncEnumerable());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Same(_encryptionKey, capturedEncryptionKey);
-    }
-
-    /// <summary>
-    /// Verifies that FormatAsync creates token without encryption when no encryption keys available.
-    /// Ensures formatter degrades gracefully when encryption is not configured.
-    /// Tokens remain signed but unencrypted (JWS without JWE).
-    /// </summary>
-    [Fact]
-    public async Task FormatAsync_WithNoEncryptionKeys_ShouldCreateUnencryptedToken()
-    {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
-
-        JsonWebKey? capturedEncryptionKey = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Null(capturedEncryptionKey);
-    }
-
-    /// <summary>
-    /// Verifies that FormatAsync uses only the first available encryption key.
-    /// Per implementation, encryption is optional and uses first key if available.
-    /// Ensures consistent encryption key selection behavior.
-    /// </summary>
-    [Fact]
-    public async Task FormatAsync_WithMultipleEncryptionKeys_ShouldUseFirstKey()
-    {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
-
-        var secondEncryptionKey = new RsaJsonWebKey { KeyId = "enc-key-2", Algorithm = "RSA-OAEP" };
-        JsonWebKey? capturedEncryptionKey = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(new[] { _encryptionKey, secondEncryptionKey }.ToAsyncEnumerable());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Same(_encryptionKey, capturedEncryptionKey);
-    }
-
-    #endregion
-
-    #region JWT Creation Tests
-
-    /// <summary>
-    /// Verifies that FormatAsync returns JWT string from IJsonWebTokenCreator.
-    /// Ensures complete JWT creation flow produces expected encoded token.
-    /// </summary>
-    [Fact]
-    public async Task FormatAsync_ShouldReturnEncodedJwtFromCreator()
-    {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
         _jwtCreator
             .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        var result = await _formatter.FormatAsync(token);
+        var result = await _formatter.FormatAsync(token, SignedOnly);
 
-        // Assert
         Assert.Equal(EncodedJwt, result);
+        Assert.Null(capturedEncryptionKey);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<bool>()), Times.Never);
     }
 
+    // Encryption
+
     /// <summary>
-    /// Verifies that FormatAsync passes correct token to IJsonWebTokenCreator.
-    /// Ensures token integrity throughout formatting process.
+    /// Verifies that when the policy leaves the key-management algorithm unset, it is derived from the
+    /// selected encryption key's declared <c>alg</c> (RFC 7517 Section 4.4).
     /// </summary>
     [Fact]
-    public async Task FormatAsync_ShouldPassTokenToCreator()
+    public async Task FormatAsync_Encrypt_DerivesKeyManagementAlgorithmFromKey()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "at+jwt" },
-            Payload =
-            {
-                Subject = "user123",
-                Issuer = "https://auth.example.com",
-                Audiences = ["api"]
-            }
-        };
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey); // declares RSA-OAEP
 
-        JsonWebToken? capturedToken = null;
-
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
+        string? capturedAlg = null;
+        JsonWebKey? capturedEncryptionKey = null;
         _jwtCreator
-            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, alg, _) =>
+            {
+                capturedEncryptionKey = enc;
+                capturedAlg = alg;
+            })
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        await _formatter.FormatAsync(token);
+        await _formatter.FormatAsync(token, Encrypt());
 
-        // Assert
-        Assert.Same(token, capturedToken);
+        Assert.Same(_encryptionKey, capturedEncryptionKey);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capturedAlg);
     }
 
     /// <summary>
-    /// Verifies that FormatAsync invokes IJsonWebTokenCreator exactly once.
-    /// Ensures no duplicate token creation or unnecessary operations.
+    /// Verifies that when neither the policy nor the key declares a key-management algorithm, it falls back
+    /// to RSA-OAEP-256, the library's default JWE <c>alg</c>.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_ShouldInvokeCreatorOnce()
+    public async Task FormatAsync_Encrypt_FallsBackToRsaOaep256_WhenKeyDeclaresNoAlgorithm()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
+        var token = TokenWith();
+        var agnosticKey = new RsaJsonWebKey { KeyId = "enc-agnostic", Algorithm = null };
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(agnosticKey);
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
+        string? capturedAlg = null;
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, agnosticKey, It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, alg, _) => capturedAlg = alg)
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        await _formatter.FormatAsync(token);
+        await _formatter.FormatAsync(token, Encrypt());
 
-        // Assert
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedAlg);
     }
 
-    #endregion
-
-    #region Integration Tests
-
     /// <summary>
-    /// Verifies complete JWT formatting flow with signing and encryption.
-    /// Tests end-to-end token creation with both cryptographic operations.
-    /// Represents typical production scenario for refresh tokens.
+    /// Verifies that an explicit policy key-management algorithm overrides the key's declared <c>alg</c>.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_WithSigningAndEncryption_ShouldProduceCompleteJwt()
+    public async Task FormatAsync_Encrypt_ExplicitPolicyAlgorithmOverridesKeyDeclaredAlgorithm()
     {
-        // Arrange
-        var token = new JsonWebToken
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey); // declares RSA-OAEP
+
+        string? capturedAlg = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, alg, _) => capturedAlg = alg)
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
+
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedAlg);
+    }
+
+    /// <summary>
+    /// Verifies that a pinned encryption <c>kid</c> selects that exact encryption key among several.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_Encrypt_WithPinnedEncryptionKeyId_SelectsThatKey()
+    {
+        var token = TokenWith();
+        var otherEncryptionKey = new RsaJsonWebKey
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "JWT" },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Subject = "user123",
-                Issuer = "https://auth.example.com",
-                Audiences = ["https://api.example.com"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-            }
+            KeyId = "enc-key-2",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
         };
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey, otherEncryptionKey);
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256, _signingKeyRS384 }.ToAsyncEnumerable());
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
 
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(new[] { _encryptionKey }.ToAsyncEnumerable());
+        await _formatter.FormatAsync(token, Encrypt(keyId: "enc-key-2"));
 
+        Assert.Same(otherEncryptionKey, capturedEncryptionKey);
+    }
+
+    /// <summary>
+    /// Verifies that the policy's content-encryption algorithm flows through to the JWE <c>enc</c>.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_Encrypt_PassesPolicyContentEncryptionAlgorithm()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey);
+
+        var policy = new ServiceJwtEncryption(
+            Encrypt: true,
+            KeyManagementAlgorithm: null,
+            KeyId: null,
+            EncryptionAlgorithms.ContentEncryption.Aes128Gcm);
+
+        string? capturedEnc = null;
         _jwtCreator
             .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, _, enc) => capturedEnc = enc)
             .ReturnsAsync(EncodedJwt);
 
-        // Act
-        var result = await _formatter.FormatAsync(token);
+        await _formatter.FormatAsync(token, policy);
 
-        // Assert
-        Assert.Equal(EncodedJwt, result);
-        _keysProvider.Verify(p => p.GetSigningKeys(true), Times.Once);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(false), Times.Once);
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, capturedEnc);
     }
 
     /// <summary>
-    /// Verifies JWT formatting flow for access token without encryption.
-    /// Tests typical access token scenario (signed but not encrypted for performance).
-    /// Per OAuth 2.0 best practices, access tokens often unencrypted for efficiency.
+    /// Verifies that a policy asking for encryption while no encryption key is configured fails loudly at
+    /// issuance rather than silently downgrading to a signed-only token.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_ForAccessToken_ShouldProduceSignedJwt()
+    public async Task FormatAsync_Encrypt_WithNoEncryptionKey_Throws()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "at+jwt" },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Subject = "user123",
-                Issuer = "https://auth.example.com",
-                Audiences = ["https://api.example.com"],
-                Scope = [TestConstants.DefaultScope, "profile", "email"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
-            }
-        };
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys();
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        var result = await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Equal(EncodedJwt, result);
-        _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _formatter.FormatAsync(token, Encrypt()));
     }
 
     /// <summary>
-    /// Verifies JWT formatting for Registration Access Token.
-    /// Per RFC 7592 Section 3, Registration Access Tokens authenticate client configuration requests.
-    /// Ensures formatter correctly handles all auth service token types.
+    /// Verifies that a pinned encryption <c>kid</c> that matches no configured key fails loudly.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_ForRegistrationAccessToken_ShouldProduceJwt()
+    public async Task FormatAsync_Encrypt_WithUnknownPinnedEncryptionKeyId_Throws()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = "JWT" },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Subject = "client_abc123",
-                Issuer = "https://auth.example.com",
-                Audiences = ["https://auth.example.com/register"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
-            }
-        };
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey);
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(EncodedJwt);
-
-        // Act
-        var result = await _formatter.FormatAsync(token);
-
-        // Assert
-        Assert.Equal(EncodedJwt, result);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _formatter.FormatAsync(token, Encrypt(keyId: "missing-kid")));
     }
 
-    #endregion
-
-    #region Error Handling Tests
+    // Retained implicit legacy path
 
     /// <summary>
-    /// Verifies that FormatAsync throws when GetSigningKeys returns empty sequence.
-    /// Critical security check - prevents token issuance when no signing keys configured.
+    /// Verifies that the retained, obsolete parameterless overload still encrypts implicitly whenever any
+    /// service encryption key exists, preserving backward compatibility for callers not yet migrated.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_WithNoSigningKeys_ShouldThrowInvalidOperationException()
+    public async Task Legacy_FormatAsync_WithEncryptionKey_EncryptsImplicitly()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Subject = "user123" }
-        };
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey);
 
-        _keysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
-        _keysProvider
-            .Setup(p => p.GetEncryptionKeys(false))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
-
+        JsonWebKey? capturedEncryptionKey = null;
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("Signing key is required"));
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(token));
+#pragma warning disable CS0618 // exercising the retained obsolete overload on purpose
+        await _formatter.FormatAsync(token);
+#pragma warning restore CS0618
+
+        Assert.Same(_encryptionKey, capturedEncryptionKey);
     }
 
-    #endregion
+    /// <summary>
+    /// Verifies that the obsolete parameterless overload produces a signed-only token when no service
+    /// encryption key is configured.
+    /// </summary>
+    [Fact]
+    public async Task Legacy_FormatAsync_WithNoEncryptionKey_SignsOnly()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys();
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+#pragma warning disable CS0618 // exercising the retained obsolete overload on purpose
+        await _formatter.FormatAsync(token);
+#pragma warning restore CS0618
+
+        Assert.Null(capturedEncryptionKey);
+    }
 }

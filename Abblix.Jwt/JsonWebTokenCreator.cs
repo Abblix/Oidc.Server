@@ -33,16 +33,24 @@ namespace Abblix.Jwt;
 /// <param name="signer">The JWT signer for creating signatures.</param>
 /// <param name="encryptor">The JWT encryptor for creating encrypted tokens.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
+/// <param name="encryptionAlgorithmsProvider">The provider for supported JWE key-management algorithms.</param>
 internal sealed class JsonWebTokenCreator(
     IJsonWebTokenSigner signer,
     IJsonWebTokenEncryptor encryptor,
-    SigningAlgorithmsProvider signingAlgorithmsProvider) : IJsonWebTokenCreator
+    SigningAlgorithmsProvider signingAlgorithmsProvider,
+    EncryptionAlgorithmsProvider encryptionAlgorithmsProvider) : IJsonWebTokenCreator
 {
     /// <summary>
     /// Gets the collection of signing algorithms supported for JWT creation.
     /// Dynamically determined from registered signers in the dependency injection container.
     /// </summary>
     public IEnumerable<string> SignedResponseAlgorithmsSupported => signingAlgorithmsProvider.Algorithms;
+
+    /// <summary>
+    /// Gets the collection of JWE key-management algorithms supported for encrypting a JWT on creation.
+    /// Dynamically determined from the registered encryptors in the dependency injection container.
+    /// </summary>
+    public IEnumerable<string> EncryptedResponseAlgorithmsSupported => encryptionAlgorithmsProvider.KeyManagementAlgorithms;
 
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encryption key.

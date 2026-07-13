@@ -21,11 +21,13 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -34,7 +36,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class RegistrationAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    IIssuerProvider issuerProvider) : IRegistrationAccessTokenService
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options) : IRegistrationAccessTokenService
 {
     /// <summary>
     /// Issues a registration access token for a registered client.
@@ -46,12 +49,15 @@ public class RegistrationAccessTokenService(
     /// <returns>A task that results in the encoded registration access token.</returns>
     public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
+        var signing = options.Value.ServiceTokens.RegistrationAccessToken.Signing;
+
         var token = new JsonWebToken
         {
             Header =
             {
                 Type = JwtTypes.RegistrationAccessToken,
-                Algorithm = SigningAlgorithms.RS256,
+                Algorithm = signing.Algorithm,
+                KeyId = signing.KeyId,
             },
             Payload =
             {
@@ -69,6 +75,7 @@ public class RegistrationAccessTokenService(
             },
         };
 
-        return serviceJwtFormatter.FormatAsync(token);
+        return serviceJwtFormatter.FormatAsync(
+            token, ServiceJwtEncryption.ForRegistrationAccessToken(options.Value));
     }
 }

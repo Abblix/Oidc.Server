@@ -164,6 +164,16 @@ public record OidcOptions
 	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
 
 	/// <summary>
+	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
+	/// registration access and initial access tokens). Each type signs with RS256 and is signed only by
+	/// default; a host encrypts a specific type by setting that type's
+	/// <see cref="ServiceTokenOptions.Encryption"/> block. This makes outbound service-token encryption an
+	/// explicit per-type choice: populating <see cref="EncryptionKeys"/> for an inbound need (such as
+	/// decrypting client-sent encrypted request objects) no longer encrypts any outbound service token.
+	/// </summary>
+	public ServiceTokensOptions ServiceTokens { get; set; } = new();
+
+	/// <summary>
 	/// The duration for which a Pushed Authorization Request (PAR) is valid. PAR is a security enhancement that allows
 	/// clients to pre-register authorization requests directly with the authorization server. This duration specifies
 	/// the maximum time a pre-registered request is considered valid, balancing the need for security with usability

@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -48,13 +49,16 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="grantIdGenerator">Generator for unique refresh-token grant identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
+/// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
+/// </param>
 public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IGrantIdGenerator grantIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
-	ITokenRegistry tokenRegistry) : IRefreshTokenService
+	ITokenRegistry tokenRegistry,
+	IOptions<OidcOptions> options) : IRefreshTokenService
 {
 	/// <summary>
 	/// Generates a new refresh token based on the user's current authentication session and authorization context,
@@ -98,12 +102,15 @@ public class RefreshTokenService(
 		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
 		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
+		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
+
 		var newToken = new JsonWebToken
 		{
 			Header =
 			{
 				Type = JwtTypes.RefreshToken,
-				Algorithm = SigningAlgorithms.RS256,
+				Algorithm = signing.Algorithm,
+				KeyId = signing.KeyId,
 			},
 			Payload =
 			{
@@ -119,7 +126,9 @@ public class RefreshTokenService(
 		authSession.ApplyTo(newToken.Payload);
 		authContext.ApplyTo(newToken.Payload);
 
-		return new EncodedJsonWebToken(newToken, await jwtFormatter.FormatAsync(newToken));
+		var encoded = await jwtFormatter.FormatAsync(
+			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
+		return new EncodedJsonWebToken(newToken, encoded);
 	}
 
 	private static DateTimeOffset CalculateExpiresAt(
