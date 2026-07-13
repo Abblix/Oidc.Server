@@ -31,4 +31,10 @@ partial class ResponseModeValidator
         Level = LogLevel.Warning,
         Message = "The response mode {ResponseMode} is not compatible with response type {ResponseType}")]
     private partial void LogIncompatibleResponseMode(string ResponseMode, string[]? ResponseType);
+
+    [LoggerMessage(
+        EventId = LogEvents.Endpoints.ResponseModeValidator.ResponseModeNotAllowedForClient,
+        Level = LogLevel.Warning,
+        Message = "The response mode {ResponseMode} is not allowed for the client {ClientId}")]
+    private partial void LogResponseModeNotAllowedForClient(string ResponseMode, string ClientId);
 }

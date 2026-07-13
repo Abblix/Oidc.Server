@@ -38,6 +38,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// <c>fragment</c>, <c>form_post</c> is allowed; flows that issue tokens at the
 /// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
 /// must not appear in the URL query string.
+/// After that flow-compatibility check, when the client configures an explicit
+/// <see cref="Features.ClientInformation.ClientInfo.AllowedResponseModes"/> allow-list the effective response
+/// mode must be a member of it, letting a host pin the delivery channel and close a response-mode downgrade
+/// (RFC 9700).
 /// </summary>
 public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
@@ -55,6 +59,17 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 			}
 
 			context.ResponseMode = responseMode;
+		}
+
+		// Optional per-client allow-list. The effective mode is context.ResponseMode: the explicit
+		// response_mode set just above, or the flow default FlowTypeValidator placed there when the
+		// parameter was omitted — so omitting response_mode cannot slip past a configured restriction.
+		var allowedModes = context.ClientInfo.AllowedResponseModes;
+		if (allowedModes is { Length: > 0 } && Array.IndexOf(allowedModes, context.ResponseMode) < 0)
+		{
+			LogResponseModeNotAllowedForClient(context.ResponseMode, context.ClientInfo.ClientId);
+
+			return context.InvalidRequest("The response mode is not allowed for the client");
 		}
 
 		return null;

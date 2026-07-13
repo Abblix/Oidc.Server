@@ -122,6 +122,7 @@ internal static class LogEvents
             private const int Base = 2065;
 
             public const int IncompatibleResponseMode = Base + 1;
+            public const int ResponseModeNotAllowedForClient = Base + 2;
         }
 
         /// <summary>

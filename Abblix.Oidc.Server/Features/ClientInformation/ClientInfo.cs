@@ -131,6 +131,20 @@ public record ClientInfo(string ClientId)
     public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode];
 
     /// <summary>
+    /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
+    /// which the authorization response is delivered. When set to a non-empty list, a request is rejected unless
+    /// its effective response mode (the explicit <c>response_mode</c>, or the flow default when the parameter is
+    /// omitted) is a member of the list, compared by exact, case-sensitive string match. This lets a host close a
+    /// response-mode downgrade: a client the host intends to run with
+    /// <see cref="Common.Constants.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
+    /// <c>query</c> on a crafted request, nor by omitting the parameter to inherit the flow default. The
+    /// restriction is applied on top of, and after, the flow-compatibility check. When <c>null</c> or empty (the
+    /// default) it imposes no per-client restriction. There is no registered DCR metadata parameter for it, so
+    /// the list is host-side configuration only.
+    /// </summary>
+    public string[]? AllowedResponseModes { get; set; }
+
+    /// <summary>
     /// Allows the client to request tokens that enable access to the user's resources while they’re offline.
     /// </summary>
     public bool? OfflineAccessAllowed { get; set; } = false;
