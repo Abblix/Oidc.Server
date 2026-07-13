@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -29,6 +30,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -45,11 +47,14 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// enhancing security by enabling token revocation and tracking capabilities.</param>
 /// <param name="serviceJwtFormatter">The formatter used for encoding the JSON Web Token (JWT), ensuring it meets
 /// the standards required for secure transmission and validation.</param>
+/// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
+/// </param>
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
-	IAuthServiceJwtFormatter serviceJwtFormatter) : IAccessTokenService
+	IAuthServiceJwtFormatter serviceJwtFormatter,
+	IOptions<OidcOptions> options) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
@@ -75,13 +80,15 @@ internal class AccessTokenService(
 		ClientInfo clientInfo)
 	{
 		var issuedAt = clock.GetUtcNow();
+		var signing = options.Value.ServiceTokens.AccessToken.Signing;
 
 		var accessToken = new JsonWebToken
 		{
 			Header =
 			{
 				Type = JwtTypes.AccessToken,
-				Algorithm = SigningAlgorithms.RS256,
+				Algorithm = signing.Algorithm,
+				KeyId = signing.KeyId,
 			},
 			Payload =
 			{
@@ -96,7 +103,9 @@ internal class AccessTokenService(
 		authSession.ApplyTo(accessToken.Payload);
 		authContext.ApplyTo(accessToken.Payload);
 
-		return new EncodedJsonWebToken(accessToken, await serviceJwtFormatter.FormatAsync(accessToken));
+		var encoded = await serviceJwtFormatter.FormatAsync(
+			accessToken, ServiceJwtEncryption.ForAccessToken(options.Value));
+		return new EncodedJsonWebToken(accessToken, encoded);
 	}
 
 	/// <summary>

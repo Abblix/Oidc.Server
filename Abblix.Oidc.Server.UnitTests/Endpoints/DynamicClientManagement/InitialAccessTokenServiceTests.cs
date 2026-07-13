@@ -23,11 +23,13 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -57,7 +59,8 @@ public class InitialAccessTokenServiceTests
 
         _service = new InitialAccessTokenService(
             _jwtFormatter.Object,
-            _issuerProvider.Object);
+            _issuerProvider.Object,
+            Options.Create(new OidcOptions()));
     }
 
     [Fact]
@@ -65,8 +68,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
-            .Callback<JsonWebToken>(t => capturedToken = t)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
@@ -81,8 +84,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
-            .Callback<JsonWebToken>(t => capturedToken = t)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
@@ -96,8 +99,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
-            .Callback<JsonWebToken>(t => capturedToken = t)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         var expiresIn = TimeSpan.FromDays(30);
@@ -115,8 +118,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
-            .Callback<JsonWebToken>(t => capturedToken = t)
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, expiresIn: null);
@@ -129,7 +132,7 @@ public class InitialAccessTokenServiceTests
     public async Task IssueTokenAsync_ShouldReturnFormattedJwt()
     {
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>()))
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("eyJhbGciOiJSUzI1NiJ9.test.signature");
 
         var result = await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));

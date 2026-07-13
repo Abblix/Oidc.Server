@@ -33,6 +33,13 @@ public interface IJsonWebTokenCreator
 	IEnumerable<string> SignedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values, e.g. "RSA-OAEP-256") supported for
+	/// encrypting a JWT on creation. The symmetric counterpart of <see cref="SignedResponseAlgorithmsSupported"/>,
+	/// projected from the registered encryptors.
+	/// </summary>
+	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
+
+	/// <summary>
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.
 	/// </summary>
 	/// <param name="token">The JsonWebToken object containing the payload of the JWT.</param>

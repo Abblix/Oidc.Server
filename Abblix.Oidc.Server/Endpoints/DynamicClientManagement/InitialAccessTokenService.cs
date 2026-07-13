@@ -21,11 +21,13 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -34,17 +36,21 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class InitialAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    IIssuerProvider issuerProvider) : IInitialAccessTokenService
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options) : IInitialAccessTokenService
 {
     /// <inheritdoc />
     public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
     {
+        var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
+
         var token = new JsonWebToken
         {
             Header =
             {
                 Type = JwtTypes.InitialAccessToken,
-                Algorithm = SigningAlgorithms.RS256,
+                Algorithm = signing.Algorithm,
+                KeyId = signing.KeyId,
             },
             Payload =
             {
@@ -57,6 +63,7 @@ public class InitialAccessTokenService(
             },
         };
 
-        return serviceJwtFormatter.FormatAsync(token);
+        return serviceJwtFormatter.FormatAsync(
+            token, ServiceJwtEncryption.ForInitialAccessToken(options.Value));
     }
 }
