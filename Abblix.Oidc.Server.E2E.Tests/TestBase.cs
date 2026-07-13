@@ -139,6 +139,39 @@ public abstract class TestBase(TestFactory factory)
         return parsed;
     }
 
+    /// <summary>
+    /// Drives a plain auth-code flow with <c>offline_access</c> for the confidential test client and
+    /// returns the parsed token response — its <c>refresh_token</c> is the first member of a fresh
+    /// family. Shared by the refresh-token rotation and tampering scenarios so the flow lives in one place.
+    /// </summary>
+    protected static async Task<JsonObject> ObtainConfidentialOfflineTokensAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}",
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+
+        return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+    }
+
     protected static JsonObject DecodeJwtPayload(string jwt)
     {
         var parts = jwt.Split('.');

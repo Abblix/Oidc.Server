@@ -84,6 +84,19 @@ builder.Services.AddOidcServices(options =>
             AllowedResponseTypes = [[ResponseTypes.None]],
             PkceRequired = false,
         },
+
+        // Client that opts in to the per-client response-mode allow-list, pinned to form_post, used to
+        // prove the response-mode downgrade backstop end to end: query/fragment (and an omitted
+        // response_mode that inherits the query default) are rejected, form_post is accepted.
+        new ClientInfo(TestConstants.ResponseModePinnedClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            RedirectUris = [redirect],
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            AllowedResponseModes = [ResponseModes.FormPost],
+        },
     ];
 
     // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted

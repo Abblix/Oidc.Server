@@ -63,6 +63,11 @@ public static class TestConstants
     /// returns no code or token — only state and iss.</summary>
     public const string NoneResponseTypeClientId = "e2e-none-response-type";
 
+    /// <summary>Client that opts in to the per-client <c>AllowedResponseModes</c> allow-list, pinned to
+    /// form_post: the response-mode downgrade backstop rejects a crafted request naming query or fragment
+    /// (and one that omits response_mode to inherit the query default). Drives the response-mode restriction E2E.</summary>
+    public const string ResponseModePinnedClientId = "e2e-response-mode-pinned";
+
     /// <summary>Shared secret across every pre-seeded client.</summary>
     public const string ConfidentialClientSecret = "e2e-secret";
 

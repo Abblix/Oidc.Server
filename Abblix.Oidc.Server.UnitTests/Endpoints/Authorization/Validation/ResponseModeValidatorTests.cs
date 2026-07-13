@@ -58,7 +58,9 @@ public class ResponseModeValidatorTests
     /// </summary>
     private static AuthorizationValidationContext CreateContext(
         FlowTypes flowType,
-        string? responseMode = null)
+        string? responseMode = null,
+        string[]? allowedResponseModes = null,
+        string defaultResponseMode = ResponseModes.Query)
     {
         var request = new AuthorizationRequest
         {
@@ -69,13 +71,19 @@ public class ResponseModeValidatorTests
             ResponseMode = responseMode,
         };
 
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            AllowedResponseModes = allowedResponseModes,
+        };
 
         var context = new AuthorizationValidationContext(request)
         {
             ClientInfo = clientInfo,
             FlowType = flowType,
-            ResponseMode = ResponseModes.Query, // Default
+            // In the real pipeline FlowTypeValidator sets this to the flow default before
+            // ResponseModeValidator runs; the tests reproduce that so the effective-mode check
+            // (which reads context.ResponseMode when response_mode is omitted) sees the same value.
+            ResponseMode = defaultResponseMode,
         };
 
         return context;
@@ -562,5 +570,164 @@ public class ResponseModeValidatorTests
         // No trimming, so "query " != "query"
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies that an explicitly requested mode within the client's AllowedResponseModes list succeeds.
+    /// The per-client allow-list permits exactly the pinned mode and nothing else.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientAllowsMode_RequestUsesIt_ShouldSucceed()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: ResponseModes.FormPost,
+            allowedResponseModes: [ResponseModes.FormPost]);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(ResponseModes.FormPost, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// Verifies that an explicitly requested mode outside the client's AllowedResponseModes list is rejected,
+    /// even though it is compatible with the flow. This is the response-mode downgrade backstop: a client
+    /// pinned to form_post cannot be driven with fragment on a crafted authorization request.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseModes.Fragment)]
+    [InlineData(ResponseModes.Query)]
+    public async Task ValidateAsync_ClientPinnedToFormPost_RequestsAnotherMode_ShouldReturnError(string requested)
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: requested,
+            allowedResponseModes: [ResponseModes.FormPost]);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies that omitting response_mode does not bypass the per-client restriction. A client pinned to
+    /// form_post that receives a request with no response_mode would otherwise inherit the flow default (query);
+    /// the effective-mode check rejects it, closing the omission variant of the downgrade.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientPinnedToFormPost_RequestOmitsResponseMode_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: null,
+            allowedResponseModes: [ResponseModes.FormPost],
+            defaultResponseMode: ResponseModes.Query);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// Verifies that omitting response_mode succeeds when the flow default is itself in the client's list.
+    /// The effective-mode check permits the inherited default when the host allows it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientAllowsDefault_RequestOmitsResponseMode_ShouldSucceed()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: null,
+            allowedResponseModes: [ResponseModes.Query, ResponseModes.FormPost],
+            defaultResponseMode: ResponseModes.Query);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(ResponseModes.Query, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// Verifies that a null AllowedResponseModes imposes no restriction (backward-compatible default).
+    /// Flow-only validation applies, so query remains valid for the code flow.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientAllowedModesNull_ShouldImposeNoRestriction()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: ResponseModes.Query,
+            allowedResponseModes: null);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(ResponseModes.Query, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// Verifies that an empty AllowedResponseModes list is treated as unset (no restriction), so it never
+    /// bricks a client by permitting nothing.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientAllowedModesEmpty_ShouldImposeNoRestriction()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: ResponseModes.Query,
+            allowedResponseModes: []);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(ResponseModes.Query, context.ResponseMode);
+    }
+
+    /// <summary>
+    /// Verifies that a mode rejected by the per-client allow-list is logged as a warning, mirroring the
+    /// existing flow-incompatibility logging for security monitoring.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ModeRejectedByClientList_ShouldLogWarning()
+    {
+        // Arrange
+        var context = CreateContext(
+            FlowTypes.AuthorizationCode,
+            responseMode: ResponseModes.Fragment,
+            allowedResponseModes: [ResponseModes.FormPost]);
+
+        // Act
+        await _validator.ValidateAsync(context);
+
+        // Assert
+        _logger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("not allowed for the client")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 }
