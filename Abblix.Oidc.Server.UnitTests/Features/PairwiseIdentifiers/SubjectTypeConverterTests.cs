@@ -54,7 +54,7 @@ public class SubjectTypeConverterTests
 
     /// <summary>
     /// OIDC Core §8.1: without an explicit sector identifier the sector is the host component of
-    /// the registered redirect_uri — two statically configured clients of the same sector must
+    /// the registered redirect_uri - two statically configured clients of the same sector must
     /// derive the same pairwise subject. The previous client_id fallback broke exactly this.
     /// </summary>
     [Fact]
@@ -86,7 +86,7 @@ public class SubjectTypeConverterTests
     /// <summary>
     /// Custom-scheme redirect URIs of native clients (RFC 8252 §7.1) carry no meaningful host:
     /// the single-slash form parses with an empty Host, and the authority form puts an arbitrary
-    /// path-like segment there — either would merge unrelated clients into one shared sector,
+    /// path-like segment there - either would merge unrelated clients into one shared sector,
     /// giving them identical pairwise subjects and defeating the isolation pairwise subject
     /// types exist to provide (OIDC Core §8.1). The client_id fallback applies instead.
     /// </summary>
@@ -103,7 +103,7 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// Different sectors must produce unlinkable identifiers for the same subject — the core
+    /// Different sectors must produce unlinkable identifiers for the same subject - the core
     /// privacy property of pairwise subject types.
     /// </summary>
     [Fact]
@@ -189,5 +189,118 @@ public class SubjectTypeConverterTests
         var pairwise = converter.Convert(Subject, sealingClient);
 
         Assert.Throws<InvalidOperationException>(() => converter.Recover(pairwise, otherSectorClient));
+    }
+
+    /// <summary>
+    /// A public client's subject is not transformed: Convert returns it unchanged, so the client sees the real
+    /// subject (OIDC Core §8, the public subject type).
+    /// </summary>
+    [Fact]
+    public void Convert_PublicClient_ReturnsSubjectUnchanged()
+    {
+        var converter = CreateConverter();
+        var client = new ClientInfo("client-pub") { SubjectType = SubjectTypes.Public };
+
+        Assert.Equal(Subject, converter.Convert(Subject, client));
+    }
+
+    /// <summary>
+    /// A public client's subject passes through on the way back too: Recover returns it unchanged, since a public
+    /// subject is never sealed.
+    /// </summary>
+    [Fact]
+    public void Recover_PublicClient_ReturnsSubjectUnchanged()
+    {
+        var converter = CreateConverter();
+        var client = new ClientInfo("client-pub") { SubjectType = SubjectTypes.Public };
+
+        Assert.Equal(Subject, converter.Recover(Subject, client));
+    }
+
+    /// <summary>
+    /// The subject is part of the seal, not ignored: two different users in the same sector get different pairwise
+    /// identifiers, so a sector cannot conflate two accounts into one.
+    /// </summary>
+    [Fact]
+    public void Convert_DifferentSubjects_SameSector_ProduceDifferentSubjects()
+    {
+        var converter = CreateConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+
+        Assert.NotEqual(converter.Convert("user-one", client), converter.Convert("user-two", client));
+    }
+
+    /// <summary>
+    /// Pairwise identifiers require configuration: a converter built without pairwise settings fails loudly when a
+    /// pairwise client asks to seal a subject, rather than silently leaking the real subject.
+    /// </summary>
+    [Fact]
+    public void Convert_PairwiseWithoutSettings_Throws()
+    {
+        var converter = new SubjectTypeConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+
+        Assert.Throws<InvalidOperationException>(() => converter.Convert(Subject, client));
+    }
+
+    /// <summary>
+    /// The same fail-loud guard covers the reverse direction: a converter without pairwise settings cannot open a
+    /// pairwise identifier and throws instead of returning a wrong subject.
+    /// </summary>
+    [Fact]
+    public void Recover_PairwiseWithoutSettings_Throws()
+    {
+        var configured = CreateConverter();
+        var unconfigured = new SubjectTypeConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+        var pairwise = configured.Convert(Subject, client);
+
+        Assert.Throws<InvalidOperationException>(() => unconfigured.Recover(pairwise, client));
+    }
+
+    /// <summary>
+    /// The identifier is stable across converter instances sharing the salt, not tied to one process: a pseudonym
+    /// sealed by one instance is reproduced and opened by another, so pairwise identifiers survive a restart and work
+    /// on a stateless server farm.
+    /// </summary>
+    [Fact]
+    public void ConvertAndRecover_AreStableAcrossInstances_WithSameSalt()
+    {
+        var instanceA = CreateConverter();
+        var instanceB = CreateConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+
+        var sealedByA = instanceA.Convert(Subject, client);
+
+        Assert.Equal(sealedByA, instanceB.Convert(Subject, client));
+        Assert.Equal(Subject, instanceB.Recover(sealedByA, client));
+    }
+
+    /// <summary>
+    /// A syntactically invalid pseudonym (not even valid base64url) is rejected loudly rather than mis-parsed into a
+    /// bogus subject.
+    /// </summary>
+    [Fact]
+    public void Recover_MalformedPseudonym_Throws()
+    {
+        var converter = CreateConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+
+        Assert.Throws<InvalidOperationException>(() => converter.Recover("not valid base64url!!", client));
+    }
+
+    /// <summary>
+    /// The last-resort sector fallback is the client id: two clients with neither a sector_identifier nor any
+    /// redirect URIs (for example client_credentials-only clients) stay isolated, each sealing the same subject to a
+    /// different value.
+    /// </summary>
+    [Fact]
+    public void Convert_NoSectorIdentifierNoRedirectUris_FallsBackToClientId()
+    {
+        var converter = CreateConverter();
+        var clientA = CreatePairwiseClient("client-a");
+        var clientB = CreatePairwiseClient("client-b");
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
 }
