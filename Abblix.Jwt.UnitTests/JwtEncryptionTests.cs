@@ -281,7 +281,9 @@ public class JwtEncryptionTests
 
         var encryptor = provider.GetRequiredService<IJsonWebTokenEncryptor>();
         var result = await encryptor.DecryptAsync(
-            jwtParts, new JsonWebKey[] { encKey }.ToAsyncEnumerable());
+            jwtParts,
+            new JsonWebKey[] { encKey }.ToAsyncEnumerable(),
+            TestContext.Current.CancellationToken);
 
         // The content decryptor must run on a correct-length CEK (32 bytes for A256GCM), not on the
         // 5-byte value RSA1_5 decrypted — otherwise the fast length-fail leaks PKCS1 padding validity.

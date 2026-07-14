@@ -1,3 +1,25 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -5,33 +27,44 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Defines the contract for JSON Web Encryption (JWE) token encryption and decryption services.
 /// </summary>
-internal interface IJsonWebTokenEncryptor
+/// <remarks>
+/// The payload is exchanged as bytes rather than a string: the CEK protects arbitrary octets, and a
+/// later feature encrypts a binary (non-text) payload, so a byte contract fits every caller while a
+/// JWS-wrapping caller does the trivial UTF-8 conversion. Encryption is asynchronous and cancellable so
+/// key management (unwrap/agree) can be served by an external key custodian over a network round-trip;
+/// the in-process path completes synchronously inside the task.
+/// </remarks>
+public interface IJsonWebTokenEncryptor
 {
     /// <summary>
-    /// Encrypts an inner JWS token to create a JWE token.
+    /// Encrypts a plaintext payload (typically an inner JWS) into a JWE token.
     /// Implements RFC 7516 (JWE) encryption.
     /// </summary>
-    /// <param name="innerJws">The inner JWS token to encrypt.</param>
+    /// <param name="plaintext">The bytes to encrypt; a JWS-wrapping caller UTF-8 encodes the inner JWS.</param>
     /// <param name="encryptionKey">The JSON Web Key to use for encryption.</param>
     /// <param name="tokenType">The token type to set in the JWE header.</param>
-    /// <param name="keyEncryptionAlgorithm">The key encryption algorithm (e.g., RSA-OAEP-256).</param>
-    /// <param name="contentEncryptionAlgorithm">The content encryption algorithm (e.g., A256CBC-HS512).</param>
+    /// <param name="keyEncryptionAlgorithm">The key encryption algorithm (e.g. RSA-OAEP-256).</param>
+    /// <param name="contentEncryptionAlgorithm">The content encryption algorithm (e.g. A256CBC-HS512).</param>
+    /// <param name="cancellationToken">Cancels a network-backed external key-management round-trip.</param>
     /// <returns>The JWE compact serialization string.</returns>
-    string Encrypt(
-        string innerJws,
+    Task<string> EncryptAsync(
+        byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
         string keyEncryptionAlgorithm,
-        string contentEncryptionAlgorithm);
+        string contentEncryptionAlgorithm,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Validates and decrypts JWE tokens.
+    /// Validates and decrypts a JWE token.
     /// Implements RFC 7516 (JWE) decryption.
     /// </summary>
     /// <param name="jwtParts">The base64url-encoded JWE string parts.</param>
     /// <param name="decryptionKeys">The decryption keys to try.</param>
-    /// <returns>A result containing either the decrypted JWT string or a validation error.</returns>
-    Task<Result<string, JwtValidationError>> DecryptAsync(
+    /// <param name="cancellationToken">Cancels enumeration of the decryption-key source and any external unwrap.</param>
+    /// <returns>A result containing either the decrypted plaintext bytes or a validation error.</returns>
+    Task<Result<byte[], JwtValidationError>> DecryptAsync(
         string[] jwtParts,
-        IAsyncEnumerable<JsonWebKey> decryptionKeys);
+        IAsyncEnumerable<JsonWebKey> decryptionKeys,
+        CancellationToken cancellationToken = default);
 }

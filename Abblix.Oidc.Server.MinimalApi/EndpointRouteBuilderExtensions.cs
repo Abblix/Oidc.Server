@@ -467,7 +467,7 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     private static async Task<IResult> KeysAsync(IAuthServiceKeysProvider serviceKeysProvider)
     {
-        var keys = await serviceKeysProvider.GetSigningKeys().ToArrayAsync();
+        var keys = await serviceKeysProvider.GetPublishedKeysAsync();
         return Results.Json(new JsonWebKeySet(keys));
     }
 }

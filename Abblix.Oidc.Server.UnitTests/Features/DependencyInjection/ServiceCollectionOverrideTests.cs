@@ -30,6 +30,7 @@ using Abblix.Jwt.Encryption;
 using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -76,6 +77,39 @@ public class ServiceCollectionOverrideTests
 
         Assert.Single(descriptors);
         Assert.Same(stub, descriptors[0].ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddAuthServiceJwt_HostPreregisteredKeysStore_Wins()
+    {
+        // The write-role store is segregated from the reader; a host that persists keys elsewhere
+        // registers its own, and the library's fail-loud default must not shadow it.
+        var services = new ServiceCollection();
+        var stub = new Mock<IAuthServiceKeysStore>().Object;
+        services.AddSingleton<IAuthServiceKeysStore>(stub);
+
+        services.AddAuthServiceJwt();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthServiceKeysStore));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public async Task DefaultKeysStore_AddAsync_FailsLoud()
+    {
+        // With no persistent store registered, the default cannot save a generated key and must fail
+        // clearly rather than dropping it silently.
+        var services = new ServiceCollection();
+        services.AddAuthServiceJwt();
+        await using var provider = services.BuildServiceProvider();
+
+        var store = provider.GetRequiredService<IAuthServiceKeysStore>();
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var descriptor = new AuthServiceKeyDescriptor(
+            key, KeyLifecycleStatus.Active, DateTimeOffset.MinValue, DateTimeOffset.MaxValue, DateTimeOffset.MaxValue);
+
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => store.AddAsync(descriptor, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -296,6 +330,35 @@ public class ServiceCollectionOverrideTests
         services.AddJsonWebTokens();
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenCreator));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostPreregisteredSigner_Wins()
+    {
+        // The signing orchestrator is part of the public JWT surface; a host that fronts an external
+        // key custodian may replace it wholesale. The library's TryAdd default must not shadow it.
+        var services = new ServiceCollection();
+        var stub = new Mock<IJsonWebTokenSigner>().Object;
+        services.AddSingleton(stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenSigner));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostPreregisteredEncryptor_Wins()
+    {
+        // Symmetric with the signer: the encryption orchestrator is public and host-replaceable.
+        var services = new ServiceCollection();
+        var stub = new Mock<IJsonWebTokenEncryptor>().Object;
+        services.AddSingleton(stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenEncryptor));
         Assert.Same(stub, descriptor.ImplementationInstance);
     }
 

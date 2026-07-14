@@ -105,7 +105,7 @@ public sealed class DiscoveryController : ControllerBase
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider)
 	{
-		var keys = await serviceKeysProvider.GetSigningKeys().ToArrayAsync();
+		var keys = await serviceKeysProvider.GetPublishedKeysAsync();
 		return new JsonWebKeySet(keys);
 	}
 }
