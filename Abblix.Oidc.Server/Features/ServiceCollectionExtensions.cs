@@ -352,6 +352,13 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>();
+
+        // The write-role counterpart to the reader above. The default is the read-only static
+        // configuration that fails loud if asked to persist a generated key; a persistent store (shipped
+        // with key generation and rotation) replaces it host-first via TryAdd. It is segregated from the
+        // reader (ISP), so read-only consumers never depend on persistence.
+        services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
+
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
         return services;
