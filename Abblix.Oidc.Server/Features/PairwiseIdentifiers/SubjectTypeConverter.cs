@@ -47,9 +47,15 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// </summary>
     /// <param name="settings">The pairwise salt and hash, or null when pairwise identifiers are not configured.</param>
     public SubjectTypeConverter(PairwiseSubjectSettings? settings = null)
-        => _encryptor = settings is null
-            ? null
-            : new DeterministicAeadEncryptor(settings.HashAlgorithm, System.Convert.FromBase64String(settings.Salt));
+    {
+        _encryptor = settings switch
+        {
+            { HashAlgorithm: var algorithm, Salt: {} salt }
+                => new DeterministicAeadEncryptor(algorithm, System.Convert.FromBase64String(salt)),
+
+            _ => null,
+        };
+    }
 
     /// <summary>
     /// The two OIDC Core Section 8 subject types this converter implements: <c>public</c> (passes the local
@@ -132,7 +138,7 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// </remarks>
     private static byte[] Sector(ClientInfo clientInfo)
     {
-        var redirectUri = clientInfo.RedirectUris?.FirstOrDefault();
+        var redirectUri = clientInfo.RedirectUris.FirstOrDefault();
         var redirectHost =
             redirectUri != null &&
             (redirectUri.Scheme == Uri.UriSchemeHttp || redirectUri.Scheme == Uri.UriSchemeHttps)
