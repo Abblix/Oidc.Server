@@ -174,6 +174,14 @@ public static class JwtClaimTypes
     public const string Subject = IanaClaimTypes.Sub;
 
     /// <summary>
+    /// The 'psub' (protected subject) claim is an Abblix private claim carrying the real subject in a
+    /// server-only, reversible protected form. It is used on tokens whose <c>sub</c> is a pairwise pseudonym,
+    /// so the authorization server can recover the real subject while third parties see only the pseudonym.
+    /// It is opaque to any party but the issuing server and is stripped from outward-facing responses.
+    /// </summary>
+    public const string ProtectedSubject = "psub";
+
+    /// <summary>
     /// The 'sid' (session ID) claim identifies the session to which the JWT is linked.
     /// Useful for maintaining state between the client and the issuer.
     /// </summary>

@@ -119,6 +119,16 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
+	/// The protected subject ('psub'): the real subject in a server-only, reversible protected form, present on
+	/// tokens whose <see cref="Subject"/> is a pairwise pseudonym. Opaque to every party but the issuing server.
+	/// </summary>
+	public string? ProtectedSubject
+	{
+		get => Json.GetProperty<string>(JwtClaimTypes.ProtectedSubject);
+		set => Json.SetProperty(JwtClaimTypes.ProtectedSubject, value);
+	}
+
+	/// <summary>
 	/// The session ID associated with the JWT, typically used to manage session state across applications.
 	/// </summary>
 	/// <remarks>
