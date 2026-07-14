@@ -149,6 +149,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
 
+        // Fail loud at startup when a configured external key (no private material) has no host port to serve
+        // it, or names an algorithm with no external form, instead of failing at the first sign or decrypt.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ExternalKeyWiringValidator>());
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) — same host-first contract as TryAdd* seams.
         return services
@@ -347,6 +352,13 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>();
+
+        // The write-role counterpart to the reader above. The default is the read-only static
+        // configuration that fails loud if asked to persist a generated key; a persistent store (shipped
+        // with key generation and rotation) replaces it host-first via TryAdd. It is segregated from the
+        // reader (ISP), so read-only consumers never depend on persistence.
+        services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
+
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
         return services;

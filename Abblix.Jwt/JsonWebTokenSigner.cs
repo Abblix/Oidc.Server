@@ -13,20 +13,30 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Handles signing and signature verification of JSON Web Signature (JWS) tokens.
 /// </summary>
-/// <param name="serviceProvider">The service provider for resolving signers by algorithm.</param>
+/// <param name="serviceProvider">The service provider for resolving the keyed signature primitives
+/// (<see cref="IDataSigner{TJsonWebKey}"/>) by algorithm, for both signing and verification.</param>
+/// <param name="externalSigner">Optional host port that signs with an external key custodian (HSM/KMS/
+/// vault) when a signing key is published public-only. Absent (null) means no external signing keys - the
+/// optional dependency defaults to null, so the container passes null when the host registers no port.</param>
 /// <param name="logger">Records signature-verification outcomes as structured events. The
 /// caller-facing <see cref="JwtValidationError"/> carries a human-readable description, but
 /// FAPI 2.0 audit-logging requires a granular event-type on every key-resolution failure
 /// (kid mismatch vs. empty issuer JWKS) so a SOC operator can tell a key-rotation incident
 /// from a misconfigured issuer without parsing free-form text.</param>
-internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IServiceProvider serviceProvider) : IJsonWebTokenSigner
+internal partial class JsonWebTokenSigner(
+    ILogger<JsonWebTokenSigner> logger,
+    IServiceProvider serviceProvider,
+    IExternalSigner? externalSigner = null) : IJsonWebTokenSigner
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
 
     /// <summary>
     /// Creates a signed JSON Web Signature (JWS) token.
     /// </summary>
-    public string Sign(JsonWebToken token, JsonWebKey? signingKey)
+    public async Task<string> SignAsync(
+        JsonWebToken token,
+        JsonWebKey? signingKey,
+        CancellationToken cancellationToken = default)
     {
         var headerAlgorithm = token.Header.Algorithm;
 
@@ -66,32 +76,57 @@ internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IS
         token.Header.Algorithm = algorithm;
         token.Header.KeyId = signingKey.KeyId;
 
-        // Validate that signing key contains private key material
-        if (!signingKey.HasPrivateKey)
-        {
-            throw new InvalidOperationException(
-                $"Signing operation requires private key material, but key (kid={signingKey.KeyId}) contains only public key data.");
-        }
-
         // Encode header and payload
         var signingInput = $"{EncodeJson(token.Header.Json)}.{EncodeJson(token.Payload.Json)}";
-
-        // Create signature
         var signingBytes = Encoding.UTF8.GetBytes(signingInput);
-        var signature = signingKey switch
+
+        // Sign with the private half in process when present; otherwise route to the external key custodian
+        // by kid (the absence of private material, not a flag, selects the remote path); fail closed when a
+        // public-only key has no external signer.
+        var signature = await SignBytesAsync(signingKey, algorithm, signingBytes, cancellationToken);
+
+        return $"{signingInput}.{Base64Url.EncodeToString(signature)}";
+    }
+
+    /// <summary>
+    /// Produces the signature bytes: in process with the keyed <see cref="IDataSigner{TJsonWebKey}"/> when
+    /// the key carries private material, via the external custodian by kid when it does not, else fail closed.
+    /// </summary>
+    private ValueTask<byte[]> SignBytesAsync(
+        JsonWebKey signingKey,
+        string algorithm,
+        byte[] data,
+        CancellationToken cancellationToken)
+    {
+        if (signingKey.HasPrivateKey)
+            return new ValueTask<byte[]>(SignLocally(signingKey));
+
+        if (externalSigner != null)
+        {
+            // The kid published in the token and JWKS IS the custodian's handle - no separate identifier
+            // and no mapping - so an external key must carry one.
+            var kid = signingKey.KeyId ?? throw new InvalidOperationException(
+                "An external signing key must carry a 'kid': it is the key custodian's handle.");
+
+            return externalSigner.SignAsync(kid, algorithm, data, cancellationToken);
+        }
+
+        throw new InvalidOperationException(
+            $"Signing requires private key material for key (kid={signingKey.KeyId}); it carries none " +
+            "and no external signer is configured.");
+
+        byte[] SignLocally(JsonWebKey key) => key switch
         {
             RsaJsonWebKey rsaKey => SignBy(rsaKey),
             EllipticCurveJsonWebKey ecKey => SignBy(ecKey),
             OctetJsonWebKey octetKey => SignBy(octetKey),
-            _ => throw new InvalidOperationException($"No signer registered for key type: {signingKey.GetType().Name}")
+            _ => throw new InvalidOperationException($"No signer registered for key type: {key.GetType().Name}"),
         };
-
-        return $"{signingInput}.{Base64Url.EncodeToString(signature)}";
 
         byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
             var dataSigner = serviceProvider.GetRequiredKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
-            return dataSigner.Sign(jwk, signingBytes);
+            return dataSigner.Sign(jwk, data);
         }
     }
 
@@ -110,7 +145,8 @@ internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IS
     public async Task<JwtValidationError?> ValidateAsync(
         string[] jwt,
         JsonWebTokenHeader header,
-        IAsyncEnumerable<JsonWebKey> signingKeys)
+        IAsyncEnumerable<JsonWebKey> signingKeys,
+        CancellationToken cancellationToken = default)
     {
         // Per RFC 7515 Section 4.1.1, 'alg' parameter in JWT header is REQUIRED
         var algorithm = header.Algorithm;
@@ -123,7 +159,7 @@ internal partial class JsonWebTokenSigner(ILogger<JsonWebTokenSigner> logger, IS
         // foreach level. JWKS responses are bounded (typically 1-3 keys), so materializing
         // is cheap; lazy-streaming would only matter for hosts that fan out per-issuer to
         // unbounded sources, which is not a supported pattern.
-        var allKeys = await signingKeys.ToArrayAsync();
+        var allKeys = await signingKeys.ToArrayAsync(cancellationToken);
 
         var keyId = header.KeyId;
         if (allKeys.Length == 0)

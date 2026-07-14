@@ -20,11 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Buffers.Binary;
-using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,14 +35,12 @@ namespace Abblix.Jwt.Encryption;
 /// (ECDH-ES+A128KW/A192KW/A256KW), where the derived key wraps a random CEK per RFC 3394.
 /// </summary>
 /// <remarks>
-/// The Concat KDF (NIST SP 800-56A §5.8.1) runs entirely inside the platform crypto provider:
-/// <see cref="ECDiffieHellman.DeriveKeyFromHash(ECDiffieHellmanPublicKey, HashAlgorithmName, byte[], byte[])"/>
-/// computes exactly Hash(prepend || Z || append),
-/// which is one KDF round when prepend is the 32-bit big-endian round counter and append is the
-/// JOSE OtherInfo (AlgorithmID || PartyUInfo || PartyVInfo || SuppPubInfo). The shared secret Z
-/// never leaves the provider. CEKs longer than one SHA-256 output take additional rounds with
-/// incremented counters. Supports the NIST curves P-256, P-384 and P-521 — the set the platform
-/// <see cref="ECDiffieHellman"/> covers.
+/// The ephemeral-static agreement yields the raw shared secret Z, on which the Concat KDF
+/// (NIST SP 800-56A §5.8.1, JOSE OtherInfo per RFC 7518 §4.6.2) is run by
+/// <see cref="ConcatKeyDerivation"/>. Expressing the KDF over a raw Z, rather than fusing it with the
+/// agreement, is what lets the identical derivation serve the external-custodian path, where an HSM/KMS
+/// performs the agreement and returns Z. Supports the NIST curves P-256, P-384 and P-521 — the set the
+/// platform <see cref="ECDiffieHellman"/> covers.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
 internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serviceProvider)
@@ -228,13 +223,13 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	}
 
 	/// <summary>
-	/// The Concat KDF (NIST SP 800-56A §5.8.1) with SHA-256, computed natively:
-	/// each round is <c>SHA256(counter || Z || OtherInfo)</c> via
-	/// <see cref="ECDiffieHellman.DeriveKeyFromHash(ECDiffieHellmanPublicKey, HashAlgorithmName, byte[], byte[])"/>
-	/// with the big-endian round counter as
-	/// secretPrepend and the JOSE OtherInfo as secretAppend, so the shared secret Z never leaves
-	/// the crypto provider. Multiple rounds cover derived keys longer than one hash output
-	/// (e.g. 512-bit CEKs for A256CBC-HS512 under Direct Key Agreement).
+	/// Materialises the raw ECDH shared secret Z between the two parties and runs the Concat KDF on it
+	/// via <see cref="ConcatKeyDerivation"/>. The agreement is the only step that touches the private key;
+	/// expressing the KDF over a raw Z lets the exact same derivation serve the external-custodian path,
+	/// where an HSM performs the agreement and returns Z. <see cref="ECDiffieHellman.DeriveRawSecretAgreement"/>
+	/// yields the same Z that <see cref="ECDiffieHellman.DeriveKeyFromHash(ECDiffieHellmanPublicKey,HashAlgorithmName,byte[],byte[])"/>
+	/// would hash internally, so the derived key is byte-identical to the previous fused implementation
+	/// (pinned by the ECDH-ES known-answer vector).
 	/// </summary>
 	private static byte[] DeriveKey(
 		ECDiffieHellman privateParty,
@@ -244,55 +239,16 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		string? apv,
 		int keySizeInBytes)
 	{
-		var otherInfo = BuildOtherInfo(algorithmId, apu, apv, keySizeInBytes);
-
-		var derivedKey = new byte[keySizeInBytes];
-		var counter = new byte[sizeof(uint)];
-
-		for (var offset = 0; offset < keySizeInBytes; offset += SHA256.HashSizeInBytes)
+		// Z is the raw ECDH shared secret named by NIST SP 800-56A and RFC 7518 §4.6.
+		// DeriveRawSecretAgreement yields exactly what the fused DeriveKeyFromHash would hash internally.
+		var sharedSecretZ = privateParty.DeriveRawSecretAgreement(publicParty);
+		try
 		{
-			BinaryPrimitives.WriteUInt32BigEndian(counter, (uint)(offset / SHA256.HashSizeInBytes) + 1);
-
-			var round = privateParty.DeriveKeyFromHash(publicParty, HashAlgorithmName.SHA256, counter, otherInfo);
-			round.AsSpan(0, Math.Min(round.Length, keySizeInBytes - offset)).CopyTo(derivedKey.AsSpan(offset));
-			CryptographicOperations.ZeroMemory(round);
+			return ConcatKeyDerivation.DeriveKey(sharedSecretZ, algorithmId, apu, apv, keySizeInBytes);
 		}
-
-		return derivedKey;
-	}
-
-	/// <summary>
-	/// Builds the Concat KDF OtherInfo per RFC 7518 §4.6.2:
-	/// AlgorithmID || PartyUInfo || PartyVInfo || SuppPubInfo, where the first three are 32-bit
-	/// big-endian length-prefixed octet strings (the ASCII algorithm identifier and the
-	/// base64url-decoded 'apu'/'apv' values, empty when absent) and SuppPubInfo is the derived
-	/// key length in bits as a 32-bit big-endian integer. SuppPrivInfo is the empty octet sequence.
-	/// </summary>
-	private static byte[] BuildOtherInfo(string algorithmId, string? apu, string? apv, int keySizeInBytes)
-	{
-		var algorithmIdBytes = Encoding.ASCII.GetBytes(algorithmId);
-		var partyUInfo = apu is null ? [] : Base64Url.DecodeFromChars(apu);
-		var partyVInfo = apv is null ? [] : Base64Url.DecodeFromChars(apv);
-
-		var otherInfo = new byte[
-			sizeof(uint) + algorithmIdBytes.Length +
-			sizeof(uint) + partyUInfo.Length +
-			sizeof(uint) + partyVInfo.Length +
-			sizeof(uint)];
-
-		var span = otherInfo.AsSpan();
-		WriteLengthPrefixed(ref span, algorithmIdBytes);
-		WriteLengthPrefixed(ref span, partyUInfo);
-		WriteLengthPrefixed(ref span, partyVInfo);
-		BinaryPrimitives.WriteUInt32BigEndian(span, (uint)keySizeInBytes * 8);
-
-		return otherInfo;
-	}
-
-	private static void WriteLengthPrefixed(ref Span<byte> destination, byte[] data)
-	{
-		BinaryPrimitives.WriteUInt32BigEndian(destination, (uint)data.Length);
-		data.CopyTo(destination[sizeof(uint)..]);
-		destination = destination[(sizeof(uint) + data.Length)..];
+		finally
+		{
+			CryptographicOperations.ZeroMemory(sharedSecretZ);
+		}
 	}
 }

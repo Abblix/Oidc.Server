@@ -47,7 +47,7 @@ internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthSer
 	{
 		var jsonWebKeys =
 			from jwk in options.Value.EncryptionKeys
-			select jwk.Sanitize(includePrivateKeys);
+			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
 	}
@@ -61,8 +61,22 @@ internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthSer
 	{
 		var jsonWebKeys =
 			from jwk in options.Value.SigningKeys
-			select jwk.Sanitize(includePrivateKeys);
+			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
 	}
+
+	/// <summary>
+	/// Sanitizes a configured key, tolerating an external (public-only) key when private keys are asked for.
+	/// </summary>
+	/// <remarks>
+	/// An external key is published public-only: its secret half lives in an external custodian, so the
+	/// key carries no private material. A caller asking for private keys (<paramref name="includePrivateKeys"/>
+	/// is true) to sign or decrypt must then receive the public-only key rather than an exception, because
+	/// the private operation is routed to the external port downstream. <see cref="JsonWebKey.Sanitize"/>
+	/// throws when there is nothing private to include, so the request is downgraded to public-only exactly
+	/// for a key that has no private material; a local key with private material is served unchanged.
+	/// </remarks>
+	private static JsonWebKey SanitizeAllowingPublicOnly(JsonWebKey jwk, bool includePrivateKeys)
+		=> jwk.Sanitize(includePrivateKeys && jwk.HasPrivateKey);
 }
