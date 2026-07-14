@@ -93,7 +93,10 @@ internal partial class JsonWebTokenSigner(
     /// the key carries private material, via the external custodian by kid when it does not, else fail closed.
     /// </summary>
     private ValueTask<byte[]> SignBytesAsync(
-        JsonWebKey signingKey, string algorithm, byte[] data, CancellationToken cancellationToken)
+        JsonWebKey signingKey,
+        string algorithm,
+        byte[] data,
+        CancellationToken cancellationToken)
     {
         if (signingKey.HasPrivateKey)
             return new ValueTask<byte[]>(SignLocally(signingKey));

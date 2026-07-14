@@ -56,7 +56,11 @@ internal class JsonWebTokenEncryptor(
         // ephemeral-static agreement. Either step may add algorithm parameters to the header ('epk' for
         // ECDH-ES, 'iv'/'tag' for AES-GCM key wrap, 'p2s'/'p2c' for PBES2).
         var (cek, encryptedKey) = await EncryptKeyAsync(
-            header, encryptionKey, keyEncryptionAlgorithm, contentEncryptor.KeySizeInBytes, cancellationToken);
+            header,
+            encryptionKey,
+            keyEncryptionAlgorithm,
+            contentEncryptor.KeySizeInBytes,
+            cancellationToken);
 
         // Encode header AFTER key encryption (in case it was modified)
         var headerEncoded = EncodeJson(header.Json);
@@ -282,6 +286,7 @@ internal class JsonWebTokenEncryptor(
             // type, mirroring the keyed-DI validation the in-process path gets for free.
             RsaJsonWebKey when IsExternalRsaAlgorithm(algorithm)
                 => await port.UnwrapKeyAsync(kid, algorithm, header, encryptedKey, cancellationToken),
+
             OctetJsonWebKey when IsExternallyWrappable(algorithm)
                 => await port.UnwrapKeyAsync(kid, algorithm, header, encryptedKey, cancellationToken),
 
@@ -357,12 +362,16 @@ internal class JsonWebTokenEncryptor(
                 if (encryptedKey.Length != 0)
                     return null;
 
-                if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm
-                    || serviceProvider.GetKeyedService<IDataEncryptor>(contentEncryptionAlgorithm) is not { } contentEncryptor)
+                if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm ||
+                    serviceProvider.GetKeyedService<IDataEncryptor>(contentEncryptionAlgorithm) is not { } contentEncryptor)
                     return null;
 
                 return ConcatKeyDerivation.DeriveKey(
-                    sharedSecretZ, contentEncryptionAlgorithm, apu, apv, contentEncryptor.KeySizeInBytes);
+                    sharedSecretZ,
+                    contentEncryptionAlgorithm,
+                    apu,
+                    apv,
+                    contentEncryptor.KeySizeInBytes);
             }
             finally
             {
