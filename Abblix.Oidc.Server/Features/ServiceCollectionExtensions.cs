@@ -149,6 +149,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
 
+        // Fail loud at startup when a configured external key (no private material) has no host port to serve
+        // it, or names an algorithm with no external form, instead of failing at the first sign or decrypt.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ExternalKeyWiringValidator>());
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) — same host-first contract as TryAdd* seams.
         return services
