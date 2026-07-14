@@ -174,14 +174,6 @@ public static class JwtClaimTypes
     public const string Subject = IanaClaimTypes.Sub;
 
     /// <summary>
-    /// The 'psub' (protected subject) claim is an Abblix private claim carrying the real subject in a
-    /// server-only, reversible protected form. It is used on tokens whose <c>sub</c> is a pairwise pseudonym,
-    /// so the authorization server can recover the real subject while third parties see only the pseudonym.
-    /// It is opaque to any party but the issuing server and is stripped from outward-facing responses.
-    /// </summary>
-    public const string ProtectedSubject = "psub";
-
-    /// <summary>
     /// The 'sid' (session ID) claim identifies the session to which the JWT is linked.
     /// Useful for maintaining state between the client and the issuer.
     /// </summary>
@@ -306,7 +298,7 @@ public static class JwtClaimTypes
     public const string AuthenticationMethodReferences = IanaClaimTypes.Amr;
 
     /// <summary>
-    /// "grant_id" — Abblix private claim (RFC 7519 Section 4.3) identifying the authorization grant a refresh
+    /// "grant_id" - Abblix private claim (RFC 7519 Section 4.3) identifying the authorization grant a refresh
     /// token belongs to. It binds every refresh token derived from one grant into a single lineage (a "token
     /// family" in RFC 9700 terms): a first-issued token starts a new grant, and each rotation carries the same
     /// value forward. It lets a detected replay revoke the whole family in one registry write. No IANA-registered

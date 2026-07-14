@@ -23,6 +23,8 @@
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
@@ -47,9 +49,12 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// </remarks>
 /// <param name="jwtValidator">Validates the refresh-token JWT's signature and lifetime.</param>
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
+/// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
+/// pairwise subject back to the real subject.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
-    IRefreshTokenService refreshTokenService) : ISubjectTokenResolver
+    IRefreshTokenService refreshTokenService,
+    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
@@ -71,7 +76,18 @@ public sealed class RefreshTokenSubjectTokenResolver(
                 $"subject_token has unexpected typ header '{jwt.Header.Type}' for token type refresh_token.");
         }
 
-        var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(jwt);
+        // The refresh token was issued to its original client (not necessarily the requesting one); the real
+        // subject is opened against that client's sector.
+        var originalClientId = jwt.Payload.ClientId;
+        var originalClient = originalClientId is null
+            ? null
+            : await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck();
+        if (originalClient is null)
+        {
+            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");
+        }
+
+        var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(jwt, originalClient);
         if (!grantLookup.TryGetSuccess(out var grant))
         {
             return new OidcError(

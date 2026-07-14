@@ -46,6 +46,7 @@ using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Nonces;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
@@ -85,13 +86,13 @@ public static class ServiceCollectionExtensions
         // Deliberate design: client authentication is a try-each composite, NOT keyed-name DI
         // by token_endpoint_auth_method. Unlike the keyed-DI extension points in this codebase
         // (signers by alg, RAR validators by type, crit handlers by name), the auth method is
-        // NOT a discriminator carried in the incoming token request — it is the client's
+        // NOT a discriminator carried in the incoming token request - it is the client's
         // registered metadata. The request only presents credentials whose FORM implies the
         // method (Basic header, body secret, mTLS certificate, client_assertion JWT), and
         // client_id itself is extracted method-specifically (decoded from the Base64 Basic
         // header vs read from the body vs taken from the assertion's sub). Keying on the method
-        // would require first detecting the credential form to derive it — which is exactly what
-        // each authenticator's TryAuthenticateClientAsync already does — so keyed dispatch would
+        // would require first detecting the credential form to derive it - which is exactly what
+        // each authenticator's TryAuthenticateClientAsync already does - so keyed dispatch would
         // be circular and strictly more complex. Each authenticator self-selects by inspecting
         // the request for its own credential shape; the composite returns the first match.
         services.TryAddEnumerable([
@@ -155,7 +156,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ExternalKeyWiringValidator>());
 
         // TryAddAlias: a host that pre-registers its own client store must win over the
-        // OidcOptions-backed default (issue #226) — same host-first contract as TryAdd* seams.
+        // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
         return services
             .TryAddAlias<IClientInfoProvider, ClientInfoStorage>()
             .TryAddAlias<IClientInfoManager, ClientInfoStorage>();
@@ -486,12 +487,13 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers pairwise subject identifier settings, enabling HMAC-based subject conversion
-    /// for clients with SubjectType=pairwise. The salt and hash algorithm are used to compute
-    /// stable, non-reversible per-client subject identifiers per OpenID Connect Core Section 8.1.
+    /// Registers pairwise subject identifier settings, enabling reversible per-sector subject conversion for clients
+    /// with SubjectType=pairwise. The salt and hash algorithm key a deterministic authenticated-encryption seal that
+    /// produces stable, per-sector pseudonyms the server can open back to the real subject, per OpenID Connect Core
+    /// Section 8.1.
     /// </summary>
     /// <param name="services">The service collection to register settings into.</param>
-    /// <param name="settings">The pairwise subject settings containing the HMAC salt and algorithm.</param>
+    /// <param name="settings">The pairwise subject settings containing the seal key (salt) and hash algorithm.</param>
     public static IServiceCollection AddPairwiseSubjectIdentifiers(
         this IServiceCollection services,
         PairwiseSubjectSettings settings)

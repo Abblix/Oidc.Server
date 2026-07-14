@@ -53,5 +53,6 @@ public interface IRefreshTokenService
 	/// Reconstructs the <see cref="AuthorizedGrant"/> represented by a previously issued refresh
 	/// token, or returns an <see cref="OidcError"/> when the token cannot be honored.
 	/// </summary>
-	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken);
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
+		JsonWebToken refreshToken, ClientInfo clientInfo);
 }

@@ -22,27 +22,26 @@
 
 using System.Security.Cryptography;
 
-namespace Abblix.Oidc.Server.Features.UserInfo;
+namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 /// <summary>
 /// Configuration for pairwise subject identifier generation.
-/// The salt is a server-side secret that prevents external computation of pairwise identifiers,
-/// ensuring that even with knowledge of the user's real subject and the client ID,
-/// an attacker cannot derive the pairwise identifier.
+/// The salt is a server-side secret that keys the reversible pairwise seal, so that even with knowledge of the
+/// user's real subject and the sector, an attacker cannot derive or open the pairwise identifier.
 /// </summary>
 public record PairwiseSubjectSettings
 {
     /// <summary>
-    /// A base64-encoded cryptographic salt used in HMAC computation for pairwise identifiers.
-    /// This value MUST be kept secret, generated once, and never changed
-    /// (changing it would invalidate all existing pairwise identifiers).
+    /// A base64-encoded cryptographic key that keys the deterministic authenticated-encryption seal producing
+    /// pairwise identifiers. This value MUST be kept secret, generated once, and never changed
+    /// (changing it would invalidate all existing pairwise identifiers - none could be opened back).
     /// Minimum recommended length: 32 bytes (256 bits) before encoding.
     /// </summary>
     public required string Salt { get; init; }
 
     /// <summary>
-    /// The HMAC algorithm used to compute pairwise subject identifiers.
-    /// Defaults to HMAC-SHA256. Supported algorithms: SHA256, SHA384, SHA512, SHA1.
+    /// The hash algorithm used as the pseudorandom function for the pairwise seal (key derivation and the
+    /// synthetic IV). Defaults to SHA-256. Supported algorithms: SHA256, SHA384, SHA512, SHA1.
     /// </summary>
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
 }

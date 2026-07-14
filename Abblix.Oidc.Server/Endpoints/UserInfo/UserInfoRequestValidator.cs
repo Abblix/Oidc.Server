@@ -75,7 +75,7 @@ public class UserInfoRequestValidator(
 		{
 			// RFC 9449 §7.1: DPoP-bound access tokens are presented via the DPoP scheme.
 			// The actual scheme/binding compatibility check runs after JWT parse so we can
-			// inspect cnf.jkt — here we only filter out unrecognised schemes.
+			// inspect cnf.jkt - here we only filter out unrecognised schemes.
 			if (authorizationHeader.Scheme is not (TokenTypes.Bearer or TokenTypes.DPoP))
 			{
 				return new OidcError(
@@ -103,7 +103,7 @@ public class UserInfoRequestValidator(
 		else if (userInfoRequest.AccessToken == null)
 		{
 			// RFC 6750 §3.1: a request with no authentication information at all gets a bare
-			// WWW-Authenticate challenge — the typed marker tells the challenge builder to omit
+			// WWW-Authenticate challenge - the typed marker tells the challenge builder to omit
 			// the error attributes the other invalid_token cases carry.
 			return new MissingAuthenticationError(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
@@ -140,20 +140,25 @@ public class UserInfoRequestValidator(
 
 		// RFC 8705 §3 RS-side enforcement: when the access token carries cnf.x5t#S256 the
 		// certificate presented on the mutual-TLS connection MUST hash to the bound value.
-		// Independent of the DPoP binding above — a token carrying both must satisfy each.
+		// Independent of the DPoP binding above - a token carrying both must satisfy each.
 		var mtlsError = mtlsValidator.Validate(clientRequest, token);
 		if (mtlsError is not null)
 			return mtlsError;
 
-		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token);
-
-		var clientInfo = await clientInfoProvider.TryFindClientAsync(authContext.ClientId).WithLicenseCheck();
+		// Resolve the client before authenticating the token: a pairwise access token's 'sub' is opened back to
+		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
+		var clientId = token.Payload.ClientId;
+		var clientInfo = clientId is null
+			? null
+			: await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 		if (clientInfo == null)
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,
-				$"The client '{authContext.ClientId}' is not found");
+				$"The client '{clientId}' is not found");
 		}
+
+		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token, clientInfo);
 
 		return new ValidUserInfoRequest(userInfoRequest, authSession, authContext, clientInfo);
 	}

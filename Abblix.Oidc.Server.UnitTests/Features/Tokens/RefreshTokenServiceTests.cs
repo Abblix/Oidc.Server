@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -81,6 +82,8 @@ public class RefreshTokenServiceTests
 
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
 
+        // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
+        // the exact production path: Convert and Recover both pass the subject through unchanged.
         _service = new RefreshTokenService(
             issuerProvider.Object,
             timeProvider,
@@ -88,6 +91,7 @@ public class RefreshTokenServiceTests
             grantIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
+            new SubjectTypeConverter(),
             Options.Create(new OidcOptions()));
     }
 
@@ -256,7 +260,7 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// Verifies that when rotating a token (AllowReuse=false), the previous refresh token is marked
-    /// <see cref="JsonWebTokenStatus.Used"/> — superseded, not killed. Per the RFC 9700 Section 4.14.2
+    /// <see cref="JsonWebTokenStatus.Used"/> - superseded, not killed. Per the RFC 9700 Section 4.14.2
     /// rotation model, a later replay of a superseded token is the breach signal that
     /// <see cref="TokenStatusValidatorDecorator"/> escalates into a whole-family revocation. Marking it
     /// Revoked here would lose that signal by collapsing "superseded by rotation" into "explicitly killed".
@@ -536,7 +540,7 @@ public class RefreshTokenServiceTests
         Assert.NotNull(result);
         Assert.NotNull(capturedToken);
         // Sliding window slides to now: now + 2h. Absolute ceiling: originalIssuedAt + 30days.
-        // now + 2h < originalIssuedAt + 30days, so the slid window wins — and it is LATER than the
+        // now + 2h < originalIssuedAt + 30days, so the slid window wins - and it is LATER than the
         // old token's expiry (originalIssuedAt + 2h), proving the window actually extended.
         var expectedExpiry = _currentTime + slidingExpiry;
         Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
@@ -683,7 +687,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken);
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -718,7 +722,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken);
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -750,7 +754,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken);
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));

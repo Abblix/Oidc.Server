@@ -27,10 +27,12 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -41,18 +43,28 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// Unit tests for <see cref="RefreshTokenSubjectTokenResolver"/> -- the RFC 8693 subject_token
 /// resolver for refresh_token URI (own-issued JWT of typ=rt+jwt, recovers original AuthorizedGrant).
 /// </summary>
+[Collection("License")]
 public class RefreshTokenSubjectTokenResolverTests
 {
     private const string TokenWire = "refresh.jwt.signature";
+    private const string OriginalClientId = "client-1";
 
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator = new(MockBehavior.Strict);
     private readonly Mock<IRefreshTokenService> _refreshTokenService = new(MockBehavior.Strict);
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
     private readonly RefreshTokenSubjectTokenResolver _resolver;
 
-    public RefreshTokenSubjectTokenResolverTests()
+    public RefreshTokenSubjectTokenResolverTests(LicenseFixture fixture)
     {
-        _resolver = new RefreshTokenSubjectTokenResolver(_jwtValidator.Object, _refreshTokenService.Object);
+        // The refresh token names its original client; the resolver looks that client up (its sector opens a
+        // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(OriginalClientId))
+            .ReturnsAsync(new ClientInfo(OriginalClientId));
+
+        _resolver = new RefreshTokenSubjectTokenResolver(
+            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
     }
 
     [Fact]
@@ -68,7 +80,7 @@ public class RefreshTokenSubjectTokenResolverTests
             new AuthorizationContext("client-1", ["openid"], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -94,7 +106,7 @@ public class RefreshTokenSubjectTokenResolverTests
             new AuthorizationContext("client-1", ["openid"], null) { AuthorizationDetails = adNode });
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -143,7 +155,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .ReturnsAsync(jwt);
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "token revoked"));
 
         var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
@@ -159,7 +171,13 @@ public class RefreshTokenSubjectTokenResolverTests
         return new JsonWebToken
         {
             Header = { Type = JwtTypes.RefreshToken, Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Issuer = "https://issuer.example.com", IssuedAt = now, ExpiresAt = now.AddDays(30) },
+            Payload =
+            {
+                ClientId = OriginalClientId,
+                Issuer = "https://issuer.example.com",
+                IssuedAt = now,
+                ExpiresAt = now.AddDays(30),
+            },
         };
     }
 }

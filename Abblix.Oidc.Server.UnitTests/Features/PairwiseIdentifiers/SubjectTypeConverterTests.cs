@@ -23,10 +23,10 @@
 using System;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
+namespace Abblix.Oidc.Server.UnitTests.Features.PairwiseIdentifiers;
 
 /// <summary>
 /// Unit tests for <see cref="SubjectTypeConverter"/> verifying pairwise subject derivation per
@@ -114,5 +114,80 @@ public class SubjectTypeConverterTests
         var sectorTwo = CreatePairwiseClient("client-b", redirectUris: [new Uri("https://two.example.com/cb")]);
 
         Assert.NotEqual(converter.Convert(Subject, sectorOne), converter.Convert(Subject, sectorTwo));
+    }
+
+    /// <summary>
+    /// A pairwise subject is stable: the same (subject, sector) always seals to the same value, so a client sees a
+    /// consistent identifier for the user across logins - the core stability guarantee of OIDC Core §8.1.
+    /// </summary>
+    [Fact]
+    public void Convert_SameSubjectAndClient_IsDeterministic()
+    {
+        var converter = CreateConverter();
+        var client = CreatePairwiseClient("client-a", redirectUris: [new Uri("https://app.example.com/cb")]);
+
+        Assert.Equal(converter.Convert(Subject, client), converter.Convert(Subject, client));
+    }
+
+    /// <summary>
+    /// The pairwise identifier is reversible: Recover opens it back to the exact original subject, and the sealed
+    /// value is not the bare subject - this is what lets the server carry the pseudonym in tokens yet still resolve
+    /// the real user.
+    /// </summary>
+    [Fact]
+    public void Recover_AfterConvert_ReturnsOriginalSubject()
+    {
+        var converter = CreateConverter();
+        var client = CreatePairwiseClient("client-a", redirectUris: [new Uri("https://app.example.com/cb")]);
+
+        var pairwise = converter.Convert(Subject, client);
+
+        Assert.NotEqual(Subject, pairwise);
+        Assert.Equal(Subject, converter.Recover(pairwise, client));
+    }
+
+    /// <summary>
+    /// Sector, not client id, determines the identifier: two distinct clients sharing an explicit sector_identifier
+    /// seal the same subject to the same value, so a sector's back-ends see one consistent identifier (OIDC Core
+    /// §8.1).
+    /// </summary>
+    [Fact]
+    public void Convert_SameExplicitSectorIdentifier_DifferentClients_ProduceSameSubject()
+    {
+        var converter = CreateConverter();
+        var clientA = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+        var clientB = CreatePairwiseClient("client-b", sectorIdentifier: "sector.example.com");
+
+        Assert.Equal(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
+    /// Different sectors stay unlinkable: the same subject under two distinct explicit sector_identifiers seals to
+    /// different values, the privacy property pairwise subject types exist to provide.
+    /// </summary>
+    [Fact]
+    public void Convert_DifferentExplicitSectorIdentifiers_ProduceDifferentSubjects()
+    {
+        var converter = CreateConverter();
+        var clientA = CreatePairwiseClient("client-a", sectorIdentifier: "one.example.com");
+        var clientB = CreatePairwiseClient("client-b", sectorIdentifier: "two.example.com");
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
+    /// A pairwise identifier sealed for one sector cannot be opened under another: the sector is bound as associated
+    /// data, so Recover under the wrong client's sector fails loudly instead of returning a wrong or forged subject.
+    /// </summary>
+    [Fact]
+    public void Recover_UnderDifferentSector_Throws()
+    {
+        var converter = CreateConverter();
+        var sealingClient = CreatePairwiseClient("client-a", sectorIdentifier: "one.example.com");
+        var otherSectorClient = CreatePairwiseClient("client-b", sectorIdentifier: "two.example.com");
+
+        var pairwise = converter.Convert(Subject, sealingClient);
+
+        Assert.Throws<InvalidOperationException>(() => converter.Recover(pairwise, otherSectorClient));
     }
 }

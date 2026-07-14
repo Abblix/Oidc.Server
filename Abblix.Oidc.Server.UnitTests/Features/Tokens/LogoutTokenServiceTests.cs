@@ -28,10 +28,10 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
-using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -114,7 +114,7 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
-    /// Back-Channel Logout §2.4: the logout token is signed in the same manner as the ID Token —
+    /// Back-Channel Logout §2.4: the logout token is signed in the same manner as the ID Token -
     /// by default the client's registered ID Token signing algorithm applies, not a hardcoded RS256.
     /// </summary>
     [Theory]
@@ -163,7 +163,7 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
-    /// Back-Channel Logout §2.4: "A Logout Token MUST be signed" and none "MUST NOT be used" —
+    /// Back-Channel Logout §2.4: "A Logout Token MUST be signed" and none "MUST NOT be used" -
     /// even when the client legally registered id_token_signed_response_alg=none (allowed for
     /// response types that return no ID Token from the authorization endpoint), the logout token
     /// must fall back to RS256, the algorithm every OIDC client is required to support.

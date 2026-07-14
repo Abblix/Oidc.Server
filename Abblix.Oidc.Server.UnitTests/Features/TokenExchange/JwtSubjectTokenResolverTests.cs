@@ -25,6 +25,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Time.Testing;
@@ -48,12 +50,21 @@ public class JwtSubjectTokenResolverTests
         ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
 
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator = new(MockBehavior.Strict);
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
     private readonly JwtSubjectTokenResolver _resolver;
 
     public JwtSubjectTokenResolverTests()
     {
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object);
+        // These tests cover public/plain subject tokens, whose client either is unnamed or is not pairwise, so the
+        // resolver never opens 'sub'. Returning no client from the lookup drives that pass-through path (a converter
+        // with no pairwise settings would pass through anyway), keeping these tests decoupled from licensing.
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .ReturnsAsync((ClientInfo?)null);
+
+        _resolver = new JwtSubjectTokenResolver(
+            _jwtValidator.Object, new SubjectTypeConverter(), _clientInfoProvider.Object);
     }
 
     [Fact]

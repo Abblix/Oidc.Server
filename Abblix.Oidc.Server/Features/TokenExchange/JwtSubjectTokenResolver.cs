@@ -24,6 +24,9 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -43,7 +46,13 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// instance's primary key so dispatch logging stays readable.
 /// </remarks>
 /// <param name="jwtValidator">Validates own-issued JWTs (signature against AS keys, claims).</param>
-public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidator) : ISubjectTokenResolver
+/// <param name="subjectTypeConverter">Opens a pairwise subject_token's <c>sub</c> back to the real subject.</param>
+/// <param name="clientInfoProvider">Resolves the client the subject_token was issued to, whose sector opens its
+/// pairwise subject.</param>
+public sealed class JwtSubjectTokenResolver(
+    IAuthServiceJwtValidator jwtValidator,
+    ISubjectTypeConverter subjectTypeConverter,
+    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
 {
     /// <summary>
     /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
@@ -73,6 +82,19 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
             return new OidcError(ErrorCodes.InvalidRequest, "subject_token is missing the required 'sub' claim.");
         }
 
+        // The client the subject_token names (client_id, else azp, else the sole audience): used both to open a
+        // pairwise 'sub' back to the real subject and as the confused-deputy origin below.
+        var originalClientId = jwt.Payload.ClientId ?? jwt.Payload.AuthorizedParty ?? SingleAudience(jwt);
+
+        // When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym; open
+        // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
+        // and pass through unchanged.
+        var originalClient = originalClientId is not null
+            ? await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck()
+            : null;
+        if (originalClient is not null)
+            subject = subjectTypeConverter.Recover(subject, originalClient);
+
         // Direct raw access to authorization_details preserves byte-exact payload; DeepClone
         // detaches it from the subject_token's payload before it flows into a fresh
         // AuthorizationContext (and onward into a new JWT) -- without the clone System.Text.Json
@@ -99,9 +121,7 @@ public sealed class JwtSubjectTokenResolver(IAuthServiceJwtValidator jwtValidato
             // any client exchange any user's id_token. The preference order matches how each token
             // shape encodes its client; a token with several audiences and neither client_id nor azp
             // stays null, i.e. its origin is genuinely undeterminable.
-            OriginalClientId = jwt.Payload.ClientId
-                ?? jwt.Payload.AuthorizedParty
-                ?? SingleAudience(jwt),
+            OriginalClientId = originalClientId,
 
             // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
             JwtTokenType = jwt.Header.Type,

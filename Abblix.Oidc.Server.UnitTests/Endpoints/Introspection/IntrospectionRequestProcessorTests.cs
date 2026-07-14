@@ -166,11 +166,11 @@ public class IntrospectionRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies introspection returns payload JSON directly.
-    /// Tests that claims come from token.Payload.Json.
+    /// Verifies introspection echoes the token payload directly, so a pairwise client sees its own opaque per-sector
+    /// pseudonym in <c>sub</c> - which is meaningful only to the issuing server and leaks nothing extra.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_ShouldReturnPayloadJson()
+    public async Task ProcessAsync_ShouldEchoPayloadClaims()
     {
         // Arrange
         var request = CreateIntrospectionRequest();
@@ -183,6 +183,7 @@ public class IntrospectionRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
         Assert.Same(token.Payload.Json, success.Claims);
+        Assert.Equal("user_123", success.Claims?["sub"]?.GetValue<string>());
     }
 
     /// <summary>

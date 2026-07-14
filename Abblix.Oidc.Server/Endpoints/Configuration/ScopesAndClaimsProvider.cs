@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserInfo;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;

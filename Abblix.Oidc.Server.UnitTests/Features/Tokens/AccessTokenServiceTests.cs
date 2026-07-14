@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -71,11 +72,14 @@ public class AccessTokenServiceTests
 
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
+        // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
+        // the exact production path: Convert and Recover both pass the subject through unchanged.
         _service = new AccessTokenService(
             issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
+            new SubjectTypeConverter(),
             Options.Create(new OidcOptions()));
     }
 
@@ -335,7 +339,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt);
+        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
 
         // Assert
         Assert.Equal(UserId, authSession.Subject);
@@ -370,7 +374,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt);
+        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
 
         // Assert
         Assert.Equal(ClientId, authContext.ClientId);
@@ -403,7 +407,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt);
+        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
 
         // Assert
         Assert.Null(authContext.Resources);
@@ -433,7 +437,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt);
+        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
 
         // Assert
         Assert.NotNull(authSession.AdditionalClaims);
