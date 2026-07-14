@@ -27,12 +27,18 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Default <see cref="ICryptoRouter"/>: routes signing to the in-process keyed
-/// <see cref="IDataSigner{TJsonWebKey}"/> when the key carries private material, and fails closed for a
-/// public-only key. The external (key-custodian) branch is introduced together with the remote-signing
-/// port, so this default is byte-identical to the previous in-process dispatch.
+/// <see cref="IDataSigner{TJsonWebKey}"/> when the key carries private material, to the host-provided
+/// <see cref="IExternalSigner"/> by <c>kid</c> when it does not, and fails closed when a public-only key
+/// has no external signer configured. The in-process path is byte-identical to the previous dispatch.
 /// </summary>
 /// <param name="serviceProvider">Resolves the keyed byte-primitive signer by algorithm.</param>
-internal sealed class CryptoRouter(IServiceProvider serviceProvider) : ICryptoRouter
+/// <param name="externalSigner">Optional host port that signs with an external key custodian
+/// (HSM/KMS/vault). Absent (null) means no external keys, so signing is served entirely in process. It is
+/// an optional dependency with a null default, so the container passes null when the host registers no
+/// port.</param>
+internal sealed class CryptoRouter(
+    IServiceProvider serviceProvider,
+    IExternalSigner? externalSigner = null) : ICryptoRouter
 {
     /// <inheritdoc />
     public ValueTask<byte[]> SignAsync(
@@ -41,19 +47,28 @@ internal sealed class CryptoRouter(IServiceProvider serviceProvider) : ICryptoRo
         byte[] data,
         CancellationToken cancellationToken)
     {
-        // The absence of private material is exactly what will route to an external signer once one is
-        // wired; until then a public-only signing key fails closed here rather than silently producing
-        // nothing. This is the single home of the "sign requires the private half" rule (moved out of
+        // Secret material present: sign in process with the keyed primitive (the unchanged path).
+        if (signingKey.HasPrivateKey)
+            return new ValueTask<byte[]>(SignLocally(signingKey));
+
+        // No private material means the key is published public-only, its private half held by an
+        // external custodian. Route to the host port by kid; the absence of private material, not a flag,
+        // is what selects the remote path. This is the single home of that decision (moved out of
         // JsonWebTokenSigner), so the same invariant will govern the shared protected-data seal.
-        if (!signingKey.HasPrivateKey)
+        if (externalSigner != null)
         {
-            throw new InvalidOperationException(
-                $"Signing requires private key material for key (kid={signingKey.KeyId}); it carries none " +
-                "and no external signer is configured.");
+            // The kid published in the token and JWKS IS the custodian's handle - no separate identifier
+            // and no mapping - so an external key must carry one.
+            var kid = signingKey.KeyId ?? throw new InvalidOperationException(
+                "An external signing key must carry a 'kid': it is the key custodian's handle.");
+
+            return externalSigner.SignAsync(kid, algorithm, data, cancellationToken);
         }
 
-        // Secret material present: sign in process with the keyed primitive (the unchanged path).
-        return new ValueTask<byte[]>(SignLocally(signingKey));
+        // Fail closed: a public-only key with no external signer cannot sign.
+        throw new InvalidOperationException(
+            $"Signing requires private key material for key (kid={signingKey.KeyId}); it carries none " +
+            "and no external signer is configured.");
 
         byte[] SignLocally(JsonWebKey key) => key switch
         {
