@@ -14,14 +14,16 @@ namespace Abblix.Jwt;
 /// Handles encryption and decryption of JSON Web Encryption (JWE) tokens.
 /// Implements RFC 7516 (JWE) encryption and decryption.
 /// </summary>
-/// <param name="serviceProvider">The service provider for resolving encryptors and key encryptors by type.</param>
-internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWebTokenEncryptor
+/// <param name="serviceProvider">The service provider for resolving content encryptors by algorithm.</param>
+/// <param name="router">The crypto router that dispatches key management in process or to an external key
+/// custodian and owns the fail-closed decision.</param>
+internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider, ICryptoRouter router) : IJsonWebTokenEncryptor
 {
     /// <summary>
     /// Encrypts an inner JWS token to create a JWE token.
     /// Implements RFC 7516 (JWE) encryption.
     /// </summary>
-    public Task<string> EncryptAsync(
+    public async Task<string> EncryptAsync(
         byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
@@ -29,12 +31,9 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         string contentEncryptionAlgorithm,
         CancellationToken cancellationToken = default)
     {
-        // Validate that encryption key contains public key material
-        if (!encryptionKey.HasPublicKey)
-        {
-            throw new InvalidOperationException(
-                $"Encryption operation requires public key material, but key (kid={encryptionKey.KeyId}) contains no public key data.");
-        }
+        // Key validation and the local-vs-external fail-closed decision live in the router. The public-key
+        // guard that used to sit here would reject an external symmetric key (which has no public half), so
+        // it moves into the router, where the routing knows what each key can actually do.
 
         // Resolve content encryptor to get required CEK size
         var contentEncryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(contentEncryptionAlgorithm);
@@ -47,12 +46,12 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             KeyId = encryptionKey.KeyId
         };
 
-        // The key encryptor both produces the CEK and protects it. Key-wrapping algorithms return a
-        // random CEK; "dir" returns the shared key itself; ECDH-ES derives the CEK from the
-        // ephemeral-static agreement. Either step may add algorithm parameters to the header
-        // ('epk' for ECDH-ES, 'iv'/'tag' for AES-GCM key wrap, 'p2s'/'p2c' for PBES2).
-        var (cek, encryptedKey) = EncryptKey(
-            header, encryptionKey, keyEncryptionAlgorithm, contentEncryptor.KeySizeInBytes);
+        // The router produces the CEK and protects it, in process or via an external custodian. Key-wrapping
+        // algorithms return a random CEK; "dir" returns the shared key itself; ECDH-ES derives the CEK from
+        // the ephemeral-static agreement. Either step may add algorithm parameters to the header ('epk' for
+        // ECDH-ES, 'iv'/'tag' for AES-GCM key wrap, 'p2s'/'p2c' for PBES2).
+        var (cek, encryptedKey) = await router.EncryptKeyAsync(
+            header, encryptionKey, keyEncryptionAlgorithm, contentEncryptor.KeySizeInBytes, cancellationToken);
 
         // Encode header AFTER key encryption (in case it was modified)
         var headerEncoded = EncodeJson(header.Json);
@@ -66,9 +65,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             additionalAuthenticatedData);
 
         // JWE Compact Serialization: header.encryptedKey.iv.ciphertext.authTag
-        // Key management runs in process here; the external-custodian path (which observes the token)
-        // arrives with the remote key-encryptor, so this completes synchronously for now.
-        return Task.FromResult(EncodeJwe(headerEncoded, encryptedKey, iv, ciphertext, authTag));
+        return EncodeJwe(headerEncoded, encryptedKey, iv, ciphertext, authTag);
     }
 
     /// <summary>
@@ -89,31 +86,6 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         return string.Join(".", parts
             .Select(p => Base64Url.EncodeToString(p))
             .Prepend(header));
-    }
-
-    /// <summary>
-    /// Produces the Content Encryption Key and encrypts it using the appropriate key encryptor.
-    /// </summary>
-    private (byte[] cek, byte[] encryptedKey) EncryptKey(
-        JsonWebTokenHeader header,
-        JsonWebKey key,
-        string algorithm,
-        int cekSizeInBytes)
-    {
-        return key switch
-        {
-            RsaJsonWebKey rsaKey => EncryptBy(rsaKey),
-            OctetJsonWebKey octetKey => EncryptBy(octetKey),
-            EllipticCurveJsonWebKey ecKey => EncryptBy(ecKey),
-            _ => throw new InvalidOperationException($"No key encryptor registered for key type: {key.GetType().Name}")
-        };
-
-        (byte[], byte[]) EncryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
-        {
-            var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
-            var cek = keyEncryptor.GenerateContentEncryptionKey(header, jwk, cekSizeInBytes);
-            return (cek, keyEncryptor.EncryptKey(header, jwk, cek));
-        }
     }
 
     /// <summary>
@@ -191,12 +163,9 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         {
             keyFound = true;
 
-            // Validate that decryption key contains private key material
-            if (!key.HasPrivateKey)
-            {
-                throw new InvalidOperationException(
-                    $"Decryption operation requires private key material, but key (kid={key.KeyId}) contains only public key data.");
-            }
+            // The router recovers the CEK - in process for a local key, or via the external custodian for a
+            // public-only key - and returns null on any decryption failure, which the mitigation below turns
+            // into a uniform outcome. The "must have private material" gate now lives in the router.
 
             // RFC 7516 §11.5: substitute a randomly generated CEK of the correct size and still run the
             // AEAD step when CEK decryption fails — wrong key, malformed padding, or an unregistered
@@ -209,8 +178,8 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             // This is what makes RSA1_5 (RSAES-PKCS1-v1_5) safe to support: it closes the
             // Bleichenbacher/Manger padding oracle by removing the observable difference between valid
             // and invalid padding.
-            if (!TryDecryptContentKey(header, key, algorithm, encryptedKey, out var contentEncryptionKey) ||
-                contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
+            var contentEncryptionKey = await router.DecryptKeyAsync(header, key, algorithm, encryptedKey, cancellationToken);
+            if (contentEncryptionKey == null || contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
             if (contentDecryptor.TryDecrypt(
@@ -226,38 +195,4 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             keyFound ? "Failed to decrypt JWE with any available key" : "No decryption keys found");
     }
 
-    /// <summary>
-    /// Attempts to decrypt the Content Encryption Key using the provided key.
-    /// Resolves the appropriate key encryptor from DI based on the key type and algorithm.
-    /// </summary>
-    private bool TryDecryptContentKey(
-        JsonWebTokenHeader header,
-        JsonWebKey key,
-        string algorithm,
-        byte[] encryptedKey,
-        [NotNullWhen(true)] out byte[]? contentEncryptionKey)
-    {
-        contentEncryptionKey = null;
-
-        // Resolve key encryptor by key type and algorithm
-        return key switch
-        {
-            RsaJsonWebKey rsaKey => TryDecryptBy(rsaKey, out contentEncryptionKey),
-            OctetJsonWebKey octetKey => TryDecryptBy(octetKey, out contentEncryptionKey),
-            EllipticCurveJsonWebKey ecKey => TryDecryptBy(ecKey, out contentEncryptionKey),
-            _ => false
-        };
-
-        bool TryDecryptBy<TJsonWebKey>(TJsonWebKey jwk, [NotNullWhen(true)] out byte[]? decryptedKey)
-            where TJsonWebKey : JsonWebKey
-        {
-            var keyEncryptor = serviceProvider.GetKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
-            if (keyEncryptor == null)
-            {
-                decryptedKey = null;
-                return false;
-            }
-            return keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out decryptedKey);
-        }
-    }
 }

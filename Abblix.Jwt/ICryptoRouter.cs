@@ -54,4 +54,43 @@ internal interface ICryptoRouter
         string algorithm,
         byte[] data,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Produces the Content Encryption Key and its wrapped form for creating a JWE. Asymmetric key
+    /// management (RSA, ECDH-ES) runs in process against the recipient's public half, so it is local even
+    /// for an external key; a symmetric key whose secret bytes are absent is wrapped by an external
+    /// custodian; direct and password-based key management have no external form and fail closed.
+    /// </summary>
+    /// <param name="header">The JWE header; key management may add parameters (epk, iv, tag) to it.</param>
+    /// <param name="encryptionKey">The recipient key the JWE is encrypted with.</param>
+    /// <param name="algorithm">The JWE <c>alg</c> (key-management) identifier.</param>
+    /// <param name="contentKeySizeInBytes">The CEK size the content encryption algorithm requires.</param>
+    /// <param name="cancellationToken">Cancels a network-backed external wrap.</param>
+    /// <returns>The Content Encryption Key and the JWE Encrypted Key bytes.</returns>
+    ValueTask<(byte[] contentEncryptionKey, byte[] encryptedKey)> EncryptKeyAsync(
+        JsonWebTokenHeader header,
+        JsonWebKey encryptionKey,
+        string algorithm,
+        int contentKeySizeInBytes,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Recovers the Content Encryption Key from a JWE Encrypted Key. A key with secret material unwraps in
+    /// process; a public-only key routes the private operation - RSA decrypt, ECDH agreement, or symmetric
+    /// unwrap - to an external custodian. Returns null on any decryption failure so a wrong key is
+    /// indistinguishable from a bad ciphertext (the RFC 7516 §11.5 mitigation upstream relies on this);
+    /// fails closed by throwing only on misconfiguration (an external key with no port or no external form).
+    /// </summary>
+    /// <param name="header">The JWE header carrying algorithm parameters (epk, iv, tag, apu, apv).</param>
+    /// <param name="decryptionKey">The candidate recipient key.</param>
+    /// <param name="algorithm">The JWE <c>alg</c> (key-management) identifier.</param>
+    /// <param name="encryptedKey">The JWE Encrypted Key bytes.</param>
+    /// <param name="cancellationToken">Cancels a network-backed external unwrap or agreement.</param>
+    /// <returns>The recovered CEK, or null on a decryption failure.</returns>
+    ValueTask<byte[]?> DecryptKeyAsync(
+        JsonWebTokenHeader header,
+        JsonWebKey decryptionKey,
+        string algorithm,
+        byte[] encryptedKey,
+        CancellationToken cancellationToken);
 }
