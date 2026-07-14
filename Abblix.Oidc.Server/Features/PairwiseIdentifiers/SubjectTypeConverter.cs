@@ -86,12 +86,11 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// Recovers the real subject from the client-facing subject: for a pairwise client, opens the per-sector
     /// pseudonym; for a public client, returns the subject unchanged.
     /// </summary>
-    public string Recover(string subject, ClientInfo clientInfo)
-        => clientInfo.SubjectType switch
-        {
-            SubjectTypes.Pairwise => RecoverPairwise(subject, clientInfo),
-            _ => subject,
-        };
+    public string Recover(string subject, ClientInfo clientInfo) => clientInfo.SubjectType switch
+    {
+        SubjectTypes.Pairwise => RecoverPairwise(subject, clientInfo),
+        _ => subject,
+    };
 
     private string RecoverPairwise(string pseudonym, ClientInfo clientInfo)
     {
@@ -107,11 +106,12 @@ public class SubjectTypeConverter : ISubjectTypeConverter
         }
 
         var subject = Encryptor(clientInfo).Open(sealedData, Sector(clientInfo));
-        return subject is not null
-            ? Encoding.UTF8.GetString(subject)
-            : throw new InvalidOperationException(
+        if (subject is null)
+            throw new InvalidOperationException(
                 $"The pairwise subject for client '{clientInfo.ClientId}' could not be recovered: it is malformed, " +
                 "sealed for a different sector, or was produced under a different pairwise salt.");
+
+        return Encoding.UTF8.GetString(subject);
     }
 
     private DeterministicAeadEncryptor Encryptor(ClientInfo clientInfo)
@@ -138,13 +138,13 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// </remarks>
     private static byte[] Sector(ClientInfo clientInfo)
     {
-        var redirectUri = clientInfo.RedirectUris.FirstOrDefault();
-        var redirectHost =
-            redirectUri != null &&
-            (redirectUri.Scheme == Uri.UriSchemeHttp || redirectUri.Scheme == Uri.UriSchemeHttps)
-                ? redirectUri.Host
-                : null;
-        var sector = clientInfo.SectorIdentifier ?? redirectHost ?? clientInfo.ClientId;
+        var sector =
+            clientInfo.SectorIdentifier ??
+            clientInfo.RedirectUris.FirstOrDefault(redirectUri =>
+                redirectUri.Scheme == Uri.UriSchemeHttp ||
+                redirectUri.Scheme == Uri.UriSchemeHttps)?.Host ??
+            clientInfo.ClientId;
+
         return Encoding.UTF8.GetBytes(sector);
     }
 }

@@ -92,6 +92,7 @@ public sealed class JwtSubjectTokenResolver(
         var originalClient = originalClientId is not null
             ? await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck()
             : null;
+
         if (originalClient is not null)
             subject = subjectTypeConverter.Recover(subject, originalClient);
 
