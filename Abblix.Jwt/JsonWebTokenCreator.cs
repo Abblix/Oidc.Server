@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -76,25 +78,30 @@ internal sealed class JsonWebTokenCreator(
     /// The method creates a JWT using custom implementation that supports multiple audiences.
     /// Supports both JWS (signed) and JWE (encrypted) tokens.
     /// </remarks>
-    public Task<string> IssueAsync(
+    public async Task<string> IssueAsync(
         JsonWebToken token,
         JsonWebKey? signingKey,
         JsonWebKey? encryptionKey = null,
         string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
         string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512)
     {
-        var jwtString = signer.Sign(token, signingKey);
+        // IssueAsync does not yet carry a CancellationToken: the external key-custodian ports that would
+        // observe one arrive with remote signing / key-management, which is when it is threaded up from
+        // the callers. In-process crypto ignores cancellation, so None is passed until then.
+        var jwtString = await signer.SignAsync(token, signingKey, CancellationToken.None);
 
         if (encryptionKey != null)
         {
-            jwtString = encryptor.Encrypt(
-                jwtString,
+            // The encryptor is byte-oriented; wrap the inner JWS as its UTF-8 plaintext.
+            jwtString = await encryptor.EncryptAsync(
+                Encoding.UTF8.GetBytes(jwtString),
                 encryptionKey,
                 token.Header.Type,
                 keyEncryptionAlgorithm,
-                contentEncryptionAlgorithm);
+                contentEncryptionAlgorithm,
+                CancellationToken.None);
         }
 
-        return Task.FromResult(jwtString);
+        return jwtString;
     }
 }

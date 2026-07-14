@@ -21,12 +21,13 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
     /// Encrypts an inner JWS token to create a JWE token.
     /// Implements RFC 7516 (JWE) encryption.
     /// </summary>
-    public string Encrypt(
-        string innerJws,
+    public Task<string> EncryptAsync(
+        byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
         string keyEncryptionAlgorithm,
-        string contentEncryptionAlgorithm)
+        string contentEncryptionAlgorithm,
+        CancellationToken cancellationToken = default)
     {
         // Validate that encryption key contains public key material
         if (!encryptionKey.HasPublicKey)
@@ -34,9 +35,6 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             throw new InvalidOperationException(
                 $"Encryption operation requires public key material, but key (kid={encryptionKey.KeyId}) contains no public key data.");
         }
-
-        // First, create the inner JWS (signed token) as the plaintext to encrypt
-        var plaintext = Encoding.UTF8.GetBytes(innerJws);
 
         // Resolve content encryptor to get required CEK size
         var contentEncryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(contentEncryptionAlgorithm);
@@ -68,7 +66,9 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             additionalAuthenticatedData);
 
         // JWE Compact Serialization: header.encryptedKey.iv.ciphertext.authTag
-        return EncodeJwe(headerEncoded, encryptedKey, iv, ciphertext, authTag);
+        // Key management runs in process here; the external-custodian path (which observes the token)
+        // arrives with the remote key-encryptor, so this completes synchronously for now.
+        return Task.FromResult(EncodeJwe(headerEncoded, encryptedKey, iv, ciphertext, authTag));
     }
 
     /// <summary>
@@ -125,9 +125,10 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
                         "(base64, header JSON, enc/alg presence, decryptor resolution, per-key decryption); " +
                         "splitting the single decrypt flow would fragment it without improving readability. " +
                         "Covered by the JwtEncryptionTests decryption suite.")]
-    public async Task<Result<string, JwtValidationError>> DecryptAsync(
+    public async Task<Result<byte[], JwtValidationError>> DecryptAsync(
         string[] jwtParts,
-        IAsyncEnumerable<JsonWebKey> decryptionKeys)
+        IAsyncEnumerable<JsonWebKey> decryptionKeys,
+        CancellationToken cancellationToken = default)
     {
         // Decode all JWE parts - invalid base64 means invalid token
         byte[][] decodedParts;
@@ -186,7 +187,7 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
         var aad = Encoding.ASCII.GetBytes(jwtParts[0]);
 
         var keyFound = false;
-        await foreach (var key in decryptionKeys)
+        await foreach (var key in decryptionKeys.WithCancellation(cancellationToken))
         {
             keyFound = true;
 
@@ -215,7 +216,8 @@ internal class JsonWebTokenEncryptor(IServiceProvider serviceProvider) : IJsonWe
             if (contentDecryptor.TryDecrypt(
                     contentEncryptionKey, new EncryptedData(iv, ciphertext, authTag), aad, out var plaintext))
             {
-                return Encoding.UTF8.GetString(plaintext);
+                // Byte-oriented result: a JWS-wrapping caller (the validator) does the UTF-8 decode.
+                return plaintext;
             }
         }
 

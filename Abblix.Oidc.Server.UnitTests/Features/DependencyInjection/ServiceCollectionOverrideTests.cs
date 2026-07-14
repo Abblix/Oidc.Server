@@ -300,6 +300,35 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
+    public void AddJsonWebTokens_HostPreregisteredSigner_Wins()
+    {
+        // The signing orchestrator is part of the public JWT surface; a host that fronts an external
+        // key custodian may replace it wholesale. The library's TryAdd default must not shadow it.
+        var services = new ServiceCollection();
+        var stub = new Mock<IJsonWebTokenSigner>().Object;
+        services.AddSingleton(stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenSigner));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
+    public void AddJsonWebTokens_HostPreregisteredEncryptor_Wins()
+    {
+        // Symmetric with the signer: the encryption orchestrator is public and host-replaceable.
+        var services = new ServiceCollection();
+        var stub = new Mock<IJsonWebTokenEncryptor>().Object;
+        services.AddSingleton(stub);
+
+        services.AddJsonWebTokens();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenEncryptor));
+        Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    [Fact]
     public void AddJsonWebTokens_InvokedTwice_DefaultsRegisteredOnce()
     {
         var services = new ServiceCollection();

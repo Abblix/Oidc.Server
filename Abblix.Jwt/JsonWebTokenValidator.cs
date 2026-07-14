@@ -483,7 +483,8 @@ internal class JsonWebTokenValidator(
         var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
         var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
-        return await result.BindAsync(innerJwt => ValidateAsync(innerJwt, parameters));
+        // DecryptAsync is byte-oriented; the inner JWS is UTF-8 text, so decode it before re-validating.
+        return await result.BindAsync(innerJwtBytes => ValidateAsync(Encoding.UTF8.GetString(innerJwtBytes), parameters));
     }
 
     /// <summary>

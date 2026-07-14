@@ -59,6 +59,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
 
+        // The fail-closed crypto router (ICryptoRouter): the single place the "sign with the private
+        // half in process, or route to an external key custodian, else fail closed" decision lives.
+        // Internal to the assembly, but TryAdd for symmetry with the orchestrators above.
+        services.TryAddSingleton<ICryptoRouter, CryptoRouter>();
+
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is
         // advertised automatically (signing_alg / encryption_alg / encryption_enc values).
