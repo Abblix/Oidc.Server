@@ -188,7 +188,10 @@ internal class JsonWebTokenEncryptor(
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
             if (contentDecryptor.TryDecrypt(
-                    contentEncryptionKey, new EncryptedData(iv, ciphertext, authTag), aad, out var plaintext))
+                    contentEncryptionKey,
+                    new EncryptedData(iv, ciphertext, authTag),
+                    aad,
+                    out var plaintext))
             {
                 // Byte-oriented result: a JWS-wrapping caller (the validator) does the UTF-8 decode.
                 return plaintext;

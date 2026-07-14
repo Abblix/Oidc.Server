@@ -180,21 +180,31 @@ public class ExternalKeyEncryptorTests
         public int AgreeCalls { get; private set; }
 
         public ValueTask<byte[]?> UnwrapKeyAsync(
-            string kid, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
+            string kid,
+            string algorithm,
+            JsonWebTokenHeader header,
+            byte[] encryptedKey,
+            CancellationToken cancellationToken)
         {
             UnwrapCalls++;
             byte[]? cek = fullKey switch
             {
                 RsaJsonWebKey rsaKey => RsaDecrypt(rsaKey, algorithm, encryptedKey),
-                OctetJsonWebKey octKey when octKey.KeyValue is { } secret
+
+                OctetJsonWebKey { KeyValue: { } secret }
                     => AesKeyWrap.TryUnwrap(secret, encryptedKey, out var unwrapped) ? unwrapped : null,
+
                 _ => null,
             };
             return new ValueTask<byte[]?>(cek);
         }
 
         public ValueTask<byte[]> WrapKeyAsync(
-            string kid, string algorithm, JsonWebTokenHeader header, byte[] contentEncryptionKey, CancellationToken cancellationToken)
+            string kid,
+            string algorithm,
+            JsonWebTokenHeader header,
+            byte[] contentEncryptionKey,
+            CancellationToken cancellationToken)
         {
             WrapCalls++;
             var secret = ((OctetJsonWebKey)fullKey).KeyValue!;
@@ -202,7 +212,10 @@ public class ExternalKeyEncryptorTests
         }
 
         public ValueTask<byte[]> AgreeKeyAsync(
-            string kid, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+            string kid,
+            string algorithm,
+            JsonWebKey ephemeralPublicKey,
+            CancellationToken cancellationToken)
         {
             AgreeCalls++;
             using var recipient = ((EllipticCurveJsonWebKey)fullKey).ToEcdh();
