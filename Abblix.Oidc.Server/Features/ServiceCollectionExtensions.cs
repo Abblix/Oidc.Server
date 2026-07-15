@@ -494,12 +494,47 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to register settings into.</param>
     /// <param name="settings">The pairwise subject settings containing the seal key (salt) and hash algorithm.</param>
+    /// <exception cref="ArgumentException">The salt is missing, not valid base64, or decodes to fewer than
+    /// <see cref="MinPairwiseSaltBytes"/> bytes. Validated here so a misconfigured seal key fails at startup rather
+    /// than at the first token issuance or, worse, silently under a weak key.</exception>
     public static IServiceCollection AddPairwiseSubjectIdentifiers(
         this IServiceCollection services,
         PairwiseSubjectSettings settings)
     {
+        ValidatePairwiseSalt(settings.Salt);
         services.TryAddSingleton(settings);
         return services;
+    }
+
+    /// <summary>
+    /// The minimum decoded length of the pairwise salt. It is the sole key material of the pairwise seal, so it
+    /// carries 256 bits of secret entropy - anything shorter weakens every pairwise identifier the server issues.
+    /// </summary>
+    private const int MinPairwiseSaltBytes = 32;
+
+    private static void ValidatePairwiseSalt(string salt)
+    {
+        if (string.IsNullOrWhiteSpace(salt))
+            throw new ArgumentException(
+                "The pairwise salt is required: it is the key material of the pairwise subject seal.",
+                nameof(salt));
+
+        byte[] decoded;
+        try
+        {
+            decoded = Convert.FromBase64String(salt);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException(
+                "The pairwise salt must be a base64-encoded value.", nameof(salt), exception);
+        }
+
+        if (decoded.Length < MinPairwiseSaltBytes)
+            throw new ArgumentException(
+                $"The pairwise salt must decode to at least {MinPairwiseSaltBytes} bytes (256 bits) to key the " +
+                $"pairwise subject seal securely, but it decoded to {decoded.Length} bytes.",
+                nameof(salt));
     }
 
     /// <summary>
