@@ -339,7 +339,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
+        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Equal(UserId, authSession.Subject);
@@ -374,7 +374,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
+        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Equal(ClientId, authContext.ClientId);
@@ -407,7 +407,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
+        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Null(authContext.Resources);
@@ -437,7 +437,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo());
+        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.NotNull(authSession.AdditionalClaims);
@@ -470,6 +470,56 @@ public class AccessTokenServiceTests
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Equal(_currentTime + customExpiration, capturedToken!.Payload.ExpiresAt);
+    }
+
+    /// <summary>
+    /// A pairwise access token whose 'sub' does not open for the presenting client (a foreign-sector or pre-change
+    /// token) is rejected as invalid_token rather than faulting: recovery returns a failure result, not an exception.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticateByAccessToken_PairwiseSubjectDoesNotOpen_ReturnsInvalidToken()
+    {
+        // Arrange: a service with real pairwise settings, and a 'sub' that is a valid pseudonym for a DIFFERENT
+        // sector, so it cannot open for the presenting client's sector.
+        var converter = new SubjectTypeConverter(
+            new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        var service = new AccessTokenService(
+            Mock.Of<IIssuerProvider>(),
+            new FakeTimeProvider(_currentTime),
+            Mock.Of<ITokenIdGenerator>(),
+            Mock.Of<IAuthServiceJwtFormatter>(),
+            converter,
+            Options.Create(new OidcOptions()));
+
+        var presentingClient = new ClientInfo(ClientId)
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifier = "sector.example.com",
+        };
+        var foreignSectorSub = converter.Convert("real-user", new ClientInfo("other")
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifier = "other.example.com",
+        });
+        var jwt = new JsonWebToken
+        {
+            Payload =
+            {
+                Subject = foreignSectorSub,
+                SessionId = SessionId,
+                AuthenticationTime = _currentTime,
+                IdentityProvider = "local",
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+            },
+        };
+
+        // Act
+        var result = await service.AuthenticateByAccessTokenAsync(jwt, presentingClient);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
     }
 
     /// <summary>

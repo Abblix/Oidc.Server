@@ -59,8 +59,10 @@ public interface ISubjectTypeConverter
     /// </summary>
     /// <param name="subject">The client-facing subject identifier (pairwise pseudonym or real subject).</param>
     /// <param name="clientInfo">The client the subject was issued for.</param>
-    /// <returns>The real subject identifier.</returns>
-    /// <exception cref="System.InvalidOperationException">Thrown when a pairwise pseudonym cannot be opened:
-    /// malformed, sealed for a different sector, or produced under a different pairwise salt.</exception>
-    string Recover(string subject, ClientInfo clientInfo);
+    /// <returns>The real subject identifier, or <c>null</c> when a pairwise pseudonym cannot be opened (malformed,
+    /// sealed for a different sector, or produced under a different pairwise salt) so the caller can reject the
+    /// token at the protocol level.</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown only when pairwise identifiers are not configured
+    /// but a pairwise client is asked to recover, which is a server misconfiguration rather than a bad token.</exception>
+    string? Recover(string subject, ClientInfo clientInfo);
 }

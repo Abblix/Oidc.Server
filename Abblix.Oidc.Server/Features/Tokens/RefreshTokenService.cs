@@ -183,6 +183,14 @@ public class RefreshTokenService(
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
 		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		if (subject is null)
+		{
+			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the
+			// grant rather than faulting the refresh.
+			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+				new OidcError(ErrorCodes.InvalidGrant, "The refresh token subject could not be resolved"));
+		}
+
 		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
 			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
 	}

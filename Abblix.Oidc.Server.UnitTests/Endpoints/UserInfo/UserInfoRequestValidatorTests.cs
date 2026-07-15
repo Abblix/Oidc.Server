@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -34,6 +35,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Moq;
 using Xunit;
 
@@ -146,7 +148,7 @@ public class UserInfoRequestValidatorTests
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((authSession, authContext));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
@@ -187,7 +189,7 @@ public class UserInfoRequestValidatorTests
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((authSession, authContext));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
@@ -368,7 +370,7 @@ public class UserInfoRequestValidatorTests
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((authSession, authContext));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("unknown_client"))
@@ -407,7 +409,7 @@ public class UserInfoRequestValidatorTests
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((authSession, authContext));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
