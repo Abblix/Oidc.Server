@@ -37,6 +37,7 @@ public class JsonWebKeySerializationTests
     private const string CurveP256 = "P-256";
     private const string OctKeyId = "oct-key-1";
     private const string HmacAlgorithm = "HS256";
+    private const string RsaAlgorithm = "RS256";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -55,7 +56,7 @@ public class JsonWebKeySerializationTests
         {
             KeyId = RsaKeyId,
             Usage = "sig",
-            Algorithm = "RS256",
+            Algorithm = RsaAlgorithm,
             Exponent = Encoding.UTF8.GetBytes("AQAB"),
             Modulus = Encoding.UTF8.GetBytes("modulus-value"),
             PrivateExponent = Encoding.UTF8.GetBytes("private-exponent"),
@@ -74,7 +75,7 @@ public class JsonWebKeySerializationTests
         Assert.Equal("RSA", jsonDoc.RootElement.GetProperty("kty").GetString());
         Assert.Equal("rsa-key-1", jsonDoc.RootElement.GetProperty("kid").GetString());
         Assert.Equal("sig", jsonDoc.RootElement.GetProperty("use").GetString());
-        Assert.Equal("RS256", jsonDoc.RootElement.GetProperty("alg").GetString());
+        Assert.Equal(RsaAlgorithm, jsonDoc.RootElement.GetProperty("alg").GetString());
         Assert.True(jsonDoc.RootElement.TryGetProperty("e", out _));
         Assert.True(jsonDoc.RootElement.TryGetProperty("n", out _));
         Assert.True(jsonDoc.RootElement.TryGetProperty("d", out _));
@@ -192,7 +193,7 @@ public class JsonWebKeySerializationTests
         {
             KeyId = RsaKeyId,
             Usage = "sig",
-            Algorithm = "RS256",
+            Algorithm = RsaAlgorithm,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD, 0xEF],
             PrivateExponent = [0x12, 0x34, 0x56],
@@ -571,7 +572,7 @@ public class JsonWebKeySerializationTests
         {
             KeyId = RsaKeyId,
             Usage = "sig",
-            Algorithm = "RS256",
+            Algorithm = RsaAlgorithm,
             Exponent = [1, 0, 1],
             Modulus = [0xAB, 0xCD],
             // Private members are left null, as they are for an external, public-only key.
