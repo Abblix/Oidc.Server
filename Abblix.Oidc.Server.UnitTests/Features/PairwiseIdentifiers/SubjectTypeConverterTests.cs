@@ -303,4 +303,28 @@ public class SubjectTypeConverterTests
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
+
+    /// <summary>
+    /// The pairwise identifier stays compact: it is the base64url of an AES key wrap of the subject, so its length
+    /// is a small, bounded function of the subject length - 16 wrapped bytes (22 base64url chars) for a subject up
+    /// to one 8-byte semiblock, then 8 more wrapped bytes per further semiblock. This pins the size contract so an
+    /// unexpected growth (which would inflate every token's sub) is caught by a regression.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 22)]
+    [InlineData(8, 22)]
+    [InlineData(9, 32)]
+    [InlineData(16, 32)]
+    [InlineData(17, 43)]
+    [InlineData(36, 64)]
+    public void Convert_PairwiseIdentifierLength_IsBoundedBySubjectLength(int subjectByteLength, int expectedLength)
+    {
+        var converter = CreateConverter();
+        var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
+        var subject = new string('a', subjectByteLength); // ASCII, one byte per character
+
+        var pairwise = converter.Convert(subject, client);
+
+        Assert.Equal(expectedLength, pairwise.Length);
+    }
 }
