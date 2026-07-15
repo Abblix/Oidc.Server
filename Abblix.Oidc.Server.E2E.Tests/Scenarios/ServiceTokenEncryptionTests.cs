@@ -54,7 +54,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     [Fact]
     public async Task EncryptionKeyConfigured_AccessTokenEncryptedByDefault_AndConsumedByOwnUserInfo()
     {
-        using var host = CreateHost(_ => { });
+        await using var host = CreateHost(_ => { });
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -82,7 +82,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     [Fact]
     public async Task AccessTokenEncryptionDisabled_AccessTokenSignedOnly_RefreshStillEncrypted()
     {
-        using var host = CreateHost(options => options.ServiceTokens.AccessToken.Encrypt = false);
+        await using var host = CreateHost(options => options.ServiceTokens.AccessToken.Encrypt = false);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 

@@ -62,11 +62,11 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     [Fact]
     public async Task PairwiseClient_AccessMatchesIdToken_HidesRealSubject_AndUserInfoRecoversUser()
     {
-        using var host = CreateHost();
+        await using var host = CreateHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
-        var tokens = await ObtainPairwiseTokensAsync(client, discovery);
+        var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
         var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
         var accessPayload = DecodeJwtPayload(accessToken);
@@ -93,12 +93,12 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     [Fact]
     public async Task PairwiseClient_Refresh_RecoversRealSubject_AndReissuesPseudonym()
     {
-        using var host = CreateHost();
+        await using var host = CreateHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainPairwiseTokensAsync(
-            client, discovery, $"{Scopes.OpenId} {Scopes.OfflineAccess}");
+            client, discovery, Scopes.OpenId, Scopes.OfflineAccess);
         var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         // Refreshing forces the server to recover the real subject by opening the refresh token's pairwise sub
@@ -142,16 +142,18 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             });
 
     private static async Task<JsonObject> ObtainPairwiseTokensAsync(
-        HttpClient client, DiscoveryDocument discovery, string scope = Scopes.OpenId)
+        HttpClient client,
+        DiscoveryDocument discovery,
+        params string[] scope)
     {
         var (verifier, challenge) = GeneratePkcePair();
 
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new ()
         {
             [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = scope,
+            [AuthorizationRequest.Parameters.Scope] = string.Join(" ", scope),
             [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
             [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
