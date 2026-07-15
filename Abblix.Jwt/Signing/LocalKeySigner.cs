@@ -52,19 +52,21 @@ internal sealed class LocalKeySigner(IServiceProvider serviceProvider) : IDataSi
                 $"Signing requires private key material for key (kid={key.KeyId}); it carries none " +
                 "and no external signer is configured.");
 
-        byte[] signature = key switch
+        var signature = key switch
         {
-            RsaJsonWebKey rsaKey => SignBy(rsaKey),
-            EllipticCurveJsonWebKey ecKey => SignBy(ecKey),
-            OctetJsonWebKey octetKey => SignBy(octetKey),
+            RsaJsonWebKey rsaKey => SignBy(rsaKey, algorithm, data),
+            EllipticCurveJsonWebKey ecKey => SignBy(ecKey, algorithm, data),
+            OctetJsonWebKey octetKey => SignBy(octetKey, algorithm, data),
             _ => throw new InvalidOperationException($"No signer registered for key type: {key.GetType().Name}"),
         };
-        return new ValueTask<byte[]>(signature);
 
-        byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
-        {
-            var algorithmSigner = serviceProvider.GetRequiredKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
-            return algorithmSigner.Sign(jwk, data);
-        }
+        return new ValueTask<byte[]>(signature);
+    }
+
+    private byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk, string algorithm, byte[] data)
+        where TJsonWebKey : JsonWebKey
+    {
+        var signer = serviceProvider.GetRequiredKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
+        return signer.Sign(jwk, data);
     }
 }

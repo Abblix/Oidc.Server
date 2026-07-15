@@ -34,7 +34,8 @@ namespace Abblix.Jwt.Encryption;
 /// secret. Anything the custodian cannot serve (an algorithm with no external form, or one that does not match
 /// the key type) returns null, so the RFC 7516 §11.5 mitigation upstream sees a uniform failure.
 /// </summary>
-internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider) : IContentKeyDecryptor
+internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider)
+    : IContentKeyDecryptor
 {
     /// <summary>Owns any public-only key: its private half lives with the custodian, not in process.</summary>
     public bool CanDecrypt(JsonWebKey key) => !key.HasPrivateKey;
@@ -97,8 +98,10 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
                 return null;
 
             // The originator's ephemeral public key is mandatory and must live on the recipient's curve.
-            if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey
-                || !string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
+            if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey)
+                return null;
+
+            if (!string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
                 return null;
 
             // Z is the raw ECDH shared secret (NIST SP 800-56A / RFC 7518 §4.6); here it comes from the
@@ -117,8 +120,11 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
                 if (encryptedKey.Length != 0)
                     return null;
 
-                if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm ||
-                    serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm) is not { } contentEncryptor)
+                if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm)
+                    return null;
+
+                var encryptor = serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm);
+                if (encryptor == null)
                     return null;
 
                 return ConcatKeyDerivation.DeriveKey(
@@ -126,7 +132,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
                     contentEncryptionAlgorithm,
                     apu,
                     apv,
-                    contentEncryptor.KeySizeInBytes);
+                    encryptor.KeySizeInBytes);
             }
             finally
             {
@@ -188,9 +194,9 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
     /// </summary>
     private static int? KeyWrapSize(string algorithm) => algorithm switch
     {
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW => 16,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW => 24,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => 32,
+        EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW => 128 >> 3,
+        EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW => 192 >> 3,
+        EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => 256 >> 3,
         _ => null,
     };
 }

@@ -135,7 +135,7 @@ public class ExternalKeyDecryptorTests
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
-        services.AddJsonWebTokens(); // no AddExternalKeyDecryptor: LocalKeyDecryptor is the sole seam
+        services.AddJsonWebTokens(); // no AddKeyCustodian: LocalKeyDecryptor is the sole seam
         await using var provider = services.BuildServiceProvider();
 
         var seam = provider.GetRequiredService<IContentKeyDecryptor>();
@@ -186,7 +186,7 @@ public class ExternalKeyDecryptorTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddExternalKeyDecryptor(custodian); // the host wires its key custodian for decryption
+        services.AddKeyCustodian(custodian); // the host wires its key custodian into both seams
         return services.BuildServiceProvider();
     }
 
@@ -215,6 +215,10 @@ public class ExternalKeyDecryptorTests
     {
         public int UnwrapCalls { get; private set; }
         public int AgreeCalls { get; private set; }
+
+        // This custodian holds only encryption keys, so the library never routes a signing operation here.
+        public ValueTask<byte[]> SignAsync(string kid, string algorithm, byte[] data, CancellationToken cancellationToken)
+            => throw new NotSupportedException("This decryption custodian holds no signing keys.");
 
         public ValueTask<byte[]?> UnwrapKeyAsync(
             string kid,

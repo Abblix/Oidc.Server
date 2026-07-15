@@ -34,38 +34,48 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds HSM/KMS/vault signing for public-only signing keys: registers a signing backend
-    /// (<see cref="IDataSigner"/>) that routes every key with no private material to the supplied
-    /// <paramref name="handler"/> by its <c>kid</c>, while keys that carry private material keep signing in
-    /// process on the built-in backend. Call after <see cref="AddJsonWebTokens"/>. This convenience owns all
-    /// public-only keys, so for several custodians register a per-custodian <see cref="IDataSigner"/> backend
-    /// that owns only its own keys instead.
+    /// Adds HSM/KMS/vault handling for public-only keys, wiring one external <see cref="IKeyCustodian"/> into
+    /// both crypto seams: a public-only signing key routes its signing to the custodian, and a public-only
+    /// decryption key routes its RSA/symmetric unwrap or ECDH-ES agreement to it, while keys that carry their
+    /// private/secret material keep working in process. The public operations - signature verification and
+    /// wrapping a CEK with the recipient's public half - stay local and never reach the custodian. Call after
+    /// <see cref="AddJsonWebTokens"/>; the custodian is DI-constructed, so it can depend on a typed client.
     /// </summary>
+    /// <typeparam name="TCustodian">The host custodian implementation.</typeparam>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="handler">The custodian signing callback, addressed by the key's <c>kid</c>.</param>
     /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddExternalSigner(this IServiceCollection services, ExternalSignHandler handler)
+    public static IServiceCollection AddKeyCustodian<TCustodian>(this IServiceCollection services)
+        where TCustodian : class, IKeyCustodian
     {
-        services.AddSingleton(handler);
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
-        return services.Compose<IDataSigner, CompositeSigner>();
+        services.TryAddSingleton<IKeyCustodian, TCustodian>();
+        return services.ComposeExternalKeyBackends();
     }
 
     /// <summary>
-    /// Adds HSM/KMS/vault decryption for public-only encryption keys: registers a decryption backend
-    /// (<see cref="IContentKeyDecryptor"/>) that routes every key with no secret material to the supplied
-    /// <paramref name="custodian"/> by its <c>kid</c>, while keys that carry their secret keep unwrapping in
-    /// process on the built-in backend. Call after <see cref="AddJsonWebTokens"/>. Encryption is never routed to
-    /// a custodian, so there is no matching encryptor: producing a JWE wraps the CEK with the recipient's public
-    /// half or a locally held shared secret, in process.
+    /// Adds HSM/KMS/vault handling for public-only keys using a ready <paramref name="custodian"/> instance,
+    /// wiring it into both crypto seams. The instance overload suits a pre-built custodian or a test fake; a
+    /// custodian that needs DI-resolved dependencies uses <see cref="AddKeyCustodian{TCustodian}"/> instead. See
+    /// that overload for the full routing description.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="custodian">The external key custodian serving RSA/symmetric unwrap and ECDH agreement.</param>
+    /// <param name="custodian">The external key custodian serving signing, RSA/symmetric unwrap and ECDH agreement.</param>
     /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddExternalKeyDecryptor(this IServiceCollection services, IKeyCustodian custodian)
+    public static IServiceCollection AddKeyCustodian(this IServiceCollection services, IKeyCustodian custodian)
     {
         services.AddSingleton(custodian);
+        return services.ComposeExternalKeyBackends();
+    }
+
+    /// <summary>
+    /// Registers the external backends for the wired <see cref="IKeyCustodian"/> - <see cref="ExternalKeySigner"/>
+    /// on the signing seam and <see cref="ExternalKeyDecryptor"/> on the key-recovery seam - and composes each
+    /// with its in-process peer, so a key routes to the backend that owns it.
+    /// </summary>
+    private static IServiceCollection ComposeExternalKeyBackends(this IServiceCollection services)
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, ExternalKeyDecryptor>());
+        services.Compose<IDataSigner, CompositeSigner>();
         return services.Compose<IContentKeyDecryptor, CompositeDecryptor>();
     }
 
@@ -97,14 +107,14 @@ public static class ServiceCollectionExtensions
 
         // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
         // the in-process LocalKeySigner owns private-bearing keys and is the sole backend by default. A host
-        // adds HSM/KMS/vault signing by registering another IDataSigner backend and composing the family via
-        // AddExternalSigner (or its own Compose<IDataSigner, CompositeDataSigner> call); the composite then
-        // routes each key to the backend that owns it and fails closed when none does.
+        // adds HSM/KMS/vault signing by wiring an IKeyCustodian via AddKeyCustodian, which adds an external
+        // backend and composes the family; the composite then routes each key to the backend that owns it and
+        // fails closed when none does.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
 
         // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam: the in-process
-        // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. A host
-        // adds HSM/KMS/vault decryption via AddExternalKeyDecryptor. Encryption (wrapping the CEK) uses the
+        // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. The same
+        // AddKeyCustodian call wires the external decryption backend. Encryption (wrapping the CEK) uses the
         // recipient's public half or a local secret and never routes here, so there is no encryptor seam.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, LocalKeyDecryptor>());
 

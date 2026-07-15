@@ -29,7 +29,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Verifies external (key-custodian) signing: a signing key published public-only, whose private half lives
-/// behind an external signer callback registered with <c>AddExternalSigner</c>, produces a token that
+/// behind a host <c>IKeyCustodian</c> registered with <c>AddKeyCustodian</c>, produces a token that
 /// validates against the public key - proving the library never loads private material yet issues a
 /// verifiable signature. Also verifies the fail-closed behaviour when a public-only key has no external
 /// signer wired.
@@ -53,7 +53,7 @@ public class ExternalSignerTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddExternalSigner(custodian.SignAsync); // the host decorates the signing seam with its custodian
+        services.AddKeyCustodian(custodian); // the host wires its key custodian into both seams
         await using var provider = services.BuildServiceProvider();
 
         var token = new JsonWebToken
@@ -121,10 +121,10 @@ public class ExternalSignerTests
 
     /// <summary>
     /// Stands in for an HSM/KMS/vault: holds the private half the library never sees and signs with it,
-    /// recording how it was called so the test can assert the routing addressed it by kid and algorithm. Its
-    /// <see cref="SignAsync"/> is handed to <c>AddExternalSigner</c> as the custodian callback.
+    /// recording how it was called so the test can assert the routing addressed it by kid and algorithm. It is
+    /// wired via <c>AddKeyCustodian</c>; holding no decryption keys, it leaves unwrap and agree unreachable.
     /// </summary>
-    private sealed class FakeCustodian(RsaJsonWebKey privateKey)
+    private sealed class FakeCustodian(RsaJsonWebKey privateKey) : IKeyCustodian
     {
         public int CallCount { get; private set; }
         public string? LastKid { get; private set; }
@@ -141,5 +141,13 @@ public class ExternalSignerTests
             using var rsa = privateKey.ToRsa();
             return new ValueTask<byte[]>(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         }
+
+        public ValueTask<byte[]?> UnwrapKeyAsync(
+            string kid, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
+            => throw new NotSupportedException("This signing custodian holds no decryption keys.");
+
+        public ValueTask<byte[]> AgreeKeyAsync(
+            string kid, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+            => throw new NotSupportedException("This signing custodian holds no decryption keys.");
     }
 }

@@ -23,13 +23,11 @@
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// An external-custodian signing backend (<see cref="IDataSigner"/>) that owns public-only keys and routes
-/// their signing to a single host <see cref="ExternalSignHandler"/> (an HSM/KMS/vault callback), addressing it
-/// by the key's <c>kid</c>. It is the backend <c>AddExternalSigner</c> registers for the common single-custodian
-/// case; because it owns every public-only key, it does not combine with another external backend - a host
-/// wiring several custodians registers a per-custodian <see cref="IDataSigner"/> that owns only its own keys.
+/// An external-custodian signing backend (<see cref="IDataSigner"/>) that owns public-only signing keys and
+/// routes their signing to the host <see cref="IKeyCustodian"/>, addressing it by the key's <c>kid</c>. It is
+/// registered by <c>AddKeyCustodian</c> alongside the decryption backend, so one custodian serves both seams.
 /// </summary>
-internal sealed class ExternalKeySigner(ExternalSignHandler sign) : IDataSigner
+internal sealed class ExternalKeySigner(IKeyCustodian custodian) : IDataSigner
 {
     /// <summary>
     /// Owns any public-only key: its private half lives with the custodian, so it cannot be signed in process.
@@ -47,6 +45,6 @@ internal sealed class ExternalKeySigner(ExternalSignHandler sign) : IDataSigner
         var kid = key.KeyId ?? throw new InvalidOperationException(
             "An external signing key must carry a 'kid': it is the key custodian's handle.");
 
-        return sign(kid, algorithm, data, cancellationToken);
+        return custodian.SignAsync(kid, algorithm, data, cancellationToken);
     }
 }
