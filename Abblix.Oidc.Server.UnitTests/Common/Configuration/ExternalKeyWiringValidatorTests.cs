@@ -30,40 +30,20 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// Verifies the startup fail-closed guard for external keys: a public-only key with no host port, or an
-/// external key naming an algorithm with no external form, is rejected at boot; a correctly wired external
-/// key and a purely local configuration validate.
+/// Verifies the startup fail-closed guard for external encryption keys: a public-only encryption key with no
+/// key-management port, or one naming an algorithm with no external form, is rejected at boot; a correctly
+/// wired external encryption key and a purely local configuration validate. Signing keys are not checked at
+/// startup (they fail closed at runtime), so their coverage lives with the signing-seam tests, not here.
 /// </summary>
 public class ExternalKeyWiringValidatorTests
 {
     private static readonly RsaJsonWebKey LocalSigningKey =
         JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-    private static JsonWebKey ExternalSigningKey()
-        => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256).Sanitize(false);
-
     private static JsonWebKey ExternalRsaEncryptionKey()
         => JsonWebKeyFactory
             .CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)
             .Sanitize(false);
-
-    [Fact]
-    public void ExternalSigningKey_WithoutSignerPort_Fails()
-    {
-        var validator = new ExternalKeyWiringValidator();
-        var options = new OidcOptions { SigningKeys = [ExternalSigningKey()] };
-
-        Assert.True(validator.Validate(null, options).Failed);
-    }
-
-    [Fact]
-    public void ExternalSigningKey_WithSignerPort_Succeeds()
-    {
-        var validator = new ExternalKeyWiringValidator(new Mock<IExternalSigner>().Object);
-        var options = new OidcOptions { SigningKeys = [ExternalSigningKey()] };
-
-        Assert.True(validator.Validate(null, options).Succeeded);
-    }
 
     [Fact]
     public void ExternalEncryptionKey_WithoutKeyEncryptorPort_Fails()

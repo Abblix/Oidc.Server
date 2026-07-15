@@ -22,23 +22,20 @@
 
 using Abblix.Jwt;
 using Abblix.Jwt.Encryption;
-using Abblix.Jwt.Signing;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Fails loud at startup when a configured key has no private material - an external key, whose private half
-/// lives with a custodian - but the host port that would serve it is missing, or when its algorithm has no
-/// external form. Without this check the misconfiguration is latent: it surfaces only when the first token
-/// needs signing or the first request object needs decrypting, turning a deployment-time error into a
-/// runtime outage. A purely local configuration, where every key carries its secret material, is
-/// unaffected and validates with no external port registered.
+/// Fails loud at startup when a configured encryption key has no private material - an external key, whose
+/// private half lives with a custodian - but no key-management port is registered to serve it, or when its
+/// algorithm has no external form. Signing keys are not checked here: under the decoration model an external
+/// signer is not startup-introspectable, so a public-only signing key with no external signer fails closed
+/// at runtime on the first sign instead. A purely local configuration, where every key carries its secret
+/// material, is unaffected and validates with no external port registered.
 /// </summary>
-/// <param name="externalSigner">The signing port, or null when the host registered none.</param>
 /// <param name="externalKeyEncryptor">The key-management port, or null when the host registered none.</param>
 public sealed class ExternalKeyWiringValidator(
-    IExternalSigner? externalSigner = null,
     IExternalKeyEncryptor? externalKeyEncryptor = null) : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
@@ -46,17 +43,9 @@ public sealed class ExternalKeyWiringValidator(
     {
         var failures = new List<string>();
 
-        foreach (var key in options.SigningKeys)
-        {
-            // A key that carries its private half signs in process; only a public-only (external) key needs
-            // the remote signer.
-            if (!key.HasPrivateKey && externalSigner is null)
-            {
-                failures.Add(
-                    $"Signing key (kid={key.KeyId}) has no private material, so it can only sign through an " +
-                    $"external key custodian, but no {nameof(IExternalSigner)} is registered.");
-            }
-        }
+        // Signing keys are intentionally not checked here: with the decoration model there is no
+        // startup-introspectable "is an external signer registered" signal, so a public-only signing key
+        // with no external signer wired fails closed at runtime (the signing seam throws on the first sign).
 
         foreach (var key in options.EncryptionKeys)
         {

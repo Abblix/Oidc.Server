@@ -34,6 +34,21 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
+    /// Adds HSM/KMS/vault signing for public-only signing keys: decorates <see cref="IDataSigner"/> so a key
+    /// with no private material routes to the supplied <paramref name="handler"/> by its <c>kid</c>, while a
+    /// key that carries private material keeps signing in process. Call after <see cref="AddJsonWebTokens"/>.
+    /// For several custodians or custom routing, register your own <see cref="IDataSigner"/> decorator instead.
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <param name="handler">The custodian signing callback, addressed by the key's <c>kid</c>.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection AddExternalSigner(this IServiceCollection services, ExternalSignHandler handler)
+    {
+        services.AddSingleton(handler);
+        return services.Decorate<IDataSigner, ExternalKeySigner>();
+    }
+
+    /// <summary>
     /// Registers services for creating and validating JSON Web Tokens (JWTs) within the application.
     /// </summary>
     /// <remarks>
@@ -58,6 +73,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJsonWebTokenValidator, JsonWebTokenValidator>();
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
+
+        // The signing seam behind IJsonWebTokenSigner: signs in process by default. A host adds HSM/KMS/vault
+        // signing by decorating IDataSigner - directly with its own decorator, or via AddExternalSigner for a
+        // simple callback. Host-first: a host IDataSigner pre-registration wins.
+        services.TryAddSingleton<IDataSigner, LocalKeySigner>();
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is

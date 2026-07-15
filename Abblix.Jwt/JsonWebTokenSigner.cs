@@ -14,10 +14,11 @@ namespace Abblix.Jwt;
 /// Handles signing and signature verification of JSON Web Signature (JWS) tokens.
 /// </summary>
 /// <param name="serviceProvider">The service provider for resolving the keyed signature primitives
-/// (<see cref="ISignatureAlgorithm{TJsonWebKey}"/>) by algorithm, for both signing and verification.</param>
-/// <param name="externalSigner">Optional host port that signs with an external key custodian (HSM/KMS/
-/// vault) when a signing key is published public-only. Absent (null) means no external signing keys - the
-/// optional dependency defaults to null, so the container passes null when the host registers no port.</param>
+/// (<see cref="ISignatureAlgorithm{TJsonWebKey}"/>) by algorithm for signature verification (the local
+/// verify path); signing goes through <paramref name="dataSigner"/>.</param>
+/// <param name="dataSigner">The signing seam that produces the JWS signature bytes: in process for a
+/// private-bearing key, or via an external key custodian for a public-only one. Routing local-vs-custodian
+/// and the fail-closed rule live behind this seam, not in the token signer.</param>
 /// <param name="logger">Records signature-verification outcomes as structured events. The
 /// caller-facing <see cref="JwtValidationError"/> carries a human-readable description, but
 /// FAPI 2.0 audit-logging requires a granular event-type on every key-resolution failure
@@ -26,7 +27,7 @@ namespace Abblix.Jwt;
 internal partial class JsonWebTokenSigner(
     ILogger<JsonWebTokenSigner> logger,
     IServiceProvider serviceProvider,
-    IExternalSigner? externalSigner = null) : IJsonWebTokenSigner
+    IDataSigner dataSigner) : IJsonWebTokenSigner
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
 
@@ -80,54 +81,11 @@ internal partial class JsonWebTokenSigner(
         var signingInput = $"{EncodeJson(token.Header.Json)}.{EncodeJson(token.Payload.Json)}";
         var signingBytes = Encoding.UTF8.GetBytes(signingInput);
 
-        // Sign with the private half in process when present; otherwise route to the external key custodian
-        // by kid (the absence of private material, not a flag, selects the remote path); fail closed when a
-        // public-only key has no external signer.
-        var signature = await SignBytesAsync(signingKey, algorithm, signingBytes, cancellationToken);
+        // Delegate the private operation to the signing seam: it signs in process for a private-bearing key
+        // and routes to an external custodian for a public-only one, failing closed when neither applies.
+        var signature = await dataSigner.SignAsync(signingKey, algorithm, signingBytes, cancellationToken);
 
         return $"{signingInput}.{Base64Url.EncodeToString(signature)}";
-    }
-
-    /// <summary>
-    /// Produces the signature bytes: in process with the keyed <see cref="ISignatureAlgorithm{TJsonWebKey}"/> when
-    /// the key carries private material, via the external custodian by kid when it does not, else fail closed.
-    /// </summary>
-    private ValueTask<byte[]> SignBytesAsync(
-        JsonWebKey signingKey,
-        string algorithm,
-        byte[] data,
-        CancellationToken cancellationToken)
-    {
-        if (signingKey.HasPrivateKey)
-            return new ValueTask<byte[]>(SignLocally(signingKey));
-
-        if (externalSigner != null)
-        {
-            // The kid published in the token and JWKS IS the custodian's handle - no separate identifier
-            // and no mapping - so an external key must carry one.
-            var kid = signingKey.KeyId ?? throw new InvalidOperationException(
-                "An external signing key must carry a 'kid': it is the key custodian's handle.");
-
-            return externalSigner.SignAsync(kid, algorithm, data, cancellationToken);
-        }
-
-        throw new InvalidOperationException(
-            $"Signing requires private key material for key (kid={signingKey.KeyId}); it carries none " +
-            "and no external signer is configured.");
-
-        byte[] SignLocally(JsonWebKey key) => key switch
-        {
-            RsaJsonWebKey rsaKey => SignBy(rsaKey),
-            EllipticCurveJsonWebKey ecKey => SignBy(ecKey),
-            OctetJsonWebKey octetKey => SignBy(octetKey),
-            _ => throw new InvalidOperationException($"No signer registered for key type: {key.GetType().Name}"),
-        };
-
-        byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
-        {
-            var dataSigner = serviceProvider.GetRequiredKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
-            return dataSigner.Sign(jwk, data);
-        }
     }
 
     /// <summary>
@@ -241,8 +199,8 @@ internal partial class JsonWebTokenSigner(
 
         bool ValidateBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var dataSigner = serviceProvider.GetKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
-            return dataSigner != null && dataSigner.Verify(jwk, data, signature);
+            var algorithmSigner = serviceProvider.GetKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
+            return algorithmSigner != null && algorithmSigner.Verify(jwk, data, signature);
         }
     }
 }

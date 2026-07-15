@@ -23,31 +23,26 @@
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// Host-implemented port that signs bytes with a private key held by an external custodian - an HSM, a
-/// cloud KMS, or a vault transit engine - where the private key never enters application memory. The
-/// library calls this when a configured signing key is published public-only (its private half is absent
-/// from the key store). It is NOT registered by the library: a host with no external keys leaves it
-/// unregistered, and the crypto router then serves signing entirely in process.
+/// Signs abstract byte data with a server signing key: it resolves the algorithm implementation from the
+/// key and performs the private operation in process (when the key carries private material) or against an
+/// external key custodian (when it is published public-only). This is the routed, byte-level counterpart of
+/// the token-level <see cref="IJsonWebTokenSigner"/>: because it works with bytes rather than a whole token,
+/// an HSM/KMS/vault integration decorates or composes over it (see <see cref="ExternalKeySigner"/>) without
+/// touching JWS framing.
 /// </summary>
-/// <remarks>
-/// The <c>kid</c> passed in is the custodian's handle for the key, identical to the key's published
-/// <c>kid</c> - there is no separate identifier and no mapping. The implementation signs with its own key
-/// material and returns the raw signature bytes in the JWS wire format for the algorithm; for ECDSA that
-/// is the fixed-width R || S concatenation of RFC 7518 Section 3.4, not the ASN.1 DER encoding some SDKs
-/// return. It never receives or returns private key material.
-/// </remarks>
-public interface IExternalSigner
+public interface IDataSigner
 {
     /// <summary>
-    /// Signs <paramref name="data"/> with the external private key identified by <paramref name="kid"/>.
+    /// Produces the signature bytes for <paramref name="data"/> under <paramref name="algorithm"/> using
+    /// <paramref name="key"/>, in the JWS wire format for the algorithm.
     /// </summary>
-    /// <param name="kid">The key custodian's handle, identical to the published key's <c>kid</c>.</param>
+    /// <param name="key">The signing key. Its <c>kid</c> is the custodian's handle when it is external.</param>
     /// <param name="algorithm">The JWS algorithm identifier (e.g. RS256, ES256) the signature must use.</param>
     /// <param name="data">The signing input bytes, BASE64URL(header) + '.' + BASE64URL(payload).</param>
-    /// <param name="cancellationToken">Cancels the signing round-trip to the custodian.</param>
+    /// <param name="cancellationToken">Cancels the signing operation, including a custodian round-trip.</param>
     /// <returns>The raw signature bytes in JWS wire format for the algorithm.</returns>
     ValueTask<byte[]> SignAsync(
-        string kid,
+        JsonWebKey key,
         string algorithm,
         byte[] data,
         CancellationToken cancellationToken);
