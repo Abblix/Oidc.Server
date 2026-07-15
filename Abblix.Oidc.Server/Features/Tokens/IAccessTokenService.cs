@@ -22,8 +22,10 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -43,7 +45,8 @@ public interface IAccessTokenService
 	/// <param name="clientInfo">Information about the client for whom the token is being created.</param>
 	/// <returns>A task that represents the asynchronous create operation.
 	/// The task result contains the newly created <see cref="JsonWebToken"/>.</returns>
-	Task<EncodedJsonWebToken> CreateAccessTokenAsync(AuthSession authSession,
+	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
+		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo);
 
@@ -53,7 +56,11 @@ public interface IAccessTokenService
 	/// <param name="accessToken">The access token to authenticate.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
-	/// <returns>A task that represents the asynchronous authentication operation. The task result contains
-	/// the <see cref="AuthSession"/> and <see cref="AuthorizationContext"/> associated with the authenticated user.</returns>
-	Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(JsonWebToken accessToken, ClientInfo clientInfo);
+	/// <returns>A task that represents the asynchronous authentication operation. On success the result carries the
+	/// <see cref="AuthorizedGrant"/> (the authenticated user's session and authorization context); it carries an
+	/// <see cref="OidcError"/> when a pairwise subject cannot be opened for this client, so the caller rejects the
+	/// token at the protocol level. This mirrors the result shape of the refresh and token-exchange recovery paths.</returns>
+	Task<Result<AuthorizedGrant, OidcError>> AuthenticateByAccessTokenAsync(
+		JsonWebToken accessToken,
+		ClientInfo clientInfo);
 }

@@ -177,10 +177,11 @@ public class SubjectTypeConverterTests
 
     /// <summary>
     /// A pairwise identifier sealed for one sector cannot be opened under another: the sector is bound as associated
-    /// data, so Recover under the wrong client's sector fails loudly instead of returning a wrong or forged subject.
+    /// data, so Recover under the wrong client's sector returns null instead of a wrong or forged subject, letting
+    /// the caller reject the token.
     /// </summary>
     [Fact]
-    public void Recover_UnderDifferentSector_Throws()
+    public void Recover_UnderDifferentSector_ReturnsNull()
     {
         var converter = CreateConverter();
         var sealingClient = CreatePairwiseClient("client-a", sectorIdentifier: "one.example.com");
@@ -188,7 +189,7 @@ public class SubjectTypeConverterTests
 
         var pairwise = converter.Convert(Subject, sealingClient);
 
-        Assert.Throws<InvalidOperationException>(() => converter.Recover(pairwise, otherSectorClient));
+        Assert.Null(converter.Recover(pairwise, otherSectorClient));
     }
 
     /// <summary>
@@ -277,16 +278,16 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// A syntactically invalid pseudonym (not even valid base64url) is rejected loudly rather than mis-parsed into a
-    /// bogus subject.
+    /// A syntactically invalid pseudonym (not even valid base64url) returns null rather than being mis-parsed into a
+    /// bogus subject, letting the caller reject the token.
     /// </summary>
     [Fact]
-    public void Recover_MalformedPseudonym_Throws()
+    public void Recover_MalformedPseudonym_ReturnsNull()
     {
         var converter = CreateConverter();
         var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
 
-        Assert.Throws<InvalidOperationException>(() => converter.Recover("not valid base64url!!", client));
+        Assert.Null(converter.Recover("not valid base64url!!", client));
     }
 
     /// <summary>

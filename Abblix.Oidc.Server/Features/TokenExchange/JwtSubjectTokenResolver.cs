@@ -94,7 +94,16 @@ public sealed class JwtSubjectTokenResolver(
             : null;
 
         if (originalClient is not null)
-            subject = subjectTypeConverter.Recover(subject, originalClient);
+        {
+            // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
+            // rather than faulting the exchange.
+            var recovered = subjectTypeConverter.Recover(subject, originalClient);
+            if (recovered is null)
+                return new OidcError(
+                    ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
+
+            subject = recovered;
+        }
 
         // Direct raw access to authorization_details preserves byte-exact payload; DeepClone
         // detaches it from the subject_token's payload before it flows into a fresh

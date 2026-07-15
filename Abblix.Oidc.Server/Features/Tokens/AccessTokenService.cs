@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -31,6 +32,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
@@ -126,22 +128,29 @@ internal class AccessTokenService(
 	/// <param name="accessToken">The access token to be authenticated and analyzed.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
-	/// <returns>A task that returns the <see cref="AuthSession"/> and <see cref="AuthorizationContext"/>
-	/// derived from the token.</returns>
+	/// <returns>A task with the <see cref="AuthorizedGrant"/> (session and authorization context) on success, or an
+	/// <see cref="OidcError"/> when a pairwise subject cannot be opened for this client so the caller rejects the
+	/// token.</returns>
 	/// <remarks>
 	/// This method facilitates the secure validation of access tokens, ensuring that only tokens issued by the trusted
 	/// authority and not tampered with are accepted. It decodes embedded claims to reconstruct the original
 	/// authorization and authentication details, supporting secure and informed access control decisions.
 	/// </remarks>
-	public Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(
-		JsonWebToken accessToken, ClientInfo clientInfo)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthenticateByAccessTokenAsync(
+		JsonWebToken accessToken,
+		ClientInfo clientInfo)
 	{
 		var authSession = accessToken.Payload.ToAuthSession();
 		var authorizationContext = accessToken.Payload.ToAuthorizationContext();
 
 		// Recover the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
 		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
-		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
-		return Task.FromResult((authSession with { Subject = subject }, authorizationContext));
+		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
+		// at the protocol level instead of faulting.
+		var result = subjectTypeConverter.Recover(authSession.Subject, clientInfo)
+			.FailIfNull(new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
+			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
+
+		return Task.FromResult(result);
 	}
 }

@@ -84,16 +84,22 @@ public class SubjectTypeConverter : ISubjectTypeConverter
 
     /// <summary>
     /// Recovers the real subject from the client-facing subject: for a pairwise client, opens the per-sector
-    /// pseudonym; for a public client, returns the subject unchanged.
+    /// pseudonym; for a public client, returns the subject unchanged. Returns <c>null</c> when a pairwise pseudonym
+    /// cannot be opened, so the caller can surface a protocol-level rejection instead of faulting.
     /// </summary>
-    public string Recover(string subject, ClientInfo clientInfo) => clientInfo.SubjectType switch
+    public string? Recover(string subject, ClientInfo clientInfo) => clientInfo.SubjectType switch
     {
         SubjectTypes.Pairwise => RecoverPairwise(subject, clientInfo),
         _ => subject,
     };
 
-    private string RecoverPairwise(string pseudonym, ClientInfo clientInfo)
+    private string? RecoverPairwise(string pseudonym, ClientInfo clientInfo)
     {
+        // The pseudonym is client-supplied (it rides in the token's 'sub'), so a value that is not valid base64url or
+        // does not open is a rejected input, not a server fault: return null and let the caller surface the protocol
+        // error. A missing pairwise configuration is a server misconfiguration and still throws (via Encryptor).
+        var encryptor = Encryptor(clientInfo);
+
         byte[] sealedData;
         try
         {
@@ -101,17 +107,11 @@ public class SubjectTypeConverter : ISubjectTypeConverter
         }
         catch (FormatException)
         {
-            throw new InvalidOperationException(
-                $"The pairwise subject for client '{clientInfo.ClientId}' is not a valid pseudonym.");
+            return null;
         }
 
-        var subject = Encryptor(clientInfo).Open(sealedData, Sector(clientInfo));
-        if (subject is null)
-            throw new InvalidOperationException(
-                $"The pairwise subject for client '{clientInfo.ClientId}' could not be recovered: it is malformed, " +
-                "sealed for a different sector, or was produced under a different pairwise salt.");
-
-        return Encoding.UTF8.GetString(subject);
+        var subject = encryptor.Open(sealedData, Sector(clientInfo));
+        return subject is not null ? Encoding.UTF8.GetString(subject) : null;
     }
 
     private DeterministicAeadEncryptor Encryptor(ClientInfo clientInfo)

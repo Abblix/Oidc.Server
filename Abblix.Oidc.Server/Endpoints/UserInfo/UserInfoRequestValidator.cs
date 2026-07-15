@@ -109,9 +109,10 @@ public class UserInfoRequestValidator(
 		// Resolve the client before authenticating the token: a pairwise access token's 'sub' is opened back to
 		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
 		var clientId = token.Payload.ClientId;
-		var clientInfo = clientId is null
-			? null
-			: await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+		var clientInfo = clientId is not null
+			? await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck()
+			: null;
+
 		if (clientInfo == null)
 		{
 			return new OidcError(
@@ -119,9 +120,10 @@ public class UserInfoRequestValidator(
 				$"The client '{clientId}' is not found");
 		}
 
-		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token, clientInfo);
-
-		return new ValidUserInfoRequest(userInfoRequest, authSession, authContext, clientInfo);
+		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
+		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
+		return (await accessTokenService.AuthenticateByAccessTokenAsync(token, clientInfo))
+			.MapSuccess(grant => new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo));
 	}
 
 	/// <summary>
@@ -131,7 +133,8 @@ public class UserInfoRequestValidator(
 	/// attributes.
 	/// </summary>
 	private static Result<string, OidcError> ExtractAccessToken(
-		UserInfoRequest userInfoRequest, ClientRequest clientRequest)
+		UserInfoRequest userInfoRequest,
+		ClientRequest clientRequest)
 	{
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader == null)
