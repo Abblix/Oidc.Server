@@ -148,7 +148,7 @@ internal class AccessTokenService(
 		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
 		// at the protocol level instead of faulting.
 		var result = subjectTypeConverter.Recover(authSession.Subject, clientInfo)
-			.FailIfNull(new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
+			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
 			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
 
 		return Task.FromResult(result);

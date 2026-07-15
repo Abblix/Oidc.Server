@@ -187,7 +187,7 @@ public class ExternalKeyEncryptorTests
             CancellationToken cancellationToken)
         {
             UnwrapCalls++;
-            byte[]? cek = fullKey switch
+            var cek = fullKey switch
             {
                 RsaJsonWebKey rsaKey => RsaDecrypt(rsaKey, algorithm, encryptedKey),
 
