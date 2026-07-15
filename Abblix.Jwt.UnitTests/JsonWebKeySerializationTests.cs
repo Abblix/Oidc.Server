@@ -554,4 +554,36 @@ public class JsonWebKeySerializationTests
         Assert.True(jsonDoc.RootElement.TryGetProperty("kty", out var ktyProp));
         Assert.Equal("oct", ktyProp.GetString());
     }
+
+    /// <summary>
+    /// A public-only JWK omits its absent private-key members rather than serializing them as null, even when
+    /// the caller's options do NOT set WhenWritingNull (e.g. ASP.NET's default JSON options). The converter
+    /// forces this because a null member is invalid in a JWK per RFC 7517: a public key published in a JWKS
+    /// must never carry <c>"d": null</c>.
+    /// </summary>
+    [Fact]
+    public void RsaJsonWebKey_PublicOnly_OmitsNullMembers_RegardlessOfCallerOptions()
+    {
+        // Options that would otherwise write null members - the converter must override this for JWKs.
+        var optionsWritingNulls = new JsonSerializerOptions { PropertyNamingPolicy = null };
+
+        var publicOnly = new RsaJsonWebKey
+        {
+            KeyId = RsaKeyId,
+            Usage = "sig",
+            Algorithm = "RS256",
+            Exponent = [1, 0, 1],
+            Modulus = [0xAB, 0xCD],
+            // Private members are left null, as they are for an external, public-only key.
+        };
+
+        var json = JsonSerializer.Serialize<JsonWebKey>(publicOnly, optionsWritingNulls);
+        var jsonDoc = JsonDocument.Parse(json);
+
+        Assert.True(jsonDoc.RootElement.TryGetProperty("n", out _));
+        Assert.True(jsonDoc.RootElement.TryGetProperty("e", out _));
+
+        foreach (var absent in new[] { "d", "p", "q", "dp", "dq", "qi", "x5c", "x5t" })
+            Assert.False(jsonDoc.RootElement.TryGetProperty(absent, out _), $"'{absent}' must be absent, not null");
+    }
 }
