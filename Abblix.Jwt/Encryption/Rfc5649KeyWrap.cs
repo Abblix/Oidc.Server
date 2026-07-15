@@ -134,9 +134,12 @@ internal static class Rfc5649KeyWrap
         if (!CryptographicOperations.FixedTimeEquals(aiv[..4], AivPrefix))
             return Reject(padded);
 
+        // The message length must be positive, no longer than the padded data, and leave between zero and seven
+        // padding bytes; a whole padding semiblock would mean the wrap used one semiblock too many. Computed in
+        // signed arithmetic so the padding count cannot underflow.
         var messageLength = BinaryPrimitives.ReadUInt32BigEndian(aiv[4..]);
-        var paddedLength = (uint)padded.Length;
-        if (messageLength == 0 || messageLength <= paddedLength - SemiblockSize || messageLength > paddedLength)
+        var paddingLength = (long)padded.Length - messageLength;
+        if (messageLength == 0 || paddingLength < 0 || paddingLength >= SemiblockSize)
             return Reject(padded);
 
         for (var i = (int)messageLength; i < padded.Length; i++)
