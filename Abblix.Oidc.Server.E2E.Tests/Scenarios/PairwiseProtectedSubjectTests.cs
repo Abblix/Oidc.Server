@@ -32,10 +32,13 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -49,15 +52,17 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// Enabled on an isolated host so the shared default suite is untouched.
 /// </summary>
 /// <remarks>
-/// This E2E host stubs <c>IUserClaimsProvider</c> with a static provider that bypasses the id_token's pairwise
-/// conversion, so the pseudonym is checked against the deterministically-computed value rather than the stubbed
-/// id_token's <c>sub</c>. The access-token pseudonym is produced by the code under test independently of the
-/// stubbed claims provider.
+/// The E2E host replaces the default claims stub (which writes the raw subject) with one that applies the pairwise
+/// conversion exactly as the production <c>UserClaimsProvider</c> does, so the id_token carries the real per-sector
+/// pseudonym. The test asserts <c>access_token.sub == id_token.sub</c> directly, and also against the
+/// deterministically recomputed pseudonym to pin the exact value. The access-token pseudonym is produced by the
+/// code under test (the token service), independent of the claims provider.
 /// </remarks>
 public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(factory)
 {
     private const string PairwiseClientId = "e2e-pairwise";
     private const string RealSubject = "e2e-subject";
+    private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
 
     [Fact]
     public async Task PairwiseClient_AccessMatchesIdToken_HidesRealSubject_AndUserInfoRecoversUser()
@@ -69,14 +74,17 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
         var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
-        var accessPayload = DecodeJwtPayload(accessToken);
-        var accessSub = accessPayload["sub"]!.GetValue<string>();
+        var accessSub = DecodeJwtPayload(accessToken)["sub"]!.GetValue<string>();
+        var idSub = DecodeJwtPayload(tokens["id_token"]!.GetValue<string>())["sub"]!.GetValue<string>();
 
-        // The access token carries the pairwise pseudonym - the exact value the id_token carries in a real host -
-        // not the real subject: an unencrypted access token no longer leaks the real subject to the client. The
-        // expected value is recomputed with the same salt and client so the check is deterministic.
+        // RFC 9068 Section 2.2: the access token's sub matches the id_token's sub. Both carry the pairwise
+        // pseudonym now that the access token's subject is sealed too - before #256 they diverged (real sub in the
+        // access token, pairwise in the id_token). Asserting them equal proves the consistency directly, and the
+        // recomputed value pins that it is the expected per-sector pseudonym, not the real subject.
+        Assert.Equal(idSub, accessSub);
         Assert.Equal(ExpectedPseudonym(), accessSub);
         Assert.NotEqual(RealSubject, accessSub);
+        Assert.NotEqual(RealSubject, idSub);
 
         // The server recovers the real subject by opening the reversible pseudonym in sub to resolve the user at
         // UserInfo - the real subject never appears in the client-visible token.
@@ -131,8 +139,40 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task PairwiseClient_TokenExchange_OpensSubjectToken_AndReissuesPseudonym()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
+        var subjectToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+
+        // Presenting the pairwise access token as an RFC 8693 subject_token forces the resolver to look the
+        // pairwise client up and open the pseudonym in its sub back to the real subject before building the grant.
+        var exchanged = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            ["subject_token"] = subjectToken,
+            ["subject_token_type"] = AccessTokenType,
+            [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var exchangedToken = exchanged[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var exchangedSub = DecodeJwtPayload(exchangedToken)["sub"]!.GetValue<string>();
+
+        // The re-issued token carries the same pairwise pseudonym: the exchange recovered the real subject from the
+        // presented pseudonym and re-sealed it for the same client. Had recovery not fired, the pseudonym would have
+        // been treated as the real subject and sealed a second time into a different value - so this equality is
+        // exactly what proves the subject_token was opened end to end.
+        Assert.Equal(ExpectedPseudonym(), exchangedSub);
+        Assert.NotEqual(RealSubject, exchangedSub);
+    }
+
     // The pairwise pseudonym the code under test must produce for this client and subject, recomputed with the same
-    // salt and client so E2E checks are deterministic (the E2E host stubs the id_token's own pairwise conversion).
+    // salt and client so the E2E can pin the exact expected value deterministically.
     private static string ExpectedPseudonym()
         => new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) })
             .Convert(RealSubject, new ClientInfo(PairwiseClientId)
@@ -187,7 +227,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         {
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.TokenExchange],
             PkceRequired = true,
             RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
             OfflineAccessAllowed = true,
@@ -199,6 +239,13 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             {
                 services.AddPairwiseSubjectIdentifiers(
                     new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+
+                // Emit a real pairwise id_token: the default host stub writes the raw subject to the id_token's
+                // 'sub', so replace it with a provider that applies the pairwise conversion exactly as the
+                // production UserClaimsProvider does. This lets the test assert access_token.sub == id_token.sub
+                // (RFC 9068 Section 2.2) directly instead of against a recomputed value.
+                services.Replace(
+                    ServiceDescriptor.Singleton<IUserClaimsProvider, PairwiseStaticUserClaimsProvider>());
 
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                     new PostConfigureOptions<OidcOptions>(
