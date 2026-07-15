@@ -29,12 +29,13 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Verifies external (key-custodian) JWE key management: a recipient key published public-only, whose
-/// private/secret half lives behind an <see cref="IExternalKeyEncryptor"/>, decrypts and wraps through the
-/// port so no private material enters the library. Covers RSA unwrap, symmetric AES-KW wrap+unwrap,
-/// external ECDH-ES agreement, and the fail-closed rejection of direct key agreement.
+/// Verifies external (key-custodian) JWE key recovery: a recipient key published public-only, whose
+/// private/secret half lives behind an <see cref="IKeyCustodian"/>, decrypts through the key-recovery seam so no
+/// private material enters the library. Covers RSA unwrap, symmetric AES-KW unwrap, external ECDH-ES agreement,
+/// and the fail-closed rejection of producing a JWE with a public-only symmetric key - wrapping uses the local
+/// secret or the recipient's public half and is never routed to a custodian.
 /// </summary>
-public class ExternalKeyEncryptorTests
+public class ExternalKeyDecryptorTests
 {
     private const string Issuer = "https://auth.example.com";
     private static readonly RsaJsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
@@ -42,42 +43,44 @@ public class ExternalKeyEncryptorTests
     [Fact]
     public async Task ExternalRsaKey_DecryptsInboundJwe_ViaUnwrapPort()
     {
-        // A full RSA encryption key; the library holds only its public half, the private half standing
-        // behind the fake custodian (an inbound encrypted request object is the canonical scenario).
+        // A full RSA encryption key; the library holds only its public half, the private half standing behind
+        // the fake custodian (an inbound encrypted request object is the canonical scenario).
         var fullKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256);
         var publicOnly = (RsaJsonWebKey)fullKey.Sanitize(includePrivateKeys: false);
         var custodian = new FakeKeyCustodian(fullKey);
 
-        // RSA encryption uses the public half, so producing the JWE is a local operation (no port call).
+        // RSA encryption uses the public half, so producing the JWE is a local operation; only the decrypt-side
+        // unwrap is remote.
         var result = await RoundTripAsync(
             custodian,
-            publicOnly,
+            encryptionKey: publicOnly,
+            decryptionKey: publicOnly,
             EncryptionAlgorithms.KeyManagement.RsaOaep256,
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm);
 
         AssertSucceeded(result);
-        Assert.Equal(1, custodian.UnwrapCalls); // only the decrypt (unwrap) is remote
-        Assert.Equal(0, custodian.WrapCalls);
+        Assert.Equal(1, custodian.UnwrapCalls);
         Assert.False(publicOnly.HasPrivateKey);
     }
 
     [Fact]
-    public async Task ExternalSymmetricKey_WrapsAndUnwraps_ViaPort()
+    public async Task ExternalSymmetricKey_DecryptsInboundJwe_ViaUnwrapPort()
     {
-        // A full symmetric (A256KW) key and its published public-only form (the key bytes are absent).
+        // A full symmetric (A256KW) key and its published public-only form (the key bytes are absent). Wrapping
+        // uses the local secret, so the JWE is produced in process with the full key; only the decrypt-side
+        // unwrap is remote, routed by the external (public-only) key's kid.
         var fullKey = new OctetJsonWebKey { KeyId = "ext-oct", KeyValue = CryptoRandom.GetRandomBytes(32) };
         var external = fullKey with { KeyValue = null };
         var custodian = new FakeKeyCustodian(fullKey);
 
-        // A symmetric key has no public half, so both wrap (produce) and unwrap (consume) are remote.
         var result = await RoundTripAsync(
             custodian,
-            external,
+            encryptionKey: fullKey,
+            decryptionKey: external,
             EncryptionAlgorithms.KeyManagement.Aes256KW,
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm);
 
         AssertSucceeded(result);
-        Assert.Equal(1, custodian.WrapCalls);
         Assert.Equal(1, custodian.UnwrapCalls);
         Assert.False(external.HasPrivateKey);
     }
@@ -90,11 +93,12 @@ public class ExternalKeyEncryptorTests
         var publicOnly = (EllipticCurveJsonWebKey)fullKey.Sanitize(includePrivateKeys: false);
         var custodian = new FakeKeyCustodian(fullKey);
 
-        // ECDH-ES encryption agrees against the recipient's public half locally; only the decrypt-side
-        // agreement needs the private key, so only it is remote. The KDF runs locally on the shared secret.
+        // ECDH-ES encryption agrees against the recipient's public half locally; only the decrypt-side agreement
+        // needs the private key, so only it is remote. The KDF runs locally on the shared secret.
         var result = await RoundTripAsync(
             custodian,
-            publicOnly,
+            encryptionKey: publicOnly,
+            decryptionKey: publicOnly,
             EncryptionAlgorithms.KeyManagement.EcdhEs,
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm);
 
@@ -104,11 +108,12 @@ public class ExternalKeyEncryptorTests
     }
 
     [Fact]
-    public async Task ExternalDirectKey_Encrypt_FailsClosed()
+    public async Task PublicOnlySymmetricKey_Encrypt_FailsClosed()
     {
-        // Direct key agreement has no external form: the CEK is the shared secret itself, so an external
-        // "dir" key cannot be wrapped. The router fails closed rather than reaching for absent material.
-        var external = new OctetJsonWebKey { KeyId = "ext-dir", KeyValue = null };
+        // A symmetric key has no public half: wrapping needs the secret, and wrapping is never routed to a
+        // custodian, so producing a JWE with a public-only symmetric key fails closed rather than reaching for
+        // absent material.
+        var external = new OctetJsonWebKey { KeyId = "ext-oct", KeyValue = null };
         await using var provider = BuildProvider(new FakeKeyCustodian(external));
         var creator = provider.GetRequiredService<IJsonWebTokenCreator>();
 
@@ -116,13 +121,14 @@ public class ExternalKeyEncryptorTests
             NewToken(),
             SigningKey,
             external,
-            EncryptionAlgorithms.KeyManagement.Dir,
+            EncryptionAlgorithms.KeyManagement.Aes256KW,
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm));
     }
 
     private static async Task<Result<JsonWebToken, JwtValidationError>> RoundTripAsync(
-        IExternalKeyEncryptor custodian,
+        IKeyCustodian custodian,
         JsonWebKey encryptionKey,
+        JsonWebKey decryptionKey,
         string keyManagementAlgorithm,
         string contentEncryptionAlgorithm)
     {
@@ -138,17 +144,17 @@ public class ExternalKeyEncryptorTests
             Options = ValidationOptions.ValidateIssuer | ValidationOptions.RequireSignedTokens,
             ValidateIssuer = iss => Task.FromResult(iss == Issuer),
             ResolveIssuerSigningKeys = _ => new[] { SigningKey.Sanitize(false) }.ToAsyncEnumerable(),
-            ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
+            ResolveTokenDecryptionKeys = _ => new[] { decryptionKey }.ToAsyncEnumerable(),
         });
     }
 
-    private static ServiceProvider BuildProvider(IExternalKeyEncryptor custodian)
+    private static ServiceProvider BuildProvider(IKeyCustodian custodian)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddSingleton(custodian); // the host wires its key-management port
+        services.AddExternalKeyDecryptor(custodian); // the host wires its key custodian for decryption
         return services.BuildServiceProvider();
     }
 
@@ -170,13 +176,12 @@ public class ExternalKeyEncryptorTests
             result.TryGetFailure(out var error) ? $"{error.Error} - {error.ErrorDescription}" : "Validation failed");
 
     /// <summary>
-    /// Stands in for an HSM/KMS/vault: holds the private/secret material the library never sees and performs
-    /// the key-management operations that need it, recording how many times each was invoked.
+    /// Stands in for an HSM/KMS/vault: holds the private/secret material the library never sees and performs the
+    /// decrypt-side key-recovery operations that need it, recording how many times each was invoked.
     /// </summary>
-    private sealed class FakeKeyCustodian(JsonWebKey fullKey) : IExternalKeyEncryptor
+    private sealed class FakeKeyCustodian(JsonWebKey fullKey) : IKeyCustodian
     {
         public int UnwrapCalls { get; private set; }
-        public int WrapCalls { get; private set; }
         public int AgreeCalls { get; private set; }
 
         public ValueTask<byte[]?> UnwrapKeyAsync(
@@ -199,18 +204,6 @@ public class ExternalKeyEncryptorTests
             return new ValueTask<byte[]?>(cek);
         }
 
-        public ValueTask<byte[]> WrapKeyAsync(
-            string kid,
-            string algorithm,
-            JsonWebTokenHeader header,
-            byte[] contentEncryptionKey,
-            CancellationToken cancellationToken)
-        {
-            WrapCalls++;
-            var secret = ((OctetJsonWebKey)fullKey).KeyValue!;
-            return new ValueTask<byte[]>(AesKeyWrap.Wrap(secret, contentEncryptionKey));
-        }
-
         public ValueTask<byte[]> AgreeKeyAsync(
             string kid,
             string algorithm,
@@ -222,12 +215,6 @@ public class ExternalKeyEncryptorTests
             using var ephemeral = ((EllipticCurveJsonWebKey)ephemeralPublicKey).ToEcdh();
             return new ValueTask<byte[]>(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
         }
-
-        public ValueTask<byte[]> SealAsync(string kid, byte[] plaintext, byte[] associatedData, CancellationToken cancellationToken)
-            => throw new NotSupportedException("Seal is not exercised by these tests.");
-
-        public ValueTask<byte[]?> OpenAsync(string kid, byte[] sealedData, byte[] associatedData, CancellationToken cancellationToken)
-            => throw new NotSupportedException("Open is not exercised by these tests.");
 
         private static byte[]? RsaDecrypt(RsaJsonWebKey key, string algorithm, byte[] encryptedKey)
         {

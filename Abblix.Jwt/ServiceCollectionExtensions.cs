@@ -52,6 +52,24 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds HSM/KMS/vault decryption for public-only encryption keys: registers a decryption backend
+    /// (<see cref="IDataDecryptor"/>) that routes every key with no secret material to the supplied
+    /// <paramref name="custodian"/> by its <c>kid</c>, while keys that carry their secret keep unwrapping in
+    /// process on the built-in backend. Call after <see cref="AddJsonWebTokens"/>. Encryption is never routed to
+    /// a custodian, so there is no matching encryptor: producing a JWE wraps the CEK with the recipient's public
+    /// half or a locally held shared secret, in process.
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <param name="custodian">The external key custodian serving RSA/symmetric unwrap and ECDH agreement.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection AddExternalKeyDecryptor(this IServiceCollection services, IKeyCustodian custodian)
+    {
+        services.AddSingleton(custodian);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataDecryptor, ExternalKeyDecryptor>());
+        return services.Compose<IDataDecryptor, CompositeDataDecryptor>();
+    }
+
+    /// <summary>
     /// Registers services for creating and validating JSON Web Tokens (JWTs) within the application.
     /// </summary>
     /// <remarks>
@@ -83,6 +101,12 @@ public static class ServiceCollectionExtensions
         // AddExternalSigner (or its own Compose<IDataSigner, CompositeDataSigner> call); the composite then
         // routes each key to the backend that owns it and fails closed when none does.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
+
+        // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam: the in-process
+        // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. A host
+        // adds HSM/KMS/vault decryption via AddExternalKeyDecryptor. Encryption (wrapping the CEK) uses the
+        // recipient's public half or a local secret and never routes here, so there is no encryptor seam.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataDecryptor, LocalKeyDecryptor>());
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is
