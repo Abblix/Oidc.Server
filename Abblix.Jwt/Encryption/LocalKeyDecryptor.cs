@@ -25,14 +25,14 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// The in-process decryption backend (<see cref="IDataDecryptor"/>): owns keys that carry their private/secret
+/// The in-process decryption backend (<see cref="IContentKeyDecryptor"/>): owns keys that carry their private/secret
 /// material and recovers the Content Encryption Key with them, dispatching to the keyed per-algorithm
 /// <see cref="IKeyManagementAlgorithm{TJsonWebKey}"/>. It is one peer among the backends
-/// <see cref="CompositeDataDecryptor"/> routes across; a public-only key is not its own (<see cref="CanDecrypt"/>
+/// <see cref="CompositeContentKeyDecryptor"/> routes across; a public-only key is not its own (<see cref="CanDecrypt"/>
 /// returns false), so such a key routes to an external backend, or - when this backend is resolved alone in the
 /// uncomposed topology - yields a uniform null (RFC 7516 §11.5) rather than a throw.
 /// </summary>
-internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : IDataDecryptor
+internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : IContentKeyDecryptor
 {
     /// <summary>
     /// Owns any key that carries its private/secret material: in-process unwrap needs that half in memory.

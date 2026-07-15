@@ -18,12 +18,12 @@ namespace Abblix.Jwt;
 /// management algorithms by algorithm. Producing a JWE wraps the CEK in process - with the recipient's public
 /// half for asymmetric algorithms, or a locally held shared secret for symmetric ones - so encryption never
 /// needs a custodian.</param>
-/// <param name="dataDecryptor">The key-recovery seam: it recovers the CEK in process for a key that carries its
+/// <param name="contentKeyDecryptor">The key-recovery seam: it recovers the CEK in process for a key that carries its
 /// private/secret material, or via an external key custodian for a public-only one. Only decryption routes
 /// local-vs-custodian; encryption stays entirely in process and does not pass through this seam.</param>
 internal class JsonWebTokenEncryptor(
     IServiceProvider serviceProvider,
-    IDataDecryptor dataDecryptor) : IJsonWebTokenEncryptor
+    IContentKeyDecryptor contentKeyDecryptor) : IJsonWebTokenEncryptor
 {
     /// <summary>
     /// Encrypts an inner JWS token to create a JWE token.
@@ -219,7 +219,7 @@ internal class JsonWebTokenEncryptor(
             // This is what makes RSA1_5 (RSAES-PKCS1-v1_5) safe to support: it closes the
             // Bleichenbacher/Manger padding oracle by removing the observable difference between valid
             // and invalid padding.
-            var contentEncryptionKey = await dataDecryptor.DecryptKeyAsync(header, key, algorithm, encryptedKey, cancellationToken);
+            var contentEncryptionKey = await contentKeyDecryptor.DecryptKeyAsync(header, key, algorithm, encryptedKey, cancellationToken);
             if (contentEncryptionKey == null || contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 

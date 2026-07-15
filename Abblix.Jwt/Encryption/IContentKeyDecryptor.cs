@@ -30,10 +30,10 @@ namespace Abblix.Jwt.Encryption;
 /// PUBLIC half for asymmetric algorithms, or a locally held shared secret for symmetric ones, so it never needs
 /// a custodian and never passes through this seam - it stays in <see cref="IJsonWebTokenEncryptor"/>, exactly as
 /// signature verification stays out of <see cref="Signing.IDataSigner"/>. Backends compose as peers behind
-/// <see cref="CompositeDataDecryptor"/>: <see cref="LocalKeyDecryptor"/> unwraps in process, an external
+/// <see cref="CompositeContentKeyDecryptor"/>: <see cref="LocalKeyDecryptor"/> unwraps in process, an external
 /// custodian backend (<see cref="ExternalKeyDecryptor"/>) unwraps against an HSM/KMS/vault.
 /// </summary>
-public interface IDataDecryptor
+public interface IContentKeyDecryptor
 {
     /// <summary>
     /// Reports whether this backend owns recovering the CEK for <paramref name="key"/>. The in-process backend

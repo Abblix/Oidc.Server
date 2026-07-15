@@ -53,7 +53,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds HSM/KMS/vault decryption for public-only encryption keys: registers a decryption backend
-    /// (<see cref="IDataDecryptor"/>) that routes every key with no secret material to the supplied
+    /// (<see cref="IContentKeyDecryptor"/>) that routes every key with no secret material to the supplied
     /// <paramref name="custodian"/> by its <c>kid</c>, while keys that carry their secret keep unwrapping in
     /// process on the built-in backend. Call after <see cref="AddJsonWebTokens"/>. Encryption is never routed to
     /// a custodian, so there is no matching encryptor: producing a JWE wraps the CEK with the recipient's public
@@ -65,8 +65,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddExternalKeyDecryptor(this IServiceCollection services, IKeyCustodian custodian)
     {
         services.AddSingleton(custodian);
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataDecryptor, ExternalKeyDecryptor>());
-        return services.Compose<IDataDecryptor, CompositeDataDecryptor>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, ExternalKeyDecryptor>());
+        return services.Compose<IContentKeyDecryptor, CompositeContentKeyDecryptor>();
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public static class ServiceCollectionExtensions
         // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. A host
         // adds HSM/KMS/vault decryption via AddExternalKeyDecryptor. Encryption (wrapping the CEK) uses the
         // recipient's public half or a local secret and never routes here, so there is no encryptor seam.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataDecryptor, LocalKeyDecryptor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, LocalKeyDecryptor>());
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is

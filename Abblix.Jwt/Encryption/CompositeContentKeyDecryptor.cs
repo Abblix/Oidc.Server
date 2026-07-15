@@ -23,7 +23,7 @@
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// The key-recovery seam (<see cref="IDataDecryptor"/>) as a composition of decryption backends: it holds every
+/// The key-recovery seam (<see cref="IContentKeyDecryptor"/>) as a composition of decryption backends: it holds every
 /// registered backend and, per call, routes to the first that owns the key. Ownership is decided by the key -
 /// <see cref="LocalKeyDecryptor"/> owns keys that carry their private/secret material, external custodian
 /// backends (<see cref="ExternalKeyDecryptor"/>) own their public-only keys - so in-process unwrap, one or more
@@ -31,7 +31,7 @@ namespace Abblix.Jwt.Encryption;
 /// decryption failure (RFC 7516 §11.5), never a throw on the attacker-supplied token. The backends are keyed by
 /// this composite's type so it enumerates them without resolving itself.
 /// </summary>
-internal sealed class CompositeDataDecryptor(IEnumerable<IDataDecryptor> backends) : IDataDecryptor
+internal sealed class CompositeContentKeyDecryptor(IEnumerable<IContentKeyDecryptor> backends) : IContentKeyDecryptor
 {
     public bool CanDecrypt(JsonWebKey key) => backends.Any(backend => backend.CanDecrypt(key));
 

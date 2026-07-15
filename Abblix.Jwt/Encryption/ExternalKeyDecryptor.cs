@@ -27,14 +27,14 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// The external-custodian decryption backend (<see cref="IDataDecryptor"/>): owns public-only keys and recovers
+/// The external-custodian decryption backend (<see cref="IContentKeyDecryptor"/>): owns public-only keys and recovers
 /// the Content Encryption Key through an <see cref="IKeyCustodian"/> (an HSM/KMS/vault), addressing it by the
 /// key's <c>kid</c>. RSA decryption and symmetric unwrap are single remote calls; ECDH-ES sends only the
 /// agreement to the custodian and runs the Concat KDF and any AES key unwrap in process on the returned shared
 /// secret. Anything the custodian cannot serve (an algorithm with no external form, or one that does not match
 /// the key type) returns null, so the RFC 7516 §11.5 mitigation upstream sees a uniform failure.
 /// </summary>
-internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider) : IDataDecryptor
+internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider) : IContentKeyDecryptor
 {
     /// <summary>Owns any public-only key: its private half lives with the custodian, not in process.</summary>
     public bool CanDecrypt(JsonWebKey key) => !key.HasPrivateKey;
