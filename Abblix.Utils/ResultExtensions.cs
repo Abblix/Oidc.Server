@@ -78,6 +78,21 @@ public static class ResultExtensions
     }
 
     /// <summary>
+    /// Converts a nullable value into a successful result if not null; otherwise, returns a failure.
+    /// </summary>
+    /// <typeparam name="TSuccess">The type of the value.</typeparam>
+    /// <typeparam name="TFailure">The type of the failure.</typeparam>
+    /// <param name="value">The nullable value to check.</param>
+    /// <param name="failure">The failure to return if the value is null.</param>
+    /// <returns>A successful result if the value is not null; otherwise, a failed result.</returns>
+    public static Result<TSuccess, TFailure> FailIfNull<TSuccess, TFailure>(
+        this TSuccess? value,
+        Func<TFailure> failure)
+    {
+        return value is not null ? value : failure();
+    }
+
+    /// <summary>
     /// Asynchronously converts a nullable value into a successful result if not null; otherwise, returns a failure.
     /// </summary>
     /// <typeparam name="TSuccess">The type of the value.</typeparam>
@@ -88,6 +103,22 @@ public static class ResultExtensions
     public static async Task<Result<TSuccess, TFailure>> FailIfNullAsync<TSuccess, TFailure>(
         this Task<TSuccess?> valueTask,
         TFailure failure)
+    {
+        var value = await valueTask;
+        return value.FailIfNull(failure);
+    }
+
+    /// <summary>
+    /// Asynchronously converts a nullable value into a successful result if not null; otherwise, returns a failure.
+    /// </summary>
+    /// <typeparam name="TSuccess">The type of the value.</typeparam>
+    /// <typeparam name="TFailure">The type of the failure.</typeparam>
+    /// <param name="valueTask">The asynchronous task producing the nullable value.</param>
+    /// <param name="failure">The failure to return if the value is null.</param>
+    /// <returns>A task representing the successful or failed result.</returns>
+    public static async Task<Result<TSuccess, TFailure>> FailIfNullAsync<TSuccess, TFailure>(
+        this Task<TSuccess?> valueTask,
+        Func<TFailure> failure)
     {
         var value = await valueTask;
         return value.FailIfNull(failure);
