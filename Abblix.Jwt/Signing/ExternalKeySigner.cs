@@ -23,23 +23,25 @@
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// An <see cref="IDataSigner"/> decorator that routes a public-only key's signing to a host
-/// <see cref="ExternalSignHandler"/> (an HSM/KMS/vault callback), and delegates any key that carries private
-/// material to the inner signer. The absence of private material (not a flag) selects the remote path, and
-/// the key's <c>kid</c> IS the custodian's handle. Registered by the <c>AddExternalSigner</c> convenience;
-/// a host that wants full control writes its own <see cref="IDataSigner"/> decorator instead.
+/// An external-custodian signing backend (<see cref="IDataSigner"/>) that owns public-only keys and routes
+/// their signing to a single host <see cref="ExternalSignHandler"/> (an HSM/KMS/vault callback), addressing it
+/// by the key's <c>kid</c>. It is the backend <c>AddExternalSigner</c> registers for the common single-custodian
+/// case; because it owns every public-only key, it does not combine with another external backend - a host
+/// wiring several custodians registers a per-custodian <see cref="IDataSigner"/> that owns only its own keys.
 /// </summary>
-internal sealed class ExternalKeySigner(IDataSigner inner, ExternalSignHandler sign) : IDataSigner
+internal sealed class ExternalKeySigner(ExternalSignHandler sign) : IDataSigner
 {
+    /// <summary>
+    /// Owns any public-only key: its private half lives with the custodian, so it cannot be signed in process.
+    /// </summary>
+    public bool CanSign(JsonWebKey key) => !key.HasPrivateKey;
+
     public ValueTask<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,
         CancellationToken cancellationToken)
     {
-        if (key.HasPrivateKey)
-            return inner.SignAsync(key, algorithm, data, cancellationToken);
-
         // The kid published in the token and JWKS IS the custodian's handle - no separate identifier and no
         // mapping - so an external key must carry one.
         var kid = key.KeyId ?? throw new InvalidOperationException(

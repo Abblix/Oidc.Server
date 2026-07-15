@@ -26,8 +26,8 @@ namespace Abblix.Jwt.Signing;
 /// A host callback that signs bytes with a signing key held by an external custodian (HSM, cloud KMS, or a
 /// vault transit engine), addressed by its <c>kid</c> and never seeing private material. Pass it to
 /// <c>AddExternalSigner</c> to route a public-only signing key to the custodian without writing a full
-/// <see cref="IDataSigner"/> decorator; a host that wants more control (multiple custodians, custom routing)
-/// writes its own decorator over <see cref="IDataSigner"/> instead.
+/// <see cref="IDataSigner"/> backend; a host that wants more control (multiple custodians, custom routing)
+/// registers its own <see cref="IDataSigner"/> backend instead.
 /// </summary>
 /// <param name="kid">The custodian's handle, identical to the published key's <c>kid</c>.</param>
 /// <param name="algorithm">The JWS algorithm identifier (e.g. RS256, ES256) the signature must use.</param>

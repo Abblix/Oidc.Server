@@ -25,22 +25,28 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// The in-process <see cref="IDataSigner"/>: signs with a signing key whose private material is held in
-/// memory, dispatching to the keyed per-algorithm <see cref="ISignatureAlgorithm{TJsonWebKey}"/>, and fails
-/// closed when the key carries none. It is the terminal link of any signer chain: an external-key decorator
-/// sits in front of it (see <see cref="ExternalKeySigner"/>), so a public-only key reaching this link is one
-/// that no decorator claimed, which must not sign with nothing.
+/// The in-process signing backend (<see cref="IDataSigner"/>): owns keys that carry private material and signs
+/// with them in memory, dispatching to the keyed per-algorithm <see cref="ISignatureAlgorithm{TJsonWebKey}"/>.
+/// It is one peer among the backends <see cref="CompositeDataSigner"/> routes across; a public-only key is not
+/// its own (<see cref="CanSign"/> returns false), so such a key routes to an external backend or, when none
+/// owns it, the composite fails closed.
 /// </summary>
 internal sealed class LocalKeySigner(IServiceProvider serviceProvider) : IDataSigner
 {
+    /// <summary>
+    /// Owns any key that carries private material: in-process signing needs the private half in memory.
+    /// </summary>
+    public bool CanSign(JsonWebKey key) => key.HasPrivateKey;
+
     public ValueTask<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,
         CancellationToken cancellationToken)
     {
-        // Fail closed: local signing needs private material, and reaching the terminal link without it means
-        // no external signer claimed this public-only key, so throw rather than sign with nothing.
+        // LocalKeySigner owns only private-bearing keys (see CanSign). When no external backend is composed it
+        // is resolved as the sole signer, so it enforces its own ownership here too: refuse a public-only key
+        // and fail closed rather than sign with nothing.
         if (!key.HasPrivateKey)
             throw new InvalidOperationException(
                 $"Signing requires private key material for key (kid={key.KeyId}); it carries none " +

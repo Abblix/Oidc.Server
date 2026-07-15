@@ -23,15 +23,25 @@
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// Signs abstract byte data with a server signing key: it resolves the algorithm implementation from the
-/// key and performs the private operation in process (when the key carries private material) or against an
-/// external key custodian (when it is published public-only). This is the routed, byte-level counterpart of
-/// the token-level <see cref="IJsonWebTokenSigner"/>: because it works with bytes rather than a whole token,
-/// an HSM/KMS/vault integration decorates or composes over it (see <see cref="ExternalKeySigner"/>) without
-/// touching JWS framing.
+/// A signing backend that owns a slice of the server's signing keys and produces JWS signature bytes for the
+/// keys it owns. Backends compose as peers behind <see cref="CompositeDataSigner"/>, which asks each in turn
+/// whether it owns the key (<see cref="CanSign"/>) and routes to the first that does: the in-process
+/// <see cref="LocalKeySigner"/> owns keys that carry private material, an external custodian backend
+/// (<see cref="ExternalKeySigner"/>) owns the public-only keys whose <c>kid</c> is its handle. This is the
+/// byte-level counterpart of the token-level <see cref="IJsonWebTokenSigner"/>: it works with bytes, not a
+/// whole token, so an HSM/KMS/vault integration is one more backend and never touches JWS framing.
 /// </summary>
 public interface IDataSigner
 {
+    /// <summary>
+    /// Reports whether this signer owns <paramref name="key"/> and can therefore sign with it. Ownership is a
+    /// property of the key, not of the algorithm: the in-process backend owns keys that carry private material,
+    /// an external custodian backend owns the public-only keys whose <c>kid</c> is one of its handles.
+    /// </summary>
+    /// <param name="key">The signing key the composite is about to route.</param>
+    /// <returns><c>true</c> if this signer can sign with <paramref name="key"/>; otherwise <c>false</c>.</returns>
+    bool CanSign(JsonWebKey key);
+
     /// <summary>
     /// Produces the signature bytes for <paramref name="data"/> under <paramref name="algorithm"/> using
     /// <paramref name="key"/>, in the JWS wire format for the algorithm.

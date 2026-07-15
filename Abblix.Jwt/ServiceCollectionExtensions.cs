@@ -34,10 +34,12 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds HSM/KMS/vault signing for public-only signing keys: decorates <see cref="IDataSigner"/> so a key
-    /// with no private material routes to the supplied <paramref name="handler"/> by its <c>kid</c>, while a
-    /// key that carries private material keeps signing in process. Call after <see cref="AddJsonWebTokens"/>.
-    /// For several custodians or custom routing, register your own <see cref="IDataSigner"/> decorator instead.
+    /// Adds HSM/KMS/vault signing for public-only signing keys: registers a signing backend
+    /// (<see cref="IDataSigner"/>) that routes every key with no private material to the supplied
+    /// <paramref name="handler"/> by its <c>kid</c>, while keys that carry private material keep signing in
+    /// process on the built-in backend. Call after <see cref="AddJsonWebTokens"/>. This convenience owns all
+    /// public-only keys, so for several custodians register a per-custodian <see cref="IDataSigner"/> backend
+    /// that owns only its own keys instead.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
     /// <param name="handler">The custodian signing callback, addressed by the key's <c>kid</c>.</param>
@@ -45,7 +47,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddExternalSigner(this IServiceCollection services, ExternalSignHandler handler)
     {
         services.AddSingleton(handler);
-        return services.Decorate<IDataSigner, ExternalKeySigner>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
+        return services.Compose<IDataSigner, CompositeDataSigner>();
     }
 
     /// <summary>
@@ -74,10 +77,12 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
 
-        // The signing seam behind IJsonWebTokenSigner: signs in process by default. A host adds HSM/KMS/vault
-        // signing by decorating IDataSigner - directly with its own decorator, or via AddExternalSigner for a
-        // simple callback. Host-first: a host IDataSigner pre-registration wins.
-        services.TryAddSingleton<IDataSigner, LocalKeySigner>();
+        // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
+        // the in-process LocalKeySigner owns private-bearing keys and is the sole backend by default. A host
+        // adds HSM/KMS/vault signing by registering another IDataSigner backend and composing the family via
+        // AddExternalSigner (or its own Compose<IDataSigner, CompositeDataSigner> call); the composite then
+        // routes each key to the backend that owns it and fails closed when none does.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is
@@ -153,7 +158,7 @@ public static class ServiceCollectionExtensions
     /// Enables the RSA1_5 (RSAES-PKCS1-v1_5) key management algorithm (RFC 7518 Section 4.2) for
     /// both producing and consuming JWE tokens. It is deliberately not part of
     /// <see cref="AddJsonWebTokens"/>: NIST SP 800-131A Rev. 2 disallows RSA key transport with
-    /// PKCS#1 v1.5 padding after 2023, and RFC 8725 §3.2 prescribes preferring RSAES-OAEP —
+    /// PKCS#1 v1.5 padding after 2023, and RFC 8725 §3.2 prescribes preferring RSAES-OAEP -
     /// interoperating with a legacy peer that still requires it is an explicit hosting decision.
     /// The padding's Bleichenbacher decryption oracle stays closed for opted-in hosts by the
     /// RFC 7516 §11.5 mitigation in <see cref="JsonWebTokenEncryptor"/>: a CEK that fails to
@@ -188,7 +193,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension
     /// parameter listed in a JWS 'crit' array (RFC 7515 §4.1.11). The parameter name is the
-    /// DI key, so the registration cannot claim a name without a handler behind it — name and
+    /// DI key, so the registration cannot claim a name without a handler behind it - name and
     /// behaviour are inseparable.
     /// </summary>
     /// <typeparam name="THandler">Concrete handler type.</typeparam>
