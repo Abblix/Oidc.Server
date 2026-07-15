@@ -27,7 +27,7 @@ namespace Abblix.Jwt.Signing;
 /// <summary>
 /// The in-process signing backend (<see cref="IDataSigner"/>): owns keys that carry private material and signs
 /// with them in memory, dispatching to the keyed per-algorithm <see cref="ISignatureAlgorithm{TJsonWebKey}"/>.
-/// It is one peer among the backends <see cref="CompositeDataSigner"/> routes across; a public-only key is not
+/// It is one peer among the backends <see cref="CompositeSigner"/> routes across; a public-only key is not
 /// its own (<see cref="CanSign"/> returns false), so such a key routes to an external backend or, when none
 /// owns it, the composite fails closed.
 /// </summary>

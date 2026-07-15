@@ -28,9 +28,9 @@ namespace Abblix.Jwt.Encryption;
 /// The in-process decryption backend (<see cref="IContentKeyDecryptor"/>): owns keys that carry their private/secret
 /// material and recovers the Content Encryption Key with them, dispatching to the keyed per-algorithm
 /// <see cref="IKeyManagementAlgorithm{TJsonWebKey}"/>. It is one peer among the backends
-/// <see cref="CompositeContentKeyDecryptor"/> routes across; a public-only key is not its own (<see cref="CanDecrypt"/>
+/// <see cref="CompositeDecryptor"/> routes across; a public-only key is not its own (<see cref="CanDecrypt"/>
 /// returns false), so such a key routes to an external backend, or - when this backend is resolved alone in the
-/// uncomposed topology - yields a uniform null (RFC 7516 §11.5) rather than a throw.
+/// uncomposed topology - fails loud, since a public-only key with no custodian is a misconfiguration.
 /// </summary>
 internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : IContentKeyDecryptor
 {
@@ -48,10 +48,17 @@ internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : ICon
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Uncomposed topology: LocalKeyDecryptor may be the sole decryptor. A public-only key has no in-process
-        // secret to unwrap with, so yield null - a uniform decryption failure (RFC 7516 §11.5), never a throw on
-        // the attacker-supplied token.
-        var contentEncryptionKey = key.HasPrivateKey ? DecryptLocally(key) : null;
+        // LocalKeyDecryptor owns only keys that carry their secret half (see CanDecrypt). When no custodian is
+        // composed it is resolved as the sole decryptor, so it enforces its own ownership here too: a public-only
+        // key with no custodian is a misconfiguration, not a decryption failure, so fail loud rather than silently
+        // reject every inbound token for it. The RFC 7516 §11.5 uniform-null stays for real decryption failures,
+        // which DecryptLocally returns.
+        if (!key.HasPrivateKey)
+            throw new InvalidOperationException(
+                $"Decryption key (kid={key.KeyId}) has no secret material: it can only unwrap through an external " +
+                "key custodian, but none is configured.");
+
+        var contentEncryptionKey = DecryptLocally(key);
         return new ValueTask<byte[]?>(contentEncryptionKey);
 
         byte[]? DecryptLocally(JsonWebKey localKey) => localKey switch

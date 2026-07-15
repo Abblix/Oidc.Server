@@ -31,7 +31,7 @@ namespace Abblix.Jwt.Signing;
 /// than emit an unsigned or empty signature (a public-only key whose custodian was never wired lands here). The
 /// backends are keyed by this composite's type so it enumerates them without resolving itself.
 /// </summary>
-internal sealed class CompositeDataSigner(IEnumerable<IDataSigner> backends) : IDataSigner
+internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IDataSigner
 {
     public bool CanSign(JsonWebKey key) => backends.Any(backend => backend.CanSign(key));
 
@@ -50,6 +50,5 @@ internal sealed class CompositeDataSigner(IEnumerable<IDataSigner> backends) : I
         }
 
         return owner.SignAsync(key, algorithm, data, cancellationToken);
-
     }
 }

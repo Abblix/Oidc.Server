@@ -24,7 +24,7 @@ namespace Abblix.Jwt.Signing;
 
 /// <summary>
 /// A signing backend that owns a slice of the server's signing keys and produces JWS signature bytes for the
-/// keys it owns. Backends compose as peers behind <see cref="CompositeDataSigner"/>, which asks each in turn
+/// keys it owns. Backends compose as peers behind <see cref="CompositeSigner"/>, which asks each in turn
 /// whether it owns the key (<see cref="CanSign"/>) and routes to the first that does: the in-process
 /// <see cref="LocalKeySigner"/> owns keys that carry private material, an external custodian backend
 /// (<see cref="ExternalKeySigner"/>) owns the public-only keys whose <c>kid</c> is its handle. This is the

@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,6 +124,37 @@ public class ExternalKeyDecryptorTests
             external,
             EncryptionAlgorithms.KeyManagement.Aes256KW,
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm));
+    }
+
+    [Fact]
+    public async Task PublicOnlyKey_WithoutCustodian_FailsClosedAtDecrypt()
+    {
+        // A public-only key with no custodian wired has no decryption path. Recovering the CEK for it is a
+        // misconfiguration, not a decryption failure, so the seam fails loud rather than silently returning null
+        // and rejecting every inbound token for the key.
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens(); // no AddExternalKeyDecryptor: LocalKeyDecryptor is the sole seam
+        await using var provider = services.BuildServiceProvider();
+
+        var seam = provider.GetRequiredService<IContentKeyDecryptor>();
+        var publicOnly = (RsaJsonWebKey)JsonWebKeyFactory
+            .CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)
+            .Sanitize(includePrivateKeys: false);
+        var header = new JsonWebTokenHeader(new JsonObject())
+        {
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            KeyId = publicOnly.KeyId,
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await seam.DecryptKeyAsync(
+            header,
+            publicOnly,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            new byte[256],
+            TestContext.Current.CancellationToken));
     }
 
     private static async Task<Result<JsonWebToken, JwtValidationError>> RoundTripAsync(

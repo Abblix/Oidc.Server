@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton(handler);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
-        return services.Compose<IDataSigner, CompositeDataSigner>();
+        return services.Compose<IDataSigner, CompositeSigner>();
     }
 
     /// <summary>
@@ -66,7 +66,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton(custodian);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, ExternalKeyDecryptor>());
-        return services.Compose<IContentKeyDecryptor, CompositeContentKeyDecryptor>();
+        return services.Compose<IContentKeyDecryptor, CompositeDecryptor>();
     }
 
     /// <summary>
