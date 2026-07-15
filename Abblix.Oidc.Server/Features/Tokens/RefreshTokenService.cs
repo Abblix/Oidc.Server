@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -49,6 +50,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="grantIdGenerator">Generator for unique refresh-token grant identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
+/// <param name="subjectTypeConverter">Converts the real subject to the client-facing subject (pairwise pseudonym
+/// or real) on issuance, and opens it back when authorizing the token.</param>
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
 public class RefreshTokenService(
@@ -58,6 +61,7 @@ public class RefreshTokenService(
 	IGrantIdGenerator grantIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry,
+	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options) : IRefreshTokenService
 {
 	/// <summary>
@@ -126,6 +130,11 @@ public class RefreshTokenService(
 		authSession.ApplyTo(newToken.Payload);
 		authContext.ApplyTo(newToken.Payload);
 
+		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
+		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
+		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
+		newToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+
 		var encoded = await jwtFormatter.FormatAsync(
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
@@ -143,7 +152,7 @@ public class RefreshTokenService(
 		if (options.SlidingExpiresIn is { } slidingExpiresIn)
 		{
 			// The sliding window is anchored to NOW (the moment of this refresh), so each use
-			// extends the lifetime — that is what makes it "sliding". Anchoring it to issuedAt (as
+			// extends the lifetime - that is what makes it "sliding". Anchoring it to issuedAt (as
 			// before) produced a fixed value that never moved, making the window a hard limit. The
 			// extended expiry is still capped by the absolute ceiling.
 			var slidingExpiresAt = now + slidingExpiresIn;
@@ -160,14 +169,21 @@ public class RefreshTokenService(
 	/// and expiry, granting a new access token for continued use.
 	/// </summary>
 	/// <param name="refreshToken">The refresh token to be validated and authorized.</param>
+	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
+	/// the real subject.</param>
 	/// <returns>A task that, upon successful validation, results in an <see cref="AuthorizedGrant"/>
 	/// encapsulating the reconstituted authentication session and authorization context.</returns>
-	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(JsonWebToken refreshToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
+		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
-		var result = new RefreshTokenAuthorizedGrant(authSession, authContext, refreshToken);
 
-		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(result);
+		// Recover the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
+		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
+		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
+		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
 	}
 }

@@ -322,8 +322,8 @@ public class JsonWebTokenPayload(JsonObject json)
 
 	/// <summary>
 	/// The proof-of-possession confirmation object (RFC 7800 §3.1 <c>cnf</c>) bound to this
-	/// JWT. Carries each binding the token holds — <c>cnf.x5t#S256</c> for mTLS-bound
-	/// tokens (RFC 8705 §3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 §6.1) —
+	/// JWT. Carries each binding the token holds - <c>cnf.x5t#S256</c> for mTLS-bound
+	/// tokens (RFC 8705 §3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 §6.1) -
 	/// behind typed accessors. Assignment writes the wrapped <see cref="JsonObject"/> as
 	/// the <c>cnf</c> claim; assigning <c>null</c> removes the claim.
 	/// </summary>
@@ -337,7 +337,7 @@ public class JsonWebTokenPayload(JsonObject json)
 	/// The RFC 9396 <c>authorization_details</c> claim as a sequence of typed wrappers over
 	/// the underlying <see cref="JsonArray"/> stored at <see cref="Json"/>[<c>authorization_details</c>].
 	/// Each wrapper shares its <see cref="JsonNode"/> reference with the corresponding array
-	/// element — read-through is byte-exact, and property setters on a wrapper mutate the
+	/// element - read-through is byte-exact, and property setters on a wrapper mutate the
 	/// underlying claim in place. Assigning a new sequence rebuilds the raw array via
 	/// <see cref="JsonArrayExtensions.ToRawJsonArray"/>, deep-cloning each entry's
 	/// <see cref="AuthorizationDetail.Json"/> to detach parent ownership; assigning <c>null</c>

@@ -26,9 +26,9 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
-using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -95,7 +95,7 @@ public partial class LogoutTokenService(
                 // "A Logout Token MUST be signed" and that none "MUST NOT be used": a client whose
                 // response types return no ID Token from the authorization endpoint may legally
                 // register id_token_signed_response_alg=none, so that value cannot be inherited
-                // here — fall back to RS256, which every OIDC client is required to support.
+                // here - fall back to RS256, which every OIDC client is required to support.
                 Algorithm = ResolveSigningAlgorithm(clientInfo),
             },
             Payload =

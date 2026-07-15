@@ -68,7 +68,7 @@ public class RefreshTokenGrantHandler(
 	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 	{
 		// RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
-		// not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
 		if (!request.RefreshToken.HasValue())
 		{
 			return ErrorFactory.MissingParameter(TokenRequest.Parameters.RefreshToken);
@@ -93,7 +93,9 @@ public class RefreshTokenGrantHandler(
 		}
 
 		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
-		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token);
+		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens
+		// a pairwise subject back to the real subject.
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token, clientInfo);
 		if (result.TryGetFailure(out var authError))
 		{
 			return authError;

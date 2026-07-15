@@ -23,6 +23,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;

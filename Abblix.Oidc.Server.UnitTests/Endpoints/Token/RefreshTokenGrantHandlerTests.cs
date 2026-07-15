@@ -65,7 +65,7 @@ public class RefreshTokenGrantHandlerTests
 
     /// <summary>
     /// RFC 6749 §5.2: a token request without the required refresh_token parameter is the caller's
-    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
     public async Task AuthorizeAsync_MissingRefreshToken_ReturnsInvalidRequest()
@@ -97,7 +97,7 @@ public class RefreshTokenGrantHandlerTests
             Context: new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(expectedGrant);
 
         // Act
@@ -131,7 +131,7 @@ public class RefreshTokenGrantHandlerTests
             Context: new AuthorizationContext(DifferentClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grantForDifferentClient);
 
         // Act
@@ -256,7 +256,7 @@ public class RefreshTokenGrantHandlerTests
 
         var serviceError = new OidcError(ErrorCodes.InvalidGrant, "Token has been revoked");
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(serviceError);
 
         // Act

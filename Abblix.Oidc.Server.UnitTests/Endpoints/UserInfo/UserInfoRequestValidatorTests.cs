@@ -145,7 +145,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
@@ -186,7 +186,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
@@ -367,7 +367,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider
@@ -406,7 +406,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((authSession, authContext));
 
         _clientInfoProvider

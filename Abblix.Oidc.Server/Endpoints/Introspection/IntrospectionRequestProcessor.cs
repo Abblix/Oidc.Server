@@ -65,6 +65,8 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 		// For instance, an authorization server MAY limit which scopes from a given token are returned for each protected resource
 		// to prevent a protected resource from learning more about the larger network than is necessary for its operation.
 
+		// A pairwise client's 'sub' is its own opaque per-sector pseudonym - meaningful only to the issuing server
+		// (which can reverse it) - so echoing the payload as-is leaks nothing extra to the introspecting resource.
 		return new IntrospectionSuccess(true, request.Token.Payload.Json, request.ClientInfo);
 	}
 }

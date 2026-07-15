@@ -46,7 +46,7 @@ public class AuthorizationValueReuseDetectionE2ETests(TestFactory factory) : Tes
     [Fact]
     public async Task Reusing_a_code_challenge_across_authorizations_is_rejected()
     {
-        using var host = CreateDetectingHost();
+        await using var host = CreateDetectingHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var (_, codeChallenge) = GeneratePkcePair();
@@ -65,7 +65,7 @@ public class AuthorizationValueReuseDetectionE2ETests(TestFactory factory) : Tes
     [Fact]
     public async Task Reusing_a_nonce_across_authorizations_is_rejected()
     {
-        using var host = CreateDetectingHost();
+        await using var host = CreateDetectingHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var nonce = FreshNonce();

@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -47,6 +48,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// enhancing security by enabling token revocation and tracking capabilities.</param>
 /// <param name="serviceJwtFormatter">The formatter used for encoding the JSON Web Token (JWT), ensuring it meets
 /// the standards required for secure transmission and validation.</param>
+/// <param name="subjectTypeConverter">Converts the real subject to the client-facing subject (pairwise pseudonym
+/// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
 internal class AccessTokenService(
@@ -54,6 +57,7 @@ internal class AccessTokenService(
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter serviceJwtFormatter,
+	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options) : IAccessTokenService
 {
 	/// <summary>
@@ -103,8 +107,14 @@ internal class AccessTokenService(
 		authSession.ApplyTo(accessToken.Payload);
 		authContext.ApplyTo(accessToken.Payload);
 
+		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
+		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
+		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
+		accessToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+
 		var encoded = await serviceJwtFormatter.FormatAsync(
 			accessToken, ServiceJwtEncryption.ForAccessToken(options.Value));
+
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}
 
@@ -114,6 +124,8 @@ internal class AccessTokenService(
 	/// access.
 	/// </summary>
 	/// <param name="accessToken">The access token to be authenticated and analyzed.</param>
+	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
+	/// the real subject.</param>
 	/// <returns>A task that returns the <see cref="AuthSession"/> and <see cref="AuthorizationContext"/>
 	/// derived from the token.</returns>
 	/// <remarks>
@@ -121,10 +133,15 @@ internal class AccessTokenService(
 	/// authority and not tampered with are accepted. It decodes embedded claims to reconstruct the original
 	/// authorization and authentication details, supporting secure and informed access control decisions.
 	/// </remarks>
-	public Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(JsonWebToken accessToken)
+	public Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(
+		JsonWebToken accessToken, ClientInfo clientInfo)
 	{
 		var authSession = accessToken.Payload.ToAuthSession();
 		var authorizationContext = accessToken.Payload.ToAuthorizationContext();
-		return Task.FromResult((authSession, authorizationContext));
+
+		// Recover the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
+		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
+		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		return Task.FromResult((authSession with { Subject = subject }, authorizationContext));
 	}
 }

@@ -51,7 +51,9 @@ public interface IAccessTokenService
 	/// Asynchronously authenticates a user based on a provided access token.
 	/// </summary>
 	/// <param name="accessToken">The access token to authenticate.</param>
+	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
+	/// the real subject.</param>
 	/// <returns>A task that represents the asynchronous authentication operation. The task result contains
 	/// the <see cref="AuthSession"/> and <see cref="AuthorizationContext"/> associated with the authenticated user.</returns>
-	Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(JsonWebToken accessToken);
+	Task<(AuthSession, AuthorizationContext)> AuthenticateByAccessTokenAsync(JsonWebToken accessToken, ClientInfo clientInfo);
 }

@@ -22,7 +22,7 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 
-namespace Abblix.Oidc.Server.Features.UserInfo;
+namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 /// <summary>
 /// Defines the interface for a service that converts user subject identifiers according to the client's specified
@@ -42,11 +42,25 @@ public interface ISubjectTypeConverter
     IEnumerable<string> SubjectTypesSupported { get; }
 
     /// <summary>
-    /// Converts the subject identifier for an end-user based on the client's subject type.
+    /// Converts the real subject identifier into the client-facing one based on the client's subject type: a
+    /// pairwise client gets a reversible, per-sector pseudonym; a public client gets the subject unchanged.
     /// </summary>
     /// <param name="subject">The original subject identifier of the end-user.</param>
     /// <param name="clientInfo">Information about the client for which the subject identifier is being transformed.
     /// </param>
     /// <returns>The transformed subject identifier suitable for the client's subject type.</returns>
     string Convert(string subject, ClientInfo clientInfo);
+
+    /// <summary>
+    /// Recovers the real subject identifier from the client-facing one produced by <see cref="Convert"/>: a
+    /// pairwise client's pseudonym is opened back to the real subject; a public client's subject is returned
+    /// unchanged. The <paramref name="clientInfo"/> must be the client the subject was sealed for, as its sector
+    /// binds the pseudonym.
+    /// </summary>
+    /// <param name="subject">The client-facing subject identifier (pairwise pseudonym or real subject).</param>
+    /// <param name="clientInfo">The client the subject was issued for.</param>
+    /// <returns>The real subject identifier.</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown when a pairwise pseudonym cannot be opened:
+    /// malformed, sealed for a different sector, or produced under a different pairwise salt.</exception>
+    string Recover(string subject, ClientInfo clientInfo);
 }
