@@ -69,50 +69,11 @@ public class UserInfoRequestValidator(
 		UserInfoRequest userInfoRequest,
 		ClientRequest clientRequest)
 	{
-		string jwtAccessToken;
-		var authorizationHeader = clientRequest.AuthorizationHeader;
-		if (authorizationHeader != null)
-		{
-			// RFC 9449 §7.1: DPoP-bound access tokens are presented via the DPoP scheme.
-			// The actual scheme/binding compatibility check runs after JWT parse so we can
-			// inspect cnf.jkt - here we only filter out unrecognised schemes.
-			if (authorizationHeader.Scheme is not (TokenTypes.Bearer or TokenTypes.DPoP))
-			{
-				return new OidcError(
-					ErrorCodes.InvalidToken,
-					$"The scheme name '{authorizationHeader.Scheme}' is not supported");
-			}
+		var tokenResult = ExtractAccessToken(userInfoRequest, clientRequest);
+		if (tokenResult.TryGetFailure(out var tokenError))
+			return tokenError;
 
-			if (userInfoRequest.AccessToken != null)
-			{
-				return new OidcError(
-					ErrorCodes.InvalidToken,
-					$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
-					$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
-			}
-
-			if (authorizationHeader.Parameter == null)
-			{
-				return new OidcError(
-					ErrorCodes.InvalidToken,
-					$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
-			}
-
-			jwtAccessToken = authorizationHeader.Parameter;
-		}
-		else if (userInfoRequest.AccessToken == null)
-		{
-			// RFC 6750 §3.1: a request with no authentication information at all gets a bare
-			// WWW-Authenticate challenge - the typed marker tells the challenge builder to omit
-			// the error attributes the other invalid_token cases carry.
-			return new MissingAuthenticationError(
-				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
-				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
-		}
-		else
-		{
-			jwtAccessToken = userInfoRequest.AccessToken;
-		}
+		var jwtAccessToken = tokenResult.GetSuccess();
 
 		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
@@ -161,5 +122,48 @@ public class UserInfoRequestValidator(
 		var (authSession, authContext) = await accessTokenService.AuthenticateByAccessTokenAsync(token, clientInfo);
 
 		return new ValidUserInfoRequest(userInfoRequest, authSession, authContext, clientInfo);
+	}
+
+	/// <summary>
+	/// Extracts the access token from exactly one source per RFC 6750 §2: the <c>Authorization</c> header (Bearer or
+	/// DPoP scheme) or the <c>access_token</c> parameter, but never both. Returns the typed
+	/// <see cref="MissingAuthenticationError"/> when neither is present so the challenge builder omits error
+	/// attributes.
+	/// </summary>
+	private static Result<string, OidcError> ExtractAccessToken(
+		UserInfoRequest userInfoRequest, ClientRequest clientRequest)
+	{
+		var authorizationHeader = clientRequest.AuthorizationHeader;
+		if (authorizationHeader == null)
+		{
+			if (userInfoRequest.AccessToken != null)
+				return userInfoRequest.AccessToken;
+
+			// RFC 6750 §3.1: a request with no authentication information at all gets a bare WWW-Authenticate
+			// challenge - the typed marker tells the challenge builder to omit the error attributes.
+			return new MissingAuthenticationError(
+				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
+				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
+		}
+
+		// RFC 9449 §7.1: DPoP-bound access tokens are presented via the DPoP scheme. The actual scheme/binding
+		// compatibility check runs after JWT parse so we can inspect cnf.jkt - here we only reject unknown schemes.
+		if (authorizationHeader.Scheme is not (TokenTypes.Bearer or TokenTypes.DPoP))
+			return new OidcError(
+				ErrorCodes.InvalidToken,
+				$"The scheme name '{authorizationHeader.Scheme}' is not supported");
+
+		if (userInfoRequest.AccessToken != null)
+			return new OidcError(
+				ErrorCodes.InvalidToken,
+				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
+				$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
+
+		if (authorizationHeader.Parameter == null)
+			return new OidcError(
+				ErrorCodes.InvalidToken,
+				$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
+
+		return authorizationHeader.Parameter;
 	}
 }
