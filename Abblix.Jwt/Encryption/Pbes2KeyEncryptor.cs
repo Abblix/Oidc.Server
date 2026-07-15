@@ -43,7 +43,7 @@ namespace Abblix.Jwt.Encryption;
 /// an attacker-supplied token can demand (denial-of-service by iteration count).
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyEncryptor<OctetJsonWebKey>
+internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;

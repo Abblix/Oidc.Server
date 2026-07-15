@@ -40,7 +40,8 @@ namespace Abblix.Jwt.Encryption;
 /// decryption is replaced with a random CEK so the outcome is uniform), not in this encryptor.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm) : IKeyEncryptor<RsaJsonWebKey>
+internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm)
+	: IKeyManagementAlgorithm<RsaJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;

@@ -69,31 +69,31 @@ public static class ServiceCollectionExtensions
         // RSA-OAEP and RSA-OAEP-256 are the recommended algorithms; RSA1_5 is opt-in via
         // AddRsaPkcs1KeyManagement (NIST SP 800-131A Rev. 2 disallows PKCS#1 v1.5 key transport).
         services
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep)
-            .AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256);
+            .AddKeyManagementAlgorithm<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep)
+            .AddKeyManagementAlgorithm<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         // AES-GCM Key Wrap (symmetric key encryption with GCM)
         services
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw)
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192Gcmkw)
-            .AddKeyEncryptor<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192Gcmkw)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesGcmKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
 
         // AES Key Wrap (RFC 3394 symmetric key wrapping)
         services
-            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128KW)
-            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192KW)
-            .AddKeyEncryptor<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256KW);
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes128KW)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes192KW)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, AesKeyWrapEncryptor>(EncryptionAlgorithms.KeyManagement.Aes256KW);
 
         // Direct Key Agreement (no key encryption)
         services
-            .AddKeyEncryptor<OctetJsonWebKey, DirectKeyAgreement>(EncryptionAlgorithms.KeyManagement.Dir);
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, DirectKeyAgreement>(EncryptionAlgorithms.KeyManagement.Dir);
 
         // ECDH-ES key agreement: direct (the derived key is the CEK) and with RFC 3394 key wrapping
         services
-            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEs)
-            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW)
-            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW)
-            .AddKeyEncryptor<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW);
+            .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEs)
+            .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW)
+            .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW)
+            .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW);
 
         // Register content encryptors by algorithm
         services
@@ -106,25 +106,25 @@ public static class ServiceCollectionExtensions
 
         // Register signers by algorithm.
         // NoneSigner is registered directly: it is the only signer whose constructor takes no
-        // algorithm parameter, so the AddDataSigner factory (which passes the algorithm as
+        // algorithm parameter, so the AddSignatureAlgorithm factory (which passes the algorithm as
         // a constructor override) cannot instantiate it.
-        services.TryAddKeyedSingleton<IDataSigner<JsonWebKey>, NoneSigner>(SigningAlgorithms.None);
+        services.TryAddKeyedSingleton<ISignatureAlgorithm<JsonWebKey>, NoneSigner>(SigningAlgorithms.None);
 
         services
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS256)
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS384)
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS512)
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS256)
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS384)
-            .AddDataSigner<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS512)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS256)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS384)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.RS512)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS256)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS384)
+            .AddSignatureAlgorithm<RsaJsonWebKey, RsaSigner>(SigningAlgorithms.PS512)
 
-            .AddDataSigner<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES256)
-            .AddDataSigner<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES384)
-            .AddDataSigner<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES512)
+            .AddSignatureAlgorithm<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES256)
+            .AddSignatureAlgorithm<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES384)
+            .AddSignatureAlgorithm<EllipticCurveJsonWebKey, EcdsaSigner>(SigningAlgorithms.ES512)
 
-            .AddDataSigner<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS256)
-            .AddDataSigner<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS384)
-            .AddDataSigner<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS512);
+            .AddSignatureAlgorithm<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS256)
+            .AddSignatureAlgorithm<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS384)
+            .AddSignatureAlgorithm<OctetJsonWebKey, HmacSigner>(SigningAlgorithms.HS512);
 
         return services;
     }
@@ -143,7 +143,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to register the encryptor in.</param>
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddRsaPkcs1KeyManagement(this IServiceCollection services)
-        => services.AddKeyEncryptor<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5);
+        => services.AddKeyManagementAlgorithm<RsaJsonWebKey, RsaKeyEncryptor>(EncryptionAlgorithms.KeyManagement.Rsa1_5);
 
     /// <summary>
     /// Enables the PBES2 password-based key management algorithms (PBES2-HS256+A128KW,
@@ -161,9 +161,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddPbes2KeyManagement(this IServiceCollection services)
         => services
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW)
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW)
-            .AddKeyEncryptor<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW);
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW)
+            .AddKeyManagementAlgorithm<OctetJsonWebKey, Pbes2KeyEncryptor>(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW);
 
     /// <summary>
     /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension
@@ -179,7 +179,7 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
     /// Keyed-name DI mirrors the signer/encryptor registrations in this assembly
-    /// (<see cref="AddDataSigner{TKey,TSigner}"/> by 'alg'): one keyed registration serves
+    /// (<see cref="AddSignatureAlgorithm{TKey,TSigner}"/> by 'alg'): one keyed registration serves
     /// O(1) request-time dispatch (<c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c>).
     /// <see cref="ServiceCollectionDescriptorExtensions.TryAddKeyedSingleton{TService,TImplementation}(IServiceCollection,object)"/>
     /// dedups by (service, key) first-wins, so a host pre-registration for a name wins over a
@@ -199,7 +199,7 @@ public static class ServiceCollectionExtensions
     /// Key encryptors handle the "alg" parameter in JWE headers (e.g., RSA-OAEP, A256GCMKW, dir).
     /// </summary>
     /// <typeparam name="TKey">The type of JSON Web Key this encryptor operates on (RsaJsonWebKey, OctetJsonWebKey, etc.).</typeparam>
-    /// <typeparam name="TEncryptor">The IKeyEncryptor implementation for encrypting/decrypting Content Encryption Keys.</typeparam>
+    /// <typeparam name="TEncryptor">The IKeyManagementAlgorithm implementation for encrypting/decrypting Content Encryption Keys.</typeparam>
     /// <param name="services">The service collection to register the encryptor in.</param>
     /// <param name="algorithm">The JWE key management algorithm identifier (e.g., "RSA-OAEP-256", "A256GCMKW", "dir").</param>
     /// <returns>The service collection for method chaining.</returns>
@@ -209,13 +209,13 @@ public static class ServiceCollectionExtensions
     /// TryAdd dedups by (service, key) first-wins, so a host pre-registration for the algorithm wins
     /// over the built-in default.
     /// </remarks>
-    private static IServiceCollection AddKeyEncryptor<TKey, TEncryptor>(
+    private static IServiceCollection AddKeyManagementAlgorithm<TKey, TEncryptor>(
         this IServiceCollection services,
         string algorithm)
         where TKey : JsonWebKey
-        where TEncryptor : IKeyEncryptor<TKey>
+        where TEncryptor : IKeyManagementAlgorithm<TKey>
     {
-        services.TryAddKeyedSingleton<IKeyEncryptor<TKey>>(
+        services.TryAddKeyedSingleton<IKeyManagementAlgorithm<TKey>>(
             algorithm,
             (sp, _) => sp.CreateService<TEncryptor>(Dependency.Override(algorithm)));
         return services;
@@ -225,7 +225,7 @@ public static class ServiceCollectionExtensions
     /// Registers a content encryptor implementation for a specific JWE content encryption algorithm.
     /// Content encryptors handle the "enc" parameter in JWE headers (e.g., A256GCM, A128CBC-HS256).
     /// </summary>
-    /// <typeparam name="TEncryptor">The IDataEncryptor implementation for encrypting/decrypting JWE content.</typeparam>
+    /// <typeparam name="TEncryptor">The IContentEncryptionAlgorithm implementation for encrypting/decrypting JWE content.</typeparam>
     /// <param name="services">The service collection to register the encryptor in.</param>
     /// <param name="algorithm">The JWE content encryption algorithm identifier (e.g., "A256GCM", "A128CBC-HS256").</param>
     /// <returns>The service collection for method chaining.</returns>
@@ -239,9 +239,9 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddContentEncryptor<TEncryptor>(
         this IServiceCollection services,
         string algorithm)
-        where TEncryptor : IDataEncryptor
+        where TEncryptor : IContentEncryptionAlgorithm
     {
-        services.TryAddKeyedSingleton<IDataEncryptor>(
+        services.TryAddKeyedSingleton<IContentEncryptionAlgorithm>(
             algorithm,
             (sp, _) => sp.CreateService<TEncryptor>(Dependency.Override(algorithm)));
         return services;
@@ -252,7 +252,7 @@ public static class ServiceCollectionExtensions
     /// Signers handle the "alg" parameter in JWS headers (e.g., RS256, ES384, HS512).
     /// </summary>
     /// <typeparam name="TKey">The type of JSON Web Key this signer operates on (RsaJsonWebKey, EllipticCurveJsonWebKey, OctetJsonWebKey, etc.).</typeparam>
-    /// <typeparam name="TSigner">The IDataSigner implementation for creating/verifying digital signatures.</typeparam>
+    /// <typeparam name="TSigner">The ISignatureAlgorithm implementation for creating/verifying digital signatures.</typeparam>
     /// <param name="services">The service collection to register the signer in.</param>
     /// <param name="algorithm">The JWS signing algorithm identifier (e.g., "RS256", "ES384", "HS512").</param>
     /// <returns>The service collection for method chaining.</returns>
@@ -262,13 +262,13 @@ public static class ServiceCollectionExtensions
     /// TryAdd dedups by (service, key) first-wins, so a host pre-registration for the algorithm wins
     /// over the built-in default.
     /// </remarks>
-    private static IServiceCollection AddDataSigner<TKey, TSigner>(
+    private static IServiceCollection AddSignatureAlgorithm<TKey, TSigner>(
         this IServiceCollection services,
         string algorithm)
         where TKey: JsonWebKey
-        where TSigner: IDataSigner<TKey>
+        where TSigner: ISignatureAlgorithm<TKey>
     {
-        services.TryAddKeyedSingleton<IDataSigner<TKey>>(
+        services.TryAddKeyedSingleton<ISignatureAlgorithm<TKey>>(
             algorithm,
             (sp, _) => sp.CreateService<TSigner>(Dependency.Override(algorithm)));
         return services;

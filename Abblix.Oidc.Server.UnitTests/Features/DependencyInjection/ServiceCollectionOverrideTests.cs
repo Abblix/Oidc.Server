@@ -309,13 +309,13 @@ public class ServiceCollectionOverrideTests
         // algorithm key. The library registration must not shadow it.
         var services = new ServiceCollection();
         var stub = new HostRsaSigner();
-        services.AddKeyedSingleton<IDataSigner<RsaJsonWebKey>>(SigningAlgorithms.RS256, stub);
+        services.AddKeyedSingleton<ISignatureAlgorithm<RsaJsonWebKey>>(SigningAlgorithms.RS256, stub);
 
         services.AddJsonWebTokens();
 
         var descriptor = Assert.Single(
             services,
-            d => d.ServiceType == typeof(IDataSigner<RsaJsonWebKey>) &&
+            d => d.ServiceType == typeof(ISignatureAlgorithm<RsaJsonWebKey>) &&
                  Equals(d.ServiceKey, SigningAlgorithms.RS256));
         Assert.Same(stub, descriptor.KeyedImplementationInstance);
     }
@@ -374,11 +374,11 @@ public class ServiceCollectionOverrideTests
         Assert.Single(services, d => d.ServiceType == typeof(IJsonWebTokenValidator));
         Assert.Single(
             services,
-            d => d.ServiceType == typeof(IDataSigner<RsaJsonWebKey>) &&
+            d => d.ServiceType == typeof(ISignatureAlgorithm<RsaJsonWebKey>) &&
                  Equals(d.ServiceKey, SigningAlgorithms.RS256));
         Assert.Single(
             services,
-            d => d.ServiceType == typeof(IKeyEncryptor<RsaJsonWebKey>) &&
+            d => d.ServiceType == typeof(IKeyManagementAlgorithm<RsaJsonWebKey>) &&
                  Equals(d.ServiceKey, EncryptionAlgorithms.KeyManagement.RsaOaep256));
     }
 
@@ -390,7 +390,7 @@ public class ServiceCollectionOverrideTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
-        services.AddKeyedSingleton<IDataSigner<EllipticCurveJsonWebKey>>(
+        services.AddKeyedSingleton<ISignatureAlgorithm<EllipticCurveJsonWebKey>>(
             HostSigningAlgorithm, new HostEllipticCurveSigner());
 
         services.AddJsonWebTokens();
@@ -410,7 +410,7 @@ public class ServiceCollectionOverrideTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
-        services.AddKeyedSingleton<IKeyEncryptor<EllipticCurveJsonWebKey>>(
+        services.AddKeyedSingleton<IKeyManagementAlgorithm<EllipticCurveJsonWebKey>>(
             HostKeyManagementAlgorithm, new HostEllipticCurveKeyEncryptor());
 
         services.AddJsonWebTokens();
@@ -521,7 +521,7 @@ public class ServiceCollectionOverrideTests
             validator.EncryptionMethodsSupported);
     }
 
-    private sealed class HostRsaSigner : IDataSigner<RsaJsonWebKey>
+    private sealed class HostRsaSigner : ISignatureAlgorithm<RsaJsonWebKey>
     {
         public string Algorithm => SigningAlgorithms.RS256;
 
@@ -530,7 +530,7 @@ public class ServiceCollectionOverrideTests
         public bool Verify(RsaJsonWebKey key, byte[] data, byte[] signature) => false;
     }
 
-    private sealed class HostEllipticCurveSigner : IDataSigner<EllipticCurveJsonWebKey>
+    private sealed class HostEllipticCurveSigner : ISignatureAlgorithm<EllipticCurveJsonWebKey>
     {
         public string Algorithm => HostSigningAlgorithm;
 
@@ -539,7 +539,7 @@ public class ServiceCollectionOverrideTests
         public bool Verify(EllipticCurveJsonWebKey key, byte[] data, byte[] signature) => false;
     }
 
-    private sealed class HostEllipticCurveKeyEncryptor : IKeyEncryptor<EllipticCurveJsonWebKey>
+    private sealed class HostEllipticCurveKeyEncryptor : IKeyManagementAlgorithm<EllipticCurveJsonWebKey>
     {
         public string Algorithm => HostKeyManagementAlgorithm;
 

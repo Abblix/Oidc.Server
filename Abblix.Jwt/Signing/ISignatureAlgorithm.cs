@@ -25,7 +25,8 @@ namespace Abblix.Jwt.Signing;
 /// <summary>
 /// Defines the contract for signing and verifying JWT tokens using a specific cryptographic algorithm.
 /// </summary>
-public interface IDataSigner<in TJsonWebKey> where TJsonWebKey : JsonWebKey
+public interface ISignatureAlgorithm<in TJsonWebKey>
+	where TJsonWebKey : JsonWebKey
 {
 	/// <summary>
 	/// The JWS signing algorithm identifier this signer implements (e.g. "RS256", "ES384").

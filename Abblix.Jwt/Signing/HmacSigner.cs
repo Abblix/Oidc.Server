@@ -37,7 +37,7 @@ namespace Abblix.Jwt.Signing;
 /// - HS384: minimum 384 bits (48 bytes) with SHA-384
 /// - HS512: minimum 512 bits (64 bytes) with SHA-512
 /// </remarks>
-internal sealed class HmacSigner(string algorithm) : IDataSigner<OctetJsonWebKey>
+internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;

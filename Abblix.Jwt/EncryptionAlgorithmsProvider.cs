@@ -8,7 +8,7 @@ namespace Abblix.Jwt;
 /// Provides access to the collections of JWE algorithms supported by the JWT infrastructure.
 /// Projects both sets — key-management algorithms (the JWE <c>alg</c>, e.g. "RSA-OAEP-256") and
 /// content-encryption algorithms (the JWE <c>enc</c>, e.g. "A256GCM") — from the live keyed
-/// <see cref="IKeyEncryptor{TJsonWebKey}"/> and <see cref="IDataEncryptor"/> registrations, so
+/// <see cref="IKeyManagementAlgorithm{TJsonWebKey}"/> and <see cref="IContentEncryptionAlgorithm"/> registrations, so
 /// discovery always reflects exactly the encryptors the host currently has registered — including
 /// algorithms the host added or replaced — with no registration-time bookkeeping to keep in sync.
 /// </summary>
@@ -34,12 +34,12 @@ internal sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvi
     /// </summary>
     public IEnumerable<string> ContentEncryptionAlgorithms
         => serviceProvider
-            .GetKeyedServices<IDataEncryptor>(KeyedService.AnyKey)
+            .GetKeyedServices<IContentEncryptionAlgorithm>(KeyedService.AnyKey)
             .Select(encryptor => encryptor.Algorithm)
             .Distinct();
 
     private IEnumerable<string> KeyManagementAlgorithmsFor<TJsonWebKey>() where TJsonWebKey : JsonWebKey
         => serviceProvider
-            .GetKeyedServices<IKeyEncryptor<TJsonWebKey>>(KeyedService.AnyKey)
+            .GetKeyedServices<IKeyManagementAlgorithm<TJsonWebKey>>(KeyedService.AnyKey)
             .Select(encryptor => encryptor.Algorithm);
 }

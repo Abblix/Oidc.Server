@@ -14,7 +14,7 @@ namespace Abblix.Jwt;
 /// Handles signing and signature verification of JSON Web Signature (JWS) tokens.
 /// </summary>
 /// <param name="serviceProvider">The service provider for resolving the keyed signature primitives
-/// (<see cref="IDataSigner{TJsonWebKey}"/>) by algorithm, for both signing and verification.</param>
+/// (<see cref="ISignatureAlgorithm{TJsonWebKey}"/>) by algorithm, for both signing and verification.</param>
 /// <param name="externalSigner">Optional host port that signs with an external key custodian (HSM/KMS/
 /// vault) when a signing key is published public-only. Absent (null) means no external signing keys - the
 /// optional dependency defaults to null, so the container passes null when the host registers no port.</param>
@@ -89,7 +89,7 @@ internal partial class JsonWebTokenSigner(
     }
 
     /// <summary>
-    /// Produces the signature bytes: in process with the keyed <see cref="IDataSigner{TJsonWebKey}"/> when
+    /// Produces the signature bytes: in process with the keyed <see cref="ISignatureAlgorithm{TJsonWebKey}"/> when
     /// the key carries private material, via the external custodian by kid when it does not, else fail closed.
     /// </summary>
     private ValueTask<byte[]> SignBytesAsync(
@@ -125,7 +125,7 @@ internal partial class JsonWebTokenSigner(
 
         byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var dataSigner = serviceProvider.GetRequiredKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
+            var dataSigner = serviceProvider.GetRequiredKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
             return dataSigner.Sign(jwk, data);
         }
     }
@@ -215,7 +215,7 @@ internal partial class JsonWebTokenSigner(
 
     /// <summary>
     /// Verifies a signature using the appropriate signer based on the key type and algorithm.
-    /// Resolves the correct IDataSigner implementation from DI using the algorithm as key.
+    /// Resolves the correct ISignatureAlgorithm implementation from DI using the algorithm as key.
     /// </summary>
     /// <param name="key">The JSON Web Key to use for verification.</param>
     /// <param name="algorithm">The signing algorithm.</param>
@@ -241,7 +241,7 @@ internal partial class JsonWebTokenSigner(
 
         bool ValidateBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var dataSigner = serviceProvider.GetKeyedService<IDataSigner<TJsonWebKey>>(algorithm);
+            var dataSigner = serviceProvider.GetKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm);
             return dataSigner != null && dataSigner.Verify(jwk, data, signature);
         }
     }

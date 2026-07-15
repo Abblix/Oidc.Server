@@ -32,7 +32,7 @@ namespace Abblix.Jwt.Signing;
 /// <remarks>
 /// Uses DSASignatureFormat.IeeeP1363FixedFieldConcatenation for JWT-compliant signature format.
 /// </remarks>
-internal sealed class EcdsaSigner(string algorithm) : IDataSigner<EllipticCurveJsonWebKey>
+internal sealed class EcdsaSigner(string algorithm) : ISignatureAlgorithm<EllipticCurveJsonWebKey>
 {
 	private readonly (HashAlgorithmName hashAlgorithm, int signatureLength) _parameters = GetAlgorithmParameters(algorithm);
 

@@ -41,7 +41,7 @@ internal class JsonWebTokenEncryptor(
         // half), so it lives with the key-management routing, which knows what each key can actually do.
 
         // Resolve content encryptor to get required CEK size
-        var contentEncryptor = serviceProvider.GetRequiredKeyedService<IDataEncryptor>(contentEncryptionAlgorithm);
+        var contentEncryptor = serviceProvider.GetRequiredKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm);
 
         var header = new JsonWebTokenHeader(new JsonObject())
         {
@@ -157,7 +157,7 @@ internal class JsonWebTokenEncryptor(
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE — an unregistered 'enc' yields no decryptor and is
         // rejected outright.
-        var contentDecryptor = serviceProvider.GetKeyedService<IDataEncryptor>(encryptionAlgorithm);
+        var contentDecryptor = serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(encryptionAlgorithm);
         if (contentDecryptor == null)
             return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
 
@@ -247,7 +247,7 @@ internal class JsonWebTokenEncryptor(
 
         (byte[], byte[]) EncryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(algorithm);
             var cek = keyEncryptor.GenerateContentEncryptionKey(header, jwk, contentKeySizeInBytes);
             return (cek, keyEncryptor.EncryptKey(header, jwk, cek));
         }
@@ -309,7 +309,7 @@ internal class JsonWebTokenEncryptor(
 
         byte[]? TryDecryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
-            var keyEncryptor = serviceProvider.GetKeyedService<IKeyEncryptor<TJsonWebKey>>(algorithm);
+            var keyEncryptor = serviceProvider.GetKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(algorithm);
             return keyEncryptor != null && keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out var cek)
                 ? cek
                 : null;
@@ -363,7 +363,7 @@ internal class JsonWebTokenEncryptor(
                     return null;
 
                 if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm ||
-                    serviceProvider.GetKeyedService<IDataEncryptor>(contentEncryptionAlgorithm) is not { } contentEncryptor)
+                    serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm) is not { } contentEncryptor)
                     return null;
 
                 return ConcatKeyDerivation.DeriveKey(

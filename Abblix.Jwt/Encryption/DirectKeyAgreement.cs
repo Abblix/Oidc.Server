@@ -37,7 +37,7 @@ namespace Abblix.Jwt.Encryption;
 /// Per RFC 7518 Section 4.5, the "encrypted_key" value is the empty octet sequence.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class DirectKeyAgreement : IKeyEncryptor<OctetJsonWebKey>
+internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <summary>
 	/// Initializes DirectKeyAgreement with algorithm validation.

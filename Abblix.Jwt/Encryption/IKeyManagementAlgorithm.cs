@@ -38,7 +38,7 @@ namespace Abblix.Jwt.Encryption;
 /// which specifies how the actual content is encrypted using the CEK.
 /// Common key encryption algorithms include RSA-OAEP, RSA-OAEP-256, RSA1_5, ECDH-ES, and AES key wrap.
 /// </remarks>
-public interface IKeyEncryptor<in TJsonWebKey>
+public interface IKeyManagementAlgorithm<in TJsonWebKey>
 	where TJsonWebKey: JsonWebKey
 {
 	/// <summary>
