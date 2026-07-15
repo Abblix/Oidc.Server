@@ -40,8 +40,8 @@ public record PairwiseSubjectSettings
     public required string Salt { get; init; }
 
     /// <summary>
-    /// The hash algorithm used as the pseudorandom function for the pairwise seal (key derivation and the
-    /// synthetic IV). Defaults to SHA-256. Supported algorithms: SHA256, SHA384, SHA512, SHA1.
+    /// The hash algorithm used for the HKDF key derivation that keys the pairwise seal. Defaults to SHA-256.
+    /// Supported algorithms: SHA256, SHA384, SHA512, SHA1.
     /// </summary>
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
 }

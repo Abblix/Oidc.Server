@@ -32,14 +32,14 @@ namespace Abblix.Jwt.Encryption;
 /// <remarks>
 /// The BCL exposes only RFC 5649 (key wrap with padding), which is a different, non-interchangeable
 /// construction, so RFC 3394 is implemented here as a line-by-line transcription of the §2.2.1/§2.2.2
-/// pseudocode — six rounds of AES-ECB over (register || block) pairs with the step counter XORed into
-/// the register — with no deviations from the specification. The cipher itself stays in the platform:
+/// pseudocode - six rounds of AES-ECB over (register || block) pairs with the step counter XORed into
+/// the register - with no deviations from the specification. The cipher itself stays in the platform:
 /// this class never touches key schedule or S-boxes; everything beyond the transcription is engineering
 /// hygiene (in-place state layout, constant-time register comparison, zeroing recovered blocks on
 /// integrity failure), none of it altering the algorithm.
 /// Correctness is pinned by tests on two independent axes: <c>AesKeyWrapTests</c> asserts all six
-/// known-answer vectors of RFC 3394 §4 — every KEK-size × key-data-size combination the specification
-/// defines, byte-exact — plus an unwrap-failure check for every single-byte tampering position, and
+/// known-answer vectors of RFC 3394 §4 - every KEK-size × key-data-size combination the specification
+/// defines, byte-exact - plus an unwrap-failure check for every single-byte tampering position, and
 /// <c>JweKeyManagementInteropTests</c> proves bidirectional interoperability with the
 /// Microsoft.IdentityModel implementation of the same construction: wraps produced by either
 /// implementation unwrap on the other.
@@ -53,10 +53,6 @@ internal static class AesKeyWrap
 {
     // 64-bit semiblock size per RFC 3394 §2; all lengths in this construction are multiples of it.
     private const int SemiblockSize = 8;
-
-    // RFC 3394 §2.2.1: the wrapping process is defined as exactly six rounds over all blocks
-    // ("For j = 0 to 5"); unwrapping runs the same six rounds in reverse.
-    private const int Rounds = 6;
 
     // RFC 3394 §2.2.3.1 default initial value of the integrity check register.
     private static ReadOnlySpan<byte> IntegrityCheckValue => [0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6];
@@ -90,27 +86,7 @@ internal static class AesKeyWrap
 
         using var aes = Aes.Create();
         aes.Key = kek;
-
-        var register = output.AsSpan(0, SemiblockSize);
-        Span<byte> block = stackalloc byte[2 * SemiblockSize];
-
-        // RFC 3394 §2.2.1: per round, per block: B = AES(K, A || R[i]); A = MSB64(B) ^ t; R[i] = LSB64(B),
-        // with the step counter t = n*j + i binding every block to its position across all rounds.
-        for (var j = 0; j < Rounds; j++)
-        {
-            for (var i = 1; i <= n; i++)
-            {
-                register.CopyTo(block);
-                output.AsSpan(i * SemiblockSize, SemiblockSize).CopyTo(block[SemiblockSize..]);
-
-                aes.EncryptEcb(block, block, PaddingMode.None);
-
-                block[..SemiblockSize].CopyTo(register);
-                XorCounter(register, (uint)(n * j + i));
-                block[SemiblockSize..].CopyTo(output.AsSpan(i * SemiblockSize, SemiblockSize));
-            }
-        }
-
+        AesKeyWrapCore.Wrap(aes, output, n);
         return output;
     }
 
@@ -136,52 +112,21 @@ internal static class AesKeyWrap
 
         var n = wrappedKey.Length / SemiblockSize - 1;
 
-        Span<byte> register = stackalloc byte[SemiblockSize];
-        wrappedKey.AsSpan(0, SemiblockSize).CopyTo(register);
-
-        var blocks = new byte[n * SemiblockSize];
-        wrappedKey.AsSpan(SemiblockSize).CopyTo(blocks);
+        // Layout the state as A || R[1..n] in a working copy the rounds transform in place.
+        var state = (byte[])wrappedKey.Clone();
 
         using var aes = Aes.Create();
         aes.Key = kek;
+        AesKeyWrapCore.Unwrap(aes, state, n);
 
-        Span<byte> block = stackalloc byte[2 * SemiblockSize];
-
-        // RFC 3394 §2.2.2: the exact inverse — rounds and blocks walked backwards:
-        // B = AES-1(K, (A ^ t) || R[i]); A = MSB64(B); R[i] = LSB64(B), with t = n*j + i.
-        for (var j = Rounds - 1; j >= 0; j--)
+        if (!CryptographicOperations.FixedTimeEquals(state.AsSpan(0, SemiblockSize), IntegrityCheckValue))
         {
-            for (var i = n; i >= 1; i--)
-            {
-                register.CopyTo(block);
-                XorCounter(block[..SemiblockSize], (uint)(n * j + i));
-                blocks.AsSpan((i - 1) * SemiblockSize, SemiblockSize).CopyTo(block[SemiblockSize..]);
-
-                aes.DecryptEcb(block, block, PaddingMode.None);
-
-                block[..SemiblockSize].CopyTo(register);
-                block[SemiblockSize..].CopyTo(blocks.AsSpan((i - 1) * SemiblockSize, SemiblockSize));
-            }
-        }
-
-        if (!CryptographicOperations.FixedTimeEquals(register, IntegrityCheckValue))
-        {
-            // Never return key material on an integrity failure — the recovered blocks are attacker-influenced.
-            CryptographicOperations.ZeroMemory(blocks);
+            // Never return key material on an integrity failure: the recovered blocks are attacker-influenced.
+            CryptographicOperations.ZeroMemory(state);
             return false;
         }
 
-        keyData = blocks;
+        keyData = state.AsSpan(SemiblockSize).ToArray();
         return true;
-    }
-
-    /// <summary>
-    /// XORs the big-endian step counter into the low-order bytes of the 64-bit register,
-    /// as RFC 3394 §2.2.1 step 2 prescribes for <c>A = MSB(64, B) ^ t</c>.
-    /// </summary>
-    private static void XorCounter(Span<byte> register, uint t)
-    {
-        for (var k = register.Length - 1; t != 0; k--, t >>= 8)
-            register[k] ^= (byte)t;
     }
 }
