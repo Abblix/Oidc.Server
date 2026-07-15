@@ -67,7 +67,10 @@ public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
     {
         var result = new JsonSerializerOptions
         {
-            DefaultIgnoreCondition = options.DefaultIgnoreCondition,
+            // A JWK omits an absent member rather than serializing it as null (RFC 7517): a public-only key
+            // carries no private-key parameters, so the JWKS must not emit "d": null etc. This is forced here,
+            // independent of the host's options, because it is a property of JWK serialization itself.
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             PropertyNamingPolicy = options.PropertyNamingPolicy,
             WriteIndented = options.WriteIndented,
             PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive,
