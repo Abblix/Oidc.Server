@@ -34,10 +34,10 @@ public class JsonWebKeySerializationTests
 {
     private const string RsaKeyId = "rsa-key-1";
     private const string EcKeyId = "ec-key-1";
-    private const string CurveP256 = "P-256";
+    private const string CurveP256 = EllipticCurveTypes.P256;
     private const string OctKeyId = "oct-key-1";
-    private const string HmacAlgorithm = "HS256";
-    private const string RsaAlgorithm = "RS256";
+    private const string HmacAlgorithm = SigningAlgorithms.HS256;
+    private const string RsaAlgorithm = SigningAlgorithms.RS256;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
