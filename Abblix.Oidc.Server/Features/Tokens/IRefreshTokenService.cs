@@ -54,5 +54,6 @@ public interface IRefreshTokenService
 	/// token, or returns an <see cref="OidcError"/> when the token cannot be honored.
 	/// </summary>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
-		JsonWebToken refreshToken, ClientInfo clientInfo);
+		JsonWebToken refreshToken,
+		ClientInfo clientInfo);
 }

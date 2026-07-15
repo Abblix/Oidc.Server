@@ -3,7 +3,6 @@
 
 using System.Net;
 using System.Text.Json.Nodes;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 

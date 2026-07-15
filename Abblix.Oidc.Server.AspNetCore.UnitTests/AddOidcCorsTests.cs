@@ -5,7 +5,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Xunit;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests;
 
