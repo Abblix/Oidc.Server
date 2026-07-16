@@ -47,7 +47,7 @@ public static class JsonWebKeyExtensions
 
 			var jwk = new EllipticCurveJsonWebKey
 			{
-				Usage = ExtractKeyUsage(certificate),
+				Usage = certificate.GetKeyUsage(),
 				KeyId = certificate.Thumbprint,
 			}
 				.Apply(ecdsaPublicKey.ExportParameters(false))
@@ -69,7 +69,7 @@ public static class JsonWebKeyExtensions
 
 			var jwk = new RsaJsonWebKey
 			{
-				Usage = ExtractKeyUsage(certificate),
+				Usage = certificate.GetKeyUsage(),
 				KeyId = certificate.Thumbprint,
 			}.Apply(rsaPublicKey.ExportParameters(false)).Apply(certificate);
 
@@ -85,10 +85,12 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
-	/// Extracts key usage from X509Certificate2.
-	/// Determines whether the key is used for signing, encryption, or both.
+	/// Derives the JWK <c>use</c> value from a certificate's Key Usage extension. A certificate that permits both
+	/// signing and encryption maps to no <c>use</c> (<c>null</c>): RFC 7517 §4.2 makes <c>use</c> a single value,
+	/// so an unrestricted key is expressed by omitting <c>use</c>, never by a multi-valued string. A certificate
+	/// with no Key Usage extension defaults to signing.
 	/// </summary>
-	private static string ExtractKeyUsage(X509Certificate2 certificate)
+	private static string? GetKeyUsage(this X509Certificate2 certificate)
 	{
 		const string defaultUsage = PublicKeyUsages.Signature;
 
@@ -97,10 +99,15 @@ public static class JsonWebKeyExtensions
 			return defaultUsage;
 
 		var sig = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.DigitalSignature);
-		var enc = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment);
+
+		// Either encipherment flag marks an encryption key. HasFlag(A | B) would demand both flags, so test the bits.
+		var enc =
+			keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment) ||
+			keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.DataEncipherment);
+
 		return (sig, enc) switch
 		{
-			(true, true) => $"{PublicKeyUsages.Signature} {PublicKeyUsages.Encryption}",
+			(true, true) => null, // permits both: omit use per RFC 7517 §4.2, never a multi-valued "sig enc"
 			(true, false) => PublicKeyUsages.Signature,
 			(false, true) => PublicKeyUsages.Encryption,
 			_ => defaultUsage,
