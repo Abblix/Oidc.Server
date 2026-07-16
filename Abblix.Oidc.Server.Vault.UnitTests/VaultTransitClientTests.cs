@@ -34,10 +34,25 @@ namespace Abblix.Oidc.Server.Vault.UnitTests;
 /// EC sign request shapes, the <c>vault:v&lt;n&gt;:</c> envelope framing, the 400-to-null decryption semantics,
 /// the algorithm gate, and the RSA / EC public-key import.
 /// </summary>
-public class VaultTransitClientTests
+public sealed class VaultTransitClientTests : IDisposable
 {
-    private static VaultTransitClient ClientOver(StubHttpMessageHandler handler)
-        => new(new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") });
+    // Each test builds a client over a stub transport. In production IHttpClientFactory owns the HttpClient and
+    // VaultTransitClient deliberately does not dispose it (a typed client never owns the factory's handler), so
+    // here the test owns that lifetime: track every created HttpClient and dispose them at test-class teardown.
+    private readonly List<HttpClient> _httpClients = [];
+
+    private VaultTransitClient ClientOver(StubHttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") };
+        _httpClients.Add(httpClient);
+        return new VaultTransitClient(httpClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var httpClient in _httpClients)
+            httpClient.Dispose();
+    }
 
     [Fact]
     public async Task SignAsync_Rs256_PostsPkcs1v15Sha256_AndStripsVersionPrefix()
