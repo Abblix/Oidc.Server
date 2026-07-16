@@ -31,10 +31,10 @@ namespace Abblix.Oidc.Server.Common.Interfaces;
 public static partial class AuthServiceKeysProviderExtensions
 {
     /// <summary>
-    /// Builds the public key set published at the JWKS endpoint: the signing keys unchanged, plus the
-    /// server's asymmetric encryption public keys marked <c>use=enc</c> so a client can encrypt a request
-    /// object or other inbound JWE to the server (RFC 9101). A symmetric server key has no public half and
-    /// is omitted; only sanitized public halves are ever published, never private or secret material.
+    /// Builds the public key set published at the JWKS endpoint: the signing public keys marked <c>use=sig</c>
+    /// and the server's asymmetric encryption public keys marked <c>use=enc</c> so a client can encrypt a
+    /// request object or other inbound JWE to the server (RFC 9101). A symmetric server key has no public half
+    /// and is omitted; only sanitized public halves are ever published, never private or secret material.
     /// As a last-resort guard against a misbehaving key provider, any key still carrying private material is
     /// stripped to its public half before it enters the set and a warning is logged: the JWKS endpoint must
     /// never leak a private key, even if an upstream provider mistakenly returns one.
@@ -44,13 +44,20 @@ public static partial class AuthServiceKeysProviderExtensions
     /// <returns>The signing keys followed by the asymmetric encryption public keys.</returns>
     public static async Task<JsonWebKey[]> GetPublishedKeysAsync(this IAuthServiceKeysProvider provider, ILogger logger)
     {
+        // Strip any private material first, then keep only keys that still have a publishable public half. A
+        // symmetric key's only material is its shared secret, so once stripped it has nothing left to publish and
+        // is dropped here: it can never reach the public JWKS, even if a provider hands it over carrying the secret.
+        // Each surviving key is then stamped with its role's use, so every published key is explicitly labelled.
         var signingKeys = await provider.GetSigningKeys()
             .Select(key => PublicOnly(key, logger))
+            .Where(key => key.HasPublicKey)
+            .Select(key => key with { Usage = PublicKeyUsages.Signature })
             .ToArrayAsync();
 
         var encryptionKeys = await provider.GetEncryptionKeys()
+            .Select(key => PublicOnly(key, logger))
             .Where(key => key.HasPublicKey)
-            .Select(key => PublicOnly(key, logger) with { Usage = PublicKeyUsages.Encryption })
+            .Select(key => key with { Usage = PublicKeyUsages.Encryption })
             .ToArrayAsync();
 
         return [..signingKeys, ..encryptionKeys];
