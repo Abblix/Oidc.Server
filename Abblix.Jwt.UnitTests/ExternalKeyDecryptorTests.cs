@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Jwt.Encryption;
@@ -217,10 +218,10 @@ public class ExternalKeyDecryptorTests
         public int AgreeCalls { get; private set; }
 
         // This custodian holds only encryption keys, so the library never routes a signing operation here.
-        public ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+        public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
             => throw new NotSupportedException("This decryption custodian holds no signing keys.");
 
-        public ValueTask<byte[]?> UnwrapKeyAsync(
+        public Task<byte[]?> UnwrapKeyAsync(
             string keyId,
             string algorithm,
             JsonWebTokenHeader header,
@@ -237,10 +238,10 @@ public class ExternalKeyDecryptorTests
 
                 _ => null,
             };
-            return new ValueTask<byte[]?>(cek);
+            return Task.FromResult(cek);
         }
 
-        public ValueTask<byte[]> AgreeKeyAsync(
+        public Task<byte[]> AgreeKeyAsync(
             string keyId,
             string algorithm,
             JsonWebKey ephemeralPublicKey,
@@ -249,11 +250,15 @@ public class ExternalKeyDecryptorTests
             AgreeCalls++;
             using var recipient = ((EllipticCurveJsonWebKey)fullKey).ToEcdh();
             using var ephemeral = ((EllipticCurveJsonWebKey)ephemeralPublicKey).ToEcdh();
-            return new ValueTask<byte[]>(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
+            return Task.FromResult(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
         }
 
-        public ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
-            => new(fullKey.Sanitize(includePrivateKeys: false));
+        public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+            string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield return new KeyVersion(fullKey.Sanitize(includePrivateKeys: false), DateTimeOffset.MinValue);
+        }
 
         private static byte[]? RsaDecrypt(RsaJsonWebKey key, string algorithm, byte[] encryptedKey)
         {

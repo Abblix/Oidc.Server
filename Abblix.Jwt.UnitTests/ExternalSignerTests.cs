@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
@@ -130,7 +131,7 @@ public class ExternalSignerTests
         public string? LastKid { get; private set; }
         public string? LastAlgorithm { get; private set; }
 
-        public ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+        public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CallCount++;
@@ -139,18 +140,22 @@ public class ExternalSignerTests
 
             // RS256 is RSASSA-PKCS1-v1_5 over SHA-256; the library verifies this against the public key.
             using var rsa = privateKey.ToRsa();
-            return new ValueTask<byte[]>(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+            return Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         }
 
-        public ValueTask<byte[]?> UnwrapKeyAsync(
+        public Task<byte[]?> UnwrapKeyAsync(
             string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 
-        public ValueTask<byte[]> AgreeKeyAsync(
+        public Task<byte[]> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 
-        public ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
-            => new(privateKey.Sanitize(includePrivateKeys: false));
+        public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+            string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield return new KeyVersion(privateKey.Sanitize(includePrivateKeys: false), DateTimeOffset.MinValue);
+        }
     }
 }

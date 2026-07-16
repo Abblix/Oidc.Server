@@ -34,7 +34,7 @@ internal sealed class ExternalKeySigner(IKeyCustodian custodian) : IDataSigner
     /// </summary>
     public bool CanSign(JsonWebKey key) => !key.HasPrivateKey;
 
-    public ValueTask<byte[]> SignAsync(
+    public Task<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,

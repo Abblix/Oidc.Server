@@ -39,7 +39,7 @@ internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : ICon
     /// </summary>
     public bool CanDecrypt(JsonWebKey key) => key.HasPrivateKey;
 
-    public ValueTask<byte[]?> DecryptKeyAsync(
+    public Task<byte[]?> DecryptKeyAsync(
         JsonWebTokenHeader header,
         JsonWebKey key,
         string algorithm,
@@ -59,7 +59,7 @@ internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : ICon
                 "key custodian, but none is configured.");
 
         var contentEncryptionKey = DecryptLocally(key);
-        return new ValueTask<byte[]?>(contentEncryptionKey);
+        return Task.FromResult(contentEncryptionKey);
 
         byte[]? DecryptLocally(JsonWebKey localKey) => localKey switch
         {

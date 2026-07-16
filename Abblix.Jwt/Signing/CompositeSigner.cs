@@ -35,7 +35,7 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
 {
     public bool CanSign(JsonWebKey key) => backends.Any(backend => backend.CanSign(key));
 
-    public ValueTask<byte[]> SignAsync(
+    public Task<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,

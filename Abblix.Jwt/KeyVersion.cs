@@ -34,4 +34,4 @@ namespace Abblix.Jwt;
 /// <param name="CreatedAt">When the custodian created this version. A custodian that does not track a creation
 /// time reports <see cref="DateTimeOffset.MinValue"/>, which a rotation policy treats as "always past the
 /// propagation window", so a single non-rotating key is always eligible to sign.</param>
-public sealed record KeyVersion(JsonWebKey PublicKey, DateTimeOffset CreatedAt);
+public readonly record struct KeyVersion(JsonWebKey PublicKey, DateTimeOffset CreatedAt);

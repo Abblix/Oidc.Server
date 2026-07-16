@@ -99,7 +99,7 @@ public sealed class VaultTransitClientTests : IDisposable
         var client = ClientOver(handler);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => client.SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken).AsTask());
+            () => client.SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
@@ -146,7 +146,7 @@ public sealed class VaultTransitClientTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => client.UnwrapKeyAsync(
             "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
-            [1], TestContext.Current.CancellationToken).AsTask());
+            [1], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -157,20 +157,20 @@ public sealed class VaultTransitClientTests : IDisposable
 
         await Assert.ThrowsAsync<NotSupportedException>(() => client.UnwrapKeyAsync(
             "oidc-enc", EncryptionAlgorithms.KeyManagement.Rsa1_5, new JsonWebTokenHeader(new JsonObject()),
-            [1], TestContext.Current.CancellationToken).AsTask());
+            [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnRsaKey()
+    public async Task GetKeyVersionsAsync_ImportsLatestVersion_OfAnRsaKey()
     {
         using var rsa = RSA.Create(2048);
         var expected = rsa.ExportParameters(false);
         var handler = KeyResponse("rsa-2048", rsa.ExportSubjectPublicKeyInfoPem());
         var client = ClientOver(handler);
 
-        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(client.GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var rsaKey = Assert.IsType<RsaJsonWebKey>(key);
         Assert.Equal(expected.Modulus, rsaKey.Modulus);
@@ -178,13 +178,13 @@ public sealed class VaultTransitClientTests : IDisposable
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnEcKey()
+    public async Task GetKeyVersionsAsync_ImportsLatestVersion_OfAnEcKey()
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var handler = KeyResponse("ecdsa-p256", ecdsa.ExportSubjectPublicKeyInfoPem());
         var client = ClientOver(handler);
 
-        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(client.GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var ecKey = Assert.IsType<EllipticCurveJsonWebKey>(key);
         Assert.Equal("P-256", ecKey.Curve);
@@ -203,4 +203,12 @@ public sealed class VaultTransitClientTests : IDisposable
                     keys = new Dictionary<string, object> { ["1"] = new { public_key = publicKeyPem } },
                 },
             }));
+
+    private static async Task<JsonWebKey> FirstPublicKeyAsync(IAsyncEnumerable<KeyVersion> versions)
+    {
+        await using var enumerator = versions.GetAsyncEnumerator();
+        if (!await enumerator.MoveNextAsync())
+            throw new InvalidOperationException("The custodian returned no key versions.");
+        return enumerator.Current.PublicKey;
+    }
 }

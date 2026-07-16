@@ -51,7 +51,7 @@ public interface IDataSigner
     /// <param name="data">The signing input bytes, BASE64URL(header) + '.' + BASE64URL(payload).</param>
     /// <param name="cancellationToken">Cancels the signing operation, including a custodian round-trip.</param>
     /// <returns>The raw signature bytes in JWS wire format for the algorithm.</returns>
-    ValueTask<byte[]> SignAsync(
+    Task<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,

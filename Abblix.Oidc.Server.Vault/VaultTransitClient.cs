@@ -23,6 +23,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Abblix.Jwt;
@@ -43,7 +44,7 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     /// R||S already, with no ASN.1 conversion. Transit hashes the input itself (<c>prehashed: false</c>). Returns
     /// the raw JWS signature bytes after stripping Transit's <c>vault:v&lt;n&gt;:</c> version prefix.
     /// </summary>
-    public async ValueTask<byte[]> SignAsync(
+    public async Task<byte[]> SignAsync(
         string keyId,
         string algorithm,
         byte[] data,
@@ -92,7 +93,7 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     /// ciphertext is indistinguishable, which the seam's padding-oracle mitigation depends on; a 403/5xx (bad
     /// token, sealed Vault) still throws. The JWE header is unused: RSA-OAEP unwrap needs only the ciphertext.
     /// </summary>
-    public async ValueTask<byte[]?> UnwrapKeyAsync(
+    public async Task<byte[]?> UnwrapKeyAsync(
         string keyId,
         string algorithm,
         JsonWebTokenHeader header,
@@ -123,7 +124,7 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     /// Derives the ECDH-ES shared secret. Vault Transit exposes no key-agreement primitive, so this store does not
     /// support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
     /// </summary>
-    public ValueTask<byte[]> AgreeKeyAsync(
+    public Task<byte[]> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
         => throw new NotSupportedException(
             "Vault Transit exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
@@ -139,19 +140,28 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     }
 
     /// <summary>
-    /// Fetches the public half of a Transit key as a public-only JWK (RSA or EC, per the Transit key type).
-    /// Transit returns it as a PEM (SubjectPublicKeyInfo). Called once per key at startup: the public key is a
-    /// durable artifact captured at generation, so JWKS publishing and signature verification run locally against
-    /// it and never touch this client on the hot path.
+    /// Enumerates the Transit key's versions as public-only JWKs (RSA or EC, per the Transit key type). Transit
+    /// returns each version's public half as a PEM (SubjectPublicKeyInfo). Called at publication time, so JWKS
+    /// publishing and signature verification run locally against the result and never touch this client on the
+    /// hot path. This build publishes the latest version only; enumerating every version for rotation overlap is
+    /// a forthcoming step.
     /// </summary>
-    public async ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+        string keyName,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var document = await SendAsync(HttpMethod.Get, $"keys/{keyId}", body: null, cancellationToken);
+        using var document = await SendAsync(HttpMethod.Get, $"keys/{keyName}", body: null, cancellationToken);
         var data = document.RootElement.GetProperty("data");
         var keyType = data.GetProperty("type").GetString()!;
         var latestVersion = data.GetProperty("latest_version").GetInt32().ToString(CultureInfo.InvariantCulture);
         var pem = data.GetProperty("keys").GetProperty(latestVersion).GetProperty("public_key").GetString()!;
 
+        yield return new KeyVersion(ImportPublicKey(keyType, pem), DateTimeOffset.MinValue);
+    }
+
+    // Imports a Transit public key PEM (SubjectPublicKeyInfo) into a public-only JWK of the matching type.
+    private static JsonWebKey ImportPublicKey(string keyType, string pem)
+    {
         if (keyType.StartsWith(KeyFamilyTypes.Ecdsa, StringComparison.Ordinal))
         {
             using var ecdsa = ECDsa.Create();

@@ -41,15 +41,23 @@ public class AzureKeyVaultClientTests
     private static AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
         => new(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), new HttpClient(handler));
 
+    private static async Task<JsonWebKey> FirstPublicKeyAsync(IAsyncEnumerable<KeyVersion> versions)
+    {
+        await using var enumerator = versions.GetAsyncEnumerator();
+        if (!await enumerator.MoveNextAsync())
+            throw new InvalidOperationException("The custodian returned no key versions.");
+        return enumerator.Current.PublicKey;
+    }
+
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsAnRsaKeyThroughTheInjectedTransport()
+    public async Task GetKeyVersionsAsync_ImportsAnRsaKeyThroughTheInjectedTransport()
     {
         using var rsa = RSA.Create(2048);
         var expected = rsa.ExportParameters(false);
         var handler = new StubHttpMessageHandler(
             _ => StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-sign", expected)));
 
-        var key = await ClientOver(handler).GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(ClientOver(handler).GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var rsaKey = Assert.IsType<RsaJsonWebKey>(key);
         Assert.Equal(expected.Modulus, rsaKey.Modulus);
@@ -57,13 +65,13 @@ public class AzureKeyVaultClientTests
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsAnEcKeyThroughTheInjectedTransport()
+    public async Task GetKeyVersionsAsync_ImportsAnEcKeyThroughTheInjectedTransport()
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.Json(
             HttpStatusCode.OK, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false))));
 
-        var key = await ClientOver(handler).GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(ClientOver(handler).GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var ecKey = Assert.IsType<EllipticCurveJsonWebKey>(key);
         Assert.Equal("P-256", ecKey.Curve);
@@ -102,7 +110,7 @@ public class AzureKeyVaultClientTests
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
         await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler)
-            .SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken).AsTask());
+            .SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }

@@ -94,14 +94,17 @@ public sealed class ExternalKeysProvider(
         var now = timeProvider.GetUtcNow();
         var propagation = options.Value.KeyRolloverPropagation;
 
-        var active = versions
-            .Where(version => now - version.CreatedAt >= propagation)
-            .OrderByDescending(version => version.CreatedAt)
-            .FirstOrDefault()
-            ?? versions.OrderByDescending(version => version.CreatedAt).First();
+        // Sort newest-first, then lead with the active version: the newest one already past the propagation
+        // window, or the newest overall if none has cleared it yet (bootstrap, the very first rollover). The rest
+        // keep newest-first order. Selection is index-based rather than by reference, since KeyVersion is a value
+        // type for which ReferenceEquals is meaningless.
+        var byNewest = versions.OrderByDescending(version => version.CreatedAt).ToList();
+        var activeIndex = byNewest.FindIndex(version => propagation <= now - version.CreatedAt);
+        if (activeIndex < 0)
+            activeIndex = 0;
 
-        return versions
-            .OrderByDescending(version => ReferenceEquals(version, active))
-            .ThenByDescending(version => version.CreatedAt);
+        return byNewest.Skip(activeIndex).Take(1)
+            .Concat(byNewest.Take(activeIndex))
+            .Concat(byNewest.Skip(activeIndex + 1));
     }
 }
