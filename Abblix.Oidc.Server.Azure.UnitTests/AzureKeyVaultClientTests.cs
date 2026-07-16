@@ -22,6 +22,7 @@
 
 using System.Net;
 using System.Security.Cryptography;
+using Abblix.Jwt;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
@@ -29,7 +30,8 @@ namespace Abblix.Oidc.Server.Azure.UnitTests;
 /// <summary>
 /// Exercises <see cref="AzureKeyVaultClient"/> against a stub transport and a fake credential, proving the
 /// IHttpClientFactory seam drives the Azure SDK end to end: the injected <see cref="HttpMessageHandler"/> is the
-/// transport for every Key Vault call, so signing, unwrapping and public-key fetch round-trip without a live vault.
+/// transport for every Key Vault call, so RSA and EC signing, unwrapping and public-key fetch round-trip without a
+/// live vault.
 /// </summary>
 public class AzureKeyVaultClientTests
 {
@@ -39,51 +41,83 @@ public class AzureKeyVaultClientTests
         => new(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), new HttpClient(handler));
 
     [Fact]
-    public async Task GetPublicKeyAsync_ReadsTheKeyThroughTheInjectedTransport()
+    public async Task GetPublicKeyAsync_ImportsAnRsaKeyThroughTheInjectedTransport()
     {
         using var rsa = RSA.Create(2048);
         var expected = rsa.ExportParameters(false);
         var handler = new StubHttpMessageHandler(
             _ => StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-sign", expected)));
-        var client = ClientOver(handler);
 
-        var result = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await ClientOver(handler).GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected.Modulus, result.Modulus);
-        Assert.Equal(expected.Exponent, result.Exponent);
-        Assert.NotNull(handler.LastRequest); // the SDK went through our injected HttpClient
+        var rsaKey = Assert.IsType<RsaJsonWebKey>(key);
+        Assert.Equal(expected.Modulus, rsaKey.Modulus);
+        Assert.False(rsaKey.HasPrivateKey);
     }
 
     [Fact]
-    public async Task SignAsync_SignsThroughTheInjectedTransport()
+    public async Task GetPublicKeyAsync_ImportsAnEcKeyThroughTheInjectedTransport()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.Json(
+            HttpStatusCode.OK, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false))));
+
+        var key = await ClientOver(handler).GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+
+        var ecKey = Assert.IsType<EllipticCurveJsonWebKey>(key);
+        Assert.Equal("P-256", ecKey.Curve);
+        Assert.False(ecKey.HasPrivateKey);
+    }
+
+    [Fact]
+    public async Task SignAsync_Rs256_SignsThroughTheInjectedTransport()
     {
         var signature = new byte[] { 3, 1, 4, 1, 5, 9 };
         using var rsa = RSA.Create(2048);
-        var publicKey = rsa.ExportParameters(false);
-        var handler = new StubHttpMessageHandler(request =>
-            request.RequestUri!.AbsolutePath.EndsWith("/sign", StringComparison.Ordinal)
-                ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, "oidc-sign", signature))
-                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-sign", publicKey)));
-        var client = ClientOver(handler);
+        var handler = SignResponder("oidc-sign", signature, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false)));
 
-        var result = await client.SignAsync("oidc-sign", new byte[] { 9, 9 }, TestContext.Current.CancellationToken);
+        var result = await ClientOver(handler).SignAsync(
+            "oidc-sign", SigningAlgorithms.RS256, new byte[] { 9, 9 }, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
     }
 
     [Fact]
-    public async Task DecryptAsync_UnwrapsThroughTheInjectedTransport()
+    public async Task SignAsync_Es256_SignsThroughTheInjectedTransport()
+    {
+        var signature = new byte[] { 2, 7, 1, 8, 2, 8 };
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var handler = SignResponder("oidc-sign", signature, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false)));
+
+        var result = await ClientOver(handler).SignAsync(
+            "oidc-sign", SigningAlgorithms.ES256, new byte[] { 9, 9 }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(signature, result);
+    }
+
+    [Fact]
+    public async Task SignAsync_RejectsUnsupportedAlgorithm()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler)
+            .SignAsync("oidc-sign", "HS256", new byte[] { 1 }, TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequest);
+    }
+
+    [Fact]
+    public async Task DecryptAsync_RsaOaep256_UnwrapsThroughTheInjectedTransport()
     {
         var plaintext = new byte[] { 2, 7, 1, 8 };
         using var rsa = RSA.Create(2048);
-        var publicKey = rsa.ExportParameters(false);
         var handler = new StubHttpMessageHandler(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
                 ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, "oidc-enc", plaintext))
-                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", publicKey)));
-        var client = ClientOver(handler);
+                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        var result = await client.DecryptAsync("oidc-enc", new byte[] { 5, 5 }, TestContext.Current.CancellationToken);
+        var result = await ClientOver(handler).DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 5, 5 }, TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
     }
@@ -92,15 +126,21 @@ public class AzureKeyVaultClientTests
     public async Task DecryptAsync_ReturnsNull_OnVaultFailure()
     {
         using var rsa = RSA.Create(2048);
-        var publicKey = rsa.ExportParameters(false);
         var handler = new StubHttpMessageHandler(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
                 ? StubHttpMessageHandler.Json(HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}""")
-                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", publicKey)));
-        var client = ClientOver(handler);
+                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        var result = await client.DecryptAsync("oidc-enc", new byte[] { 5, 5 }, TestContext.Current.CancellationToken);
+        var result = await ClientOver(handler).DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 5, 5 }, TestContext.Current.CancellationToken);
 
         Assert.Null(result);
     }
+
+    // The crypto client may fetch the key (a JIT GET) before the remote sign; return the key bundle for the GET and
+    // the signature for the POST to /sign.
+    private static StubHttpMessageHandler SignResponder(string keyName, byte[] signature, string keyBundle)
+        => new(request => request.RequestUri!.AbsolutePath.EndsWith("/sign", StringComparison.Ordinal)
+            ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, keyName, signature))
+            : StubHttpMessageHandler.Json(HttpStatusCode.OK, keyBundle));
 }

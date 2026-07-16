@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
+
 namespace Abblix.Oidc.Server.Vault;
 
 /// <summary>
@@ -47,4 +49,23 @@ public sealed class VaultTransitOptions
 
     /// <summary>Name of the Transit key used to unwrap encrypted-token CEKs; also the published encryption key's <c>kid</c>.</summary>
     public string EncryptionKeyName { get; set; } = "oidc-enc";
+
+    /// <summary>
+    /// JWS algorithm the signing key uses (default <c>RS256</c>). Must be one Transit provisions: RS256/384/512,
+    /// PS256/384/512, or ES256/384/512 (the EC ones need an ECDSA Transit key of the matching curve).
+    /// </summary>
+    public string SigningAlgorithm { get; set; } = SigningAlgorithms.RS256;
+
+    /// <summary>
+    /// JWE key-management algorithm the encryption key uses. Transit's RSA decrypt provisions <c>RSA-OAEP-256</c>
+    /// only.
+    /// </summary>
+    public string EncryptionAlgorithm { get; set; } = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+    /// <summary>
+    /// How long a pooled HTTP connection is reused before it is recycled. The Transit client is held long-lived by
+    /// the singleton key store, so recycling connections lets it pick up DNS changes without handler rotation
+    /// (default 2 minutes, matching the default IHttpClientFactory handler lifetime).
+    /// </summary>
+    public TimeSpan PooledConnectionLifetime { get; set; } = TimeSpan.FromMinutes(2);
 }

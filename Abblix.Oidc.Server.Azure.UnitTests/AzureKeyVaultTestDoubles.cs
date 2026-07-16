@@ -85,6 +85,22 @@ internal static class AzureResponses
             attributes = new { enabled = true },
         });
 
+    /// <summary>A public-only P-256 EC key bundle, the shape the SDK expects for an EC key.</summary>
+    public static string EcKeyBundle(string vaultUri, string keyName, ECParameters publicKey)
+        => JsonSerializer.Serialize(new
+        {
+            key = new
+            {
+                kid = $"{vaultUri}keys/{keyName}/v1",
+                kty = "EC",
+                crv = "P-256",
+                key_ops = new[] { "sign", "verify" },
+                x = Base64Url(publicKey.Q.X!),
+                y = Base64Url(publicKey.Q.Y!),
+            },
+            attributes = new { enabled = true },
+        });
+
     /// <summary>A sign or decrypt result, both shaped <c>{ kid, value }</c> with a base64url value.</summary>
     public static string CryptoResult(string vaultUri, string keyName, byte[] value)
         => JsonSerializer.Serialize(new { kid = $"{vaultUri}keys/{keyName}/v1", value = Base64Url(value) });

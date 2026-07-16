@@ -49,17 +49,25 @@ public static class ServiceCollectionExtensions
 
         // Typed client so the Azure SDK's transport is the host's IHttpClientFactory pipeline, mirroring the Vault
         // package. The SDK sets absolute request URIs and authenticates via the credential, so the HttpClient needs
-        // no base address or header configuration here.
-        services.AddHttpClient<AzureKeyVaultClient>();
+        // no base address or header configuration here. The SDK keeps one client for the vault, so this HttpClient is
+        // held long-lived: disable handler rotation and let SocketsHttpHandler.PooledConnectionLifetime recycle
+        // connections to pick up DNS changes, the pattern Microsoft recommends for a long-lived HttpClient.
+        services.AddHttpClient<AzureKeyVaultClient>()
+            .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value.PooledConnectionLifetime,
+            })
+            .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
         // Register the vault client as the external key store, then let the shared wiring route its private
         // operations through the crypto seam and publish its public halves at /jwks. This replaces the OIDC
         // default key provider, so call this after the OIDC registration to win the singular resolve.
         services.AddSingleton<IExternalKeyStore>(serviceProvider => serviceProvider.GetRequiredService<AzureKeyVaultClient>());
-        services.AddExternalRsaKeys(serviceProvider =>
+        services.AddExternalKeys(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value;
-            return (options.SigningKeyName, options.EncryptionKeyName);
+            return new ExternalKeyConfiguration(
+                options.SigningKeyName, options.SigningAlgorithm, options.EncryptionKeyName, options.EncryptionAlgorithm);
         });
         return services;
     }

@@ -21,16 +21,19 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Identity;
-using Azure.Security.KeyVault.Keys;
 using Azure.Security.KeyVault.Keys.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+
+// Azure.Security.KeyVault.Keys also declares a JsonWebKey; alias the namespace so the bare JsonWebKey stays the
+// Abblix.Jwt one (which the .Apply extension and the store contract need), while KeyClient / KeyType come via KeyVault.
+using KeyVault = Azure.Security.KeyVault.Keys;
 
 namespace Abblix.Oidc.Server.Azure;
 
@@ -46,7 +49,7 @@ public sealed class AzureKeyVaultClient : IExternalKeyStore
     private readonly Uri _vaultUri;
     private readonly TokenCredential _credential;
     private readonly HttpClient _httpClient;
-    private readonly KeyClient _keyClient;
+    private readonly KeyVault.KeyClient _keyClient;
     private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
 
     /// <summary>
@@ -75,8 +78,8 @@ public sealed class AzureKeyVaultClient : IExternalKeyStore
         _vaultUri = new Uri(settings.KeyVaultUri);
         _credential = credential;
         _httpClient = httpClient;
-        _keyClient = new KeyClient(
-            _vaultUri, _credential, new KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
+        _keyClient = new KeyVault.KeyClient(
+            _vaultUri, _credential, new KeyVault.KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
     }
 
     // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
@@ -90,25 +93,43 @@ public sealed class AzureKeyVaultClient : IExternalKeyStore
             : new DefaultAzureCredential();
 
     /// <summary>
-    /// Signs the JWS signing input with a Key Vault RSA key. RS256 is signed over the data (the vault hashes
-    /// it), and Key Vault returns the raw signature already in JWS wire format.
+    /// Signs the JWS signing input with a Key Vault key under the given JWS algorithm. Key Vault hashes the data
+    /// and returns the raw signature already in JWS wire format (R||S for EC).
     /// </summary>
-    public async Task<byte[]> SignAsync(string keyName, byte[] data, CancellationToken cancellationToken)
+    public async Task<byte[]> SignAsync(string keyName, string algorithm, byte[] data, CancellationToken cancellationToken)
     {
-        var result = await GetCryptographyClient(keyName).SignDataAsync(SignatureAlgorithm.RS256, data, cancellationToken);
+        var client = GetCryptographyClient(keyName);
+        var result = await client.SignDataAsync(MapSignatureAlgorithm(algorithm), data, cancellationToken);
         return result.Signature;
     }
 
-    /// <summary>
-    /// Unwraps (decrypts) an RSA-OAEP-256 CEK with a Key Vault RSA key. Key Vault decrypts a raw JWE ciphertext
-    /// directly. Returns null on failure so a wrong key or tampered ciphertext is indistinguishable, which the
-    /// seam's padding-oracle mitigation relies on.
-    /// </summary>
-    public async Task<byte[]?> DecryptAsync(string keyName, byte[] ciphertext, CancellationToken cancellationToken)
+    private static SignatureAlgorithm MapSignatureAlgorithm(string algorithm) => algorithm switch
     {
+        SigningAlgorithms.RS256 => SignatureAlgorithm.RS256,
+        SigningAlgorithms.RS384 => SignatureAlgorithm.RS384,
+        SigningAlgorithms.RS512 => SignatureAlgorithm.RS512,
+        SigningAlgorithms.PS256 => SignatureAlgorithm.PS256,
+        SigningAlgorithms.PS384 => SignatureAlgorithm.PS384,
+        SigningAlgorithms.PS512 => SignatureAlgorithm.PS512,
+        SigningAlgorithms.ES256 => SignatureAlgorithm.ES256,
+        SigningAlgorithms.ES384 => SignatureAlgorithm.ES384,
+        SigningAlgorithms.ES512 => SignatureAlgorithm.ES512,
+        _ => throw new NotSupportedException($"The Azure Key Vault store does not sign '{algorithm}'."),
+    };
+
+    /// <summary>
+    /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
+    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null on failure so a wrong
+    /// key or tampered ciphertext is indistinguishable, which the seam's padding-oracle mitigation relies on.
+    /// </summary>
+    public async Task<byte[]?> DecryptAsync(
+        string keyName, string algorithm, byte[] ciphertext, CancellationToken cancellationToken)
+    {
+        var encryptionAlgorithm = MapEncryptionAlgorithm(algorithm);
         try
         {
-            var result = await GetCryptographyClient(keyName).DecryptAsync(EncryptionAlgorithm.RsaOaep256, ciphertext, cancellationToken);
+            var client = GetCryptographyClient(keyName);
+            var result = await client.DecryptAsync(encryptionAlgorithm, ciphertext, cancellationToken);
             return result.Plaintext;
         }
         catch (RequestFailedException)
@@ -117,15 +138,41 @@ public sealed class AzureKeyVaultClient : IExternalKeyStore
         }
     }
 
+    private static EncryptionAlgorithm MapEncryptionAlgorithm(string algorithm) => algorithm switch
+    {
+        EncryptionAlgorithms.KeyManagement.RsaOaep256 => EncryptionAlgorithm.RsaOaep256,
+        EncryptionAlgorithms.KeyManagement.RsaOaep => EncryptionAlgorithm.RsaOaep,
+        EncryptionAlgorithms.KeyManagement.Rsa1_5 => EncryptionAlgorithm.Rsa15,
+        _ => throw new NotSupportedException($"The Azure Key Vault store does not unwrap '{algorithm}'."),
+    };
+
     /// <summary>
-    /// Fetches the public half of a Key Vault key as RSA parameters. Called once per key at startup, so JWKS
-    /// publishing and signature verification run locally against it and never touch the vault on the hot path.
+    /// Derives the ECDH-ES shared secret. Azure Key Vault exposes no key-agreement primitive, so this store does
+    /// not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
     /// </summary>
-    public async Task<RSAParameters> GetPublicKeyAsync(string keyName, CancellationToken cancellationToken)
+    public Task<byte[]> AgreeKeyAsync(
+        string keyName, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+        => throw new NotSupportedException(
+            "Azure Key Vault exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
+
+    /// <summary>
+    /// Fetches the public half of a Key Vault key as a public-only JWK (RSA or EC, per the key type). Called once
+    /// per key at startup, so JWKS publishing and signature verification run locally against it and never touch
+    /// the vault on the hot path.
+    /// </summary>
+    public async Task<JsonWebKey> GetPublicKeyAsync(string keyName, CancellationToken cancellationToken)
     {
         var key = await _keyClient.GetKeyAsync(keyName, cancellationToken: cancellationToken);
-        using var rsa = key.Value.Key.ToRSA();
-        return rsa.ExportParameters(false);
+        var webKey = key.Value.Key;
+
+        if (webKey.KeyType == KeyVault.KeyType.Ec || webKey.KeyType == KeyVault.KeyType.EcHsm)
+        {
+            using var ecdsa = webKey.ToECDsa();
+            return new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false));
+        }
+
+        using var rsa = webKey.ToRSA();
+        return new RsaJsonWebKey().Apply(rsa.ExportParameters(false));
     }
 
     private CryptographyClient GetCryptographyClient(string keyName)

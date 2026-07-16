@@ -32,70 +32,73 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
-/// Verifies the algorithm gate of <see cref="ExternalKeyCustodian"/>: the RSA operations forward to the store,
-/// while an unsupported algorithm is rejected before the store is touched, and ECDH-ES agreement is unreachable.
-/// One custodian serves any <see cref="IExternalKeyStore"/>, so this covers the Vault and Azure packages alike.
+/// Verifies that <see cref="ExternalKeyCustodian"/> is a faithful passthrough to the <see cref="IExternalKeyStore"/>:
+/// it forwards the kid, algorithm and payload of every private operation, and surfaces the store's rejection when
+/// the store does not provision an algorithm. The store, not the custodian, owns algorithm support, so one
+/// custodian serves any store.
 /// </summary>
 public class ExternalKeyCustodianTests
 {
     [Fact]
-    public async Task SignAsync_ForwardsRs256_ToStore()
+    public async Task SignAsync_ForwardsKidAlgorithmAndData_ToStore()
     {
         var signature = new byte[] { 1, 2, 3 };
         var store = new Mock<IExternalKeyStore>();
-        store.Setup(s => s.SignAsync("kid", It.IsAny<byte[]>(), It.IsAny<CancellationToken>())).ReturnsAsync(signature);
+        store.Setup(s => s.SignAsync("kid", SigningAlgorithms.PS384, It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(signature);
         var custodian = new ExternalKeyCustodian(store.Object);
 
         var result = await custodian.SignAsync(
-            "kid", SigningAlgorithms.RS256, new byte[] { 9 }, TestContext.Current.CancellationToken);
+            "kid", SigningAlgorithms.PS384, new byte[] { 9 }, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
+        store.Verify(
+            s => s.SignAsync("kid", SigningAlgorithms.PS384, It.IsAny<byte[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task SignAsync_RejectsNonRs256_WithoutTouchingStore()
-    {
-        // A strict mock throws on any call, so the assertion also proves the guard fires before the store is used.
-        var store = new Mock<IExternalKeyStore>(MockBehavior.Strict);
-        var custodian = new ExternalKeyCustodian(store.Object);
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => custodian
-            .SignAsync("kid", "ES256", new byte[] { 9 }, TestContext.Current.CancellationToken).AsTask());
-    }
-
-    [Fact]
-    public async Task UnwrapKeyAsync_ForwardsRsaOaep256_ToStore()
+    public async Task UnwrapKeyAsync_ForwardsKidAlgorithmAndCiphertext_ToStore()
     {
         var plaintext = new byte[] { 4, 5, 6 };
         var store = new Mock<IExternalKeyStore>();
-        store.Setup(s => s.DecryptAsync("kid", It.IsAny<byte[]>(), It.IsAny<CancellationToken>())).ReturnsAsync(plaintext);
+        store.Setup(s => s.DecryptAsync(
+                "kid", EncryptionAlgorithms.KeyManagement.RsaOaep, It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plaintext);
         var custodian = new ExternalKeyCustodian(store.Object);
 
         var result = await custodian.UnwrapKeyAsync(
-            "kid", EncryptionAlgorithms.KeyManagement.RsaOaep256,
-            new JsonWebTokenHeader(new JsonObject()), new byte[] { 1 }, TestContext.Current.CancellationToken);
+            "kid", EncryptionAlgorithms.KeyManagement.RsaOaep, new JsonWebTokenHeader(new JsonObject()),
+            new byte[] { 1 }, TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
     }
 
     [Fact]
-    public async Task UnwrapKeyAsync_RejectsNonRsaOaep256_WithoutTouchingStore()
+    public async Task AgreeKeyAsync_ForwardsToStore()
     {
-        var store = new Mock<IExternalKeyStore>(MockBehavior.Strict);
+        var sharedSecret = new byte[] { 7, 7 };
+        var store = new Mock<IExternalKeyStore>();
+        store.Setup(s => s.AgreeKeyAsync(
+                "kid", "ECDH-ES", It.IsAny<JsonWebKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sharedSecret);
         var custodian = new ExternalKeyCustodian(store.Object);
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => custodian.UnwrapKeyAsync(
-            "kid", "RSA1_5", new JsonWebTokenHeader(new JsonObject()),
-            new byte[] { 1 }, TestContext.Current.CancellationToken).AsTask());
+        var result = await custodian.AgreeKeyAsync(
+            "kid", "ECDH-ES", new EllipticCurveJsonWebKey(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(sharedSecret, result);
     }
 
     [Fact]
-    public void AgreeKeyAsync_IsNotSupported()
+    public async Task SignAsync_PropagatesTheStoresRejection_OfAnUnsupportedAlgorithm()
     {
-        var store = new Mock<IExternalKeyStore>(MockBehavior.Strict);
+        var store = new Mock<IExternalKeyStore>();
+        store.Setup(s => s.SignAsync("kid", "ES256", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new NotSupportedException());
         var custodian = new ExternalKeyCustodian(store.Object);
 
-        Assert.Throws<NotSupportedException>(() => _ = custodian.AgreeKeyAsync(
-            "kid", "ECDH-ES", new RsaJsonWebKey(), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<NotSupportedException>(() => custodian
+            .SignAsync("kid", "ES256", new byte[] { 9 }, TestContext.Current.CancellationToken).AsTask());
     }
 }

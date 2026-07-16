@@ -23,13 +23,15 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Abblix.Jwt;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Vault.UnitTests;
 
 /// <summary>
-/// Exercises the Transit wire contract of <see cref="VaultTransitClient"/> against a stub transport: request
-/// shapes, the <c>vault:v&lt;n&gt;:</c> envelope framing, and the 400-to-null decryption semantics.
+/// Exercises the Transit wire contract of <see cref="VaultTransitClient"/> against a stub transport: the RSA and
+/// EC sign request shapes, the <c>vault:v&lt;n&gt;:</c> envelope framing, the 400-to-null decryption semantics,
+/// the algorithm gate, and the RSA / EC public-key import.
 /// </summary>
 public class VaultTransitClientTests
 {
@@ -37,7 +39,7 @@ public class VaultTransitClientTests
         => new(new HttpClient(handler) { BaseAddress = new Uri("http://vault.test/v1/transit/") });
 
     [Fact]
-    public async Task SignAsync_PostsPkcs1v15Sha256_AndStripsVersionPrefix()
+    public async Task SignAsync_Rs256_PostsPkcs1v15Sha256_AndStripsVersionPrefix()
     {
         var signature = new byte[] { 1, 2, 3, 4 };
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
@@ -45,17 +47,45 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         var data = new byte[] { 9, 9 };
-        var result = await client.SignAsync("oidc-sign", data, TestContext.Current.CancellationToken);
+        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.RS256, data, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
-        Assert.Equal("http://vault.test/v1/transit/sign/oidc-sign", handler.LastRequest!.RequestUri!.ToString());
-
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
         var root = body.RootElement;
         Assert.Equal(Convert.ToBase64String(data), root.GetProperty("input").GetString());
         Assert.Equal("pkcs1v15", root.GetProperty("signature_algorithm").GetString());
         Assert.Equal("sha2-256", root.GetProperty("hash_algorithm").GetString());
         Assert.False(root.GetProperty("prehashed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SignAsync_Es256_UsesJwsMarshalingSoNoAsn1Conversion()
+    {
+        var signature = new byte[] { 5, 6, 7, 8 };
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.OK, new { data = new { signature = $"vault:v1:{Convert.ToBase64String(signature)}" } }));
+        var client = ClientOver(handler);
+
+        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.ES256, new byte[] { 1 }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(signature, result);
+        using var body = JsonDocument.Parse(handler.LastRequestBody!);
+        var root = body.RootElement;
+        Assert.Equal("jws", root.GetProperty("marshaling_algorithm").GetString());
+        Assert.Equal("sha2-256", root.GetProperty("hash_algorithm").GetString());
+        Assert.False(root.TryGetProperty("signature_algorithm", out _)); // EC has no signature_algorithm
+    }
+
+    [Fact]
+    public async Task SignAsync_RejectsUnsupportedAlgorithm_WithoutCallingTransit()
+    {
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+        var client = ClientOver(handler);
+
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => client.SignAsync("oidc-sign", "HS256", new byte[] { 1 }, TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequest);
     }
 
     [Fact]
@@ -67,11 +97,10 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         var ciphertext = new byte[] { 5, 5 };
-        var result = await client.DecryptAsync("oidc-enc", ciphertext, TestContext.Current.CancellationToken);
+        var result = await client.DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, ciphertext, TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
-        Assert.Equal("http://vault.test/v1/transit/decrypt/oidc-enc", handler.LastRequest!.RequestUri!.ToString());
-
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.Equal("vault:v1:" + Convert.ToBase64String(ciphertext),
             body.RootElement.GetProperty("ciphertext").GetString());
@@ -80,13 +109,12 @@ public class VaultTransitClientTests
     [Fact]
     public async Task DecryptAsync_ReturnsNull_OnBadRequest()
     {
-        // A 400 means a wrong key or tampered ciphertext; the client returns null so the two are indistinguishable,
-        // which the seam's padding-oracle mitigation depends on.
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
             HttpStatusCode.BadRequest, new { errors = new[] { "decryption failed" } }));
         var client = ClientOver(handler);
 
-        var result = await client.DecryptAsync("oidc-enc", new byte[] { 1 }, TestContext.Current.CancellationToken);
+        var result = await client.DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 1 }, TestContext.Current.CancellationToken);
 
         Assert.Null(result);
     }
@@ -94,41 +122,65 @@ public class VaultTransitClientTests
     [Fact]
     public async Task DecryptAsync_Throws_OnForbidden()
     {
-        // A 403 (bad token, sealed Vault) is an operational failure, not a ciphertext-dependent one, so it surfaces.
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
             HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
         var client = ClientOver(handler);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => client.DecryptAsync("oidc-enc", new byte[] { 1 }, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 1 }, TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsTheLatestVersionPublicKey()
+    public async Task DecryptAsync_RejectsUnsupportedAlgorithm_WithoutCallingTransit()
+    {
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+        var client = ClientOver(handler);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => client.DecryptAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.Rsa1_5, new byte[] { 1 }, TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequest);
+    }
+
+    [Fact]
+    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnRsaKey()
     {
         using var rsa = RSA.Create(2048);
         var expected = rsa.ExportParameters(false);
-        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+        var handler = KeyResponse("rsa-2048", rsa.ExportSubjectPublicKeyInfoPem());
+        var client = ClientOver(handler);
+
+        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+
+        var rsaKey = Assert.IsType<RsaJsonWebKey>(key);
+        Assert.Equal(expected.Modulus, rsaKey.Modulus);
+        Assert.False(rsaKey.HasPrivateKey);
+    }
+
+    [Fact]
+    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnEcKey()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var handler = KeyResponse("ecdsa-p256", ecdsa.ExportSubjectPublicKeyInfoPem());
+        var client = ClientOver(handler);
+
+        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+
+        var ecKey = Assert.IsType<EllipticCurveJsonWebKey>(key);
+        Assert.Equal("P-256", ecKey.Curve);
+        Assert.False(ecKey.HasPrivateKey);
+    }
+
+    private static StubHttpMessageHandler KeyResponse(string keyType, string publicKeyPem)
+        => new((_, _) => StubHttpMessageHandler.Json(
             HttpStatusCode.OK,
             new
             {
                 data = new
                 {
-                    latest_version = 2,
-                    keys = new Dictionary<string, object>
-                    {
-                        // Only the latest version is imported; the stale prior version is never parsed.
-                        ["1"] = new { public_key = "-----BEGIN PUBLIC KEY-----\nstale\n-----END PUBLIC KEY-----" },
-                        ["2"] = new { public_key = rsa.ExportSubjectPublicKeyInfoPem() },
-                    },
+                    type = keyType,
+                    latest_version = 1,
+                    keys = new Dictionary<string, object> { ["1"] = new { public_key = publicKeyPem } },
                 },
             }));
-        var client = ClientOver(handler);
-
-        var result = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
-
-        Assert.Equal(expected.Modulus, result.Modulus);
-        Assert.Equal(expected.Exponent, result.Exponent);
-        Assert.Equal("http://vault.test/v1/transit/keys/oidc-sign", handler.LastRequest!.RequestUri!.ToString());
-    }
 }

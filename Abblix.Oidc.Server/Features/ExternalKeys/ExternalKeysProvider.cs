@@ -38,19 +38,19 @@ public sealed class ExternalKeysProvider : IAuthServiceKeysProvider
     private readonly Lazy<Task<JsonWebKey>> _encryptionKey;
 
     /// <summary>
-    /// Captures the key names to fetch; the public keys are pulled from the store lazily on first use.
+    /// Captures the key names and algorithms to publish; the public keys are pulled from the store lazily on first
+    /// use.
     /// </summary>
     /// <param name="store">The external key store to fetch the public halves from.</param>
-    /// <param name="signingKeyName">The store's name for the signing key, published as its <c>kid</c>.</param>
-    /// <param name="encryptionKeyName">The store's name for the encryption key, published as its <c>kid</c>.</param>
-    public ExternalKeysProvider(IExternalKeyStore store, string signingKeyName, string encryptionKeyName)
+    /// <param name="configuration">The signing and encryption key names and algorithms to publish.</param>
+    public ExternalKeysProvider(IExternalKeyStore store, ExternalKeyConfiguration configuration)
     {
         // Public keys are immutable for a given kid (rotation mints a new kid, never edits one), so each is fetched
         // from the store once at first use and cached for the life of the process.
         _signingKey = new(() => BuildPublicKeyAsync(
-            store, signingKeyName, PublicKeyUsages.Signature, SigningAlgorithms.RS256));
+            store, configuration.SigningKeyName, PublicKeyUsages.Signature, configuration.SigningAlgorithm));
         _encryptionKey = new(() => BuildPublicKeyAsync(
-            store, encryptionKeyName, PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256));
+            store, configuration.EncryptionKeyName, PublicKeyUsages.Encryption, configuration.EncryptionAlgorithm));
     }
 
     /// <inheritdoc />
@@ -71,10 +71,11 @@ public sealed class ExternalKeysProvider : IAuthServiceKeysProvider
     private static async Task<JsonWebKey> BuildPublicKeyAsync(
         IExternalKeyStore store, string keyName, string usage, string algorithm)
     {
-        var parameters = await store.GetPublicKeyAsync(keyName, CancellationToken.None);
+        var publicKey = await store.GetPublicKeyAsync(keyName, CancellationToken.None);
 
-        // The parameters are public-only, so the JWK carries no private material: HasPrivateKey is false, and the
-        // kid is the store's key name, which is also the custodian's handle.
-        return new RsaJsonWebKey { KeyId = keyName, Usage = usage, Algorithm = algorithm }.Apply(parameters);
+        // The store returns bare public-key material (RSA or EC); stamp the kid (= the store key name, the
+        // custodian's handle), the use and the configured algorithm. record `with` keeps the runtime key type, so
+        // this is correct for both RsaJsonWebKey and EllipticCurveJsonWebKey.
+        return publicKey with { KeyId = keyName, Usage = usage, Algorithm = algorithm };
     }
 }

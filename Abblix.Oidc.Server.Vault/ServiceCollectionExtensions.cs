@@ -44,28 +44,38 @@ public static class ServiceCollectionExtensions
     /// <param name="configureOptions">Configures the Vault address, auth token, Transit mount and key names.</param>
     /// <returns>The service collection, for chaining.</returns>
     public static IServiceCollection AddVaultExternalKeys(
-        this IServiceCollection services, Action<VaultTransitOptions> configureOptions)
+        this IServiceCollection services,
+        Action<VaultTransitOptions> configureOptions)
     {
         services.Configure(configureOptions);
 
         // Typed client pointed at the Transit mount, carrying the auth token header. Options are read at client
-        // creation so the configured address and token drive the base address and header.
+        // creation so the configured address and token drive the base address and header. The external-key store is
+        // a singleton, so this client is held long-lived: rather than per-call CreateClient, disable handler rotation
+        // and let SocketsHttpHandler.PooledConnectionLifetime recycle connections to pick up DNS changes, the pattern
+        // Microsoft recommends for a long-lived HttpClient.
         services.AddHttpClient<VaultTransitClient>((provider, http) =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
             http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/{options.TransitMount}/");
             if (!string.IsNullOrWhiteSpace(options.Token))
                 http.DefaultRequestHeaders.Add("X-Vault-Token", options.Token);
-        });
+        })
+        .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value.PooledConnectionLifetime,
+        })
+        .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
         // Register the Transit client as the external key store, then let the shared wiring route its private
         // operations through the crypto seam and publish its public halves at /jwks. This replaces the OIDC
         // default key provider, so call this after the OIDC registration to win the singular resolve.
         services.AddSingleton<IExternalKeyStore>(serviceProvider => serviceProvider.GetRequiredService<VaultTransitClient>());
-        services.AddExternalRsaKeys(serviceProvider =>
+        services.AddExternalKeys(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
-            return (options.SigningKeyName, options.EncryptionKeyName);
+            return new ExternalKeyConfiguration(
+                options.SigningKeyName, options.SigningAlgorithm, options.EncryptionKeyName, options.EncryptionAlgorithm);
         });
         return services;
     }

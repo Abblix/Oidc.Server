@@ -27,46 +27,24 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// <summary>
 /// Adapts an <see cref="IExternalKeyStore"/> to the <see cref="IKeyCustodian"/> seam: it performs the private
 /// operations for keys the provider publishes public-only, addressed by the <c>kid</c> (which is the store's key
-/// name). One custodian serves any store, so the Vault and Azure packages carry no custodian of their own.
+/// name). It is a thin passthrough - the store owns which algorithms it supports and rejects the rest, so this
+/// custodian carries no algorithm policy of its own and serves any store. The JWE header is not forwarded: the
+/// key-management <c>algorithm</c> is all the store needs to unwrap.
 /// </summary>
-/// <remarks>
-/// Scope is RSA today: the store's sign and unwrap are fixed to <c>RS256</c> and <c>RSA-OAEP-256</c> (the
-/// operations both backends provision), so this custodian gates to exactly those and treats anything else as
-/// unsupported. ECDH-ES agreement is unreachable, as it needs an EC key such a store does not provision. Widening
-/// to other algorithms means threading the algorithm into <see cref="IExternalKeyStore"/> so each backend maps it,
-/// and generalizing the public-key surface for EC.
-/// </remarks>
 public sealed class ExternalKeyCustodian(IExternalKeyStore store) : IKeyCustodian
 {
     /// <inheritdoc />
-    public async ValueTask<byte[]> SignAsync(
+    public ValueTask<byte[]> SignAsync(
         string kid, string algorithm, byte[] data, CancellationToken cancellationToken)
-    {
-        // RSA signatures are already in JWS wire format; an EC key would sign ES* and need the DER -> R||S
-        // conversion RFC 7518 Section 3.4 mandates, which an RSA store does not do. The store's sign is fixed to
-        // RS256, so accepting any other algorithm would silently return an RS256 signature for it.
-        if (algorithm != SigningAlgorithms.RS256)
-            throw new NotSupportedException(
-                $"The external key custodian signs {SigningAlgorithms.RS256} only; got '{algorithm}'.");
-
-        return await store.SignAsync(kid, data, cancellationToken);
-    }
+        => new(store.SignAsync(kid, algorithm, data, cancellationToken));
 
     /// <inheritdoc />
-    public async ValueTask<byte[]?> UnwrapKeyAsync(
+    public ValueTask<byte[]?> UnwrapKeyAsync(
         string kid, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
-    {
-        // The store's unwrap is fixed to RSA-OAEP-256, so gate to exactly that for the same reason as signing.
-        if (algorithm != EncryptionAlgorithms.KeyManagement.RsaOaep256)
-            throw new NotSupportedException(
-                $"The external key custodian unwraps {EncryptionAlgorithms.KeyManagement.RsaOaep256} only; got '{algorithm}'.");
-
-        return await store.DecryptAsync(kid, encryptedKey, cancellationToken);
-    }
+        => new(store.DecryptAsync(kid, algorithm, encryptedKey, cancellationToken));
 
     /// <inheritdoc />
     public ValueTask<byte[]> AgreeKeyAsync(
         string kid, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
-        => throw new NotSupportedException(
-            "ECDH-ES key agreement needs an EC key; the external RSA key custodian does not provision one.");
+        => new(store.AgreeKeyAsync(kid, algorithm, ephemeralPublicKey, cancellationToken));
 }

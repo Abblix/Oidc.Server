@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
+
 namespace Abblix.Oidc.Server.Azure;
 
 /// <summary>
@@ -52,4 +54,23 @@ public sealed class AzureKeyVaultOptions
 
     /// <summary>Name of the Key Vault key used to unwrap encrypted-token CEKs; also the published encryption key's <c>kid</c>.</summary>
     public string EncryptionKeyName { get; set; } = "oidc-enc";
+
+    /// <summary>
+    /// JWS algorithm the signing key uses (default <c>RS256</c>). Must be one Key Vault provisions: RS256/384/512,
+    /// PS256/384/512, or ES256/384/512 (the EC ones need an EC Key Vault key of the matching curve).
+    /// </summary>
+    public string SigningAlgorithm { get; set; } = SigningAlgorithms.RS256;
+
+    /// <summary>
+    /// JWE key-management algorithm the encryption key uses (default <c>RSA-OAEP-256</c>). Key Vault also
+    /// provisions <c>RSA-OAEP</c> and <c>RSA1_5</c>.
+    /// </summary>
+    public string EncryptionAlgorithm { get; set; } = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+    /// <summary>
+    /// How long a pooled HTTP connection is reused before it is recycled. The Azure SDK keeps one client for the
+    /// vault, so recycling connections lets it pick up DNS changes without handler rotation (default 2 minutes,
+    /// matching the default IHttpClientFactory handler lifetime).
+    /// </summary>
+    public TimeSpan PooledConnectionLifetime { get; set; } = TimeSpan.FromMinutes(2);
 }

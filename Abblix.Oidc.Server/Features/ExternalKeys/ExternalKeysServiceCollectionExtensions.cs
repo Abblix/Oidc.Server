@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,8 +29,8 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
 /// Wires a registered <see cref="IExternalKeyStore"/> into the OIDC crypto seam and JWKS publishing. This is the
-/// shared half of the Vault and Azure integrations, and the extension point for a host that plugs in its own RSA
-/// key store: register the store as <see cref="IExternalKeyStore"/>, then call this.
+/// shared half of the Vault and Azure integrations, and the extension point for a host that plugs in its own key
+/// store: register the store as <see cref="IExternalKeyStore"/>, then call this.
 /// </summary>
 public static class ExternalKeysServiceCollectionExtensions
 {
@@ -40,20 +41,18 @@ public static class ExternalKeysServiceCollectionExtensions
     /// registration for the last singular registration to win.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="keyNames">Resolves the signing and encryption key names (typically from the store's options).</param>
+    /// <param name="configuration">Resolves the key names and algorithms to publish (typically from the store's
+    /// options).</param>
     /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddExternalRsaKeys(
-        this IServiceCollection services,
-        Func<IServiceProvider, (string SigningKeyName, string EncryptionKeyName)> keyNames)
+    public static IServiceCollection AddExternalKeys(
+        this IServiceCollection services, Func<IServiceProvider, ExternalKeyConfiguration> configuration)
     {
         services.AddKeyCustodian<ExternalKeyCustodian>();
 
+        // Construct the provider through the container so the store is injected from DI, overriding only the
+        // per-call configuration. Replaces the default key provider by the last-singular-wins rule.
         services.AddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
-        {
-            var (signingKeyName, encryptionKeyName) = keyNames(serviceProvider);
-            var store = serviceProvider.GetRequiredService<IExternalKeyStore>();
-            return new ExternalKeysProvider(store, signingKeyName, encryptionKeyName);
-        });
+            serviceProvider.CreateService<ExternalKeysProvider>(Dependency.Override(configuration(serviceProvider))));
 
         return services;
     }

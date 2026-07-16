@@ -32,50 +32,70 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
-/// Verifies that <see cref="ExternalKeysProvider"/> publishes only public-key material: the JWK it hands the
-/// pipeline carries the store's key name as its <c>kid</c>, the intended use and algorithm, and no private half,
-/// which is the exact signal the crypto seam reads to route the private operation to the store.
+/// Verifies that <see cref="ExternalKeysProvider"/> stamps the configured kid, use and algorithm onto the bare
+/// public key the store returns, keeping its runtime type (RSA or EC), and never publishes private material.
 /// </summary>
 public class ExternalKeysProviderTests
 {
     [Fact]
-    public async Task GetSigningKeys_PublishesPublicOnlyRs256Key_WithKidFromKeyName()
+    public async Task GetSigningKeys_StampsConfiguredAlgorithm_OnAnRsaKey()
     {
         using var rsa = RSA.Create(2048);
-        var provider = ProviderOver(rsa.ExportParameters(false), "sign-key");
+        var provider = ProviderPublishing(
+            "sign-key", new RsaJsonWebKey().Apply(rsa.ExportParameters(false)), SigningAlgorithms.PS256);
 
         var key = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
 
+        Assert.IsType<RsaJsonWebKey>(key);
         Assert.Equal("sign-key", key.KeyId);
         Assert.Equal(PublicKeyUsages.Signature, key.Usage);
-        Assert.Equal(SigningAlgorithms.RS256, key.Algorithm);
+        Assert.Equal(SigningAlgorithms.PS256, key.Algorithm);
         Assert.True(key.HasPublicKey);
         Assert.False(key.HasPrivateKey);
     }
 
     [Fact]
-    public async Task GetEncryptionKeys_PublishesPublicOnlyRsaOaep256Key_WithKidFromKeyName()
+    public async Task GetSigningKeys_StampsConfiguredAlgorithm_OnAnEcKey()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var provider = ProviderPublishing(
+            "sign-key", new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false)), SigningAlgorithms.ES256);
+
+        var key = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+
+        // The provider keeps the store's key type; an EC store key is published as an EC JWK.
+        Assert.IsType<EllipticCurveJsonWebKey>(key);
+        Assert.Equal("sign-key", key.KeyId);
+        Assert.Equal(PublicKeyUsages.Signature, key.Usage);
+        Assert.Equal(SigningAlgorithms.ES256, key.Algorithm);
+        Assert.True(key.HasPublicKey);
+        Assert.False(key.HasPrivateKey);
+    }
+
+    [Fact]
+    public async Task GetEncryptionKeys_StampsConfiguredAlgorithm()
     {
         using var rsa = RSA.Create(2048);
         var store = new Mock<IExternalKeyStore>();
         store.Setup(s => s.GetPublicKeyAsync("enc-key", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(rsa.ExportParameters(false));
-        var provider = new ExternalKeysProvider(store.Object, "sign-key", "enc-key");
+            .ReturnsAsync(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
+        var provider = new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
+            "sign-key", SigningAlgorithms.RS256, "enc-key", EncryptionAlgorithms.KeyManagement.RsaOaep));
 
         var key = await SingleAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
 
         Assert.Equal("enc-key", key.KeyId);
         Assert.Equal(PublicKeyUsages.Encryption, key.Usage);
-        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, key.Algorithm);
-        Assert.True(key.HasPublicKey);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, key.Algorithm);
         Assert.False(key.HasPrivateKey);
     }
 
-    private static ExternalKeysProvider ProviderOver(RSAParameters publicKey, string signingKeyName)
+    private static ExternalKeysProvider ProviderPublishing(string signingKeyName, JsonWebKey publicKey, string signingAlgorithm)
     {
         var store = new Mock<IExternalKeyStore>();
         store.Setup(s => s.GetPublicKeyAsync(signingKeyName, It.IsAny<CancellationToken>())).ReturnsAsync(publicKey);
-        return new ExternalKeysProvider(store.Object, signingKeyName, "enc-key");
+        return new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
+            signingKeyName, signingAlgorithm, "enc-key", EncryptionAlgorithms.KeyManagement.RsaOaep256));
     }
 
     private static async Task<JsonWebKey> SingleAsync(IAsyncEnumerable<JsonWebKey> keys, CancellationToken ct)
