@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Vault.UnitTests;
 public class VaultTransitClientTests
 {
     private static VaultTransitClient ClientOver(StubHttpMessageHandler handler)
-        => new(new HttpClient(handler) { BaseAddress = new Uri("http://vault.test/v1/transit/") });
+        => new(new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") });
 
     [Fact]
     public async Task SignAsync_Rs256_PostsPkcs1v15Sha256_AndStripsVersionPrefix()

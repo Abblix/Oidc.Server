@@ -40,7 +40,7 @@ public class AddVaultExternalKeysTests
         var services = new ServiceCollection();
         services.AddVaultExternalKeys(options =>
         {
-            options.Address = "http://vault.test:8200";
+            options.Address = "https://vault.test:8200";
             options.Token = "s.test-token";
             options.TransitMount = "transit";
             options.SigningKeyName = "oidc-sign";
@@ -70,7 +70,7 @@ public class AddVaultExternalKeysTests
 
         var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IKeyCustodian));
 
-        Assert.Equal("http://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
+        Assert.Equal("https://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
         Assert.Equal("s.test-token", Assert.Single(http.DefaultRequestHeaders.GetValues("X-Vault-Token")));
     }
 }
