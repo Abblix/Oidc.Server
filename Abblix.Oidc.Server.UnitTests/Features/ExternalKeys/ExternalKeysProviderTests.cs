@@ -79,7 +79,7 @@ public class ExternalKeysProviderTests
         var store = new Mock<IKeyCustodian>();
         store.Setup(s => s.GetPublicKeyAsync("enc-key", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
-        var provider = new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
+        var provider = new ExternalKeysProvider(store.Object, new TestKeyConfiguration(
             "sign-key", SigningAlgorithms.RS256, "enc-key", EncryptionAlgorithms.KeyManagement.RsaOaep));
 
         var key = await SingleAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
@@ -94,7 +94,7 @@ public class ExternalKeysProviderTests
     {
         var store = new Mock<IKeyCustodian>();
         store.Setup(s => s.GetPublicKeyAsync(signingKeyName, It.IsAny<CancellationToken>())).ReturnsAsync(publicKey);
-        return new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
+        return new ExternalKeysProvider(store.Object, new TestKeyConfiguration(
             signingKeyName, signingAlgorithm, "enc-key", EncryptionAlgorithms.KeyManagement.RsaOaep256));
     }
 
@@ -110,4 +110,8 @@ public class ExternalKeysProviderTests
         Assert.NotNull(single);
         return single;
     }
+
+    private sealed record TestKeyConfiguration(
+        string SigningKeyName, string SigningAlgorithm, string EncryptionKeyName, string EncryptionAlgorithm)
+        : IExternalKeyConfiguration;
 }

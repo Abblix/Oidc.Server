@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Azure;
 
@@ -29,7 +30,7 @@ namespace Abblix.Oidc.Server.Azure;
 /// never leaves the vault; this process only sends bytes to sign or decrypt and receives the result. The
 /// custodian addresses each key by its <c>kid</c>, which is the Key Vault key name the host publishes.
 /// </summary>
-public sealed class AzureKeyVaultOptions
+public sealed class AzureKeyVaultOptions : IExternalKeyConfiguration
 {
     /// <summary>The vault URI, e.g. <c>https://my-vault.vault.azure.net/</c>.</summary>
     public string KeyVaultUri { get; set; } = "";

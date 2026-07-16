@@ -46,7 +46,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <returns>The service collection, for chaining.</returns>
     public static IServiceCollection AddExternalKeys(
         this IServiceCollection services,
-        Func<IServiceProvider, ExternalKeyConfiguration> configuration)
+        Func<IServiceProvider, IExternalKeyConfiguration> configuration)
     {
         services.ComposeExternalKeyBackends();
 

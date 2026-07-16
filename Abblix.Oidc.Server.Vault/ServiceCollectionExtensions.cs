@@ -72,16 +72,10 @@ public static class ServiceCollectionExtensions
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
+        // VaultTransitOptions implements IExternalKeyConfiguration, so the options flow straight through with no
+        // mapping: the provider reads the signing/encryption key names and algorithms off them.
         services.AddExternalKeys(serviceProvider =>
-        {
-            var options = serviceProvider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
-
-            return new ExternalKeyConfiguration(
-                options.SigningKeyName,
-                options.SigningAlgorithm,
-                options.EncryptionKeyName,
-                options.EncryptionAlgorithm);
-        });
+            serviceProvider.GetRequiredService<IOptions<VaultTransitOptions>>().Value);
         return services;
     }
 }

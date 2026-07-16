@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// <c>/jwks</c> endpoint and local signature verification. One provider serves any custodian, so the Vault and Azure
 /// packages carry no key provider of their own.
 /// </summary>
-public sealed class ExternalKeysProvider(IKeyCustodian custodian, ExternalKeyConfiguration configuration)
+public sealed class ExternalKeysProvider(IKeyCustodian custodian, IExternalKeyConfiguration configuration)
     : IAuthServiceKeysProvider
 {
     private JsonWebKey? _signingKey;

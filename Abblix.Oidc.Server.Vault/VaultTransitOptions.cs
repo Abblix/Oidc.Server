@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Vault;
 
@@ -29,7 +30,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// Transit as non-exportable keys, so their private halves never reach this process; the custodian addresses
 /// each key by its <c>kid</c>, which is the Transit key name the host publishes as the key's identifier.
 /// </summary>
-public sealed class VaultTransitOptions
+public sealed class VaultTransitOptions : IExternalKeyConfiguration
 {
     /// <summary>Base URL of the Vault / OpenBao server, e.g. <c>http://127.0.0.1:8200</c>.</summary>
     public string Address { get; set; } = "http://127.0.0.1:8200";

@@ -26,14 +26,20 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// Selects which key an <see cref="Abblix.Jwt.IKeyCustodian"/> signs with and which it unwraps, and under which
 /// algorithm each operates. The algorithm is advertised on the published key and forwarded to the custodian on
 /// every operation, so it must be one the custodian provisions (for example <c>RS256</c>, <c>PS384</c> or
-/// <c>ES256</c> for signing; <c>RSA-OAEP-256</c> for unwrapping).
+/// <c>ES256</c> for signing; <c>RSA-OAEP-256</c> for unwrapping). A backend's options implement this directly, so
+/// the wiring passes the options straight through with no separate mapping.
 /// </summary>
-/// <param name="SigningKeyName">The custodian's name for the signing key; also its published <c>kid</c>.</param>
-/// <param name="SigningAlgorithm">The JWS algorithm the signing key uses.</param>
-/// <param name="EncryptionKeyName">The custodian's name for the encryption key; also its published <c>kid</c>.</param>
-/// <param name="EncryptionAlgorithm">The JWE key-management algorithm the encryption key uses.</param>
-public sealed record ExternalKeyConfiguration(
-    string SigningKeyName,
-    string SigningAlgorithm,
-    string EncryptionKeyName,
-    string EncryptionAlgorithm);
+public interface IExternalKeyConfiguration
+{
+    /// <summary>The custodian's name for the signing key; also its published <c>kid</c>.</summary>
+    string SigningKeyName { get; }
+
+    /// <summary>The JWS algorithm the signing key uses.</summary>
+    string SigningAlgorithm { get; }
+
+    /// <summary>The custodian's name for the encryption key; also its published <c>kid</c>.</summary>
+    string EncryptionKeyName { get; }
+
+    /// <summary>The JWE key-management algorithm the encryption key uses.</summary>
+    string EncryptionAlgorithm { get; }
+}
