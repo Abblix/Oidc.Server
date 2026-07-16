@@ -28,28 +28,29 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
-/// Wires a registered <see cref="IExternalKeyStore"/> into the OIDC crypto seam and JWKS publishing. This is the
-/// shared half of the Vault and Azure integrations, and the extension point for a host that plugs in its own key
-/// store: register the store as <see cref="IExternalKeyStore"/>, then call this.
+/// Publishes a wired <see cref="IKeyCustodian"/>'s public key halves at the <c>/jwks</c> endpoint. This is the
+/// shared half of the Vault and Azure integrations, and the extension point for a host that plugs in its own
+/// custodian: register the custodian with <c>AddKeyCustodian</c>, then call this.
 /// </summary>
 public static class ExternalKeysServiceCollectionExtensions
 {
     /// <summary>
-    /// Routes the registered <see cref="IExternalKeyStore"/>'s private operations through the crypto seam (via the
-    /// generic <see cref="ExternalKeyCustodian"/>) and publishes its public halves at <c>/jwks</c> (via the
-    /// generic <see cref="ExternalKeysProvider"/>). Replaces the default key provider, so call it AFTER the OIDC
-    /// registration for the last singular registration to win.
+    /// Publishes the custodian's public key halves at <c>/jwks</c> (via the generic <see cref="ExternalKeysProvider"/>),
+    /// replacing the default key provider. The custodian's private operations are wired into the crypto seams by
+    /// <c>AddKeyCustodian</c>. Call this AFTER the custodian registration and AFTER the OIDC registration, for the
+    /// last singular registration to win.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="configuration">Resolves the key names and algorithms to publish (typically from the store's
+    /// <param name="configuration">Resolves the key names and algorithms to publish (typically from the custodian's
     /// options).</param>
     /// <returns>The service collection, for chaining.</returns>
     public static IServiceCollection AddExternalKeys(
-        this IServiceCollection services, Func<IServiceProvider, ExternalKeyConfiguration> configuration)
+        this IServiceCollection services,
+        Func<IServiceProvider, ExternalKeyConfiguration> configuration)
     {
-        services.AddKeyCustodian<ExternalKeyCustodian>();
+        services.ComposeExternalKeyBackends();
 
-        // Construct the provider through the container so the store is injected from DI, overriding only the
+        // Construct the provider through the container so the custodian is injected from DI, overriding only the
         // per-call configuration. Replaces the default key provider by the last-singular-wins rule.
         services.AddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
             serviceProvider.CreateService<ExternalKeysProvider>(Dependency.Override(configuration(serviceProvider))));

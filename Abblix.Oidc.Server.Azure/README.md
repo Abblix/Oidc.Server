@@ -2,7 +2,7 @@
 
 **Abblix.OIDC.Server.Azure** integrates the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) with **Azure Key Vault**. The provider's signing and encryption keys live in the vault (software- or HSM-protected), so their private halves never enter your process. Signing and Content Encryption Key unwrapping run inside the vault, addressed by each key's `kid` (its Key Vault key name); the public halves are fetched once at startup, published at the `/jwks` endpoint, and used for local signature verification on the hot path. The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy.
 
-The package plugs into the OIDC server's external-key seam: a single `AddAzureExternalKeys` call registers the vault client as the external key store, routes every private operation through the crypto seam, and replaces the default key provider.
+The package plugs into the OIDC server's external-key seam: a single `AddAzureExternalKeys` call registers the vault client as the external key custodian, routes every private operation through the crypto seam, and replaces the default key provider.
 
 ## Installation
 
@@ -52,14 +52,13 @@ The store maps each configured algorithm to Key Vault's native operation and rej
 | Signing | ES256, ES384, ES512 (Key Vault returns raw R/S signatures) | EC |
 | Key unwrap | RSA-OAEP-256, RSA-OAEP, RSA1_5 | RSA |
 
-ECDH-ES key agreement is not supported: Azure Key Vault exposes no key-agreement primitive. For that you need a store built on a backend that does (for example AWS KMS `DeriveSharedSecret` or a PKCS#11 HSM), plugged into the same `IExternalKeyStore` seam.
+ECDH-ES key agreement is not supported: Azure Key Vault exposes no key-agreement primitive. For that you need a custodian built on a backend that does (for example AWS KMS `DeriveSharedSecret` or a PKCS#11 HSM), plugged into the same `IKeyCustodian` seam.
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.OIDC.Server.Vault](https://www.nuget.org/packages/Abblix.OIDC.Server.Vault)** | HashiCorp Vault / OpenBao Transit external-key integration |
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started

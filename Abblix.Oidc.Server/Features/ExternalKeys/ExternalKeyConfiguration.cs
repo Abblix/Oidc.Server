@@ -23,14 +23,14 @@
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
-/// Selects which key in an <see cref="IExternalKeyStore"/> signs and which unwraps, and under which algorithm each
-/// operates. The algorithm is advertised on the published key and forwarded to the store on every operation, so it
-/// must be one the store provisions (for example <c>RS256</c>, <c>PS384</c> or <c>ES256</c> for signing;
-/// <c>RSA-OAEP-256</c> for unwrapping).
+/// Selects which key an <see cref="Abblix.Jwt.IKeyCustodian"/> signs with and which it unwraps, and under which
+/// algorithm each operates. The algorithm is advertised on the published key and forwarded to the custodian on
+/// every operation, so it must be one the custodian provisions (for example <c>RS256</c>, <c>PS384</c> or
+/// <c>ES256</c> for signing; <c>RSA-OAEP-256</c> for unwrapping).
 /// </summary>
-/// <param name="SigningKeyName">The store's name for the signing key; also its published <c>kid</c>.</param>
+/// <param name="SigningKeyName">The custodian's name for the signing key; also its published <c>kid</c>.</param>
 /// <param name="SigningAlgorithm">The JWS algorithm the signing key uses.</param>
-/// <param name="EncryptionKeyName">The store's name for the encryption key; also its published <c>kid</c>.</param>
+/// <param name="EncryptionKeyName">The custodian's name for the encryption key; also its published <c>kid</c>.</param>
 /// <param name="EncryptionAlgorithm">The JWE key-management algorithm the encryption key uses.</param>
 public sealed record ExternalKeyConfiguration(
     string SigningKeyName,

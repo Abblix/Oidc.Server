@@ -26,56 +26,52 @@ using Abblix.Oidc.Server.Common.Interfaces;
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
-/// Publishes the public halves of an <see cref="IExternalKeyStore"/>'s signing and encryption keys to the OIDC
+/// Publishes the public halves of an <see cref="IKeyCustodian"/>'s signing and encryption keys to the OIDC
 /// pipeline. It never returns private material: each key is public-only, which is precisely the signal the crypto
 /// seam reads to route the private operation to the custodian by <c>kid</c>. The same public keys back the
-/// <c>/jwks</c> endpoint and local signature verification. One provider serves any store, so the Vault and Azure
+/// <c>/jwks</c> endpoint and local signature verification. One provider serves any custodian, so the Vault and Azure
 /// packages carry no key provider of their own.
 /// </summary>
-public sealed class ExternalKeysProvider : IAuthServiceKeysProvider
+public sealed class ExternalKeysProvider(IKeyCustodian custodian, ExternalKeyConfiguration configuration)
+    : IAuthServiceKeysProvider
 {
-    private readonly Lazy<Task<JsonWebKey>> _signingKey;
-    private readonly Lazy<Task<JsonWebKey>> _encryptionKey;
-
-    /// <summary>
-    /// Captures the key names and algorithms to publish; the public keys are pulled from the store lazily on first
-    /// use.
-    /// </summary>
-    /// <param name="store">The external key store to fetch the public halves from.</param>
-    /// <param name="configuration">The signing and encryption key names and algorithms to publish.</param>
-    public ExternalKeysProvider(IExternalKeyStore store, ExternalKeyConfiguration configuration)
-    {
-        // Public keys are immutable for a given kid (rotation mints a new kid, never edits one), so each is fetched
-        // from the store once at first use and cached for the life of the process.
-        _signingKey = new(() => BuildPublicKeyAsync(
-            store, configuration.SigningKeyName, PublicKeyUsages.Signature, configuration.SigningAlgorithm));
-        _encryptionKey = new(() => BuildPublicKeyAsync(
-            store, configuration.EncryptionKeyName, PublicKeyUsages.Encryption, configuration.EncryptionAlgorithm));
-    }
+    private JsonWebKey? _signingKey;
 
     /// <inheritdoc />
     public async IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
     {
-        yield return await _signingKey.Value;
+        var publicKey = await custodian.GetPublicKeyAsync(configuration.SigningKeyName, CancellationToken.None);
+
+        // The custodian returns bare public-key material (RSA or EC); stamp the kid (= the store key name, the
+        // custodian's handle), the use and the configured algorithm. record `with` keeps the runtime key type, so
+        // this is correct for both RsaJsonWebKey and EllipticCurveJsonWebKey.
+        _signingKey ??= publicKey with
+        {
+            Usage = PublicKeyUsages.Signature,
+            KeyId = configuration.SigningKeyName,
+            Algorithm = configuration.SigningAlgorithm,
+        };
+
+        yield return _signingKey;
     }
+
+    private JsonWebKey? _encryptionKey;
 
     /// <inheritdoc />
     public async IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
     {
-        yield return await _encryptionKey.Value;
-    }
+        var publicKey = await custodian.GetPublicKeyAsync(configuration.EncryptionKeyName, CancellationToken.None);
 
-    // An external key has no private half in this process, so includePrivateKeys is ignored: handing the pipeline
-    // the public-only key both routes the private operation to the store (via the missing secret) and gives the
-    // JWKS endpoint the exact key clients verify against.
-    private static async Task<JsonWebKey> BuildPublicKeyAsync(
-        IExternalKeyStore store, string keyName, string usage, string algorithm)
-    {
-        var publicKey = await store.GetPublicKeyAsync(keyName, CancellationToken.None);
-
-        // The store returns bare public-key material (RSA or EC); stamp the kid (= the store key name, the
+        // The custodian returns bare public-key material (RSA or EC); stamp the kid (= the store key name, the
         // custodian's handle), the use and the configured algorithm. record `with` keeps the runtime key type, so
         // this is correct for both RsaJsonWebKey and EllipticCurveJsonWebKey.
-        return publicKey with { KeyId = keyName, Usage = usage, Algorithm = algorithm };
+        _encryptionKey ??= publicKey with
+        {
+            Usage = PublicKeyUsages.Encryption,
+            KeyId = configuration.EncryptionKeyName,
+            Algorithm = configuration.EncryptionAlgorithm,
+        };
+
+        yield return _encryptionKey;
     }
 }

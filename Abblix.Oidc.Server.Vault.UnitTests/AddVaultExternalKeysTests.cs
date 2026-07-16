@@ -50,16 +50,16 @@ public class AddVaultExternalKeysTests
     }
 
     [Fact]
-    public void RegistersStoreCustodianAndKeyProvider()
+    public void RegistersCustodianAndKeyProvider()
     {
         var services = Configure();
 
-        Assert.Contains(services, d => d.ServiceType == typeof(IExternalKeyStore));
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IKeyCustodian) && d.ImplementationType == typeof(ExternalKeyCustodian));
-        Assert.Contains(services, d => d.ServiceType == typeof(VaultTransitClient));
+        Assert.Contains(services, d => d.ServiceType == typeof(IKeyCustodian));
 
         using var provider = services.BuildServiceProvider();
+
+        // The Transit client itself serves as the external key custodian, and the provider publishes its keys.
+        Assert.IsType<VaultTransitClient>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
@@ -68,7 +68,7 @@ public class AddVaultExternalKeysTests
     {
         using var provider = Configure().BuildServiceProvider();
 
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(VaultTransitClient));
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IKeyCustodian));
 
         Assert.Equal("http://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
         Assert.Equal("s.test-token", Assert.Single(http.DefaultRequestHeaders.GetValues("X-Vault-Token")));

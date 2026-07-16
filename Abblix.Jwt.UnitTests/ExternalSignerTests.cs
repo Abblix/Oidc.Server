@@ -130,11 +130,11 @@ public class ExternalSignerTests
         public string? LastKid { get; private set; }
         public string? LastAlgorithm { get; private set; }
 
-        public ValueTask<byte[]> SignAsync(string kid, string algorithm, byte[] data, CancellationToken cancellationToken)
+        public ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CallCount++;
-            LastKid = kid;
+            LastKid = keyId;
             LastAlgorithm = algorithm;
 
             // RS256 is RSASSA-PKCS1-v1_5 over SHA-256; the library verifies this against the public key.
@@ -143,11 +143,14 @@ public class ExternalSignerTests
         }
 
         public ValueTask<byte[]?> UnwrapKeyAsync(
-            string kid, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
+            string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 
         public ValueTask<byte[]> AgreeKeyAsync(
-            string kid, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+            string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
+
+        public ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+            => new(privateKey.Sanitize(includePrivateKeys: false));
     }
 }

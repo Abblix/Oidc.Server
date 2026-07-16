@@ -217,11 +217,11 @@ public class ExternalKeyDecryptorTests
         public int AgreeCalls { get; private set; }
 
         // This custodian holds only encryption keys, so the library never routes a signing operation here.
-        public ValueTask<byte[]> SignAsync(string kid, string algorithm, byte[] data, CancellationToken cancellationToken)
+        public ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
             => throw new NotSupportedException("This decryption custodian holds no signing keys.");
 
         public ValueTask<byte[]?> UnwrapKeyAsync(
-            string kid,
+            string keyId,
             string algorithm,
             JsonWebTokenHeader header,
             byte[] encryptedKey,
@@ -241,7 +241,7 @@ public class ExternalKeyDecryptorTests
         }
 
         public ValueTask<byte[]> AgreeKeyAsync(
-            string kid,
+            string keyId,
             string algorithm,
             JsonWebKey ephemeralPublicKey,
             CancellationToken cancellationToken)
@@ -251,6 +251,9 @@ public class ExternalKeyDecryptorTests
             using var ephemeral = ((EllipticCurveJsonWebKey)ephemeralPublicKey).ToEcdh();
             return new ValueTask<byte[]>(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
         }
+
+        public ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+            => new(fullKey.Sanitize(includePrivateKeys: false));
 
         private static byte[]? RsaDecrypt(RsaJsonWebKey key, string algorithm, byte[] encryptedKey)
         {

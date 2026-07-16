@@ -42,9 +42,9 @@ internal sealed class ExternalKeySigner(IKeyCustodian custodian) : IDataSigner
     {
         // The kid published in the token and JWKS IS the custodian's handle - no separate identifier and no
         // mapping - so an external key must carry one.
-        var kid = key.KeyId ?? throw new InvalidOperationException(
+        var keyId = key.KeyId ?? throw new InvalidOperationException(
             "An external signing key must carry a 'kid': it is the key custodian's handle.");
 
-        return custodian.SignAsync(kid, algorithm, data, cancellationToken);
+        return custodian.SignAsync(keyId, algorithm, data, cancellationToken);
     }
 }

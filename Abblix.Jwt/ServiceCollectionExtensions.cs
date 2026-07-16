@@ -67,11 +67,27 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds HSM/KMS/vault handling for public-only keys using a <paramref name="custodianFactory"/> that resolves
+    /// the custodian from the container, wiring it into both crypto seams. Suits a custodian that is a typed client
+    /// (built from <c>IHttpClientFactory</c>) or otherwise needs DI to construct. The factory runs once, so the
+    /// custodian is a singleton. See <see cref="AddKeyCustodian{TCustodian}"/> for the full routing description.
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <param name="custodianFactory">Resolves the external key custodian from the service provider.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection AddKeyCustodian(
+        this IServiceCollection services, Func<IServiceProvider, IKeyCustodian> custodianFactory)
+    {
+        services.AddSingleton(custodianFactory);
+        return services.ComposeExternalKeyBackends();
+    }
+
+    /// <summary>
     /// Registers the external backends for the wired <see cref="IKeyCustodian"/> - <see cref="ExternalKeySigner"/>
     /// on the signing seam and <see cref="ExternalKeyDecryptor"/> on the key-recovery seam - and composes each
     /// with its in-process peer, so a key routes to the backend that owns it.
     /// </summary>
-    private static IServiceCollection ComposeExternalKeyBackends(this IServiceCollection services)
+    public static IServiceCollection ComposeExternalKeyBackends(this IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, ExternalKeyDecryptor>());

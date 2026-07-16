@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -52,22 +53,27 @@ public static class ServiceCollectionExtensions
         // no base address or header configuration here. The SDK keeps one client for the vault, so this HttpClient is
         // held long-lived: disable handler rotation and let SocketsHttpHandler.PooledConnectionLifetime recycle
         // connections to pick up DNS changes, the pattern Microsoft recommends for a long-lived HttpClient.
-        services.AddHttpClient<AzureKeyVaultClient>()
-            .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
+        services
+            .AddHttpClient<IKeyCustodian, AzureKeyVaultClient>()
+            .ConfigurePrimaryHttpMessageHandler(provider =>
             {
-                PooledConnectionLifetime = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value.PooledConnectionLifetime,
+                var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
+                return new SocketsHttpHandler
+                {
+                    PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
+                };
             })
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // Register the vault client as the external key store, then let the shared wiring route its private
-        // operations through the crypto seam and publish its public halves at /jwks. This replaces the OIDC
-        // default key provider, so call this after the OIDC registration to win the singular resolve.
-        services.AddSingleton<IExternalKeyStore>(serviceProvider => serviceProvider.GetRequiredService<AzureKeyVaultClient>());
         services.AddExternalKeys(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value;
+
             return new ExternalKeyConfiguration(
-                options.SigningKeyName, options.SigningAlgorithm, options.EncryptionKeyName, options.EncryptionAlgorithm);
+                options.SigningKeyName,
+                options.SigningAlgorithm,
+                options.EncryptionKeyName,
+                options.EncryptionAlgorithm);
         });
         return services;
     }

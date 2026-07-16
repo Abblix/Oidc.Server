@@ -23,6 +23,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Xunit;
 
@@ -46,7 +47,7 @@ public class VaultTransitClientTests
             HttpStatusCode.OK, new { data = new { signature = $"vault:v3:{Convert.ToBase64String(signature)}" } }));
         var client = ClientOver(handler);
 
-        var data = new byte[] { 9, 9 };
+        var data = "\t\t"u8.ToArray();
         var result = await client.SignAsync("oidc-sign", SigningAlgorithms.RS256, data, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
@@ -66,7 +67,7 @@ public class VaultTransitClientTests
             HttpStatusCode.OK, new { data = new { signature = $"vault:v1:{Convert.ToBase64String(signature)}" } }));
         var client = ClientOver(handler);
 
-        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.ES256, new byte[] { 1 }, TestContext.Current.CancellationToken);
+        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.ES256, [1], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
@@ -83,7 +84,7 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => client.SignAsync("oidc-sign", "HS256", new byte[] { 1 }, TestContext.Current.CancellationToken));
+            () => client.SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken).AsTask());
 
         Assert.Null(handler.LastRequest);
     }
@@ -97,8 +98,9 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         var ciphertext = new byte[] { 5, 5 };
-        var result = await client.DecryptAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, ciphertext, TestContext.Current.CancellationToken);
+        var result = await client.UnwrapKeyAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            ciphertext, TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
@@ -113,8 +115,9 @@ public class VaultTransitClientTests
             HttpStatusCode.BadRequest, new { errors = new[] { "decryption failed" } }));
         var client = ClientOver(handler);
 
-        var result = await client.DecryptAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 1 }, TestContext.Current.CancellationToken);
+        var result = await client.UnwrapKeyAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken);
 
         Assert.Null(result);
     }
@@ -126,8 +129,9 @@ public class VaultTransitClientTests
             HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
         var client = ClientOver(handler);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => client.DecryptAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new byte[] { 1 }, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.UnwrapKeyAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken).AsTask());
     }
 
     [Fact]
@@ -136,8 +140,9 @@ public class VaultTransitClientTests
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
         var client = ClientOver(handler);
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => client.DecryptAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.Rsa1_5, new byte[] { 1 }, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<NotSupportedException>(() => client.UnwrapKeyAsync(
+            "oidc-enc", EncryptionAlgorithms.KeyManagement.Rsa1_5, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken).AsTask());
 
         Assert.Null(handler.LastRequest);
     }

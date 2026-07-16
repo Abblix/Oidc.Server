@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
 /// Verifies that <see cref="ExternalKeysProvider"/> stamps the configured kid, use and algorithm onto the bare
-/// public key the store returns, keeping its runtime type (RSA or EC), and never publishes private material.
+/// public key the custodian returns, keeping its runtime type (RSA or EC), and never publishes private material.
 /// </summary>
 public class ExternalKeysProviderTests
 {
@@ -76,7 +76,7 @@ public class ExternalKeysProviderTests
     public async Task GetEncryptionKeys_StampsConfiguredAlgorithm()
     {
         using var rsa = RSA.Create(2048);
-        var store = new Mock<IExternalKeyStore>();
+        var store = new Mock<IKeyCustodian>();
         store.Setup(s => s.GetPublicKeyAsync("enc-key", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
         var provider = new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
@@ -92,7 +92,7 @@ public class ExternalKeysProviderTests
 
     private static ExternalKeysProvider ProviderPublishing(string signingKeyName, JsonWebKey publicKey, string signingAlgorithm)
     {
-        var store = new Mock<IExternalKeyStore>();
+        var store = new Mock<IKeyCustodian>();
         store.Setup(s => s.GetPublicKeyAsync(signingKeyName, It.IsAny<CancellationToken>())).ReturnsAsync(publicKey);
         return new ExternalKeysProvider(store.Object, new ExternalKeyConfiguration(
             signingKeyName, signingAlgorithm, "enc-key", EncryptionAlgorithms.KeyManagement.RsaOaep256));

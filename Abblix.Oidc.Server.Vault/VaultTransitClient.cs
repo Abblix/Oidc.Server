@@ -26,7 +26,6 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Vault;
 
@@ -36,7 +35,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// and this client only moves bytes across the boundary. The typed <see cref="HttpClient"/> is configured by
 /// <c>AddVaultExternalKeys</c> with the Transit base address (<c>{Address}/v1/{mount}/</c>) and the auth header.
 /// </summary>
-public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStore
+public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
 {
     /// <summary>
     /// Signs the JWS signing input with a Transit key under the given JWS algorithm. RSA maps to PKCS#1 v1.5
@@ -44,12 +43,15 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStor
     /// R||S already, with no ASN.1 conversion. Transit hashes the input itself (<c>prehashed: false</c>). Returns
     /// the raw JWS signature bytes after stripping Transit's <c>vault:v&lt;n&gt;:</c> version prefix.
     /// </summary>
-    public async Task<byte[]> SignAsync(
-        string keyName, string algorithm, byte[] data, CancellationToken cancellationToken)
+    public async ValueTask<byte[]> SignAsync(
+        string keyId,
+        string algorithm,
+        byte[] data,
+        CancellationToken cancellationToken)
     {
         var request = BuildSignRequest(Convert.ToBase64String(data), algorithm);
 
-        using var document = await SendAsync(HttpMethod.Post, $"sign/{keyName}", request, cancellationToken);
+        using var document = await SendAsync(HttpMethod.Post, $"sign/{keyId}", request, cancellationToken);
         var signature = document.RootElement.GetProperty("data").GetProperty("signature").GetString()!;
 
         // Transit returns "vault:v<version>:<base64(signature)>"; the wire signature is the last segment.
@@ -88,10 +90,14 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStor
     /// algorithm Transit's RSA decrypt provisions). A standard JWE ciphertext is addressed by framing it as
     /// <c>vault:v1:&lt;base64&gt;</c>. Returns null on a decryption failure (HTTP 400) so a wrong key or tampered
     /// ciphertext is indistinguishable, which the seam's padding-oracle mitigation depends on; a 403/5xx (bad
-    /// token, sealed Vault) still throws.
+    /// token, sealed Vault) still throws. The JWE header is unused: RSA-OAEP unwrap needs only the ciphertext.
     /// </summary>
-    public async Task<byte[]?> DecryptAsync(
-        string keyName, string algorithm, byte[] ciphertext, CancellationToken cancellationToken)
+    public async ValueTask<byte[]?> UnwrapKeyAsync(
+        string keyId,
+        string algorithm,
+        JsonWebTokenHeader header,
+        byte[] encryptedKey,
+        CancellationToken cancellationToken)
     {
         if (algorithm != EncryptionAlgorithms.KeyManagement.RsaOaep256)
             throw new NotSupportedException(
@@ -99,15 +105,15 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStor
 
         // A key that never rotates has only version v1. A rotating production custodian records which version
         // wrapped each CEK and frames the prefix with that version instead of a constant.
-        var request = new { ciphertext = $"vault:v1:{Convert.ToBase64String(ciphertext)}" };
+        var request = new { ciphertext = $"vault:v1:{Convert.ToBase64String(encryptedKey)}" };
 
-        var (status, document) = await TrySendAsync(HttpMethod.Post, $"decrypt/{keyName}", request, cancellationToken);
+        var (status, document) = await TrySendAsync(HttpMethod.Post, $"decrypt/{keyId}", request, cancellationToken);
         using (document)
         {
             if (status == HttpStatusCode.BadRequest)
                 return null;
 
-            EnsureSuccess(status, document, $"decrypt/{keyName}");
+            EnsureSuccess(status, document, $"decrypt/{keyId}");
             var plaintext = document!.RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
             return Convert.FromBase64String(plaintext);
         }
@@ -117,10 +123,20 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStor
     /// Derives the ECDH-ES shared secret. Vault Transit exposes no key-agreement primitive, so this store does not
     /// support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
     /// </summary>
-    public Task<byte[]> AgreeKeyAsync(
-        string keyName, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+    public ValueTask<byte[]> AgreeKeyAsync(
+        string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
         => throw new NotSupportedException(
             "Vault Transit exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
+
+    /// <summary>
+    /// Transit reports the key family in the "type" field ("ecdsa-p256", "rsa-2048"): match on the family prefix,
+    /// not the exact curve or modulus size.
+    /// </summary>
+    private static class KeyFamilyTypes
+    {
+        public const string Ecdsa = "ecdsa";
+        public const string Rsa = "rsa";
+    }
 
     /// <summary>
     /// Fetches the public half of a Transit key as a public-only JWK (RSA or EC, per the Transit key type).
@@ -128,24 +144,29 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStor
     /// durable artifact captured at generation, so JWKS publishing and signature verification run locally against
     /// it and never touch this client on the hot path.
     /// </summary>
-    public async Task<JsonWebKey> GetPublicKeyAsync(string keyName, CancellationToken cancellationToken)
+    public async ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
     {
-        using var document = await SendAsync(HttpMethod.Get, $"keys/{keyName}", body: null, cancellationToken);
+        using var document = await SendAsync(HttpMethod.Get, $"keys/{keyId}", body: null, cancellationToken);
         var data = document.RootElement.GetProperty("data");
         var keyType = data.GetProperty("type").GetString()!;
         var latestVersion = data.GetProperty("latest_version").GetInt32().ToString(CultureInfo.InvariantCulture);
         var pem = data.GetProperty("keys").GetProperty(latestVersion).GetProperty("public_key").GetString()!;
 
-        if (keyType.StartsWith("ecdsa", StringComparison.Ordinal))
+        if (keyType.StartsWith(KeyFamilyTypes.Ecdsa, StringComparison.Ordinal))
         {
             using var ecdsa = ECDsa.Create();
             ecdsa.ImportFromPem(pem);
             return new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false));
         }
 
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(pem);
-        return new RsaJsonWebKey().Apply(rsa.ExportParameters(false));
+        if (keyType.StartsWith(KeyFamilyTypes.Rsa, StringComparison.Ordinal))
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportFromPem(pem);
+            return new RsaJsonWebKey().Apply(rsa.ExportParameters(false));
+        }
+
+        throw new NotSupportedException($"The Vault Transit store does not publish key type '{keyType}'.");
     }
 
     private async Task<JsonDocument> SendAsync(

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -54,28 +55,32 @@ public static class ServiceCollectionExtensions
         // a singleton, so this client is held long-lived: rather than per-call CreateClient, disable handler rotation
         // and let SocketsHttpHandler.PooledConnectionLifetime recycle connections to pick up DNS changes, the pattern
         // Microsoft recommends for a long-lived HttpClient.
-        services.AddHttpClient<VaultTransitClient>((provider, http) =>
+        services.AddHttpClient<IKeyCustodian, VaultTransitClient>((provider, http) =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
             http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/{options.TransitMount}/");
             if (!string.IsNullOrWhiteSpace(options.Token))
                 http.DefaultRequestHeaders.Add("X-Vault-Token", options.Token);
         })
-        .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
+        .ConfigurePrimaryHttpMessageHandler(provider =>
         {
-            PooledConnectionLifetime = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value.PooledConnectionLifetime,
+            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
+            return new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
+            };
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // Register the Transit client as the external key store, then let the shared wiring route its private
-        // operations through the crypto seam and publish its public halves at /jwks. This replaces the OIDC
-        // default key provider, so call this after the OIDC registration to win the singular resolve.
-        services.AddSingleton<IExternalKeyStore>(serviceProvider => serviceProvider.GetRequiredService<VaultTransitClient>());
         services.AddExternalKeys(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
+
             return new ExternalKeyConfiguration(
-                options.SigningKeyName, options.SigningAlgorithm, options.EncryptionKeyName, options.EncryptionAlgorithm);
+                options.SigningKeyName,
+                options.SigningAlgorithm,
+                options.EncryptionKeyName,
+                options.EncryptionAlgorithm);
         });
         return services;
     }

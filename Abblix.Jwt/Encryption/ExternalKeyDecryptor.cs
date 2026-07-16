@@ -50,7 +50,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
         // 'algorithm' and 'kid' come from the attacker-supplied JWE header, so anything this cannot handle
         // returns null and the caller substitutes a random CEK for a uniform failure (RFC 7516 §11.5). The kid
         // published in the token IS the custodian's handle, so an external key must carry one.
-        if (key.KeyId is not { } kid)
+        if (key.KeyId is not { } keyId)
             return null;
 
         return key switch
@@ -58,15 +58,15 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
             // RSA decrypt and symmetric unwrap are single remote calls. The algorithm must match the key type,
             // mirroring the keyed-DI validation the in-process path gets for free.
             RsaJsonWebKey when IsExternalRsaAlgorithm(algorithm)
-                => await custodian.UnwrapKeyAsync(kid, algorithm, header, encryptedKey, cancellationToken),
+                => await custodian.UnwrapKeyAsync(keyId, algorithm, header, encryptedKey, cancellationToken),
 
             OctetJsonWebKey when IsExternallyUnwrappable(algorithm)
-                => await custodian.UnwrapKeyAsync(kid, algorithm, header, encryptedKey, cancellationToken),
+                => await custodian.UnwrapKeyAsync(keyId, algorithm, header, encryptedKey, cancellationToken),
 
             // ECDH-ES: only the agreement needs the private key, so only it is remote; the KDF and any AES key
             // unwrap run locally on the returned shared secret.
             EllipticCurveJsonWebKey ecKey when IsEcdhEsAlgorithm(algorithm)
-                => await AgreeExternallyAsync(header, ecKey, algorithm, encryptedKey, kid, cancellationToken),
+                => await AgreeExternallyAsync(header, ecKey, algorithm, encryptedKey, keyId, cancellationToken),
 
             // dir / PBES2, or an algorithm that does not match the key type: no external form, uniform null.
             _ => null,
@@ -83,7 +83,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
         EllipticCurveJsonWebKey recipientKey,
         string algorithm,
         byte[] encryptedKey,
-        string kid,
+        string keyId,
         CancellationToken cancellationToken)
     {
         // 'epk', 'apu' and 'apv' come from the attacker-supplied header, so a malformed value fails as a uniform
@@ -106,7 +106,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
 
             // Z is the raw ECDH shared secret (NIST SP 800-56A / RFC 7518 §4.6); here it comes from the
             // custodian rather than an in-process agreement, but the KDF over it is identical.
-            var sharedSecretZ = await custodian.AgreeKeyAsync(kid, algorithm, ephemeralKey, cancellationToken);
+            var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
             try
             {
                 if (KeyWrapSize(algorithm) is { } kekSize)

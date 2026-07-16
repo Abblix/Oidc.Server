@@ -44,13 +44,13 @@ public interface IKeyCustodian
     /// Signs <paramref name="data"/> with a signing key held by the custodian, returning the signature in the
     /// JWS wire format for <paramref name="algorithm"/>. Called for a signing key the library holds public-only.
     /// </summary>
-    /// <param name="kid">The custodian's handle for the signing key.</param>
+    /// <param name="keyId">The custodian's handle for the signing key.</param>
     /// <param name="algorithm">The JWS algorithm identifier (e.g. RS256, ES256) the signature must use.</param>
     /// <param name="data">The signing input bytes, BASE64URL(header) + '.' + BASE64URL(payload).</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The raw signature bytes in JWS wire format for the algorithm.</returns>
     ValueTask<byte[]> SignAsync(
-        string kid,
+        string keyId,
         string algorithm,
         byte[] data,
         CancellationToken cancellationToken);
@@ -59,7 +59,7 @@ public interface IKeyCustodian
     /// Recovers a Content Encryption Key: an RSA decryption (RSA-OAEP / RSA-OAEP-256 / RSA1_5) or a symmetric
     /// unwrap (AES-KW / AES-GCM-KW), selected by <paramref name="algorithm"/>.
     /// </summary>
-    /// <param name="kid">The custodian's handle for the recipient key.</param>
+    /// <param name="keyId">The custodian's handle for the recipient key.</param>
     /// <param name="algorithm">The JWE <c>alg</c> value identifying the key-management operation.</param>
     /// <param name="header">The JWE header; AES-GCM-KW reads its <c>iv</c> / <c>tag</c> parameters from it.</param>
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
@@ -68,7 +68,7 @@ public interface IKeyCustodian
     /// decryption failure indistinguishable from a wrong key, which the RFC 7516 §11.5 mitigation upstream
     /// relies on to close the Bleichenbacher / padding-oracle side channel.</returns>
     ValueTask<byte[]?> UnwrapKeyAsync(
-        string kid,
+        string keyId,
         string algorithm,
         JsonWebTokenHeader header,
         byte[] encryptedKey,
@@ -79,14 +79,25 @@ public interface IKeyCustodian
     /// and the originator's ephemeral public key, returning the raw shared secret Z. The library runs the
     /// Concat KDF over Z and any AES key unwrap, so those steps never leave it.
     /// </summary>
-    /// <param name="kid">The custodian's handle for the recipient key.</param>
+    /// <param name="keyId">The custodian's handle for the recipient key.</param>
     /// <param name="algorithm">The JWE <c>alg</c> value (ECDH-ES or an ECDH-ES+A*KW variant).</param>
     /// <param name="ephemeralPublicKey">The originator's ephemeral public key from the <c>epk</c> header.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate).</returns>
     ValueTask<byte[]> AgreeKeyAsync(
-        string kid,
+        string keyId,
         string algorithm,
         JsonWebKey ephemeralPublicKey,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches the public half of a key the custodian holds as a public-only <see cref="JsonWebKey"/> (RSA or EC,
+    /// per the key type), carrying only the key material. The caller stamps the <c>kid</c>, use and algorithm.
+    /// Called once per key at startup, so JWKS publishing and signature verification run locally against it and
+    /// never touch the custodian on the hot path.
+    /// </summary>
+    /// <param name="keyId">The custodian's handle for the key.</param>
+    /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
+    /// <returns>The public-only key material for the key.</returns>
+    ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken);
 }
