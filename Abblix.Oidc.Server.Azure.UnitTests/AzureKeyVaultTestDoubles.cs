@@ -104,4 +104,17 @@ internal static class AzureResponses
     /// <summary>A sign or decrypt result, both shaped <c>{ kid, value }</c> with a base64url value.</summary>
     public static string CryptoResult(string vaultUri, string keyName, byte[] value)
         => JsonSerializer.Serialize(new { kid = $"{vaultUri}keys/{keyName}/v1", value = Base64Url(value) });
+
+    /// <summary>A "get key versions" page: each version's identifier, creation time (Unix seconds) and enabled
+    /// flag, the shape <c>KeyClient.GetPropertiesOfKeyVersions</c> pages over.</summary>
+    public static string KeyVersionsList(string vaultUri, string keyName, params (string Version, long CreatedUnix)[] versions)
+        => JsonSerializer.Serialize(new
+        {
+            value = versions.Select(version => new
+            {
+                kid = $"{vaultUri}keys/{keyName}/{version.Version}",
+                attributes = new { enabled = true, created = version.CreatedUnix },
+            }).ToArray(),
+            nextLink = (string?)null,
+        });
 }

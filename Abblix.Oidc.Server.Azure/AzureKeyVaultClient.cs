@@ -157,16 +157,27 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
             "Azure Key Vault exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
 
     /// <summary>
-    /// Enumerates the Key Vault key's versions as public-only JWKs (RSA or EC, per the key type). Called at
-    /// publication time, so JWKS publishing and signature verification run locally against the result and never
-    /// touch the vault on the hot path. This build publishes the latest version only; enumerating every version
-    /// for rotation overlap is a forthcoming step.
+    /// Enumerates every enabled version of the Key Vault key as a public-only JWK (RSA or EC, per the key type),
+    /// each carrying the version-specific <c>kid</c> (<c>&lt;name&gt;/&lt;version&gt;</c>) and the version's
+    /// creation time. Key Vault lists version metadata but not the public key, so each version's key is fetched.
+    /// Called at publication time, so JWKS publishing and signature verification run locally against the result
+    /// and never touch the vault on the hot path. The versioned <c>kid</c> is a Key Vault key identifier, which
+    /// the crypto client turns straight back into a versioned URI for sign/unwrap, so no separate handle mapping
+    /// is needed.
     /// </summary>
     public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
         string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var key = await _keyClient.GetKeyAsync(keyName, cancellationToken: cancellationToken);
-        yield return new KeyVersion(ImportPublicKey(key.Value.Key), DateTimeOffset.MinValue);
+        await foreach (var properties in _keyClient.GetPropertiesOfKeyVersionsAsync(keyName, cancellationToken))
+        {
+            // A disabled version (rotated out, or not yet enabled) must not be published or produced with.
+            if (properties.Enabled != true)
+                continue;
+
+            var key = await _keyClient.GetKeyAsync(keyName, properties.Version, cancellationToken);
+            var publicKey = ImportPublicKey(key.Value.Key) with { KeyId = $"{keyName}/{properties.Version}" };
+            yield return new KeyVersion(publicKey, properties.CreatedOn ?? DateTimeOffset.MinValue);
+        }
     }
 
     // Imports a Key Vault public key into a public-only JWK of the matching type.

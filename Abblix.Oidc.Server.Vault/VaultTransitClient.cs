@@ -50,9 +50,10 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
         byte[] data,
         CancellationToken cancellationToken)
     {
-        var request = BuildSignRequest(Convert.ToBase64String(data), algorithm);
+        var (name, version) = ParseKeyId(keyId);
+        var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
 
-        using var document = await SendAsync(HttpMethod.Post, $"sign/{keyId}", request, cancellationToken);
+        using var document = await SendAsync(HttpMethod.Post, $"sign/{name}", request, cancellationToken);
         var signature = document.RootElement.GetProperty("data").GetProperty("signature").GetString()!;
 
         // Transit returns "vault:v<version>:<base64(signature)>"; the wire signature is the last segment.
@@ -68,30 +69,34 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     private const string Sha2With512 = "sha2-512";
     private const string JwsMarshaling = "jws";
 
-    // Maps a JWS algorithm to the Transit sign request; an unmapped algorithm is rejected.
-    private static object BuildSignRequest(string input, string algorithm) => algorithm switch
+    // Maps a JWS algorithm to the Transit sign request pinned to the given key version; an unmapped algorithm is
+    // rejected. key_version pins the exact version the kid names, so the produce role signs with the active
+    // version even when a newer version is already published but still propagating.
+    private static object BuildSignRequest(string input, string algorithm, int version) => algorithm switch
     {
-        SigningAlgorithms.RS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pkcs1V15 },
-        SigningAlgorithms.RS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pkcs1V15 },
-        SigningAlgorithms.RS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pkcs1V15 },
+        SigningAlgorithms.RS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pkcs1V15, key_version = version },
+        SigningAlgorithms.RS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pkcs1V15, key_version = version },
+        SigningAlgorithms.RS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pkcs1V15, key_version = version },
 
-        SigningAlgorithms.PS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pss },
-        SigningAlgorithms.PS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pss },
-        SigningAlgorithms.PS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pss },
+        SigningAlgorithms.PS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pss, key_version = version },
+        SigningAlgorithms.PS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pss, key_version = version },
+        SigningAlgorithms.PS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pss, key_version = version },
 
-        SigningAlgorithms.ES256 => new { input, prehashed = false, hash_algorithm = Sha2With256, marshaling_algorithm = JwsMarshaling },
-        SigningAlgorithms.ES384 => new { input, prehashed = false, hash_algorithm = Sha2With384, marshaling_algorithm = JwsMarshaling },
-        SigningAlgorithms.ES512 => new { input, prehashed = false, hash_algorithm = Sha2With512, marshaling_algorithm = JwsMarshaling },
+        SigningAlgorithms.ES256 => new { input, prehashed = false, hash_algorithm = Sha2With256, marshaling_algorithm = JwsMarshaling, key_version = version },
+        SigningAlgorithms.ES384 => new { input, prehashed = false, hash_algorithm = Sha2With384, marshaling_algorithm = JwsMarshaling, key_version = version },
+        SigningAlgorithms.ES512 => new { input, prehashed = false, hash_algorithm = Sha2With512, marshaling_algorithm = JwsMarshaling, key_version = version },
 
         _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
     };
 
     /// <summary>
     /// Unwraps (decrypts) an RSA-OAEP-256 Content Encryption Key with a Transit RSA key (the only key-management
-    /// algorithm Transit's RSA decrypt provisions). A standard JWE ciphertext is addressed by framing it as
-    /// <c>vault:v1:&lt;base64&gt;</c>. Returns null on a decryption failure (HTTP 400) so a wrong key or tampered
-    /// ciphertext is indistinguishable, which the seam's padding-oracle mitigation depends on; a 403/5xx (bad
-    /// token, sealed Vault) still throws. The JWE header is unused: RSA-OAEP unwrap needs only the ciphertext.
+    /// algorithm Transit's RSA decrypt provisions). Transit reads the key version from the ciphertext framing, so
+    /// the standard JWE ciphertext is framed as <c>vault:v&lt;version&gt;:&lt;base64&gt;</c> with the version the
+    /// <c>kid</c> names, addressing the exact version that wrapped the CEK. Returns null on a decryption failure
+    /// (HTTP 400) so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
+    /// mitigation depends on; a 403/5xx (bad token, sealed Vault) still throws. The JWE header is unused: RSA-OAEP
+    /// unwrap needs only the ciphertext.
     /// </summary>
     public async Task<byte[]?> UnwrapKeyAsync(
         string keyId,
@@ -104,17 +109,16 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
             throw new NotSupportedException(
                 $"The Vault Transit store unwraps {EncryptionAlgorithms.KeyManagement.RsaOaep256} only; got '{algorithm}'.");
 
-        // A key that never rotates has only version v1. A rotating production custodian records which version
-        // wrapped each CEK and frames the prefix with that version instead of a constant.
-        var request = new { ciphertext = $"vault:v1:{Convert.ToBase64String(encryptedKey)}" };
+        var (name, version) = ParseKeyId(keyId);
+        var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
 
-        var (status, document) = await TrySendAsync(HttpMethod.Post, $"decrypt/{keyId}", request, cancellationToken);
+        var (status, document) = await TrySendAsync(HttpMethod.Post, $"decrypt/{name}", request, cancellationToken);
         using (document)
         {
             if (status == HttpStatusCode.BadRequest)
                 return null;
 
-            EnsureSuccess(status, document, $"decrypt/{keyId}");
+            EnsureSuccess(status, document, $"decrypt/{name}");
             var plaintext = document!.RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
             return Convert.FromBase64String(plaintext);
         }
@@ -140,11 +144,11 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     }
 
     /// <summary>
-    /// Enumerates the Transit key's versions as public-only JWKs (RSA or EC, per the Transit key type). Transit
-    /// returns each version's public half as a PEM (SubjectPublicKeyInfo). Called at publication time, so JWKS
-    /// publishing and signature verification run locally against the result and never touch this client on the
-    /// hot path. This build publishes the latest version only; enumerating every version for rotation overlap is
-    /// a forthcoming step.
+    /// Enumerates every version of the Transit key as a public-only JWK (RSA or EC, per the Transit key type),
+    /// each carrying the version-specific <c>kid</c> (<c>&lt;name&gt;:&lt;version&gt;</c>) and the version's
+    /// creation time. Transit returns each version's public half as a PEM (SubjectPublicKeyInfo). Called at
+    /// publication time, so JWKS publishing and signature verification run locally against the result and never
+    /// touch this client on the hot path.
     /// </summary>
     public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
         string keyName,
@@ -153,10 +157,32 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
         using var document = await SendAsync(HttpMethod.Get, $"keys/{keyName}", body: null, cancellationToken);
         var data = document.RootElement.GetProperty("data");
         var keyType = data.GetProperty("type").GetString()!;
-        var latestVersion = data.GetProperty("latest_version").GetInt32().ToString(CultureInfo.InvariantCulture);
-        var pem = data.GetProperty("keys").GetProperty(latestVersion).GetProperty("public_key").GetString()!;
 
-        yield return new KeyVersion(ImportPublicKey(keyType, pem), DateTimeOffset.MinValue);
+        // Transit returns every version under "keys" as { "<version>": { public_key, creation_time } }. Publish
+        // them all so a rotation overlaps; the kid names the version so a later sign/unwrap addresses it exactly.
+        foreach (var version in data.GetProperty("keys").EnumerateObject())
+        {
+            var pem = version.Value.GetProperty("public_key").GetString()!;
+            var createdAt = DateTimeOffset.Parse(
+                version.Value.GetProperty("creation_time").GetString()!,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
+            var publicKey = ImportPublicKey(keyType, pem) with { KeyId = $"{keyName}:{version.Name}" };
+            yield return new KeyVersion(publicKey, createdAt);
+        }
+    }
+
+    // The published kid is "<transit key name>:<version>"; split it to address the Transit key and pin the
+    // version for a private operation. Transit key names contain no colon, so the last colon is the separator.
+    private static (string Name, int Version) ParseKeyId(string keyId)
+    {
+        var separator = keyId.LastIndexOf(':');
+        if (separator > 0 && int.TryParse(
+                keyId.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var version))
+            return (keyId[..separator], version);
+
+        throw new InvalidOperationException(
+            $"Malformed external key id '{keyId}'; expected '<name>:<version>' from GetKeyVersionsAsync.");
     }
 
     // Imports a Transit public key PEM (SubjectPublicKeyInfo) into a public-only JWK of the matching type.
