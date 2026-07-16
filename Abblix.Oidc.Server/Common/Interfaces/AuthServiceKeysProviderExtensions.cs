@@ -21,31 +21,52 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Common.Interfaces;
 
 /// <summary>
 /// Extension helpers for <see cref="IAuthServiceKeysProvider"/>.
 /// </summary>
-public static class AuthServiceKeysProviderExtensions
+public static partial class AuthServiceKeysProviderExtensions
 {
     /// <summary>
     /// Builds the public key set published at the JWKS endpoint: the signing keys unchanged, plus the
     /// server's asymmetric encryption public keys marked <c>use=enc</c> so a client can encrypt a request
     /// object or other inbound JWE to the server (RFC 9101). A symmetric server key has no public half and
     /// is omitted; only sanitized public halves are ever published, never private or secret material.
+    /// As a last-resort guard against a misbehaving key provider, any key still carrying private material is
+    /// stripped to its public half before it enters the set and a warning is logged: the JWKS endpoint must
+    /// never leak a private key, even if an upstream provider mistakenly returns one.
     /// </summary>
     /// <param name="provider">The provider of the service's signing and encryption keys.</param>
+    /// <param name="logger">Logger used to warn when a private key is stripped before publication.</param>
     /// <returns>The signing keys followed by the asymmetric encryption public keys.</returns>
-    public static async Task<JsonWebKey[]> GetPublishedKeysAsync(this IAuthServiceKeysProvider provider)
+    public static async Task<JsonWebKey[]> GetPublishedKeysAsync(this IAuthServiceKeysProvider provider, ILogger logger)
     {
-        var signingKeys = await provider.GetSigningKeys().ToArrayAsync();
+        var signingKeys = await provider.GetSigningKeys()
+            .Select(key => PublicOnly(key, logger))
+            .ToArrayAsync();
 
         var encryptionKeys = await provider.GetEncryptionKeys()
             .Where(key => key.HasPublicKey)
-            .Select(key => key with { Usage = PublicKeyUsages.Encryption })
+            .Select(key => PublicOnly(key, logger) with { Usage = PublicKeyUsages.Encryption })
             .ToArrayAsync();
 
         return [..signingKeys, ..encryptionKeys];
+    }
+
+    /// <summary>
+    /// Returns the key unchanged when it carries no private material; otherwise strips it to its public half
+    /// and logs a warning. A defense-in-depth backstop at the publication boundary: the sanctioned providers
+    /// already return public-only keys, so this fires only on a misconfigured or misbehaving one.
+    /// </summary>
+    private static JsonWebKey PublicOnly(JsonWebKey key, ILogger logger)
+    {
+        if (!key.HasPrivateKey)
+            return key;
+
+        LogPrivateKeyStrippedFromPublishedSet(logger, key.KeyId);
+        return key.Sanitize(includePrivateKeys: false);
     }
 }

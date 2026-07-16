@@ -45,6 +45,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Core = Abblix.Oidc.Server.Model;
@@ -465,9 +466,11 @@ public static class EndpointRouteBuilderExtensions
     /// Returns the JSON Web Key Set (JWKS) with the provider's public signing keys, used by clients to verify
     /// issued tokens.
     /// </summary>
-    private static async Task<IResult> KeysAsync(IAuthServiceKeysProvider serviceKeysProvider)
+    private static async Task<IResult> KeysAsync(
+        IAuthServiceKeysProvider serviceKeysProvider,
+        ILogger<IAuthServiceKeysProvider> logger)
     {
-        var keys = await serviceKeysProvider.GetPublishedKeysAsync();
+        var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
         return Results.Json(new JsonWebKeySet(keys));
     }
 }

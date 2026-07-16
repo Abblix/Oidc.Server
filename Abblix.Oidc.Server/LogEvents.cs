@@ -634,6 +634,18 @@ internal static class LogEvents
             public const int UserClaimsNotFound = Base + 1;
             public const int MissingClaims = Base + 2;
         }
+
+        /// <summary>
+        /// <c>Common/Interfaces/AuthServiceKeysProviderExtensions.cs</c> - assembly of the public
+        /// JWKS key set, including the last-resort strip of any private material a provider mistakenly
+        /// hands in before it is published (sub-range 9060-9079).
+        /// </summary>
+        public static class AuthServiceKeysProvider
+        {
+            private const int Base = 9060;
+
+            public const int PrivateKeyStrippedFromPublishedSet = Base + 1;
+        }
     }
 
     /// <summary>
