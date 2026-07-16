@@ -32,15 +32,15 @@ namespace Abblix.Oidc.Server;
 internal static class LogEvents
 {
     /// <summary>
-    /// Range 2000–2099: <c>Endpoints/Authorization</c>, <c>Endpoints/Token</c>,
+    /// Range 2000-2099: <c>Endpoints/Authorization</c>, <c>Endpoints/Token</c>,
     /// response builders. Each source class lives in its own nested static class
     /// with a packed sub-range inside the feature window.
     /// </summary>
     public static class Endpoints
     {
         /// <summary>
-        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> — RFC 7523
-        /// JWT Bearer grant validation pipeline (sub-range 2000–2019).
+        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> - RFC 7523
+        /// JWT Bearer grant validation pipeline (sub-range 2000-2019).
         /// </summary>
         public static class JwtBearer
         {
@@ -65,9 +65,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Authorization/RequestFetching/RequestUriFetcher.cs</c> — fetching
+        /// <c>Endpoints/Authorization/RequestFetching/RequestUriFetcher.cs</c> - fetching
         /// of authorization request objects from a <c>request_uri</c> parameter
-        /// (sub-range 2020–2039).
+        /// (sub-range 2020-2039).
         /// </summary>
         public static class RequestUriFetcher
         {
@@ -77,8 +77,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Authorization/Validation/ClientValidator.cs</c> — validates the
-        /// client referenced by an authorization request (sub-range 2040–2049).
+        /// <c>Endpoints/Authorization/Validation/ClientValidator.cs</c> - validates the
+        /// client referenced by an authorization request (sub-range 2040-2049).
         /// </summary>
         public static class AuthorizationClientValidator
         {
@@ -88,8 +88,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Authorization/Validation/FlowTypeValidator.cs</c> — validates the
-        /// OAuth 2.0 flow derived from <c>response_type</c> (sub-range 2050–2054).
+        /// <c>Endpoints/Authorization/Validation/FlowTypeValidator.cs</c> - validates the
+        /// OAuth 2.0 flow derived from <c>response_type</c> (sub-range 2050-2054).
         /// </summary>
         public static class FlowTypeValidator
         {
@@ -101,9 +101,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Authorization/Validation/RedirectUriValidator.cs</c> — validates
+        /// <c>Endpoints/Authorization/Validation/RedirectUriValidator.cs</c> - validates
         /// the <c>redirect_uri</c> parameter against client-registered URIs
-        /// (sub-range 2055–2064).
+        /// (sub-range 2055-2064).
         /// </summary>
         public static class RedirectUriValidator
         {
@@ -113,9 +113,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Authorization/Validation/ResponseModeValidator.cs</c> — verifies
+        /// <c>Endpoints/Authorization/Validation/ResponseModeValidator.cs</c> - verifies
         /// that the <c>response_mode</c> is compatible with the detected flow type
-        /// (sub-range 2065–2069).
+        /// (sub-range 2065-2069).
         /// </summary>
         public static class ResponseModeValidator
         {
@@ -126,8 +126,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/EndSession/EndSessionRequestProcessor.cs</c> — processes RP-Initiated
-        /// Logout requests per OpenID Connect RP-Initiated Logout 1.0 (sub-range 2070–2074).
+        /// <c>Endpoints/EndSession/EndSessionRequestProcessor.cs</c> - processes RP-Initiated
+        /// Logout requests per OpenID Connect RP-Initiated Logout 1.0 (sub-range 2070-2074).
         /// </summary>
         public static class EndSessionRequestProcessor
         {
@@ -138,8 +138,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/EndSession/Validation/ClientValidator.cs</c> — resolves the client
-        /// referenced by an end-session request (sub-range 2075–2079).
+        /// <c>Endpoints/EndSession/Validation/ClientValidator.cs</c> - resolves the client
+        /// referenced by an end-session request (sub-range 2075-2079).
         /// </summary>
         public static class EndSessionClientValidator
         {
@@ -149,9 +149,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/EndSession/Validation/PostLogoutRedirectUrisValidator.cs</c> —
+        /// <c>Endpoints/EndSession/Validation/PostLogoutRedirectUrisValidator.cs</c> -
         /// validates <c>post_logout_redirect_uri</c> against the client's registered URIs
-        /// (sub-range 2080–2084).
+        /// (sub-range 2080-2084).
         /// </summary>
         public static class PostLogoutRedirectUrisValidator
         {
@@ -161,8 +161,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Introspection/IntrospectionRequestValidator.cs</c> — validates
-        /// RFC 7662 token introspection requests (sub-range 2085–2089).
+        /// <c>Endpoints/Introspection/IntrospectionRequestValidator.cs</c> - validates
+        /// RFC 7662 token introspection requests (sub-range 2085-2089).
         /// </summary>
         public static class IntrospectionRequestValidator
         {
@@ -173,8 +173,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Revocation/RevocationRequestValidator.cs</c> — validates RFC 7009
-        /// token revocation requests (sub-range 2090–2099).
+        /// <c>Endpoints/Revocation/RevocationRequestValidator.cs</c> - validates RFC 7009
+        /// token revocation requests (sub-range 2090-2099).
         /// </summary>
         public static class RevocationRequestValidator
         {
@@ -186,14 +186,14 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 3000–3099: <c>Features/ClientAuthentication</c>.
+    /// Range 3000-3099: <c>Features/ClientAuthentication</c>.
     /// </summary>
     public static class ClientAuth
     {
         /// <summary>
-        /// <c>Features/ClientAuthentication/JwtAssertionAuthenticatorBase.cs</c> — shared
+        /// <c>Features/ClientAuthentication/JwtAssertionAuthenticatorBase.cs</c> - shared
         /// JWT assertion validation pipeline for private_key_jwt and client_secret_jwt
-        /// (sub-range 3000–3019).
+        /// (sub-range 3000-3019).
         /// </summary>
         public static class JwtAssertionAuthenticatorBase
         {
@@ -212,9 +212,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/ClientSecretAuthenticator.cs</c> — base
+        /// <c>Features/ClientAuthentication/ClientSecretAuthenticator.cs</c> - base
         /// authenticator for client_secret_basic and client_secret_post
-        /// (sub-range 3020–3039).
+        /// (sub-range 3020-3039).
         /// </summary>
         public static class ClientSecretAuthenticator
         {
@@ -229,9 +229,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/ClientSecretJwtAuthenticator.cs</c> —
+        /// <c>Features/ClientAuthentication/ClientSecretJwtAuthenticator.cs</c> -
         /// client_secret_jwt authentication via HMAC-signed JWT assertions
-        /// (sub-range 3040–3059).
+        /// (sub-range 3040-3059).
         /// </summary>
         public static class ClientSecretJwtAuthenticator
         {
@@ -244,8 +244,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/NoneClientAuthenticator.cs</c> — public
-        /// clients that do not use client authentication (sub-range 3060–3069).
+        /// <c>Features/ClientAuthentication/NoneClientAuthenticator.cs</c> - public
+        /// clients that do not use client authentication (sub-range 3060-3069).
         /// </summary>
         public static class NoneClientAuthenticator
         {
@@ -255,8 +255,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/TlsClientAuthenticator.cs</c> — RFC 8705
-        /// self_signed_tls_client_auth (sub-range 3070–3084).
+        /// <c>Features/ClientAuthentication/TlsClientAuthenticator.cs</c> - RFC 8705
+        /// self_signed_tls_client_auth (sub-range 3070-3084).
         /// </summary>
         public static class TlsClientAuthenticator
         {
@@ -268,9 +268,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/TlsMetadataClientAuthenticator.cs</c> —
+        /// <c>Features/ClientAuthentication/TlsMetadataClientAuthenticator.cs</c> -
         /// RFC 8705 tls_client_auth via Subject DN / SAN matching
-        /// (sub-range 3085–3099).
+        /// (sub-range 3085-3099).
         /// </summary>
         public static class TlsMetadataClientAuthenticator
         {
@@ -282,14 +282,14 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 4000–4099: <c>Endpoints/DynamicClientManagement</c>.
+    /// Range 4000-4099: <c>Endpoints/DynamicClientManagement</c>.
     /// </summary>
     public static class DynamicClientManagement
     {
         /// <summary>
-        /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> —
+        /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> -
         /// cross-checks supplied <c>client_id</c> against register/update operation type
-        /// per RFC 7591 §3 / RFC 7592 §2.2 (sub-range 4000–4019).
+        /// per RFC 7591 §3 / RFC 7592 §2.2 (sub-range 4000-4019).
         /// </summary>
         public static class ClientIdValidator
         {
@@ -300,9 +300,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/DynamicClientManagement/Validation/SoftwareStatementValidator.cs</c> —
+        /// <c>Endpoints/DynamicClientManagement/Validation/SoftwareStatementValidator.cs</c> -
         /// validates the <c>software_statement</c> JWT parameter per RFC 7591 §2.3
-        /// (sub-range 4020–4039).
+        /// (sub-range 4020-4039).
         /// </summary>
         public static class SoftwareStatementValidator
         {
@@ -313,9 +313,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/DynamicClientManagement/Validation/SubjectTypeValidator.cs</c> —
+        /// <c>Endpoints/DynamicClientManagement/Validation/SubjectTypeValidator.cs</c> -
         /// validates OIDC Core §8 <c>subject_type</c> metadata and pairwise sector
-        /// identifier resolution (sub-range 4040–4059).
+        /// identifier resolution (sub-range 4040-4059).
         /// </summary>
         public static class SubjectTypeValidator
         {
@@ -326,16 +326,16 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 5000–5099: <c>Features/Tokens</c> — validation, issuance, revocation.
+    /// Range 5000-5099: <c>Features/Tokens</c> - validation, issuance, revocation.
     /// Each source class lives in its own nested static class with a packed sub-range
     /// inside the feature window.
     /// </summary>
     public static class Tokens
     {
         /// <summary>
-        /// <c>Features/Tokens/Validation/ClientJwtValidator.cs</c> — validation of JWTs
+        /// <c>Features/Tokens/Validation/ClientJwtValidator.cs</c> - validation of JWTs
         /// issued by clients (private_key_jwt assertions, request objects)
-        /// (sub-range 5000–5019).
+        /// (sub-range 5000-5019).
         /// </summary>
         public static class ClientJwtValidator
         {
@@ -349,9 +349,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/Tokens/LogoutTokenService.cs</c> — back-channel logout token
+        /// <c>Features/Tokens/LogoutTokenService.cs</c> - back-channel logout token
         /// generation per OpenID Connect Back-Channel Logout 1.0
-        /// (sub-range 5020–5039).
+        /// (sub-range 5020-5039).
         /// </summary>
         public static class LogoutTokenService
         {
@@ -361,9 +361,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> — JWT replay
+        /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> - JWT replay
         /// protection via <c>IDistributedCache</c> per RFC 7523 Section 5.2 and
-        /// RFC 9449 §11.1.5 (sub-range 5040–5059).
+        /// RFC 9449 §11.1.5 (sub-range 5040-5059).
         /// </summary>
         public static class DistributedJwtReplayCache
         {
@@ -374,9 +374,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/JwtBearer/JwtBearerIssuerProvider.cs</c> — trusted issuer
+        /// <c>Features/JwtBearer/JwtBearerIssuerProvider.cs</c> - trusted issuer
         /// resolution and JWKS fetching for JWT Bearer assertions
-        /// (sub-range 5060–5079).
+        /// (sub-range 5060-5079).
         /// </summary>
         public static class JwtBearerIssuerProvider
         {
@@ -388,9 +388,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/Nonces/RollingHmacNonceService.cs</c> — generic
+        /// <c>Features/Nonces/RollingHmacNonceService.cs</c> - generic
         /// stateless-nonce issuance and validation. DPoP-Nonce per RFC 9449
-        /// §8 / §9 is the current consumer (sub-range 5080–5099).
+        /// §8 / §9 is the current consumer (sub-range 5080-5099).
         /// </summary>
         public static class RollingHmacNonceService
         {
@@ -402,14 +402,14 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 6000–6099: <c>Features/SecureHttpFetch</c>.
+    /// Range 6000-6099: <c>Features/SecureHttpFetch</c>.
     /// </summary>
     public static class HttpFetch
     {
         /// <summary>
-        /// <c>Features/SecureHttpFetch/SecureHttpFetcher.cs</c> — secure outbound
+        /// <c>Features/SecureHttpFetch/SecureHttpFetcher.cs</c> - secure outbound
         /// HTTP fetch with SSRF protection and response validation
-        /// (sub-range 6000–6019).
+        /// (sub-range 6000-6019).
         /// </summary>
         public static class SecureHttpFetcher
         {
@@ -423,9 +423,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/SecureHttpFetch/SecureHttpFetcherExtensions.cs</c> — JWKS
+        /// <c>Features/SecureHttpFetch/SecureHttpFetcherExtensions.cs</c> - JWKS
         /// fetch helpers built on top of <c>ISecureHttpFetcher</c>
-        /// (sub-range 6020–6039).
+        /// (sub-range 6020-6039).
         /// </summary>
         public static class SecureHttpFetcherExtensions
         {
@@ -438,14 +438,14 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 7000–7099: <c>Features/DeviceAuthorization</c>,
+    /// Range 7000-7099: <c>Features/DeviceAuthorization</c>,
     /// <c>Features/BackChannelAuthentication</c>, <c>Features/LogoutNotification</c>.
     /// </summary>
     public static class Device
     {
         /// <summary>
-        /// <c>Features/DeviceAuthorization/UserCodeRateLimiter.cs</c> — RFC 8628
-        /// brute-force protection for user code verification (sub-range 7000–7009).
+        /// <c>Features/DeviceAuthorization/UserCodeRateLimiter.cs</c> - RFC 8628
+        /// brute-force protection for user code verification (sub-range 7000-7009).
         /// </summary>
         public static class UserCodeRateLimiter
         {
@@ -459,8 +459,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionHandler.cs</c> —
-        /// shared CIBA completion-handler validation (sub-range 7010–7019).
+        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionHandler.cs</c> -
+        /// shared CIBA completion-handler validation (sub-range 7010-7019).
         /// </summary>
         public static class AuthenticationCompletionHandler
         {
@@ -470,8 +470,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionRouter.cs</c> —
-        /// CIBA delivery-mode routing (sub-range 7020–7029).
+        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionRouter.cs</c> -
+        /// CIBA delivery-mode routing (sub-range 7020-7029).
         /// </summary>
         public static class AuthenticationCompletionRouter
         {
@@ -481,8 +481,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PingModeCompletionHandler.cs</c> —
-        /// CIBA ping mode token delivery (sub-range 7030–7039).
+        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PingModeCompletionHandler.cs</c> -
+        /// CIBA ping mode token delivery (sub-range 7030-7039).
         /// </summary>
         public static class PingModeCompletionHandler
         {
@@ -492,8 +492,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PollModeCompletionHandler.cs</c> —
-        /// CIBA poll mode token delivery (sub-range 7040–7049).
+        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PollModeCompletionHandler.cs</c> -
+        /// CIBA poll mode token delivery (sub-range 7040-7049).
         /// </summary>
         public static class PollModeCompletionHandler
         {
@@ -503,8 +503,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PushModeCompletionHandler.cs</c> —
-        /// CIBA push mode token delivery (sub-range 7050–7059).
+        /// <c>Features/BackChannelAuthentication/AuthenticationNotifiers/PushModeCompletionHandler.cs</c> -
+        /// CIBA push mode token delivery (sub-range 7050-7059).
         /// </summary>
         public static class PushModeCompletionHandler
         {
@@ -517,8 +517,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/HttpNotificationDeliveryService.cs</c> —
-        /// HTTP delivery of CIBA ping and push notifications (sub-range 7060–7069).
+        /// <c>Features/BackChannelAuthentication/HttpNotificationDeliveryService.cs</c> -
+        /// HTTP delivery of CIBA ping and push notifications (sub-range 7060-7069).
         /// </summary>
         public static class HttpNotificationDeliveryService
         {
@@ -531,8 +531,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/BackChannelAuthentication/InMemoryLongPollingService.cs</c> —
-        /// in-memory long-polling status notification (sub-range 7070–7079).
+        /// <c>Features/BackChannelAuthentication/InMemoryLongPollingService.cs</c> -
+        /// in-memory long-polling status notification (sub-range 7070-7079).
         /// </summary>
         public static class InMemoryLongPollingService
         {
@@ -547,8 +547,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/LogoutNotification/BackChannelLogoutTokenSender.cs</c> —
-        /// OpenID Connect Back-Channel Logout token transmission (sub-range 7085–7099).
+        /// <c>Features/LogoutNotification/BackChannelLogoutTokenSender.cs</c> -
+        /// OpenID Connect Back-Channel Logout token transmission (sub-range 7085-7099).
         /// </summary>
         public static class BackChannelLogoutTokenSender
         {
@@ -560,13 +560,13 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 8000–8099: <c>Features/Licensing</c>.
+    /// Range 8000-8099: <c>Features/Licensing</c>.
     /// </summary>
     public static class Licensing
     {
         /// <summary>
-        /// <c>Features/Licensing/LicenseChecker.cs</c> — runtime enforcement of
-        /// client and issuer caps from the active license (sub-range 8000–8019).
+        /// <c>Features/Licensing/LicenseChecker.cs</c> - runtime enforcement of
+        /// client and issuer caps from the active license (sub-range 8000-8019).
         /// </summary>
         public static class LicenseChecker
         {
@@ -579,8 +579,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/Licensing/LicenseManager.cs</c> — license lifecycle events
-        /// (expiring soon, grace period, expired) (sub-range 8020–8039).
+        /// <c>Features/Licensing/LicenseManager.cs</c> - license lifecycle events
+        /// (expiring soon, grace period, expired) (sub-range 8020-8039).
         /// </summary>
         public static class LicenseManager
         {
@@ -593,14 +593,14 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000–9099: misc — Discovery, Storage, Issuer, Session, RandomGenerator.
+    /// Range 9000-9099: misc - Discovery, Storage, Issuer, Session, RandomGenerator.
     /// </summary>
     public static class Misc
     {
         /// <summary>
-        /// <c>Features/RequestObject/RequestObjectFetcher.cs</c> — JWT request object
+        /// <c>Features/RequestObject/RequestObjectFetcher.cs</c> - JWT request object
         /// fetching, validation and binding for OpenID Connect authorization flows
-        /// (sub-range 9000–9019).
+        /// (sub-range 9000-9019).
         /// </summary>
         public static class RequestObjectFetcher
         {
@@ -612,8 +612,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/Storages/CompositeBinarySerializer.cs</c> — Protocol Buffers /
-        /// JSON fallback binary serializer (sub-range 9020–9039).
+        /// <c>Features/Storages/CompositeBinarySerializer.cs</c> - Protocol Buffers /
+        /// JSON fallback binary serializer (sub-range 9020-9039).
         /// </summary>
         public static class CompositeBinarySerializer
         {
@@ -624,8 +624,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/UserInfo/UserClaimsProvider.cs</c> — retrieval of user claims
-        /// for an authentication session (sub-range 9040–9059).
+        /// <c>Features/UserInfo/UserClaimsProvider.cs</c> - retrieval of user claims
+        /// for an authentication session (sub-range 9040-9059).
         /// </summary>
         public static class UserClaimsProvider
         {
@@ -634,17 +634,29 @@ internal static class LogEvents
             public const int UserClaimsNotFound = Base + 1;
             public const int MissingClaims = Base + 2;
         }
+
+        /// <summary>
+        /// <c>Common/Interfaces/AuthServiceKeysProviderExtensions.cs</c> - assembly of the public
+        /// JWKS key set, including the last-resort strip of any private material a provider mistakenly
+        /// hands in before it is published (sub-range 9060-9079).
+        /// </summary>
+        public static class AuthServiceKeysProvider
+        {
+            private const int Base = 9060;
+
+            public const int PrivateKeyStrippedFromPublishedSet = Base + 1;
+        }
     }
 
     /// <summary>
-    /// Range 10000–10099: <c>Features/DPoP</c> + DPoP-aware endpoint validators per
+    /// Range 10000-10099: <c>Features/DPoP</c> + DPoP-aware endpoint validators per
     /// RFC 9449.
     /// </summary>
     public static class DPoP
     {
         /// <summary>
-        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> — RFC 9449 §7
-        /// resource-server enforcement on the UserInfo endpoint (sub-range 10000–10019).
+        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> - RFC 9449 §7
+        /// resource-server enforcement on the UserInfo endpoint (sub-range 10000-10019).
         /// </summary>
         public static class DPoPUserInfoValidator
         {
@@ -658,8 +670,8 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> — RFC 9449 §5
-        /// token-endpoint binding (sub-range 10020–10039).
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> - RFC 9449 §5
+        /// token-endpoint binding (sub-range 10020-10039).
         /// </summary>
         public static class DPoPTokenEndpointValidator
         {

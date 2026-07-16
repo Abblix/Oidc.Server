@@ -45,6 +45,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Core = Abblix.Oidc.Server.Model;
@@ -78,14 +79,14 @@ public static class EndpointRouteBuilderExtensions
         // Gate every OIDC endpoint on HTTPS, the public discovery and JWKS metadata included. This mirrors the
         // [RequireHttps] carried by every MVC controller (DiscoveryController included): the credential- and
         // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 §3.2/§10.1), and the metadata must
-        // not be readable over plain HTTP either — a man-in-the-middle could rewrite the advertised endpoints or
-        // jwks_uri and steer clients onto attacker infrastructure. A host that genuinely needs an ungated route —
-        // a liveness/health probe — maps it outside MapOidcEndpoints; the library gates all of its own endpoints
+        // not be readable over plain HTTP either - a man-in-the-middle could rewrite the advertised endpoints or
+        // jwks_uri and steer clients onto attacker infrastructure. A host that genuinely needs an ungated route -
+        // a liveness/health probe - maps it outside MapOidcEndpoints; the library gates all of its own endpoints
         // without exception. See RequireHttpsAsync for the redirect/refuse behaviour.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
         // RFC 6749 §5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
-        // introspection, authorize, checksession, discovery, JWKS) carries it — matching the MVC controllers'
+        // introspection, authorize, checksession, discovery, JWKS) carries it - matching the MVC controllers'
         // class-level ResponseCache. Registered before the validation filter so even a validation short-circuit
         // (400 invalid_request) still ships no-store.
         oidcGroup.WithNoCache();
@@ -237,8 +238,8 @@ public static class EndpointRouteBuilderExtensions
     /// <summary>
     /// Applies the no-store cache headers (RFC 6749 §5.1) through an endpoint filter, so the no-cache behavior is a
     /// property of the endpoint rather than something each <see cref="IResult"/> opts into individually. Applied
-    /// group-wide before the validation filter, so it covers every OIDC response — handler success, handler error, and
-    /// a request short-circuited by validation — matching the MVC controllers' class-level ResponseCache.
+    /// group-wide before the validation filter, so it covers every OIDC response - handler success, handler error, and
+    /// a request short-circuited by validation - matching the MVC controllers' class-level ResponseCache.
     /// </summary>
     [SuppressMessage("SonarLint", "S3241:Methods should not return values that are never used",
         Justification = "Fluent endpoint convention like WithName/RequireCors: it returns the builder to stay " +
@@ -465,9 +466,11 @@ public static class EndpointRouteBuilderExtensions
     /// Returns the JSON Web Key Set (JWKS) with the provider's public signing keys, used by clients to verify
     /// issued tokens.
     /// </summary>
-    private static async Task<IResult> KeysAsync(IAuthServiceKeysProvider serviceKeysProvider)
+    private static async Task<IResult> KeysAsync(
+        IAuthServiceKeysProvider serviceKeysProvider,
+        ILogger<IAuthServiceKeysProvider> logger)
     {
-        var keys = await serviceKeysProvider.GetPublishedKeysAsync();
+        var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
         return Results.Json(new JsonWebKeySet(keys));
     }
 }

@@ -22,6 +22,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -220,10 +221,11 @@ public class ResponseJwtBuilderTests
     [Fact]
     public async Task BuildAsync_HonoursClientConfiguredSigningAlgorithm()
     {
-        var signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+        var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+
         _serviceKeys
             .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRs256, signingKeyRS384 }.ToAsyncEnumerable());
+            .Returns(new[] { _signingKeyRs256, signingKeyRs384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;

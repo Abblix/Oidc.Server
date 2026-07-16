@@ -35,7 +35,7 @@ namespace Abblix.Jwt.Encryption;
 /// RFC 3394 wrapped CEK alone, and integrity comes from the construction's own check register.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyEncryptor<OctetJsonWebKey>
+internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;

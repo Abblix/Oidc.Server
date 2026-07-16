@@ -23,32 +23,37 @@
 namespace Abblix.Jwt.Signing;
 
 /// <summary>
-/// Defines the contract for signing and verifying JWT tokens using a specific cryptographic algorithm.
+/// A signing backend that owns a slice of the server's signing keys and produces JWS signature bytes for the
+/// keys it owns. Backends compose as peers behind <see cref="CompositeSigner"/>, which asks each in turn
+/// whether it owns the key (<see cref="CanSign"/>) and routes to the first that does: the in-process
+/// <see cref="LocalKeySigner"/> owns keys that carry private material, an external custodian backend
+/// (<see cref="ExternalKeySigner"/>) owns the public-only keys whose <c>kid</c> is its handle. This is the
+/// byte-level counterpart of the token-level <see cref="IJsonWebTokenSigner"/>: it works with bytes, not a
+/// whole token, so an HSM/KMS/vault integration is one more backend and never touches JWS framing.
 /// </summary>
-public interface IDataSigner<in TJsonWebKey> where TJsonWebKey : JsonWebKey
+public interface IDataSigner
 {
-	/// <summary>
-	/// The JWS signing algorithm identifier this signer implements (e.g. "RS256", "ES384").
-	/// Must equal the DI key the signer is registered under: discovery enumerates the keyed
-	/// registrations and projects this value into the <c>*_signing_alg_values_supported</c> lists,
-	/// so a mismatch would advertise an algorithm name the dispatch cannot resolve.
-	/// </summary>
-	string Algorithm { get; }
+    /// <summary>
+    /// Reports whether this signer owns <paramref name="key"/> and can therefore sign with it. Ownership is a
+    /// property of the key, not of the algorithm: the in-process backend owns keys that carry private material,
+    /// an external custodian backend owns the public-only keys whose <c>kid</c> is one of its handles.
+    /// </summary>
+    /// <param name="key">The signing key the composite is about to route.</param>
+    /// <returns><c>true</c> if this signer can sign with <paramref name="key"/>; otherwise <c>false</c>.</returns>
+    bool CanSign(JsonWebKey key);
 
-	/// <summary>
-	/// Signs the provided data using the configured algorithm and specified key.
-	/// </summary>
-	/// <param name="key">The key to use for signing.</param>
-	/// <param name="data">The data to sign (typically the JWT header.payload part).</param>
-	/// <returns>The signature bytes.</returns>
-	byte[] Sign(TJsonWebKey key, byte[] data);
-
-	/// <summary>
-	/// Verifies the signature of the provided data using the configured algorithm and specified key.
-	/// </summary>
-	/// <param name="key">The key to use for verification.</param>
-	/// <param name="data">The data that was signed (typically the JWT header.payload part).</param>
-	/// <param name="signature">The signature to verify.</param>
-	/// <returns>True if the signature is valid; otherwise, false.</returns>
-	bool Verify(TJsonWebKey key, byte[] data, byte[] signature);
+    /// <summary>
+    /// Produces the signature bytes for <paramref name="data"/> under <paramref name="algorithm"/> using
+    /// <paramref name="key"/>, in the JWS wire format for the algorithm.
+    /// </summary>
+    /// <param name="key">The signing key. Its <c>kid</c> is the custodian's handle when it is external.</param>
+    /// <param name="algorithm">The JWS algorithm identifier (e.g. RS256, ES256) the signature must use.</param>
+    /// <param name="data">The signing input bytes, BASE64URL(header) + '.' + BASE64URL(payload).</param>
+    /// <param name="cancellationToken">Cancels the signing operation, including a custodian round-trip.</param>
+    /// <returns>The raw signature bytes in JWS wire format for the algorithm.</returns>
+    ValueTask<byte[]> SignAsync(
+        JsonWebKey key,
+        string algorithm,
+        byte[] data,
+        CancellationToken cancellationToken);
 }

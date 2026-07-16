@@ -6,7 +6,7 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Provides access to the collection of signing algorithms supported by the JWT infrastructure.
-/// Projects the set from the live keyed <see cref="IDataSigner{TJsonWebKey}"/> registrations, so
+/// Projects the set from the live keyed <see cref="ISignatureAlgorithm{TJsonWebKey}"/> registrations, so
 /// discovery always reflects exactly the signers the host currently has registered — including
 /// algorithms the host added or replaced — with no registration-time bookkeeping to keep in sync.
 /// </summary>
@@ -31,6 +31,6 @@ internal sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider
 
     private IEnumerable<string> AlgorithmsFor<TJsonWebKey>() where TJsonWebKey : JsonWebKey
         => serviceProvider
-            .GetKeyedServices<IDataSigner<TJsonWebKey>>(KeyedService.AnyKey)
+            .GetKeyedServices<ISignatureAlgorithm<TJsonWebKey>>(KeyedService.AnyKey)
             .Select(signer => signer.Algorithm);
 }

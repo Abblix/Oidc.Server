@@ -28,7 +28,7 @@ namespace Abblix.Jwt.Encryption;
 /// Interface for JWE (JSON Web Encryption) content encryption and decryption operations.
 /// Implements RFC 7516 encryption/decryption for different content encryption algorithms.
 /// </summary>
-internal interface IDataEncryptor
+internal interface IContentEncryptionAlgorithm
 {
 	/// <summary>
 	/// The JWE content-encryption algorithm identifier this encryptor implements (e.g. "A256GCM").

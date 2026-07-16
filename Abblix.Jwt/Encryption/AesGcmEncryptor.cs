@@ -36,7 +36,7 @@ namespace Abblix.Jwt.Encryption;
 /// making it more efficient than composite algorithms like AES-CBC-HMAC.
 /// Recommended for modern applications requiring authenticated encryption.
 /// </remarks>
-internal sealed class AesGcmEncryptor(string algorithm) : IDataEncryptor
+internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgorithm
 {
 	private readonly int _keySize = GetKeySize(algorithm);
 

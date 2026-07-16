@@ -30,7 +30,7 @@ namespace Abblix.Jwt.Signing;
 /// <remarks>
 /// Should only be used when integrity protection is not required or provided by other means.
 /// </remarks>
-internal sealed class NoneSigner : IDataSigner<JsonWebKey>
+internal sealed class NoneSigner : ISignatureAlgorithm<JsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => SigningAlgorithms.None;

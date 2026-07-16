@@ -30,7 +30,7 @@ namespace Abblix.Jwt.Signing;
 /// Implements RFC 7518 Section 3.3 (Digital Signature with RSASSA-PKCS1-v1_5) and
 /// Section 3.5 (Digital Signature with RSASSA-PSS).
 /// </summary>
-internal sealed class RsaSigner(string algorithm) : IDataSigner<RsaJsonWebKey>
+internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonWebKey>
 {
 	private readonly (HashAlgorithmName hashAlgorithm, RSASignaturePadding padding) _parameters = GetAlgorithmParameters(algorithm);
 

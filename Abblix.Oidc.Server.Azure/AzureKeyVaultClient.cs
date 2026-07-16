@@ -1,0 +1,191 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Collections.Concurrent;
+using Abblix.Jwt;
+using Azure;
+using Azure.Core;
+using Azure.Core.Pipeline;
+using Azure.Identity;
+using Azure.Security.KeyVault.Keys.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+// Azure.Security.KeyVault.Keys also declares a JsonWebKey; alias the namespace so the bare JsonWebKey stays the
+// Abblix.Jwt one (which the .Apply extension and the custodian contract need), while KeyClient / KeyType come via KeyVault.
+using KeyVault = Azure.Security.KeyVault.Keys;
+
+namespace Abblix.Oidc.Server.Azure;
+
+/// <summary>
+/// Thin wrapper over the Azure Key Vault SDK. Signing and unwrapping run inside the vault against a key whose
+/// private half never leaves it, so this type only moves bytes across the boundary. The Azure SDK is pointed at
+/// the host's <see cref="IHttpClientFactory"/> transport (like the Vault client), so it inherits the host's HTTP
+/// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
+/// resolves the key's metadata on first use.
+/// </summary>
+public sealed class AzureKeyVaultClient : IKeyCustodian
+{
+    private readonly Uri _vaultUri;
+    private readonly TokenCredential _credential;
+    private readonly HttpClient _httpClient;
+    private readonly KeyVault.KeyClient _keyClient;
+    private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
+
+    /// <summary>
+    /// Creates the client for the vault named by <paramref name="options"/>, selecting a client-secret
+    /// credential when the service-principal fields are set, or the default Azure credential chain otherwise.
+    /// </summary>
+    /// <param name="options">The configured Azure Key Vault options.</param>
+    /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
+    /// Azure SDK rides the host's HTTP pipeline.</param>
+    [ActivatorUtilitiesConstructor]
+    public AzureKeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
+        : this(options.Value, BuildCredential(options.Value), httpClient)
+    {
+    }
+
+    /// <summary>
+    /// Builds the client from an explicit credential and transport. This is the seam a test uses to drive the
+    /// Azure SDK against a stub <see cref="HttpMessageHandler"/> and a fake credential, so signing, unwrapping and
+    /// public-key fetch can be exercised without a live vault.
+    /// </summary>
+    /// <param name="settings">The Azure Key Vault options.</param>
+    /// <param name="credential">The credential the SDK authenticates with.</param>
+    /// <param name="httpClient">The transport for every Key Vault call.</param>
+    internal AzureKeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
+    {
+        _vaultUri = new Uri(settings.KeyVaultUri);
+        _credential = credential;
+        _httpClient = httpClient;
+        _keyClient = new KeyVault.KeyClient(
+            _vaultUri, _credential, new KeyVault.KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
+    }
+
+    // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
+    // DefaultAzureCredential, which covers a managed identity, an Azure CLI sign-in, or the AZURE_* environment
+    // variables. Production on Azure uses a managed identity and needs none of these set.
+    private static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
+        => !string.IsNullOrWhiteSpace(settings.TenantId)
+                && !string.IsNullOrWhiteSpace(settings.ClientId)
+                && !string.IsNullOrWhiteSpace(settings.ClientSecret)
+            ? new ClientSecretCredential(settings.TenantId, settings.ClientId, settings.ClientSecret)
+            : new DefaultAzureCredential();
+
+    /// <summary>
+    /// Signs the JWS signing input with a Key Vault key under the given JWS algorithm. Key Vault hashes the data
+    /// and returns the raw signature already in JWS wire format (R||S for EC).
+    /// </summary>
+    public async ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+    {
+        var client = GetCryptographyClient(keyId);
+        var result = await client.SignDataAsync(MapSignatureAlgorithm(algorithm), data, cancellationToken);
+        return result.Signature;
+    }
+
+    private static SignatureAlgorithm MapSignatureAlgorithm(string algorithm) => algorithm switch
+    {
+        SigningAlgorithms.RS256 => SignatureAlgorithm.RS256,
+        SigningAlgorithms.RS384 => SignatureAlgorithm.RS384,
+        SigningAlgorithms.RS512 => SignatureAlgorithm.RS512,
+        SigningAlgorithms.PS256 => SignatureAlgorithm.PS256,
+        SigningAlgorithms.PS384 => SignatureAlgorithm.PS384,
+        SigningAlgorithms.PS512 => SignatureAlgorithm.PS512,
+        SigningAlgorithms.ES256 => SignatureAlgorithm.ES256,
+        SigningAlgorithms.ES384 => SignatureAlgorithm.ES384,
+        SigningAlgorithms.ES512 => SignatureAlgorithm.ES512,
+        _ => throw new NotSupportedException($"The Azure Key Vault store does not sign '{algorithm}'."),
+    };
+
+    /// <summary>
+    /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
+    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null on failure so a wrong
+    /// key or tampered ciphertext is indistinguishable, which the seam's padding-oracle mitigation relies on. The
+    /// JWE header is unused: an RSA unwrap needs only the ciphertext.
+    /// </summary>
+    public async ValueTask<byte[]?> UnwrapKeyAsync(
+        string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
+    {
+        var encryptionAlgorithm = MapEncryptionAlgorithm(algorithm);
+        try
+        {
+            var client = GetCryptographyClient(keyId);
+            var result = await client.DecryptAsync(encryptionAlgorithm, encryptedKey, cancellationToken);
+            return result.Plaintext;
+        }
+        catch (RequestFailedException)
+        {
+            return null;
+        }
+    }
+
+    private static EncryptionAlgorithm MapEncryptionAlgorithm(string algorithm) => algorithm switch
+    {
+        EncryptionAlgorithms.KeyManagement.RsaOaep256 => EncryptionAlgorithm.RsaOaep256,
+        EncryptionAlgorithms.KeyManagement.RsaOaep => EncryptionAlgorithm.RsaOaep,
+        EncryptionAlgorithms.KeyManagement.Rsa1_5 => EncryptionAlgorithm.Rsa15,
+        _ => throw new NotSupportedException($"The Azure Key Vault store does not unwrap '{algorithm}'."),
+    };
+
+    /// <summary>
+    /// Derives the ECDH-ES shared secret. Azure Key Vault exposes no key-agreement primitive, so this store does
+    /// not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
+    /// </summary>
+    public ValueTask<byte[]> AgreeKeyAsync(
+        string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+        => throw new NotSupportedException(
+            "Azure Key Vault exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
+
+    /// <summary>
+    /// Fetches the public half of a Key Vault key as a public-only JWK (RSA or EC, per the key type). Called once
+    /// per key at startup, so JWKS publishing and signature verification run locally against it and never touch
+    /// the vault on the hot path.
+    /// </summary>
+    public async ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+    {
+        var key = await _keyClient.GetKeyAsync(keyId, cancellationToken: cancellationToken);
+        var webKey = key.Value.Key;
+
+        if (webKey.KeyType == KeyVault.KeyType.Ec || webKey.KeyType == KeyVault.KeyType.EcHsm)
+        {
+            using var ecdsa = webKey.ToECDsa();
+            return new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false));
+        }
+
+        if (webKey.KeyType == KeyVault.KeyType.Rsa || webKey.KeyType == KeyVault.KeyType.RsaHsm)
+        {
+            using var rsa = webKey.ToRSA();
+            return new RsaJsonWebKey().Apply(rsa.ExportParameters(false));
+        }
+
+        throw new NotSupportedException($"The Azure Key Vault store does not publish key type '{webKey.KeyType}'.");
+    }
+
+    private CryptographyClient GetCryptographyClient(string keyName)
+    {
+        return _cryptographyClients.GetOrAdd(
+            keyName,
+            name => new CryptographyClient(
+                new Uri($"{_vaultUri}keys/{name}"), _credential,
+                new CryptographyClientOptions { Transport = new HttpClientTransport(_httpClient) }));
+    }
+}

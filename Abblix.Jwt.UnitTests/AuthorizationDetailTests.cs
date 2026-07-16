@@ -62,11 +62,11 @@ public class AuthorizationDetailTests
         var detail = new AuthorizationDetail(json);
 
         Assert.Equal(PaymentInitiationType, detail.Type);
-        Assert.Equal(new[] { "https://api.bank.example/payments" }, detail.Locations);
-        Assert.Equal(new[] { InitiateAction, "status" }, detail.Actions);
-        Assert.Equal(new[] { "iban" }, detail.Datatypes);
+        Assert.Equal(["https://api.bank.example/payments"], detail.Locations);
+        Assert.Equal([InitiateAction, "status"], detail.Actions);
+        Assert.Equal(["iban"], detail.Datatypes);
         Assert.Equal("txn-4521", detail.Identifier);
-        Assert.Equal(new[] { "read", "write" }, detail.Privileges);
+        Assert.Equal(["read", "write"], detail.Privileges);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class AuthorizationDetailTests
         var detail = new AuthorizationDetail(json)
         {
             Type = PaymentInitiationType,
-            Actions = new[] { InitiateAction, "status" },
+            Actions = [InitiateAction, "status"],
         };
 
         Assert.Equal(PaymentInitiationType, json["type"]?.GetValue<string>());
@@ -108,7 +108,7 @@ public class AuthorizationDetailTests
         var detail = new AuthorizationDetail(json);
 
         Assert.Equal(PaymentInitiationType, detail.Type);
-        Assert.Equal(new[] { InitiateAction }, detail.Actions);
+        Assert.Equal([InitiateAction], detail.Actions);
         Assert.Equal("EUR", detail.Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("500.00", detail.Json["instructedAmount"]?["amount"]?.GetValue<string>());
         Assert.Equal("DE02100100109307118603", detail.Json["creditorAccount"]?["iban"]?.GetValue<string>());
@@ -137,11 +137,11 @@ public class AuthorizationDetailTests
         Assert.Equal(2, details.Length);
 
         Assert.Equal(PaymentInitiationType, details[0].Type);
-        Assert.Equal(new[] { InitiateAction }, details[0].Actions);
+        Assert.Equal([InitiateAction], details[0].Actions);
         Assert.Equal("500.00", details[0].Json["amount"]?.GetValue<string>());
 
         Assert.Equal("account_information", details[1].Type);
-        Assert.Equal(new[] { "https://api.bank.example/accounts" }, details[1].Locations);
+        Assert.Equal(["https://api.bank.example/accounts"], details[1].Locations);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class AuthorizationDetailTests
             new AuthorizationDetail(new JsonObject())
             {
                 Type = "account_information",
-                Locations = new[] { "https://api.bank.example/accounts" },
+                Locations = ["https://api.bank.example/accounts"],
             },
         };
 
@@ -173,10 +173,10 @@ public class AuthorizationDetailTests
         Assert.NotNull(round);
         Assert.Equal(2, round.Length);
         Assert.Equal(PaymentInitiationType, round[0].Type);
-        Assert.Equal(new[] { InitiateAction }, round[0].Actions);
+        Assert.Equal([InitiateAction], round[0].Actions);
         Assert.Equal("EUR", round[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("account_information", round[1].Type);
-        Assert.Equal(new[] { "https://api.bank.example/accounts" }, round[1].Locations);
+        Assert.Equal(["https://api.bank.example/accounts"], round[1].Locations);
     }
 
     [Fact]
@@ -184,10 +184,10 @@ public class AuthorizationDetailTests
     {
         var payload = new JsonWebTokenPayload(new JsonObject())
         {
-            AuthorizationDetails = new[]
-            {
-                new AuthorizationDetail(new JsonObject()) { Type = "x" },
-            },
+            AuthorizationDetails =
+            [
+                new AuthorizationDetail(new JsonObject()) { Type = "x" }
+            ],
         };
         Assert.True(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
 

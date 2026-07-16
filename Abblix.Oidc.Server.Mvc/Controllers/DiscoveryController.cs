@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
 
 
@@ -95,6 +96,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// Clients can use these keys to verify the authenticity of identity tokens and access tokens issued by the provider.
 	/// </summary>
 	/// <param name="serviceKeysProvider">Provider for retrieving the service's public key information.</param>
+	/// <param name="logger">Logger used to warn if a key still carrying private material is stripped before publication.</param>
 	/// <returns>
 	/// A JSON Web Key Set (JWKS) response in the form of <see cref="JsonWebKeySet"/> if the Keys endpoint is enabled,
 	/// containing the public keys used by the provider. The response conforms to the application/json media type.
@@ -103,9 +105,10 @@ public sealed class DiscoveryController : ControllerBase
 	[HttpGet(Path.Keys)]
 	[EnabledBy(OidcEndpoints.Keys)]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
-		[FromServices] IAuthServiceKeysProvider serviceKeysProvider)
+		[FromServices] IAuthServiceKeysProvider serviceKeysProvider,
+		[FromServices] ILogger<IAuthServiceKeysProvider> logger)
 	{
-		var keys = await serviceKeysProvider.GetPublishedKeysAsync();
+		var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
 		return new JsonWebKeySet(keys);
 	}
 }

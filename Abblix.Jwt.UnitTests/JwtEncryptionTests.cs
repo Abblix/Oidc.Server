@@ -253,7 +253,7 @@ public class JwtEncryptionTests
         services.AddLogging();
         services.AddJsonWebTokens();
         // Appended after AddJsonWebTokens so keyed last-wins resolution routes A256GCM to the spy.
-        services.AddKeyedSingleton<IDataEncryptor>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, spy);
+        services.AddKeyedSingleton<IContentEncryptionAlgorithm>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, spy);
         await using var provider = services.BuildServiceProvider();
 
         var encKey = (RsaJsonWebKey)encryptionKey;
@@ -293,10 +293,10 @@ public class JwtEncryptionTests
     }
 
     [SuppressMessage("Major Code Smell", "S1172:Unused method parameters should be removed",
-        Justification = "Signatures are mandated by IDataEncryptor; this spy records only the CEK length.")]
+        Justification = "Signatures are mandated by IContentEncryptionAlgorithm; this spy records only the CEK length.")]
     [SuppressMessage("Minor Code Smell", "S2325:Methods and properties that don't access instance data should be static",
-        Justification = "Explicit IDataEncryptor interface implementation cannot be static.")]
-    private sealed class CekLengthRecordingEncryptor(int keySizeInBytes) : IDataEncryptor
+        Justification = "Explicit IContentEncryptionAlgorithm interface implementation cannot be static.")]
+    private sealed class CekLengthRecordingEncryptor(int keySizeInBytes) : IContentEncryptionAlgorithm
     {
         public int LastCekLength { get; private set; } = -1;
 

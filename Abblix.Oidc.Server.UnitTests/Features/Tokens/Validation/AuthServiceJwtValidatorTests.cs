@@ -22,6 +22,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -451,7 +452,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(false))
+            .Setup(p => p.GetSigningKeys())
             .Returns(signingKeys.ToAsyncEnumerable());
 
         _serviceKeysProvider
@@ -486,7 +487,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(false))
+            .Setup(p => p.GetSigningKeys())
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
@@ -520,7 +521,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "No signing keys available"));
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(false))
+            .Setup(p => p.GetSigningKeys())
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
@@ -680,7 +681,7 @@ public class AuthServiceJwtValidatorTests
     private void SetupKeyProviders()
     {
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(false))
+            .Setup(p => p.GetSigningKeys())
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider

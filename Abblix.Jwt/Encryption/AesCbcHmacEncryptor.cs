@@ -36,7 +36,7 @@ namespace Abblix.Jwt.Encryption;
 /// The Content Encryption Key (CEK) is split: first half for HMAC, second half for AES encryption.
 /// Uses constant-time comparison to prevent timing attacks during authentication tag verification.
 /// </remarks>
-internal sealed class AesCbcHmacEncryptor(string algorithm) : IDataEncryptor
+internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryptionAlgorithm
 {
 	private readonly int _keySize = GetKeySize(algorithm);
 

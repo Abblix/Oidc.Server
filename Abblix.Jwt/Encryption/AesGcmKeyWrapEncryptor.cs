@@ -41,7 +41,7 @@ namespace Abblix.Jwt.Encryption;
 /// the wrapped-CEK ciphertext, so the output interoperates with any conformant JOSE implementation.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyEncryptor<OctetJsonWebKey>
+internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;

@@ -28,17 +28,18 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Verifies external (key-custodian) signing: a signing key published public-only, whose private half
-/// lives behind an <see cref="IExternalSigner"/>, produces a token that validates against the public key -
-/// proving the library never loads private material yet issues a verifiable signature. Also verifies the
-/// fail-closed behaviour when a public-only key has no external signer wired.
+/// Verifies external (key-custodian) signing: a signing key published public-only, whose private half lives
+/// behind a host <c>IKeyCustodian</c> registered with <c>AddKeyCustodian</c>, produces a token that
+/// validates against the public key - proving the library never loads private material yet issues a
+/// verifiable signature. Also verifies the fail-closed behaviour when a public-only key has no external
+/// signer wired.
 /// </summary>
 public class ExternalSignerTests
 {
     private const string Issuer = "https://auth.example.com";
 
     [Fact]
-    public async Task PublicOnlySigningKey_SignsViaExternalPort_AndValidatesWithPublicKey()
+    public async Task PublicOnlySigningKey_SignsViaExternalSigner_AndValidatesWithPublicKey()
     {
         // A full RSA signing key. The library is configured with only its PUBLIC half; the private half
         // stands behind a fake external custodian (an HSM/KMS/vault stand-in).
@@ -46,13 +47,13 @@ public class ExternalSignerTests
         var publicOnlyKey = (RsaJsonWebKey)fullKey.Sanitize(includePrivateKeys: false);
         Assert.False(publicOnlyKey.HasPrivateKey);
 
-        var custodian = new FakeExternalSigner(fullKey);
+        var custodian = new FakeCustodian(fullKey);
 
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddSingleton<IExternalSigner>(custodian); // the host wires its port
+        services.AddKeyCustodian(custodian); // the host wires its key custodian into both seams
         await using var provider = services.BuildServiceProvider();
 
         var token = new JsonWebToken
@@ -70,7 +71,7 @@ public class ExternalSignerTests
         var creator = provider.GetRequiredService<IJsonWebTokenCreator>();
         var jwt = await creator.IssueAsync(token, publicOnlyKey);
 
-        // The signature was produced by the external port, addressed by the key's own kid and algorithm -
+        // The signature was produced by the external custodian, addressed by the key's own kid and algorithm -
         // and the library never held private material for that key.
         Assert.Equal(1, custodian.CallCount);
         Assert.Equal(publicOnlyKey.KeyId, custodian.LastKid);
@@ -96,8 +97,8 @@ public class ExternalSignerTests
     [Fact]
     public async Task PublicOnlySigningKey_WithoutExternalSigner_FailsClosed()
     {
-        // A public-only signing key with no IExternalSigner wired cannot sign: the router fails closed
-        // rather than silently emitting an unsigned or empty signature.
+        // A public-only signing key with no external signer wired cannot sign: the seam fails closed rather
+        // than silently emitting an unsigned or empty signature.
         var publicOnlyKey = (RsaJsonWebKey)JsonWebKeyFactory
             .CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
             .Sanitize(includePrivateKeys: false);
@@ -105,7 +106,7 @@ public class ExternalSignerTests
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
-        services.AddJsonWebTokens(); // no IExternalSigner registered
+        services.AddJsonWebTokens(); // no external signer wired
         await using var provider = services.BuildServiceProvider();
 
         var token = new JsonWebToken
@@ -120,23 +121,36 @@ public class ExternalSignerTests
 
     /// <summary>
     /// Stands in for an HSM/KMS/vault: holds the private half the library never sees and signs with it,
-    /// recording how it was called so the test can assert the routing addressed it by kid and algorithm.
+    /// recording how it was called so the test can assert the routing addressed it by kid and algorithm. It is
+    /// wired via <c>AddKeyCustodian</c>; holding no decryption keys, it leaves unwrap and agree unreachable.
     /// </summary>
-    private sealed class FakeExternalSigner(RsaJsonWebKey privateKey) : IExternalSigner
+    private sealed class FakeCustodian(RsaJsonWebKey privateKey) : IKeyCustodian
     {
         public int CallCount { get; private set; }
         public string? LastKid { get; private set; }
         public string? LastAlgorithm { get; private set; }
 
-        public ValueTask<byte[]> SignAsync(string kid, string algorithm, byte[] data, CancellationToken cancellationToken)
+        public ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CallCount++;
-            LastKid = kid;
+            LastKid = keyId;
             LastAlgorithm = algorithm;
 
             // RS256 is RSASSA-PKCS1-v1_5 over SHA-256; the library verifies this against the public key.
             using var rsa = privateKey.ToRsa();
             return new ValueTask<byte[]>(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         }
+
+        public ValueTask<byte[]?> UnwrapKeyAsync(
+            string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
+            => throw new NotSupportedException("This signing custodian holds no decryption keys.");
+
+        public ValueTask<byte[]> AgreeKeyAsync(
+            string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+            => throw new NotSupportedException("This signing custodian holds no decryption keys.");
+
+        public ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+            => new(privateKey.Sanitize(includePrivateKeys: false));
     }
 }

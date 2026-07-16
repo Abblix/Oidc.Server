@@ -1079,7 +1079,7 @@ public class JsonWebTokenValidationTests
     /// Verifies that a JWS specifying an algorithm not registered for the resolved key type
     /// fails validation gracefully instead of leaking the DI resolution exception.
     /// Concretely: a token with header alg=HS256 against an RsaJsonWebKey has no
-    /// IDataSigner&lt;RsaJsonWebKey&gt; registered for "HS256", so GetRequiredKeyedService
+    /// ISignatureAlgorithm&lt;RsaJsonWebKey&gt; registered for "HS256", so GetRequiredKeyedService
     /// would throw. Per the IJsonWebTokenValidator contract, validation must return a
     /// Result.Failure with JwtError.InvalidToken — never an unhandled exception.
     /// </summary>

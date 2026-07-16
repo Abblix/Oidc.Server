@@ -762,7 +762,7 @@ public class JsonWebTokenClaimsTests
             Type = "account_information",
             Identifier = "acct-001",
         };
-        token.Payload.AuthorizationDetails = new[] { paymentDetail, accountDetail };
+        token.Payload.AuthorizationDetails = [paymentDetail, accountDetail];
 
         var roundTripToken = await SignEncryptAndValidate(token);
 
@@ -771,8 +771,8 @@ public class JsonWebTokenClaimsTests
         Assert.Equal(2, actual.Length);
 
         Assert.Equal("payment_initiation", actual[0].Type);
-        Assert.Equal(new[] { "initiate", "status" }, actual[0].Actions);
-        Assert.Equal(new[] { "https://api.bank.example/payments" }, actual[0].Locations);
+        Assert.Equal(["initiate", "status"], actual[0].Actions);
+        Assert.Equal(["https://api.bank.example/payments"], actual[0].Locations);
         Assert.Equal("EUR", actual[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
         Assert.Equal("500.00", actual[0].Json["instructedAmount"]?["amount"]?.GetValue<string>());
         Assert.Equal("Merchant A", actual[0].Json["creditorName"]?.GetValue<string>());

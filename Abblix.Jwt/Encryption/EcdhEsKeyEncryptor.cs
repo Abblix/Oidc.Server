@@ -44,7 +44,7 @@ namespace Abblix.Jwt.Encryption;
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
 internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serviceProvider)
-	: IKeyEncryptor<EllipticCurveJsonWebKey>
+	: IKeyManagementAlgorithm<EllipticCurveJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
@@ -132,7 +132,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 				return false;
 
 			if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm
-			    || serviceProvider.GetKeyedService<IDataEncryptor>(contentEncryptionAlgorithm)
+			    || serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm)
 				    is not { } contentEncryptor)
 				return false;
 
