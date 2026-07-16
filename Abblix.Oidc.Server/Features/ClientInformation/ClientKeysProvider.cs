@@ -44,7 +44,7 @@ public class ClientKeysProvider(
     /// <returns>A collection of encryption keys as an asynchronous enumerable.</returns>
     public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(ClientInfo clientInfo)
     {
-        return GetKeys(clientInfo).Where(key => key.Usage == PublicKeyUsages.Encryption);
+        return GetKeys(clientInfo).Where(key => key.Usage is null or PublicKeyUsages.Encryption);
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ public class ClientKeysProvider(
     /// <returns>A collection of signing keys as an asynchronous enumerable.</returns>
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(ClientInfo clientInfo)
     {
-        return GetKeys(clientInfo).Where(key => key.Usage == PublicKeyUsages.Signature);
+        return GetKeys(clientInfo).Where(key => key.Usage is null or PublicKeyUsages.Signature);
     }
 
     /// <summary>
