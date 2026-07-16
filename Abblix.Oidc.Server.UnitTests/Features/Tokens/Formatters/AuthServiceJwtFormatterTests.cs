@@ -245,24 +245,83 @@ public class AuthServiceJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that an explicit policy key-management algorithm overrides the key's declared <c>alg</c>.
+    /// Verifies that an explicit policy key-management algorithm selects an algorithm-agnostic encryption key
+    /// (no declared <c>alg</c>, which matches any algorithm per RFC 7517 Section 4.4) and is set as the JWE
+    /// <c>alg</c>. Under the symmetric selection model the policy algorithm drives key selection, so an agnostic
+    /// key is the one a policy algorithm binds to.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_Encrypt_ExplicitPolicyAlgorithmOverridesKeyDeclaredAlgorithm()
+    public async Task FormatAsync_Encrypt_ExplicitPolicyAlgorithmSelectsAgnosticKeyAndSetsHeaderAlgorithm()
     {
         var token = TokenWith();
+        var agnosticKey = new RsaJsonWebKey { KeyId = "enc-agnostic", Algorithm = null };
         SetupSigningKeys(_signingKeyRS256);
-        SetupEncryptionKeys(_encryptionKey); // declares RSA-OAEP
+        SetupEncryptionKeys(agnosticKey);
 
+        JsonWebKey? capturedEncryptionKey = null;
         string? capturedAlg = null;
         _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), ContentEnc))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, alg, _) => capturedAlg = alg)
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, agnosticKey, It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, alg, _) =>
+            {
+                capturedEncryptionKey = enc;
+                capturedAlg = alg;
+            })
             .ReturnsAsync(EncodedJwt);
 
         await _formatter.FormatAsync(token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
 
+        Assert.Same(agnosticKey, capturedEncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedAlg);
+    }
+
+    /// <summary>
+    /// Verifies that a policy key-management algorithm matching no configured encryption key fails loudly
+    /// rather than silently downgrading to a different key or algorithm: a required algorithm is an explicit
+    /// intent, mirroring the pinned-key-id case and the signing side.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_Encrypt_WithUnmatchedPolicyAlgorithm_Throws()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey); // declares RSA-OAEP only
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _formatter.FormatAsync(token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256)));
+    }
+
+    /// <summary>
+    /// Verifies the produce-side symmetry with signing: among several encryption keys declaring different
+    /// key-management algorithms, the policy's key-management algorithm SELECTS the matching key, not merely
+    /// the first one (RFC 7517 Section 4.4). Mirrors signing-key selection by the token 'alg'.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_Encrypt_SelectsEncryptionKeyByPolicyAlgorithm()
+    {
+        var token = TokenWith();
+        var rsaOaepKey = new RsaJsonWebKey
+        {
+            KeyId = "enc-oaep",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
+        };
+        var rsaOaep256Key = new RsaJsonWebKey
+        {
+            KeyId = "enc-oaep256",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(rsaOaepKey, rsaOaep256Key); // RSA-OAEP first, RSA-OAEP-256 second
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), ContentEnc))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
+
+        Assert.Same(rsaOaep256Key, capturedEncryptionKey);
     }
 
     /// <summary>
