@@ -236,8 +236,8 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [Theory]
     [InlineData("/.well-known/openid-configuration")]
     [InlineData("/.well-known/oauth-authorization-server")]
-    [InlineData("/.well-known/jwks")]
-    public async Task Every_oidc_response_is_no_store_like_the_mvc_controllers(string path)
+    // /.well-known/jwks is the deliberate exception: it is public, cacheable metadata (see JwksCacheTests).
+    public async Task Discovery_responses_are_no_store_like_the_mvc_controllers(string path)
     {
         var client = ClientOf(factory);
         var response = await client.GetAsync(path, TestContext.Current.CancellationToken);

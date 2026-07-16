@@ -22,6 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -32,6 +33,7 @@ using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
 
 
@@ -57,7 +59,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
 [RequireHttps]
 [ReturnsOidcInvalidRequest]
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [EnableCors(OidcConstants.CorsPolicyName)]
 [SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
@@ -82,6 +83,7 @@ public sealed class DiscoveryController : ControllerBase
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[EnabledBy(OidcEndpoints.Configuration)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IConfigurationHandler handler,
 		[FromServices] IConfigurationResponseFormatter formatter)
@@ -96,6 +98,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// Clients can use these keys to verify the authenticity of identity tokens and access tokens issued by the provider.
 	/// </summary>
 	/// <param name="serviceKeysProvider">Provider for retrieving the service's public key information.</param>
+	/// <param name="options">OIDC options; supplies the key-rollover propagation window used as the JWKS cache lifetime.</param>
 	/// <param name="logger">Logger used to warn if a key still carrying private material is stripped before publication.</param>
 	/// <returns>
 	/// A JSON Web Key Set (JWKS) response in the form of <see cref="JsonWebKeySet"/> if the Keys endpoint is enabled,
@@ -106,9 +109,15 @@ public sealed class DiscoveryController : ControllerBase
 	[EnabledBy(OidcEndpoints.Keys)]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider,
+		[FromServices] IOptions<OidcOptions> options,
 		[FromServices] ILogger<IAuthServiceKeysProvider> logger)
 	{
 		var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
+
+		// The JWKS is public, cacheable metadata: advertise a lifetime equal to the key-rollover propagation
+		// window (the deliberate exception to this controller's otherwise no-store metadata policy).
+		Response.SetCacheableHeaders(options.Value.KeyRolloverPropagation);
+
 		return new JsonWebKeySet(keys);
 	}
 }

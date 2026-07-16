@@ -104,5 +104,7 @@ public interface IKeyCustodian
     /// <param name="keyName">The custodian's name for the logical key whose versions to enumerate.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The key's versions, each a public-only <see cref="KeyVersion"/>.</returns>
-    IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(string keyName, CancellationToken cancellationToken);
+    IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+        string keyName,
+        CancellationToken cancellationToken);
 }
