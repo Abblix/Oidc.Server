@@ -19,6 +19,8 @@
     <Project Path="Abblix.Oidc.Server.MinimalApi.SourceGeneration/Abblix.Oidc.Server.MinimalApi.SourceGeneration.csproj" />
     <Project Path="Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
     <Project Path="Abblix.Oidc.Server.Mvc.SourceGeneration/Abblix.Oidc.Server.Mvc.SourceGeneration.csproj" />
+    <Project Path="Abblix.Oidc.Server.Vault/Abblix.Oidc.Server.Vault.csproj" />
+    <Project Path="Abblix.Oidc.Server.Azure/Abblix.Oidc.Server.Azure.csproj" />
     <Project Path="Abblix.Utils/Abblix.Utils.csproj" />
   </Folder>
   <Folder Name="/tests/">
