@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Runtime.CompilerServices;
+
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -100,4 +102,23 @@ public interface IKeyCustodian
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The public-only key material for the key.</returns>
     ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Enumerates every current version of the key named <paramref name="keyName"/> as its public half, each
+    /// carrying the version-specific <c>kid</c> that routes a private operation back to that exact version, plus
+    /// the custodian's creation time for that version. The default yields the single key returned by
+    /// <see cref="GetPublicKeyAsync"/> with an unset (<see cref="DateTimeOffset.MinValue"/>) creation time, so a
+    /// custodian that does not version its keys needs no change; a version-aware custodian (Vault Transit, Azure
+    /// Key Vault) overrides this to publish every version, which a rotation policy overlaps for zero-downtime
+    /// key rollover.
+    /// </summary>
+    /// <param name="keyName">The custodian's name for the logical key whose versions to enumerate.</param>
+    /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
+    /// <returns>The key's versions, each a public-only <see cref="KeyVersion"/>.</returns>
+    async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+        string keyName,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new KeyVersion(await GetPublicKeyAsync(keyName, cancellationToken), DateTimeOffset.MinValue);
+    }
 }

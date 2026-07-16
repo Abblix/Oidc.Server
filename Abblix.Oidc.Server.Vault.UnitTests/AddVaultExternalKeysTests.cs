@@ -46,6 +46,11 @@ public class AddVaultExternalKeysTests
             options.SigningKeyName = "oidc-sign";
             options.EncryptionKeyName = "oidc-enc";
         });
+
+        // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
+        // AddOidcServices. Mirror that minimally here so the provider resolves without the whole OIDC stack.
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
         return services;
     }
 

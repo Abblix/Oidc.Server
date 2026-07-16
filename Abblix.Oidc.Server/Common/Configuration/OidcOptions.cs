@@ -156,6 +156,19 @@ public record OidcOptions
 	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
 
 	/// <summary>
+	/// The key-rollover propagation window: how long a newly published signing or encryption key is served at the
+	/// JWKS endpoint before the server begins producing tokens with it, giving client JWKS caches time to pick it
+	/// up so a rotation never causes a verification or decryption failure. This single value is the server's
+	/// source of truth for rollover timing: the JWKS endpoint derives its <c>Cache-Control</c> max-age from it
+	/// (so a client honouring the header is never staler than this window), and a key provider that rotates keys
+	/// dynamically (for example the external-custodian provider addressing a versioned HSM/KMS key) holds a freshly
+	/// rotated key as announced-but-not-yet-signing for this long. Size it to at least the longest a client may
+	/// cache the JWKS. A static, non-rotating key set is unaffected by the activation gate but still gets this as
+	/// the advertised JWKS cache lifetime. Defaults to one hour.
+	/// </summary>
+	public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
+
+	/// <summary>
 	/// The default content encryption algorithm used for encrypting JWT tokens.
 	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
 	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
