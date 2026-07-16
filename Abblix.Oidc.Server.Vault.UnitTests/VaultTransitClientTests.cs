@@ -34,10 +34,25 @@ namespace Abblix.Oidc.Server.Vault.UnitTests;
 /// EC sign request shapes, the <c>vault:v&lt;n&gt;:</c> envelope framing, the 400-to-null decryption semantics,
 /// the algorithm gate, and the RSA / EC public-key import.
 /// </summary>
-public class VaultTransitClientTests
+public sealed class VaultTransitClientTests : IDisposable
 {
-    private static VaultTransitClient ClientOver(StubHttpMessageHandler handler)
-        => new(new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") });
+    // Each test builds a client over a stub transport. In production IHttpClientFactory owns the HttpClient and
+    // VaultTransitClient deliberately does not dispose it (a typed client never owns the factory's handler), so
+    // here the test owns that lifetime: track every created HttpClient and dispose them at test-class teardown.
+    private readonly List<HttpClient> _httpClients = [];
+
+    private VaultTransitClient ClientOver(StubHttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") };
+        _httpClients.Add(httpClient);
+        return new VaultTransitClient(httpClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var httpClient in _httpClients)
+            httpClient.Dispose();
+    }
 
     [Fact]
     public async Task SignAsync_Rs256_PostsPkcs1v15Sha256_AndStripsVersionPrefix()
@@ -48,7 +63,7 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         var data = "\t\t"u8.ToArray();
-        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.RS256, data, TestContext.Current.CancellationToken);
+        var result = await client.SignAsync("oidc-sign:2", SigningAlgorithms.RS256, data, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
@@ -57,6 +72,7 @@ public class VaultTransitClientTests
         Assert.Equal("pkcs1v15", root.GetProperty("signature_algorithm").GetString());
         Assert.Equal("sha2-256", root.GetProperty("hash_algorithm").GetString());
         Assert.False(root.GetProperty("prehashed").GetBoolean());
+        Assert.Equal(2, root.GetProperty("key_version").GetInt32()); // the version the kid pins
     }
 
     [Fact]
@@ -67,13 +83,14 @@ public class VaultTransitClientTests
             HttpStatusCode.OK, new { data = new { signature = $"vault:v1:{Convert.ToBase64String(signature)}" } }));
         var client = ClientOver(handler);
 
-        var result = await client.SignAsync("oidc-sign", SigningAlgorithms.ES256, [1], TestContext.Current.CancellationToken);
+        var result = await client.SignAsync("oidc-sign:4", SigningAlgorithms.ES256, [1], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
         var root = body.RootElement;
         Assert.Equal("jws", root.GetProperty("marshaling_algorithm").GetString());
         Assert.Equal("sha2-256", root.GetProperty("hash_algorithm").GetString());
+        Assert.Equal(4, root.GetProperty("key_version").GetInt32());
         Assert.False(root.TryGetProperty("signature_algorithm", out _)); // EC has no signature_algorithm
     }
 
@@ -84,7 +101,7 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => client.SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken).AsTask());
+            () => client.SignAsync("oidc-sign:1", "HS256", [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
@@ -99,12 +116,12 @@ public class VaultTransitClientTests
 
         var ciphertext = new byte[] { 5, 5 };
         var result = await client.UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            "oidc-enc:3", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             ciphertext, TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal("vault:v1:" + Convert.ToBase64String(ciphertext),
+        Assert.Equal("vault:v3:" + Convert.ToBase64String(ciphertext), // the kid's version frames the ciphertext
             body.RootElement.GetProperty("ciphertext").GetString());
     }
 
@@ -116,7 +133,7 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         var result = await client.UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [1], TestContext.Current.CancellationToken);
 
         Assert.Null(result);
@@ -130,8 +147,8 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => client.UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
-            [1], TestContext.Current.CancellationToken).AsTask());
+            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -141,21 +158,21 @@ public class VaultTransitClientTests
         var client = ClientOver(handler);
 
         await Assert.ThrowsAsync<NotSupportedException>(() => client.UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.Rsa1_5, new JsonWebTokenHeader(new JsonObject()),
-            [1], TestContext.Current.CancellationToken).AsTask());
+            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.Rsa1_5, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnRsaKey()
+    public async Task GetKeyVersionsAsync_ImportsLatestVersion_OfAnRsaKey()
     {
         using var rsa = RSA.Create(2048);
         var expected = rsa.ExportParameters(false);
         var handler = KeyResponse("rsa-2048", rsa.ExportSubjectPublicKeyInfoPem());
         var client = ClientOver(handler);
 
-        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(client.GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var rsaKey = Assert.IsType<RsaJsonWebKey>(key);
         Assert.Equal(expected.Modulus, rsaKey.Modulus);
@@ -163,17 +180,64 @@ public class VaultTransitClientTests
     }
 
     [Fact]
-    public async Task GetPublicKeyAsync_ImportsLatestVersion_OfAnEcKey()
+    public async Task GetKeyVersionsAsync_ImportsLatestVersion_OfAnEcKey()
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var handler = KeyResponse("ecdsa-p256", ecdsa.ExportSubjectPublicKeyInfoPem());
         var client = ClientOver(handler);
 
-        var key = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var key = await FirstPublicKeyAsync(client.GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken));
 
         var ecKey = Assert.IsType<EllipticCurveJsonWebKey>(key);
         Assert.Equal("P-256", ecKey.Curve);
         Assert.False(ecKey.HasPrivateKey);
+    }
+
+    [Fact]
+    public async Task GetKeyVersionsAsync_PublishesEveryVersion_WithVersionedKidsAndCreationTimes()
+    {
+        using var rsa1 = RSA.Create(2048);
+        using var rsa2 = RSA.Create(2048);
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.OK,
+            new
+            {
+                data = new
+                {
+                    type = "rsa-2048",
+                    latest_version = 2,
+                    keys = new Dictionary<string, object>
+                    {
+                        ["1"] = new { public_key = rsa1.ExportSubjectPublicKeyInfoPem(), creation_time = "2026-01-01T00:00:00Z" },
+                        ["2"] = new { public_key = rsa2.ExportSubjectPublicKeyInfoPem(), creation_time = "2026-02-01T00:00:00Z" },
+                    },
+                },
+            }));
+        var client = ClientOver(handler);
+
+        var versions = new List<KeyVersion>();
+        await foreach (var version in client.GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken))
+            versions.Add(version);
+
+        Assert.Equal(2, versions.Count);
+        var first = versions.Single(version => version.PublicKey.KeyId == "oidc-sign:1");
+        var second = versions.Single(version => version.PublicKey.KeyId == "oidc-sign:2");
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), first.CreatedAt);
+        Assert.Equal(new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero), second.CreatedAt);
+        Assert.All(versions, version => Assert.IsType<RsaJsonWebKey>(version.PublicKey));
+    }
+
+    [Fact]
+    public async Task SignAsync_RejectsKeyIdWithoutVersion()
+    {
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+        var client = ClientOver(handler);
+
+        // A kid without the ":<version>" the enumeration stamps cannot address a Transit version, so it fails loud.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.SignAsync("oidc-sign", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequest);
     }
 
     private static StubHttpMessageHandler KeyResponse(string keyType, string publicKeyPem)
@@ -185,7 +249,18 @@ public class VaultTransitClientTests
                 {
                     type = keyType,
                     latest_version = 1,
-                    keys = new Dictionary<string, object> { ["1"] = new { public_key = publicKeyPem } },
+                    keys = new Dictionary<string, object>
+                    {
+                        ["1"] = new { public_key = publicKeyPem, creation_time = "2026-01-01T00:00:00Z" },
+                    },
                 },
             }));
+
+    private static async Task<JsonWebKey> FirstPublicKeyAsync(IAsyncEnumerable<KeyVersion> versions)
+    {
+        await using var enumerator = versions.GetAsyncEnumerator();
+        if (!await enumerator.MoveNextAsync())
+            throw new InvalidOperationException("The custodian returned no key versions.");
+        return enumerator.Current.PublicKey;
+    }
 }

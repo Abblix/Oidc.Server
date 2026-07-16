@@ -66,4 +66,20 @@ public static class HttpResponseExtensions
         headers.CacheControl = PreventStorageInAnyCache;
         response.Headers.Pragma = CacheControlHeaderValue.NoCacheString;
     }
+
+    /// <summary>
+    /// Advertises a positive cache lifetime for a public, cacheable metadata response - the JWKS endpoint. Sets
+    /// <c>Cache-Control: public, max-age=&lt;maxAge&gt;</c> and clears any <c>Pragma</c> / <c>Expires</c> a
+    /// no-cache policy left behind, so the response carries a single, non-contradictory caching directive. Size
+    /// <paramref name="maxAge"/> to the key-rollover propagation window, so a client honouring the header always
+    /// holds a new signing key's public half before the server produces tokens with it.
+    /// </summary>
+    /// <param name="response">The HTTP response to modify.</param>
+    /// <param name="maxAge">How long a shared or private cache may reuse the response.</param>
+    public static void SetCacheableHeaders(this HttpResponse response, TimeSpan maxAge)
+    {
+        response.GetTypedHeaders().CacheControl = new () { Public = true, MaxAge = maxAge };
+        response.Headers.Pragma = default;
+        response.Headers.Expires = default;
+    }
 }

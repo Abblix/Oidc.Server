@@ -58,7 +58,7 @@ public interface IContentKeyDecryptor
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
     /// <param name="cancellationToken">Cancels the operation, including a custodian round-trip.</param>
     /// <returns>The recovered CEK, or null on a decryption failure.</returns>
-    ValueTask<byte[]?> DecryptKeyAsync(
+    Task<byte[]?> DecryptKeyAsync(
         JsonWebTokenHeader header,
         JsonWebKey key,
         string algorithm,

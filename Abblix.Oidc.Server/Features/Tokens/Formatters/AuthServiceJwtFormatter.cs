@@ -98,11 +98,15 @@ public class AuthServiceJwtFormatter(
 		if (!encryption.Encrypt)
 			return await jwtCreator.IssueAsync(token, signingCredentials);
 
-		// Encrypt when a server encryption key is available, otherwise fall back to a signed-only JWS (the
-		// behavior of prior versions a host keeps by leaving Encrypt on). A pinned key id that matches no
-		// configured key still fails loudly inside the selector.
+		// Select the encryption key symmetrically with signing: by the policy's key-management algorithm (and
+		// any pinned key id), exactly as the signing key is selected by the token's 'alg'. An algorithm-agnostic
+		// key (no declared 'alg') matches any algorithm per RFC 7517 Section 4.4; when the policy pins no
+		// algorithm, selection falls back to the first available encryption key. No key available at all means
+		// encryption is not configured, so fall back to a signed-only JWS (the behavior of prior versions a host
+		// keeps by leaving Encrypt on); a pinned key id or a required algorithm that matches nothing fails
+		// loudly inside the selector.
 		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
-			.FirstByAlgorithmAsync(algorithm: null, encryption.KeyId);
+			.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
 
 		if (encryptingCredentials is null)
 			return await jwtCreator.IssueAsync(token, signingCredentials);

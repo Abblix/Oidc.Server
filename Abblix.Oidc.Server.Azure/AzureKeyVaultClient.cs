@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Azure;
 using Azure.Core;
@@ -95,7 +96,7 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// Signs the JWS signing input with a Key Vault key under the given JWS algorithm. Key Vault hashes the data
     /// and returns the raw signature already in JWS wire format (R||S for EC).
     /// </summary>
-    public async ValueTask<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+    public async Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
     {
         var client = GetCryptographyClient(keyId);
         var result = await client.SignDataAsync(MapSignatureAlgorithm(algorithm), data, cancellationToken);
@@ -122,7 +123,7 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// key or tampered ciphertext is indistinguishable, which the seam's padding-oracle mitigation relies on. The
     /// JWE header is unused: an RSA unwrap needs only the ciphertext.
     /// </summary>
-    public async ValueTask<byte[]?> UnwrapKeyAsync(
+    public async Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
     {
         var encryptionAlgorithm = MapEncryptionAlgorithm(algorithm);
@@ -150,21 +151,38 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// Derives the ECDH-ES shared secret. Azure Key Vault exposes no key-agreement primitive, so this store does
     /// not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
     /// </summary>
-    public ValueTask<byte[]> AgreeKeyAsync(
+    public Task<byte[]> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
         => throw new NotSupportedException(
             "Azure Key Vault exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
 
     /// <summary>
-    /// Fetches the public half of a Key Vault key as a public-only JWK (RSA or EC, per the key type). Called once
-    /// per key at startup, so JWKS publishing and signature verification run locally against it and never touch
-    /// the vault on the hot path.
+    /// Enumerates every enabled version of the Key Vault key as a public-only JWK (RSA or EC, per the key type),
+    /// each carrying the version-specific <c>kid</c> (<c>&lt;name&gt;/&lt;version&gt;</c>) and the version's
+    /// creation time. Key Vault lists version metadata but not the public key, so each version's key is fetched.
+    /// Called at publication time, so JWKS publishing and signature verification run locally against the result
+    /// and never touch the vault on the hot path. The versioned <c>kid</c> is a Key Vault key identifier, which
+    /// the crypto client turns straight back into a versioned URI for sign/unwrap, so no separate handle mapping
+    /// is needed.
     /// </summary>
-    public async ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+        string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var key = await _keyClient.GetKeyAsync(keyId, cancellationToken: cancellationToken);
-        var webKey = key.Value.Key;
+        await foreach (var properties in _keyClient.GetPropertiesOfKeyVersionsAsync(keyName, cancellationToken))
+        {
+            // A disabled version (rotated out, or not yet enabled) must not be published or produced with.
+            if (properties.Enabled != true)
+                continue;
 
+            var key = await _keyClient.GetKeyAsync(keyName, properties.Version, cancellationToken);
+            var publicKey = ImportPublicKey(key.Value.Key) with { KeyId = $"{keyName}/{properties.Version}" };
+            yield return new KeyVersion(publicKey, properties.CreatedOn ?? DateTimeOffset.MinValue);
+        }
+    }
+
+    // Imports a Key Vault public key into a public-only JWK of the matching type.
+    private static JsonWebKey ImportPublicKey(KeyVault.JsonWebKey webKey)
+    {
         if (webKey.KeyType == KeyVault.KeyType.Ec || webKey.KeyType == KeyVault.KeyType.EcHsm)
         {
             using var ecdsa = webKey.ToECDsa();

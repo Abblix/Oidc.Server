@@ -31,12 +31,15 @@ namespace Abblix.Jwt;
 /// custodian. Wire it with <c>AddKeyCustodian</c>; a host with no external keys leaves it unregistered.
 /// </summary>
 /// <remarks>
-/// Every operation is addressed by <c>kid</c>, the custodian's handle for the key, identical to the published
-/// key's <c>kid</c> - there is no separate identifier and no mapping. The implementation never receives or
-/// returns private key material, and only needs to implement the operations its own keys require: a signing-only
-/// custodian leaves unwrap and agree unreachable, and a decryption-only custodian leaves sign unreachable.
-/// Direct encryption (<c>dir</c>) and password-based key management (PBES2) have no external form - the CEK is
-/// the secret itself, or is derived from it by a password KDF - so they are never routed here and fail closed.
+/// Every private operation is addressed by <c>kid</c>, the custodian's handle for that exact key version,
+/// identical to the published key's <c>kid</c> - there is no separate identifier and no mapping. The public
+/// halves the library publishes come from <see cref="GetKeyVersionsAsync"/>, which enumerates a named key's
+/// versions so a rotation can overlap. The implementation never receives or returns private key material, and
+/// only needs to implement the private operations its own keys require: a signing-only custodian leaves unwrap
+/// and agree unreachable, and a decryption-only custodian leaves sign unreachable. Direct encryption (<c>dir</c>)
+/// and password-based key management (PBES2) have no external form - the CEK is the secret itself, or is derived
+/// from it by a password KDF - so they are never routed here and fail closed. Every operation is a round-trip to
+/// the custodian, so the contract returns <see cref="Task{TResult}"/> throughout.
 /// </remarks>
 public interface IKeyCustodian
 {
@@ -44,12 +47,12 @@ public interface IKeyCustodian
     /// Signs <paramref name="data"/> with a signing key held by the custodian, returning the signature in the
     /// JWS wire format for <paramref name="algorithm"/>. Called for a signing key the library holds public-only.
     /// </summary>
-    /// <param name="keyId">The custodian's handle for the signing key.</param>
+    /// <param name="keyId">The custodian's handle for the signing key version.</param>
     /// <param name="algorithm">The JWS algorithm identifier (e.g. RS256, ES256) the signature must use.</param>
     /// <param name="data">The signing input bytes, BASE64URL(header) + '.' + BASE64URL(payload).</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The raw signature bytes in JWS wire format for the algorithm.</returns>
-    ValueTask<byte[]> SignAsync(
+    Task<byte[]> SignAsync(
         string keyId,
         string algorithm,
         byte[] data,
@@ -59,7 +62,7 @@ public interface IKeyCustodian
     /// Recovers a Content Encryption Key: an RSA decryption (RSA-OAEP / RSA-OAEP-256 / RSA1_5) or a symmetric
     /// unwrap (AES-KW / AES-GCM-KW), selected by <paramref name="algorithm"/>.
     /// </summary>
-    /// <param name="keyId">The custodian's handle for the recipient key.</param>
+    /// <param name="keyId">The custodian's handle for the recipient key version.</param>
     /// <param name="algorithm">The JWE <c>alg</c> value identifying the key-management operation.</param>
     /// <param name="header">The JWE header; AES-GCM-KW reads its <c>iv</c> / <c>tag</c> parameters from it.</param>
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
@@ -67,7 +70,7 @@ public interface IKeyCustodian
     /// <returns>The recovered CEK, or null on any failure. Returning null rather than throwing keeps a
     /// decryption failure indistinguishable from a wrong key, which the RFC 7516 §11.5 mitigation upstream
     /// relies on to close the Bleichenbacher / padding-oracle side channel.</returns>
-    ValueTask<byte[]?> UnwrapKeyAsync(
+    Task<byte[]?> UnwrapKeyAsync(
         string keyId,
         string algorithm,
         JsonWebTokenHeader header,
@@ -79,25 +82,29 @@ public interface IKeyCustodian
     /// and the originator's ephemeral public key, returning the raw shared secret Z. The library runs the
     /// Concat KDF over Z and any AES key unwrap, so those steps never leave it.
     /// </summary>
-    /// <param name="keyId">The custodian's handle for the recipient key.</param>
+    /// <param name="keyId">The custodian's handle for the recipient key version.</param>
     /// <param name="algorithm">The JWE <c>alg</c> value (ECDH-ES or an ECDH-ES+A*KW variant).</param>
     /// <param name="ephemeralPublicKey">The originator's ephemeral public key from the <c>epk</c> header.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate).</returns>
-    ValueTask<byte[]> AgreeKeyAsync(
+    Task<byte[]> AgreeKeyAsync(
         string keyId,
         string algorithm,
         JsonWebKey ephemeralPublicKey,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Fetches the public half of a key the custodian holds as a public-only <see cref="JsonWebKey"/> (RSA or EC,
-    /// per the key type), carrying only the key material. The caller stamps the <c>kid</c>, use and algorithm.
-    /// Called once per key at startup, so JWKS publishing and signature verification run locally against it and
-    /// never touch the custodian on the hot path.
+    /// Enumerates every current version of the key named <paramref name="keyName"/> as its public half, each
+    /// carrying the version-specific <c>kid</c> that routes a private operation back to that exact version, plus
+    /// the custodian's creation time for that version. A custodian that does not version its keys yields a single
+    /// element; a version-aware custodian (Vault Transit, Azure Key Vault) yields every version, which a rotation
+    /// policy overlaps for zero-downtime key rollover. Called at publication time, so JWKS publishing and local
+    /// signature verification run against the returned public halves and never touch the custodian on the hot path.
     /// </summary>
-    /// <param name="keyId">The custodian's handle for the key.</param>
+    /// <param name="keyName">The custodian's name for the logical key whose versions to enumerate.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
-    /// <returns>The public-only key material for the key.</returns>
-    ValueTask<JsonWebKey> GetPublicKeyAsync(string keyId, CancellationToken cancellationToken);
+    /// <returns>The key's versions, each a public-only <see cref="KeyVersion"/>.</returns>
+    IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+        string keyName,
+        CancellationToken cancellationToken);
 }

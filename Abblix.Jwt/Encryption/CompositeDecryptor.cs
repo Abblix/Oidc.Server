@@ -36,7 +36,7 @@ internal sealed class CompositeDecryptor(IEnumerable<IContentKeyDecryptor> backe
 {
     public bool CanDecrypt(JsonWebKey key) => backends.Any(backend => backend.CanDecrypt(key));
 
-    public ValueTask<byte[]?> DecryptKeyAsync(
+    public Task<byte[]?> DecryptKeyAsync(
         JsonWebTokenHeader header,
         JsonWebKey key,
         string algorithm,

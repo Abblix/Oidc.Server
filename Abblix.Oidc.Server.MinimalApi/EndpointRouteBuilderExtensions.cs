@@ -468,9 +468,17 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     private static async Task<IResult> KeysAsync(
         IAuthServiceKeysProvider serviceKeysProvider,
+        IOptions<OidcOptions> options,
+        HttpResponse response,
         ILogger<IAuthServiceKeysProvider> logger)
     {
         var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
+
+        // The JWKS is public, cacheable metadata: advertise a lifetime equal to the key-rollover propagation
+        // window, overriding the group-wide no-cache policy (SetCacheableHeaders clears the Pragma/Expires the
+        // no-cache filter set) for this one endpoint.
+        response.SetCacheableHeaders(options.Value.KeyRolloverPropagation);
+
         return Results.Json(new JsonWebKeySet(keys));
     }
 }

@@ -40,7 +40,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
     /// <summary>Owns any public-only key: its private half lives with the custodian, not in process.</summary>
     public bool CanDecrypt(JsonWebKey key) => !key.HasPrivateKey;
 
-    public async ValueTask<byte[]?> DecryptKeyAsync(
+    public async Task<byte[]?> DecryptKeyAsync(
         JsonWebTokenHeader header,
         JsonWebKey key,
         string algorithm,
@@ -78,7 +78,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
     /// raw shared secret Z; the Concat KDF and any AES key unwrap run locally. Mirrors the guards of the
     /// in-process EcdhEsKeyEncryptor.TryDecryptKey - only the agreement step is remote.
     /// </summary>
-    private async ValueTask<byte[]?> AgreeExternallyAsync(
+    private async Task<byte[]?> AgreeExternallyAsync(
         JsonWebTokenHeader header,
         EllipticCurveJsonWebKey recipientKey,
         string algorithm,

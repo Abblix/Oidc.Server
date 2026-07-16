@@ -38,7 +38,7 @@ internal sealed class LocalKeySigner(IServiceProvider serviceProvider) : IDataSi
     /// </summary>
     public bool CanSign(JsonWebKey key) => key.HasPrivateKey;
 
-    public ValueTask<byte[]> SignAsync(
+    public Task<byte[]> SignAsync(
         JsonWebKey key,
         string algorithm,
         byte[] data,
@@ -60,7 +60,7 @@ internal sealed class LocalKeySigner(IServiceProvider serviceProvider) : IDataSi
             _ => throw new InvalidOperationException($"No signer registered for key type: {key.GetType().Name}"),
         };
 
-        return new ValueTask<byte[]>(signature);
+        return Task.FromResult(signature);
     }
 
     private byte[] SignBy<TJsonWebKey>(TJsonWebKey jwk, string algorithm, byte[] data)
