@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Azure;
 
@@ -46,13 +46,21 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services, Action<AzureKeyVaultOptions> configureOptions)
     {
         services.Configure(configureOptions);
-        services.AddSingleton<AzureKeyVaultClient>();
-        services.AddKeyCustodian<AzureCustodian>();
 
-        // Publish the Key Vault keys' public halves for JWKS and local signature verification. This replaces the
-        // OIDC default key provider, so this method must run after the OIDC registration to win the singular
-        // resolve.
-        services.AddSingleton<IAuthServiceKeysProvider, AzureKeysProvider>();
+        // Typed client so the Azure SDK's transport is the host's IHttpClientFactory pipeline, mirroring the Vault
+        // package. The SDK sets absolute request URIs and authenticates via the credential, so the HttpClient needs
+        // no base address or header configuration here.
+        services.AddHttpClient<AzureKeyVaultClient>();
+
+        // Register the vault client as the external key store, then let the shared wiring route its private
+        // operations through the crypto seam and publish its public halves at /jwks. This replaces the OIDC
+        // default key provider, so call this after the OIDC registration to win the singular resolve.
+        services.AddSingleton<IExternalKeyStore>(serviceProvider => serviceProvider.GetRequiredService<AzureKeyVaultClient>());
+        services.AddExternalRsaKeys(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value;
+            return (options.SigningKeyName, options.EncryptionKeyName);
+        });
         return services;
     }
 }

@@ -22,14 +22,15 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Vault.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddVaultExternalKeys</c>: the custodian is registered behind the key seam,
-/// the default key provider is replaced by the Vault one, and the typed Transit client is pointed at the mount
+/// Verifies the wiring performed by <c>AddVaultExternalKeys</c>: the Transit client is registered as the external
+/// key store behind the shared custodian and key provider, and the typed Transit client is pointed at the mount
 /// with its auth header.
 /// </summary>
 public class AddVaultExternalKeysTests
@@ -49,15 +50,17 @@ public class AddVaultExternalKeysTests
     }
 
     [Fact]
-    public void RegistersCustodianAndVaultKeyProvider()
+    public void RegistersStoreCustodianAndKeyProvider()
     {
         var services = Configure();
 
+        Assert.Contains(services, d => d.ServiceType == typeof(IExternalKeyStore));
         Assert.Contains(services, d =>
-            d.ServiceType == typeof(IKeyCustodian) && d.ImplementationType == typeof(VaultCustodian));
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IAuthServiceKeysProvider) && d.ImplementationType == typeof(VaultKeysProvider));
+            d.ServiceType == typeof(IKeyCustodian) && d.ImplementationType == typeof(ExternalKeyCustodian));
         Assert.Contains(services, d => d.ServiceType == typeof(VaultTransitClient));
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]

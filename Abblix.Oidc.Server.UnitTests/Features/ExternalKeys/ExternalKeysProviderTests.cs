@@ -20,46 +20,29 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Net;
+using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using Abblix.Jwt;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Moq;
 using Xunit;
 
-namespace Abblix.Oidc.Server.Vault.UnitTests;
+namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
-/// Verifies that <see cref="VaultKeysProvider"/> publishes only public-key material: the JWK it hands the
-/// pipeline carries the Transit key name as its <c>kid</c>, the intended use and algorithm, and no private half,
-/// which is the exact signal the crypto seam reads to route the private operation to Vault.
+/// Verifies that <see cref="ExternalKeysProvider"/> publishes only public-key material: the JWK it hands the
+/// pipeline carries the store's key name as its <c>kid</c>, the intended use and algorithm, and no private half,
+/// which is the exact signal the crypto seam reads to route the private operation to the store.
 /// </summary>
-public class VaultKeysProviderTests
+public class ExternalKeysProviderTests
 {
-    private static VaultKeysProvider ProviderPublishing(string pem, VaultTransitOptions options)
-    {
-        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
-            HttpStatusCode.OK,
-            new
-            {
-                data = new
-                {
-                    latest_version = 1,
-                    keys = new Dictionary<string, object> { ["1"] = new { public_key = pem } },
-                },
-            }));
-        var client = new VaultTransitClient(new HttpClient(handler)
-        {
-            BaseAddress = new Uri("http://vault.test/v1/transit/"),
-        });
-        return new VaultKeysProvider(client, Options.Create(options));
-    }
-
     [Fact]
     public async Task GetSigningKeys_PublishesPublicOnlyRs256Key_WithKidFromKeyName()
     {
         using var rsa = RSA.Create(2048);
-        var provider = ProviderPublishing(rsa.ExportSubjectPublicKeyInfoPem(),
-            new VaultTransitOptions { SigningKeyName = "sign-key", EncryptionKeyName = "enc-key" });
+        var provider = ProviderOver(rsa.ExportParameters(false), "sign-key");
 
         var key = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
 
@@ -74,8 +57,10 @@ public class VaultKeysProviderTests
     public async Task GetEncryptionKeys_PublishesPublicOnlyRsaOaep256Key_WithKidFromKeyName()
     {
         using var rsa = RSA.Create(2048);
-        var provider = ProviderPublishing(rsa.ExportSubjectPublicKeyInfoPem(),
-            new VaultTransitOptions { SigningKeyName = "sign-key", EncryptionKeyName = "enc-key" });
+        var store = new Mock<IExternalKeyStore>();
+        store.Setup(s => s.GetPublicKeyAsync("enc-key", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rsa.ExportParameters(false));
+        var provider = new ExternalKeysProvider(store.Object, "sign-key", "enc-key");
 
         var key = await SingleAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
 
@@ -84,6 +69,13 @@ public class VaultKeysProviderTests
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, key.Algorithm);
         Assert.True(key.HasPublicKey);
         Assert.False(key.HasPrivateKey);
+    }
+
+    private static ExternalKeysProvider ProviderOver(RSAParameters publicKey, string signingKeyName)
+    {
+        var store = new Mock<IExternalKeyStore>();
+        store.Setup(s => s.GetPublicKeyAsync(signingKeyName, It.IsAny<CancellationToken>())).ReturnsAsync(publicKey);
+        return new ExternalKeysProvider(store.Object, signingKeyName, "enc-key");
     }
 
     private static async Task<JsonWebKey> SingleAsync(IAsyncEnumerable<JsonWebKey> keys, CancellationToken ct)

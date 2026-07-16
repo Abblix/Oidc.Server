@@ -22,19 +22,20 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddAzureExternalKeys</c>: the vault client is registered, the custodian is
-/// placed behind the key seam, and the default key provider is replaced by the Azure one.
+/// Verifies the wiring performed by <c>AddAzureExternalKeys</c>: the vault client is registered as the external
+/// key store behind the shared custodian and key provider.
 /// </summary>
 public class AddAzureExternalKeysTests
 {
     [Fact]
-    public void RegistersVaultClientCustodianAndKeyProvider()
+    public void RegistersStoreCustodianAndKeyProvider()
     {
         var services = new ServiceCollection();
         services.AddAzureExternalKeys(options =>
@@ -44,10 +45,12 @@ public class AddAzureExternalKeysTests
             options.EncryptionKeyName = "oidc-enc";
         });
 
+        Assert.Contains(services, d => d.ServiceType == typeof(IExternalKeyStore));
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(IKeyCustodian) && d.ImplementationType == typeof(ExternalKeyCustodian));
         Assert.Contains(services, d => d.ServiceType == typeof(AzureKeyVaultClient));
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IKeyCustodian) && d.ImplementationType == typeof(AzureCustodian));
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IAuthServiceKeysProvider) && d.ImplementationType == typeof(AzureKeysProvider));
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 }

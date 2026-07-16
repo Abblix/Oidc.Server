@@ -104,10 +104,10 @@ public class VaultTransitClientTests
     }
 
     [Fact]
-    public async Task GetPublicKeyPemAsync_ReturnsLatestVersionPublicKey()
+    public async Task GetPublicKeyAsync_ImportsTheLatestVersionPublicKey()
     {
         using var rsa = RSA.Create(2048);
-        var pem = rsa.ExportSubjectPublicKeyInfoPem();
+        var expected = rsa.ExportParameters(false);
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
             HttpStatusCode.OK,
             new
@@ -117,16 +117,18 @@ public class VaultTransitClientTests
                     latest_version = 2,
                     keys = new Dictionary<string, object>
                     {
+                        // Only the latest version is imported; the stale prior version is never parsed.
                         ["1"] = new { public_key = "-----BEGIN PUBLIC KEY-----\nstale\n-----END PUBLIC KEY-----" },
-                        ["2"] = new { public_key = pem },
+                        ["2"] = new { public_key = rsa.ExportSubjectPublicKeyInfoPem() },
                     },
                 },
             }));
         var client = ClientOver(handler);
 
-        var result = await client.GetPublicKeyPemAsync("oidc-sign", TestContext.Current.CancellationToken);
+        var result = await client.GetPublicKeyAsync("oidc-sign", TestContext.Current.CancellationToken);
 
-        Assert.Equal(pem, result);
+        Assert.Equal(expected.Modulus, result.Modulus);
+        Assert.Equal(expected.Exponent, result.Exponent);
         Assert.Equal("http://vault.test/v1/transit/keys/oidc-sign", handler.LastRequest!.RequestUri!.ToString());
     }
 }

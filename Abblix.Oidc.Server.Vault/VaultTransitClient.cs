@@ -23,7 +23,9 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Vault;
 
@@ -33,7 +35,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// and this client only moves bytes across the boundary. The typed <see cref="HttpClient"/> is configured by
 /// <c>AddVaultExternalKeys</c> with the Transit base address (<c>{Address}/v1/{mount}/</c>) and the auth header.
 /// </summary>
-public sealed class VaultTransitClient(HttpClient http)
+public sealed class VaultTransitClient(HttpClient httpClient) : IExternalKeyStore
 {
     /// <summary>
     /// Signs the JWS signing input with a Transit RSA key. RS256 maps to PKCS#1 v1.5 over SHA-256, and Transit
@@ -82,16 +84,21 @@ public sealed class VaultTransitClient(HttpClient http)
     }
 
     /// <summary>
-    /// Fetches the public half of a Transit key as a PEM (SubjectPublicKeyInfo). Called once per key at startup:
-    /// the public key is a durable artifact captured at generation, so JWKS publishing and signature
-    /// verification run locally against it and never touch this client on the hot path.
+    /// Fetches the public half of a Transit key. Transit returns it as a PEM (SubjectPublicKeyInfo), which this
+    /// imports to RSA parameters. Called once per key at startup: the public key is a durable artifact captured at
+    /// generation, so JWKS publishing and signature verification run locally against it and never touch this
+    /// client on the hot path.
     /// </summary>
-    public async Task<string> GetPublicKeyPemAsync(string keyName, CancellationToken cancellationToken)
+    public async Task<RSAParameters> GetPublicKeyAsync(string keyName, CancellationToken cancellationToken)
     {
         using var document = await SendAsync(HttpMethod.Get, $"keys/{keyName}", body: null, cancellationToken);
         var data = document.RootElement.GetProperty("data");
         var latestVersion = data.GetProperty("latest_version").GetInt32().ToString(CultureInfo.InvariantCulture);
-        return data.GetProperty("keys").GetProperty(latestVersion).GetProperty("public_key").GetString()!;
+        var pem = data.GetProperty("keys").GetProperty(latestVersion).GetProperty("public_key").GetString()!;
+
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(pem);
+        return rsa.ExportParameters(false);
     }
 
     private async Task<JsonDocument> SendAsync(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
@@ -108,7 +115,7 @@ public sealed class VaultTransitClient(HttpClient http)
         if (body is not null)
             request.Content = JsonContent.Create(body);
 
-        using var response = await http.SendAsync(request, cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
         var payload = await response.Content.ReadAsStringAsync(cancellationToken);
         var document = string.IsNullOrEmpty(payload) ? null : JsonDocument.Parse(payload);
         return (response.StatusCode, document);
@@ -116,7 +123,7 @@ public sealed class VaultTransitClient(HttpClient http)
 
     private static void EnsureSuccess(HttpStatusCode status, JsonDocument? document, string path)
     {
-        if ((int)status is >= 200 and < 300)
+        if (status is >= HttpStatusCode.OK and < HttpStatusCode.Ambiguous)
             return;
 
         var errors = document?.RootElement.TryGetProperty("errors", out var e) == true ? e.ToString() : "(none)";

@@ -22,25 +22,30 @@
 
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure;
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys;
 using Azure.Security.KeyVault.Keys.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Azure;
 
 /// <summary>
 /// Thin wrapper over the Azure Key Vault SDK. Signing and unwrapping run inside the vault against a key whose
-/// private half never leaves it, so this type only moves bytes across the boundary. A
-/// <see cref="CryptographyClient"/> is cached per key name because creating one resolves the key's metadata on
-/// first use.
+/// private half never leaves it, so this type only moves bytes across the boundary. The Azure SDK is pointed at
+/// the host's <see cref="IHttpClientFactory"/> transport (like the Vault client), so it inherits the host's HTTP
+/// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
+/// resolves the key's metadata on first use.
 /// </summary>
-public sealed class AzureKeyVaultClient
+public sealed class AzureKeyVaultClient : IExternalKeyStore
 {
     private readonly Uri _vaultUri;
     private readonly TokenCredential _credential;
+    private readonly HttpClient _httpClient;
     private readonly KeyClient _keyClient;
     private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
 
@@ -49,22 +54,40 @@ public sealed class AzureKeyVaultClient
     /// credential when the service-principal fields are set, or the default Azure credential chain otherwise.
     /// </summary>
     /// <param name="options">The configured Azure Key Vault options.</param>
-    public AzureKeyVaultClient(IOptions<AzureKeyVaultOptions> options)
+    /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
+    /// Azure SDK rides the host's HTTP pipeline.</param>
+    [ActivatorUtilitiesConstructor]
+    public AzureKeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
+        : this(options.Value, BuildCredential(options.Value), httpClient)
     {
-        var settings = options.Value;
-        _vaultUri = new Uri(settings.KeyVaultUri);
+    }
 
-        // Use explicit service-principal credentials from configuration when all three are set; otherwise fall
-        // back to DefaultAzureCredential, which covers a managed identity, an Azure CLI sign-in, or the AZURE_*
-        // environment variables. Production on Azure uses a managed identity and needs none of these set.
-        _credential = !string.IsNullOrWhiteSpace(settings.TenantId)
+    /// <summary>
+    /// Builds the client from an explicit credential and transport. This is the seam a test uses to drive the
+    /// Azure SDK against a stub <see cref="HttpMessageHandler"/> and a fake credential, so signing, unwrapping and
+    /// public-key fetch can be exercised without a live vault.
+    /// </summary>
+    /// <param name="settings">The Azure Key Vault options.</param>
+    /// <param name="credential">The credential the SDK authenticates with.</param>
+    /// <param name="httpClient">The transport for every Key Vault call.</param>
+    internal AzureKeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
+    {
+        _vaultUri = new Uri(settings.KeyVaultUri);
+        _credential = credential;
+        _httpClient = httpClient;
+        _keyClient = new KeyClient(
+            _vaultUri, _credential, new KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
+    }
+
+    // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
+    // DefaultAzureCredential, which covers a managed identity, an Azure CLI sign-in, or the AZURE_* environment
+    // variables. Production on Azure uses a managed identity and needs none of these set.
+    private static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
+        => !string.IsNullOrWhiteSpace(settings.TenantId)
                 && !string.IsNullOrWhiteSpace(settings.ClientId)
                 && !string.IsNullOrWhiteSpace(settings.ClientSecret)
             ? new ClientSecretCredential(settings.TenantId, settings.ClientId, settings.ClientSecret)
             : new DefaultAzureCredential();
-
-        _keyClient = new KeyClient(_vaultUri, _credential);
-    }
 
     /// <summary>
     /// Signs the JWS signing input with a Key Vault RSA key. RS256 is signed over the data (the vault hashes
@@ -106,6 +129,11 @@ public sealed class AzureKeyVaultClient
     }
 
     private CryptographyClient GetCryptographyClient(string keyName)
-        => _cryptographyClients.GetOrAdd(keyName,
-            name => new CryptographyClient(new Uri($"{_vaultUri}keys/{name}"), _credential));
+    {
+        return _cryptographyClients.GetOrAdd(
+            keyName,
+            name => new CryptographyClient(
+                new Uri($"{_vaultUri}keys/{name}"), _credential,
+                new CryptographyClientOptions { Transport = new HttpClientTransport(_httpClient) }));
+    }
 }

@@ -20,37 +20,37 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Security.Cryptography;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Azure;
+namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
-/// Publishes the public halves of the Key Vault-held signing and encryption keys to the OIDC pipeline. It never
-/// returns private material: each key is public-only, which is precisely the signal the crypto seam reads to
-/// route the private operation to the Azure custodian by <c>kid</c>. The same public keys back the <c>/jwks</c>
-/// endpoint and local signature verification.
+/// Publishes the public halves of an <see cref="IExternalKeyStore"/>'s signing and encryption keys to the OIDC
+/// pipeline. It never returns private material: each key is public-only, which is precisely the signal the crypto
+/// seam reads to route the private operation to the custodian by <c>kid</c>. The same public keys back the
+/// <c>/jwks</c> endpoint and local signature verification. One provider serves any store, so the Vault and Azure
+/// packages carry no key provider of their own.
 /// </summary>
-public sealed class AzureKeysProvider : IAuthServiceKeysProvider
+public sealed class ExternalKeysProvider : IAuthServiceKeysProvider
 {
     private readonly Lazy<Task<JsonWebKey>> _signingKey;
     private readonly Lazy<Task<JsonWebKey>> _encryptionKey;
 
     /// <summary>
-    /// Captures the key names to fetch; the public keys are pulled from Key Vault lazily on first use.
+    /// Captures the key names to fetch; the public keys are pulled from the store lazily on first use.
     /// </summary>
-    public AzureKeysProvider(AzureKeyVaultClient client, IOptions<AzureKeyVaultOptions> options)
+    /// <param name="store">The external key store to fetch the public halves from.</param>
+    /// <param name="signingKeyName">The store's name for the signing key, published as its <c>kid</c>.</param>
+    /// <param name="encryptionKeyName">The store's name for the encryption key, published as its <c>kid</c>.</param>
+    public ExternalKeysProvider(IExternalKeyStore store, string signingKeyName, string encryptionKeyName)
     {
-        var settings = options.Value;
-
-        // Public keys are immutable for a given kid (rotation mints a new kid, never edits one), so each is
-        // fetched from the vault once at first use and cached for the life of the process.
+        // Public keys are immutable for a given kid (rotation mints a new kid, never edits one), so each is fetched
+        // from the store once at first use and cached for the life of the process.
         _signingKey = new(() => BuildPublicKeyAsync(
-            client, settings.SigningKeyName, PublicKeyUsages.Signature, SigningAlgorithms.RS256));
+            store, signingKeyName, PublicKeyUsages.Signature, SigningAlgorithms.RS256));
         _encryptionKey = new(() => BuildPublicKeyAsync(
-            client, settings.EncryptionKeyName, PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256));
+            store, encryptionKeyName, PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256));
     }
 
     /// <inheritdoc />
@@ -66,15 +66,15 @@ public sealed class AzureKeysProvider : IAuthServiceKeysProvider
     }
 
     // An external key has no private half in this process, so includePrivateKeys is ignored: handing the pipeline
-    // the public-only key both routes the private operation to Key Vault (via the missing secret) and gives the
+    // the public-only key both routes the private operation to the store (via the missing secret) and gives the
     // JWKS endpoint the exact key clients verify against.
     private static async Task<JsonWebKey> BuildPublicKeyAsync(
-        AzureKeyVaultClient client, string keyName, string usage, string algorithm)
+        IExternalKeyStore store, string keyName, string usage, string algorithm)
     {
-        var parameters = await client.GetPublicKeyAsync(keyName, CancellationToken.None);
+        var parameters = await store.GetPublicKeyAsync(keyName, CancellationToken.None);
 
         // The parameters are public-only, so the JWK carries no private material: HasPrivateKey is false, and the
-        // kid is the Key Vault key name, which is also the custodian's handle.
+        // kid is the store's key name, which is also the custodian's handle.
         return new RsaJsonWebKey { KeyId = keyName, Usage = usage, Algorithm = algorithm }.Apply(parameters);
     }
 }
