@@ -135,7 +135,7 @@ public class AuthenticationSchemeAdapterTests
 		var result = await RoundTripAsync(Session(new JsonObject { ["roles"] = new JsonArray("admin", "user") }));
 
 		var roles = Assert.IsType<JsonArray>(result!.AdditionalClaims!["roles"]);
-		Assert.Equal(new[] { "admin", "user" }, roles.Select(n => (string)n!));
+		Assert.Equal(["admin", "user"], roles.Select(n => (string)n!));
 	}
 
 	[Fact]
@@ -175,14 +175,14 @@ public class AuthenticationSchemeAdapterTests
 	{
 		var input = Session() with
 		{
-			AuthenticationMethodReferences = new[] { "pwd", "otp" },
-			AffectedClientIds = new[] { "client-a", "client-b" },
+			AuthenticationMethodReferences = ["pwd", "otp"],
+			AffectedClientIds = ["client-a", "client-b"],
 		};
 
 		var result = await RoundTripAsync(input);
 
-		Assert.Equal(new[] { "pwd", "otp" }, result!.AuthenticationMethodReferences);
-		Assert.Equal(new[] { "client-a", "client-b" }, result.AffectedClientIds);
+		Assert.Equal(["pwd", "otp"], result!.AuthenticationMethodReferences);
+		Assert.Equal(["client-a", "client-b"], result.AffectedClientIds);
 	}
 
 	[Fact]
@@ -204,7 +204,7 @@ public class AuthenticationSchemeAdapterTests
 	public async Task AuthenticateAsync_CookieWithoutSessionId_ReturnsNull()
 	{
 		// A plain host login cookie under the shared "Cookies" scheme: it has sub but no OIDC sid/auth_time.
-		var identity = new ClaimsIdentity(new[] { new Claim(JwtClaimTypes.Subject, "user") }, Scheme);
+		var identity = new ClaimsIdentity([new Claim(JwtClaimTypes.Subject, "user")], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
 		Assert.Null(await _adapter.AuthenticateAsync());
@@ -213,11 +213,10 @@ public class AuthenticationSchemeAdapterTests
 	[Fact]
 	public async Task AuthenticateAsync_CookieWithoutSubject_ReturnsNull()
 	{
-		var identity = new ClaimsIdentity(new[]
-		{
+		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, "1700000000"),
-		}, Scheme);
+			new Claim(JwtClaimTypes.AuthenticationTime, "1700000000")
+		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
 		Assert.Null(await _adapter.AuthenticateAsync());
@@ -226,12 +225,11 @@ public class AuthenticationSchemeAdapterTests
 	[Fact]
 	public async Task AuthenticateAsync_MalformedAuthenticationTime_ReturnsNull()
 	{
-		var identity = new ClaimsIdentity(new[]
-		{
+		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.Subject, "user"),
 			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, "not-a-number"),
-		}, Scheme);
+			new Claim(JwtClaimTypes.AuthenticationTime, "not-a-number")
+		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
 		Assert.Null(await _adapter.AuthenticateAsync());
@@ -240,12 +238,11 @@ public class AuthenticationSchemeAdapterTests
 	[Fact]
 	public async Task AuthenticateAsync_OutOfRangeAuthenticationTime_ReturnsNull()
 	{
-		var identity = new ClaimsIdentity(new[]
-		{
+		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.Subject, "user"),
 			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-		}, Scheme);
+			new Claim(JwtClaimTypes.AuthenticationTime, long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture))
+		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
 		Assert.Null(await _adapter.AuthenticateAsync());
