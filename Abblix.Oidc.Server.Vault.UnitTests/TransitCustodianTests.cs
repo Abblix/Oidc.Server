@@ -50,7 +50,7 @@ public sealed class VaultTransitClientTests : IDisposable
         _httpClients.Add(httpClient);
 
         return new TransitCustodian(
-            new ApiClient(httpClient),
+            new StubHttpClientFactory(httpClient),
             Options.Create(new VaultTransitOptions { TransitMount = "transit" }));
     }
 

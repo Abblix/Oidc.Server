@@ -40,9 +40,12 @@ namespace Abblix.Oidc.Server.Vault;
 /// secret. Vault's own encryption of it is a second layer, not the one the design leans on.
 /// </para>
 /// </remarks>
-internal sealed class KeyValueStore(IApiClient api, IOptions<VaultKeyValueOptions> options)
+internal sealed class KeyValueStore(IHttpClientFactory httpClientFactory, IOptions<VaultKeyValueOptions> options)
     : IKeyRingStore
 {
+    /// <summary>The shared client, held for this singleton's lifetime; see the custodian for why it is by name.</summary>
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(Transport.ClientName);
+
     private VaultKeyValueOptions Options => options.Value;
 
     /// <inheritdoc />
@@ -71,7 +74,7 @@ internal sealed class KeyValueStore(IApiClient api, IOptions<VaultKeyValueOption
             Data = new KeyValueWrite.Entry { Jwe = key.Jwe, CreatedAt = key.CreatedAt.ToString("O") },
         };
 
-        using var response = await api.SendAsync(HttpMethod.Post, DataPath(key.Id), body, cancellationToken);
+        using var response = await _httpClient.SendAsync(HttpMethod.Post, DataPath(key.Id), body, cancellationToken);
         if (response.IsSuccess)
             return true;
 
@@ -90,7 +93,7 @@ internal sealed class KeyValueStore(IApiClient api, IOptions<VaultKeyValueOption
     {
         // Removing the metadata drops the secret and every version of it, which is what retiring a key means
         // here. A 404 is success: the entry is gone, which is all the caller asked for.
-        using var response = await api.SendAsync(
+        using var response = await _httpClient.SendAsync(
             HttpMethod.Delete, MetadataPath(id), body: null, cancellationToken);
 
         if (response.Status == HttpStatusCode.NotFound)
@@ -103,7 +106,7 @@ internal sealed class KeyValueStore(IApiClient api, IOptions<VaultKeyValueOption
     private async Task<IReadOnlyList<string>> ListIdsAsync(CancellationToken cancellationToken)
     {
         var path = $"{Options.Mount}/metadata/{Options.Path}";
-        using var response = await api.SendAsync(new HttpMethod("LIST"), path, body: null, cancellationToken);
+        using var response = await _httpClient.SendAsync(new HttpMethod("LIST"), path, body: null, cancellationToken);
 
         // A ring nobody has minted into yet is not an error: the first pod to run is supposed to find it empty
         // and mint into it.
@@ -123,7 +126,7 @@ internal sealed class KeyValueStore(IApiClient api, IOptions<VaultKeyValueOption
     /// <summary>Reads one entry, tolerating one deleted between the listing and the read.</summary>
     private async Task<StoredKey?> ReadAsync(string id, CancellationToken cancellationToken)
     {
-        using var response = await api.SendAsync(HttpMethod.Get, DataPath(id), body: null, cancellationToken);
+        using var response = await _httpClient.SendAsync(HttpMethod.Get, DataPath(id), body: null, cancellationToken);
         if (response.Status == HttpStatusCode.NotFound)
             return null;
 

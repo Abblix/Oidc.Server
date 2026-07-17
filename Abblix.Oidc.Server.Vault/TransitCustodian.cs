@@ -39,12 +39,18 @@ namespace Abblix.Oidc.Server.Vault;
 /// key-agreement primitive, so ECDH-ES is out. That is a property of the engine, which is why the engine is in
 /// the name.
 /// </remarks>
-internal sealed class TransitCustodian(IApiClient api, IOptions<VaultTransitOptions> options)
+internal sealed class TransitCustodian(IHttpClientFactory httpClientFactory, IOptions<VaultTransitOptions> options)
     : IKeyCustodian
 {
     /// <summary>
-    /// The Transit mount, spelled into every path. The transport stops at <c>/v1/</c> because it is shared with
-    /// the key ring, which lives on a different mount.
+    /// The shared client, held for this singleton's lifetime. Resolved by name rather than injected, because the
+    /// factory's own clients are transient and the key ring shares this one.
+    /// </summary>
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(Transport.ClientName);
+
+    /// <summary>
+    /// The Transit mount, spelled into every path. The client stops at <c>/v1/</c> because it is shared with the
+    /// key ring, which lives on a different mount.
     /// </summary>
     private string Mount => options.Value.TransitMount;
 
@@ -64,7 +70,7 @@ internal sealed class TransitCustodian(IApiClient api, IOptions<VaultTransitOpti
         var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
         var path = $"{Mount}/sign/{name}";
 
-        using var response = await api.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
         response.EnsureSuccess(path);
 
         var signature = response.Body(path).RootElement.GetProperty("data").GetProperty("signature").GetString()!;
@@ -155,7 +161,7 @@ internal sealed class TransitCustodian(IApiClient api, IOptions<VaultTransitOpti
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
         var path = $"{Mount}/decrypt/{name}";
 
-        using var response = await api.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
         if (response.Status == HttpStatusCode.BadRequest)
             return null;
 
@@ -195,7 +201,7 @@ internal sealed class TransitCustodian(IApiClient api, IOptions<VaultTransitOpti
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var path = $"{Mount}/keys/{keyName}";
-        using var response = await api.SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
+        using var response = await _httpClient.SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
         response.EnsureSuccess(path);
 
         var data = response.Body(path).RootElement.GetProperty("data");

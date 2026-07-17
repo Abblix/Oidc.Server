@@ -52,8 +52,7 @@ public sealed class KeyValueStoreTests : IDisposable
         _httpClients.Add(httpClient);
 
         return new KeyValueStore(
-            new ApiClient(httpClient),
-
+            new StubHttpClientFactory(httpClient),
             Options.Create(new VaultKeyValueOptions { Mount = "secret", Path = "oidc-keyring" }));
     }
 

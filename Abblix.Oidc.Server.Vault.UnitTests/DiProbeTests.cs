@@ -64,14 +64,12 @@ public class DiProbeTests
             .MintKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
             .PersistRingToVaultKeyValue();
 
+        // Both engines wire the transport, but it must land once: AddHttpClient appends, so a second wiring would
+        // stack a second token handler on every request. The token handler's single registration is that
+        // guarantee, and nothing at runtime would report a doubled one.
+        Assert.Equal(1, services.Count(descriptor => descriptor.ServiceType == typeof(TokenHandler)));
+
         using var provider = services.BuildServiceProvider();
-
-        // Both engines live on one Vault behind one token, so they talk through one client and one connection
-        // pool. Wiring each engine its own would work and simply cost twice the pools, which nothing would report.
-        Assert.Same(
-            provider.GetRequiredService<IApiClient>(),
-            provider.GetRequiredService<IApiClient>());
-
         Assert.NotNull(provider.GetRequiredService<IKeyCustodian>());
         Assert.NotNull(provider.GetRequiredService<IKeyRingStore>());
     }

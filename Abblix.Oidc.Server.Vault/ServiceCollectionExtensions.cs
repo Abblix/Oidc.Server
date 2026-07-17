@@ -56,7 +56,7 @@ public static class ServiceCollectionExtensions
         Action<VaultTransitOptions> configureOptions)
     {
         services.Configure(configureOptions);
-        services.AddVaultApiClient();
+        services.AddVaultTransport();
 
         // Singular contract, TryAdd so a host that brought its own custodian keeps it, as the repo's DI rule
         // requires.
@@ -87,7 +87,7 @@ public static class ServiceCollectionExtensions
     {
         var services = builder.Services;
         services.Configure(configureOptions ?? (_ => { }));
-        services.AddVaultApiClient();
+        services.AddVaultTransport();
 
         // Singular contract, pinned so a host that brings its own ring keeps it: see the custodian registration.
         services.TryAddSingleton<IKeyRingStore, KeyValueStore>();
@@ -96,23 +96,27 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures the one transport both engines talk through, once however many of them are wired.
+    /// Registers the one named client both engines resolve, once however many of them are wired.
     /// </summary>
     /// <remarks>
     /// The ring rides the same server and token as the custodian - one Vault holds both the key that protects the
     /// ring and the ring itself - so a second client would only mean a second connection pool to the same place,
-    /// and a second copy of the auth, redaction and lifetime settings to keep in step.
+    /// and a second copy of the auth, redaction and lifetime settings to keep in step. Handler rotation is off and
+    /// <see cref="SocketsHttpHandler.PooledConnectionLifetime"/> recycles the connections underneath instead,
+    /// because the consumers hold their client for their own lifetime - the pattern Microsoft recommends for a
+    /// long-lived HttpClient.
     /// </remarks>
-    private static void AddVaultApiClient(this IServiceCollection services)
+    private static void AddVaultTransport(this IServiceCollection services)
     {
         // AddHttpClient appends its configuration rather than replacing it, so a second call would run the whole
-        // chain twice. The transport's own registration is what says it has been wired already.
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(IApiClient)))
+        // chain twice - two token handlers on the request, redaction applied twice. The token handler's own
+        // registration, the first thing this does, is the mark that the transport has already been wired.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TokenHandler)))
             return;
 
         services.TryAddTransient<TokenHandler>();
 
-        services.AddHttpClient(ApiClient.ClientName, (provider, http) =>
+        services.AddHttpClient(Transport.ClientName, (provider, http) =>
         {
             // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
             // different ones, so each spells its own into every path.
@@ -134,12 +138,5 @@ public static class ServiceCollectionExtensions
             };
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
-
-        // A named client resolved here, rather than AddHttpClient<ApiClient>: the typed-client registration
-        // is TRANSIENT, so each of the singletons above would hold its own. Its consumers are long-lived, which
-        // is why handler rotation is off and SocketsHttpHandler.PooledConnectionLifetime recycles the connections
-        // underneath instead - the pattern Microsoft recommends for a long-lived HttpClient.
-        services.TryAddSingleton<IApiClient>(provider => new ApiClient(
-            provider.GetRequiredService<IHttpClientFactory>().CreateClient(ApiClient.ClientName)));
     }
 }

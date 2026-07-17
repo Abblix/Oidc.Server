@@ -86,7 +86,7 @@ public class AddVaultCustodianTests
     {
         using var provider = Configure().BuildServiceProvider();
 
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(ApiClient.ClientName);
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(Transport.ClientName);
 
         // The address stops at the server root rather than a mount: this one client also carries the key ring,
         // which lives on a different mount, so each engine spells its own into every path.
@@ -106,7 +106,7 @@ public class AddVaultCustodianTests
         // redacts nothing by default, and Trace is exactly what an operator turns on to debug a Vault problem.
         var options = provider
             .GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
-            .Get(ApiClient.ClientName);
+            .Get(Transport.ClientName);
 
         Assert.True(options.ShouldRedactHeaderValue(TokenHandler.TokenHeaderName));
     }

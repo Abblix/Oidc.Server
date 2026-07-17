@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// </remarks>
 /// <param name="Status">The HTTP status Vault answered with.</param>
 /// <param name="Document">The parsed body, or null when Vault answered with none, as it does for a delete.</param>
-internal sealed record Response(HttpStatusCode Status, JsonDocument? Document) : IDisposable
+internal sealed record ApiResponse(HttpStatusCode Status, JsonDocument? Document) : IDisposable
 {
     /// <summary>Whether Vault answered with a success status.</summary>
     internal bool IsSuccess => Status is >= HttpStatusCode.OK and < HttpStatusCode.Ambiguous;
