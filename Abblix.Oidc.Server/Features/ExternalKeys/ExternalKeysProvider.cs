@@ -76,40 +76,16 @@ public sealed class ExternalKeysProvider(
         // version-specific kid the custodian set, falling back to the configured key name for a single-version
         // custodian that leaves the kid unset. record `with` keeps the runtime key type, so this is correct for
         // both RsaJsonWebKey and EllipticCurveJsonWebKey.
-        var published = OrderProduceFirst(versions).Select(version => version.PublicKey with
-        {
-            Usage = usage,
-            KeyId = version.PublicKey.KeyId ?? keyName,
-            Algorithm = algorithm,
-        });
+        var published = versions
+            .ProduceFirst(version => version.CreatedAt, timeProvider.GetUtcNow(), options.Value.KeyRolloverPropagation)
+            .Select(version => version.PublicKey with
+            {
+                Usage = usage,
+                KeyId = version.PublicKey.KeyId ?? keyName,
+                Algorithm = algorithm,
+            });
 
         foreach (var key in published)
             yield return key;
-    }
-
-    // Order the versions produce-first: the active version leads (the produce role uses FirstByAlgorithm), the
-    // rest trail for verification/decryption and rotation overlap. The active version is the newest one already
-    // past the propagation window; if none has passed yet (bootstrap: the very first version is still fresh), the
-    // newest overall leads, since there is no older version a client could be holding instead.
-    private IEnumerable<KeyVersion> OrderProduceFirst(IReadOnlyList<KeyVersion> versions)
-    {
-        if (versions.Count <= 1)
-            return versions;
-
-        var now = timeProvider.GetUtcNow();
-        var propagation = options.Value.KeyRolloverPropagation;
-
-        // Sort newest-first, then lead with the active version: the newest one already past the propagation
-        // window, or the newest overall if none has cleared it yet (bootstrap, the very first rollover). The rest
-        // keep newest-first order. Selection is index-based rather than by reference, since KeyVersion is a value
-        // type for which ReferenceEquals is meaningless.
-        var byNewest = versions.OrderByDescending(version => version.CreatedAt).ToList();
-        var activeIndex = byNewest.FindIndex(version => propagation <= now - version.CreatedAt);
-        if (activeIndex < 0)
-            activeIndex = 0;
-
-        return byNewest.Skip(activeIndex).Take(1)
-            .Concat(byNewest.Take(activeIndex))
-            .Concat(byNewest.Skip(activeIndex + 1));
     }
 }
