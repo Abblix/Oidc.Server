@@ -85,7 +85,11 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
     // DefaultAzureCredential, which covers a managed identity, an Azure CLI sign-in, or the AZURE_* environment
     // variables. Production on Azure uses a managed identity and needs none of these set.
-    private static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
+    /// <remarks>
+    /// Internal rather than private so the key ring authenticates with the very same chain: the ring is not a
+    /// second identity to configure, it is reached by whatever already reaches the vault.
+    /// </remarks>
+    internal static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
         => !string.IsNullOrWhiteSpace(settings.TenantId)
                 && !string.IsNullOrWhiteSpace(settings.ClientId)
                 && !string.IsNullOrWhiteSpace(settings.ClientSecret)

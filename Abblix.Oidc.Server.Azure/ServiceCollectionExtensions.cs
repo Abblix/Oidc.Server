@@ -22,7 +22,9 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Azure;
@@ -74,5 +76,45 @@ public static class ServiceCollectionExtensions
         // AddHttpClient above already registered the typed client as the IKeyCustodian, so this only opens the
         // tier choice on top of it.
         return services.AddCustodian();
+    }
+
+    /// <summary>
+    /// Keeps the ring of minted keys in an Azure Blob Storage container, using the same credential the custodian
+    /// authenticates with.
+    /// </summary>
+    /// <param name="builder">The builder returned by <c>MintKeysInProcess</c>.</param>
+    /// <param name="configureOptions">Configures the blob service endpoint and the container.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// It hangs off the minting tier rather than the service collection because a ring belongs to that tier and to
+    /// no other: the tier where the vault holds every key has nothing to store.
+    /// <para>
+    /// Blob rather than a Key Vault secret, though the vault is already configured: a secret write has no
+    /// conditional create, so two pods minting the same period would both succeed and each publish its own key. A
+    /// blob upload takes <c>If-None-Match: *</c>, which is the insert-if-absent the ring needs. What lands there
+    /// is a JWE sealed to the vault's key, so the container holds ciphertext and never a secret.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection PersistRingToAzureBlob(
+        this IMintedKeysBuilder builder,
+        Action<AzureBlobKeyRingOptions> configureOptions)
+    {
+        var services = builder.Services;
+        services.Configure(configureOptions);
+
+        services.TryAddSingleton<IKeyRingStore>(provider =>
+        {
+            var ring = provider.GetRequiredService<IOptions<AzureBlobKeyRingOptions>>().Value;
+
+            // The same credential chain the custodian uses: the ring is not a second identity to manage, and the
+            // container is reached by whatever already reaches the vault.
+            var credential = AzureKeyVaultClient.BuildCredential(
+                provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
+
+            var service = new BlobServiceClient(new Uri(ring.ServiceUri), credential);
+            return new AzureBlobKeyRingStore(service.GetBlobContainerClient(ring.Container));
+        });
+
+        return services;
     }
 }
