@@ -28,23 +28,30 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Vault;
 
 /// <summary>
-/// Wires the HashiCorp Vault / OpenBao Transit custodian into the Abblix OIDC Server crypto seam and JWKS
-/// publishing.
+/// Registers the HashiCorp Vault / OpenBao Transit custodian for the Abblix OIDC Server.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Integrates Vault / OpenBao Transit as the OIDC provider's external key store: a signing key routes its
-    /// signing to Vault and an encryption key its RSA-OAEP-256 unwrap, both addressed by the key's <c>kid</c>
-    /// (the Transit key name), while the keys' public halves are fetched from Transit and published to the
-    /// <c>/jwks</c> endpoint and local signature verification. Configures the typed <see cref="VaultTransitClient"/>,
-    /// wires the custodian into both crypto seams via <c>AddKeyCustodian</c>, and replaces the default key
-    /// provider - so call this AFTER the OIDC registration for the last singular registration to win.
+    /// Registers Vault / OpenBao Transit as the custodian of the OIDC provider's keys and opens the tier choice
+    /// that completes the wiring. This call is only the transport: it configures the typed
+    /// <see cref="VaultTransitClient"/> against the Transit mount and carries the auth token. Which keys are used
+    /// - and whether their private halves ever enter this process - is the tier call chained onto the returned
+    /// builder, which must follow: a custodian without one fails at startup rather than silently falling back to
+    /// the static keys in <c>OidcOptions</c>. Chain both calls AFTER the OIDC registration, which the tier call
+    /// composes onto.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="configureOptions">Configures the Vault address, auth token, Transit mount and key names.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddVaultExternalKeys(
+    /// <param name="configureOptions">Configures the Vault address, auth token and Transit mount.</param>
+    /// <returns>The builder whose tier call completes the wiring.</returns>
+    /// <example>
+    /// <code>
+    /// services
+    ///     .AddVaultCustodian(vault =&gt; configuration.GetSection("Vault").Bind(vault))
+    ///     .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    /// </code>
+    /// </example>
+    public static IKeyCustodianBuilder AddVaultCustodian(
         this IServiceCollection services,
         Action<VaultTransitOptions> configureOptions)
     {
@@ -72,10 +79,8 @@ public static class ServiceCollectionExtensions
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // VaultTransitOptions implements IExternalKeyConfiguration, so the options flow straight through with no
-        // mapping: the provider reads the signing/encryption key names and algorithms off them.
-        services.AddExternalKeys(serviceProvider =>
-            serviceProvider.GetRequiredService<IOptions<VaultTransitOptions>>().Value);
-        return services;
+        // AddHttpClient above already registered the typed client as the IKeyCustodian, so this only opens the
+        // tier choice on top of it.
+        return services.AddCustodian();
     }
 }

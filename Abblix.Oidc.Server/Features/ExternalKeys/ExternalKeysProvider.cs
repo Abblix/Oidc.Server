@@ -42,18 +42,23 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// </summary>
 public sealed class ExternalKeysProvider(
     IKeyCustodian custodian,
-    IExternalKeyConfiguration configuration,
+    CustodianHeldKeys keys,
     IOptions<OidcOptions> options,
     TimeProvider timeProvider)
     : IAuthServiceKeysProvider
 {
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => PublishAsync(configuration.SigningKeyName, PublicKeyUsages.Signature, configuration.SigningAlgorithm);
+        => PublishAsync(keys.SigningKeyName, PublicKeyUsages.Signature, keys.SigningAlgorithm);
 
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
-        => PublishAsync(configuration.EncryptionKeyName, PublicKeyUsages.Encryption, configuration.EncryptionAlgorithm);
+        // A provider that issues no encrypted token names no encryption key, and then there is nothing to publish.
+        // Asking the custodian for a guessed name instead would fail against a custodian that holds only a signing
+        // key, which is the common high-assurance setup.
+        => keys.EncryptionKeyName is { } encryptionKeyName
+            ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
+            : AsyncEnumerable.Empty<JsonWebKey>();
 
     // Note: this lists the custodian's key versions on every call. Versions change on human timescales (a
     // rotation), so a production deployment caches the enumeration for a short lifetime and recomputes only the

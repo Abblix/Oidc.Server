@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// Thin HTTP client over the Vault / OpenBao Transit secrets engine. Every private-key operation is a network
 /// round-trip: the key is created inside Transit as non-exportable, so its private half never leaves the engine
 /// and this client only moves bytes across the boundary. The typed <see cref="HttpClient"/> is configured by
-/// <c>AddVaultExternalKeys</c> with the Transit base address (<c>{Address}/v1/{mount}/</c>) and the auth header.
+/// <c>AddVaultCustodian</c> with the Transit base address (<c>{Address}/v1/{mount}/</c>) and the auth header.
 /// </summary>
 public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
 {

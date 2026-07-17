@@ -24,27 +24,33 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Vault.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddVaultExternalKeys</c>: the Transit client is registered as the external
-/// key store behind the shared custodian and key provider, and the typed Transit client is pointed at the mount
-/// with its auth header.
+/// Verifies the wiring performed by <c>AddVaultCustodian</c>: the typed Transit client is pointed at the mount
+/// with its auth header and registered as the custodian, the tier call chained onto it installs the key provider,
+/// and omitting that tier call fails at startup instead of silently serving the static keys from the options.
 /// </summary>
-public class AddVaultExternalKeysTests
+public class AddVaultCustodianTests
 {
-    private static IServiceCollection Configure()
-    {
-        var services = new ServiceCollection();
-        services.AddVaultExternalKeys(options =>
+    private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
+        => services.AddVaultCustodian(options =>
         {
             options.Address = "https://vault.test:8200";
             options.Token = "s.test-token";
             options.TransitMount = "transit";
-            options.SigningKeyName = "oidc-sign";
-            options.EncryptionKeyName = "oidc-enc";
+        });
+
+    private static IServiceCollection Configure()
+    {
+        var services = new ServiceCollection();
+        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
+        {
+            SigningKeyName = "oidc-sign",
+            EncryptionKeyName = "oidc-enc",
         });
 
         // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
@@ -66,6 +72,47 @@ public class AddVaultExternalKeysTests
         // The Transit client itself serves as the external key custodian, and the provider publishes its keys.
         Assert.IsType<VaultTransitClient>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+    }
+
+    [Fact]
+    public void StartupValidationFails_WhenTheTierIsNeverChosen()
+    {
+        var services = new ServiceCollection();
+        AddCustodian(services);
+        services.AddSingleton(TimeProvider.System);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The host runs the startup validators before it starts the hosted service that opens the HTTP port, so
+        // this is the failure a misconfigured deployment actually meets: no port, no token, no silent fallback to
+        // the static keys of OidcOptions.
+        var validator = provider.GetRequiredService<IStartupValidator>();
+
+        var error = Assert.Throws<OptionsValidationException>(validator.Validate);
+        Assert.Contains("HoldKeysIn", Assert.Single(error.Failures));
+    }
+
+    [Fact]
+    public void StartupValidationPasses_WhenTheTierIsChosen()
+    {
+        using var provider = Configure().BuildServiceProvider();
+
+        provider.GetRequiredService<IStartupValidator>().Validate();
+    }
+
+    [Fact]
+    public void KeyProviderStillGuards_WhenTheTierIsNeverChosen()
+    {
+        var services = new ServiceCollection();
+        AddCustodian(services);
+        services.AddSingleton(TimeProvider.System);
+
+        using var provider = services.BuildServiceProvider();
+        var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
+
+        // The second line, for a host that resolves keys without a host lifetime to run the startup validation.
+        var error = Assert.Throws<InvalidOperationException>(() => keysProvider.GetSigningKeys());
+        Assert.Contains("HoldKeysIn", error.Message);
     }
 
     [Fact]

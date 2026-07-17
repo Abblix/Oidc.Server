@@ -24,25 +24,29 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddAzureExternalKeys</c>: the vault client is registered as the external
-/// key custodian, and the key provider publishes its public halves.
+/// Verifies the wiring performed by <c>AddAzureCustodian</c>: the vault client is registered as the custodian, the
+/// tier call chained onto it installs the key provider, and omitting that tier call fails at startup instead of
+/// silently serving the static keys from the options.
 /// </summary>
-public class AddAzureExternalKeysTests
+public class AddAzureCustodianTests
 {
+    private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
+        => services.AddAzureCustodian(options => options.KeyVaultUri = "https://contoso.vault.azure.net/");
+
     [Fact]
     public void RegistersCustodianAndKeyProvider()
     {
         var services = new ServiceCollection();
-        services.AddAzureExternalKeys(options =>
+        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
         {
-            options.KeyVaultUri = "https://contoso.vault.azure.net/";
-            options.SigningKeyName = "oidc-sign";
-            options.EncryptionKeyName = "oidc-enc";
+            SigningKeyName = "oidc-sign",
+            EncryptionKeyName = "oidc-enc",
         });
 
         // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
@@ -57,5 +61,23 @@ public class AddAzureExternalKeysTests
         // The vault client itself serves as the external key custodian, and the provider publishes its keys.
         Assert.IsType<AzureKeyVaultClient>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+    }
+
+    [Fact]
+    public void StartupValidationFails_WhenTheTierIsNeverChosen()
+    {
+        var services = new ServiceCollection();
+        AddCustodian(services);
+        services.AddSingleton(TimeProvider.System);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The host runs the startup validators before it starts the hosted service that opens the HTTP port, so
+        // this is the failure a misconfigured deployment actually meets: no port, no token, no silent fallback to
+        // the static keys of OidcOptions.
+        var validator = provider.GetRequiredService<IStartupValidator>();
+
+        var error = Assert.Throws<OptionsValidationException>(validator.Validate);
+        Assert.Contains("HoldKeysIn", Assert.Single(error.Failures));
     }
 }

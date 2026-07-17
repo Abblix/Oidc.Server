@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.OIDC.Server.Vault</PackageId>
     <Title>Abblix OIDC Server Vault Custodian</Title>
-    <Description>HashiCorp Vault / OpenBao Transit external-key integration for Abblix OIDC Server. Signs and unwraps with keys held inside Vault Transit (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, all wired with a single AddVaultExternalKeys call.</Description>
+    <Description>HashiCorp Vault / OpenBao Transit external-key integration for Abblix OIDC Server. Signs and unwraps with keys held inside Vault Transit (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, wired with an AddVaultCustodian call and the tier choice that follows it.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -49,6 +49,9 @@
   <ItemGroup>
     <None Include="..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
     <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <!-- The custodian model shared by every external-key package. Kept in one place at the repo root and packed
+         into each of them, so the README here carries only what is specific to this backend. -->
+    <None Include="..\EXTERNAL-KEYS.md" Link="EXTERNAL-KEYS.md" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 

@@ -1,8 +1,8 @@
 # Abblix.OIDC.Server.Vault
 
-**Abblix.OIDC.Server.Vault** integrates the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) with the HashiCorp Vault / OpenBao **Transit** secrets engine. The provider's signing and encryption keys live inside Transit as non-exportable keys, so their private halves never enter your process. Signing and Content Encryption Key unwrapping run as Transit round-trips, addressed by each key's `kid` (its Transit key name); the public halves are fetched once at startup, published at the `/jwks` endpoint, and used for local signature verification on the hot path.
+**Abblix.OIDC.Server.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys held in the HashiCorp Vault / OpenBao Transit secrets engine. The keys live inside Transit as non-exportable keys (software-protected, inside Vault's encrypted barrier), so their private halves never enter your process. Signing and Content Encryption Key unwrapping run as Transit round-trips; the public halves are published at `/jwks` and verified locally, which never calls Transit.
 
-The package plugs into the OIDC server's external-key seam: a single `AddVaultExternalKeys` call registers the Transit client as the external key custodian, routes every private operation through the crypto seam, and replaces the default key provider.
+**Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first.** It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
 
 ## Installation
 
@@ -10,37 +10,80 @@ The package plugs into the OIDC server's external-key seam: a single `AddVaultEx
 dotnet add package Abblix.OIDC.Server.Vault
 ```
 
+## Provisioning
+
+Create the keys in Transit before the first run, and leave them non-exportable, which is the default:
+
+```bash
+vault secrets enable transit
+vault write -f transit/keys/oidc-sign type=rsa-2048        # exportable stays false
+vault write -f transit/keys/oidc-enc  type=rsa-2048        # only if you issue encrypted tokens
+```
+
+Scope the provider's token to the paths it uses and nothing else. Never a root or admin token:
+
+```hcl
+path "transit/keys/oidc-sign"    { capabilities = ["read"] }    # publish the public halves
+path "transit/sign/oidc-sign"    { capabilities = ["update"] }  # sign tokens
+path "transit/keys/oidc-enc"     { capabilities = ["read"] }
+path "transit/decrypt/oidc-enc"  { capabilities = ["update"] }  # unwrap a CEK
+```
+
 ## Usage
 
-Register it **after** the OIDC services, so its key provider wins the singular registration. Name the Transit keys and, optionally, choose the algorithms:
+Point the custodian at Vault, then name the Transit keys to produce with. Chain both calls after the OIDC registration:
 
 ```csharp
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Oidc.Server.Vault;
 
-services.AddVaultExternalKeys(options =>
-{
-    options.Address = builder.Configuration["Vault:Address"] ?? "http://127.0.0.1:8200";
-    options.Token = builder.Configuration["Vault:Token"]; // sourced from the environment, never hardcoded
-    options.TransitMount = "transit";
+builder.Services
+    .AddVaultCustodian(vault =>
+    {
+        // Vault must be reached over TLS: this connection carries the token and every signature.
+        vault.Address = builder.Configuration["Vault:Address"]
+            ?? throw new InvalidOperationException("Vault:Address is not configured.");
+        vault.Token = builder.Configuration["Vault:Token"]; // from the environment, never hardcoded
+        vault.TransitMount = "transit";                     // optional: this is the default mount
+    })
+    .HoldKeysInCustodian(new CustodianHeldKeys
+    {
+        // The Transit key names. Each version publishes under its own kid, "oidc-sign:1" and so on.
+        SigningKeyName = "oidc-sign",
+        EncryptionKeyName = "oidc-enc",   // omit it if you issue no encrypted tokens: none is published
 
-    options.SigningKeyName = "oidc-sign";     // the Transit key name and the published signing kid
-    options.EncryptionKeyName = "oidc-enc";   // the Transit key name and the published encryption kid
+        // Optional: defaults to RS256.
+        SigningAlgorithm = SigningAlgorithms.RS256,
 
-    // Optional: both default to the values below.
-    options.SigningAlgorithm = SigningAlgorithms.RS256;
-    options.EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
-});
+        // Transit unwraps RSA-OAEP-256 only, so this is its one valid value.
+        EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+    });
 ```
-
-That is all: the signing key routes its signing to Transit, the encryption key routes its unwrap, and both keys' public halves appear at `/jwks`.
 
 ### Authentication
 
-The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it: dev mode uses a well-known root token, while production authenticates through AppRole or Kubernetes and mints a short-lived token.
+The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
+
+Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy above.
+
+## Rotation
+
+Rotate in Transit:
+
+```bash
+vault write -f transit/keys/oidc-sign/rotate
+```
+
+Every version is published under its own `kid`, `oidc-sign:1` and so on, and each signing request pins the exact version its `kid` names, so a token is never signed by a version the client cannot resolve. Older versions keep verifying and unwrapping until you remove them from Transit. [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) explains the propagation window that decides when a fresh version starts signing.
+
+## What it costs on Transit
+
+Every issued token costs at least two Transit round-trips: one to list the signing key's versions, one to sign. An encrypted token adds a third. Nothing here is cached, and Transit is a hard dependency of token issuance, so size it for your peak token rate. Set an explicit HTTP timeout: a hung call is otherwise bounded only by `HttpClient.Timeout`, which defaults to 100 seconds. The full picture is in [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md).
 
 ## Supported algorithms
 
-The store maps each configured algorithm to Transit's native operation and rejects the rest, so the set below is exactly what this backend provisions.
+This package maps each algorithm below to Transit's native operation and rejects any other, so this is the set it supports. Transit itself offers more; a row is added here only when the mapping and its round-trip are covered by tests.
 
 | Operation | Algorithms | Transit key |
 |---|---|---|
@@ -48,13 +91,14 @@ The store maps each configured algorithm to Transit's native operation and rejec
 | Signing | ES256, ES384, ES512 (raw R/S signature via Transit `jws` marshaling) | ECDSA |
 | Key unwrap | RSA-OAEP-256 | RSA |
 
-ECDH-ES key agreement is not supported: Vault Transit exposes no key-agreement primitive. For that you need a custodian built on a backend that does (for example AWS KMS `DeriveSharedSecret` or a PKCS#11 HSM), plugged into the same `IKeyCustodian` seam.
+ECDH-ES key agreement is not supported: Vault Transit exposes no key-agreement primitive.
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
+| **[Abblix.OIDC.Server.Azure](https://www.nuget.org/packages/Abblix.OIDC.Server.Azure)** | Azure Key Vault custodian for the same external-key seam |
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started

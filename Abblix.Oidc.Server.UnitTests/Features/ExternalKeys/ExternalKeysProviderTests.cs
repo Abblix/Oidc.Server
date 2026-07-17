@@ -97,6 +97,20 @@ public class ExternalKeysProviderTests
     }
 
     [Fact]
+    public async Task GetEncryptionKeys_PublishesNothing_WhenNoEncryptionKeyIsNamed()
+    {
+        var custodian = new Mock<IKeyCustodian>(MockBehavior.Strict);
+        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1),
+            encryptionKeyName: null);
+
+        var keys = await ToListAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
+
+        // A signing-only deployment holds no encryption key, so a guessed name would fail against the custodian.
+        // The strict mock proves the provider does not ask for one.
+        Assert.Empty(keys);
+    }
+
+    [Fact]
     public async Task GetSigningKeys_PublishesEveryVersion_KeepingEachVersionsKid()
     {
         var now = new DateTimeOffset(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
@@ -160,12 +174,18 @@ public class ExternalKeysProviderTests
         TimeSpan propagation,
         string signingKeyName = "sign-key",
         string signingAlgorithm = SigningAlgorithms.RS256,
-        string encryptionKeyName = "enc-key",
+        string? encryptionKeyName = "enc-key",
         string encryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256)
     {
-        var config = new TestKeyConfiguration(signingKeyName, signingAlgorithm, encryptionKeyName, encryptionAlgorithm);
+        var keys = new CustodianHeldKeys
+        {
+            SigningKeyName = signingKeyName,
+            SigningAlgorithm = signingAlgorithm,
+            EncryptionKeyName = encryptionKeyName,
+            EncryptionAlgorithm = encryptionAlgorithm,
+        };
         var options = Options.Create(new OidcOptions { KeyRolloverPropagation = propagation });
-        return new ExternalKeysProvider(custodian, config, options, timeProvider);
+        return new ExternalKeysProvider(custodian, keys, options, timeProvider);
     }
 
     private static IKeyCustodian CustodianWith(string keyName, params KeyVersion[] versions)
@@ -204,8 +224,4 @@ public class ExternalKeysProviderTests
         timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
         return timeProvider.Object;
     }
-
-    private sealed record TestKeyConfiguration(
-        string SigningKeyName, string SigningAlgorithm, string EncryptionKeyName, string EncryptionAlgorithm)
-        : IExternalKeyConfiguration;
 }
