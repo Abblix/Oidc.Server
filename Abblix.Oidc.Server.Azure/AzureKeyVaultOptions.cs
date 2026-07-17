@@ -20,17 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.ExternalKeys;
-
 namespace Abblix.Oidc.Server.Azure;
 
 /// <summary>
-/// Points the custodian at an Azure Key Vault. The keys are software- or HSM-protected keys whose private half
-/// never leaves the vault; this process only sends bytes to sign or decrypt and receives the result. The
-/// custodian addresses each key by its <c>kid</c>, which is the Key Vault key name the host publishes.
+/// Points the custodian at an Azure Key Vault: which vault and how to authenticate to it, and nothing about which
+/// keys to use. Which keys, and therefore whether their private halves ever enter this process, is the tier
+/// choice that follows the custodian registration.
 /// </summary>
-public sealed class AzureKeyVaultOptions : IExternalKeyConfiguration
+public sealed class AzureKeyVaultOptions
 {
     /// <summary>The vault URI, e.g. <c>https://my-vault.vault.azure.net/</c>.</summary>
     public string KeyVaultUri { get; set; } = "";
@@ -49,24 +46,6 @@ public sealed class AzureKeyVaultOptions : IExternalKeyConfiguration
 
     /// <summary>Client secret of the service principal; see <see cref="TenantId"/>. Never hardcode it.</summary>
     public string ClientSecret { get; set; } = "";
-
-    /// <summary>Name of the Key Vault key used to sign tokens; also the published signing key's <c>kid</c>.</summary>
-    public string SigningKeyName { get; set; } = "oidc-sign";
-
-    /// <summary>Name of the Key Vault key used to unwrap encrypted-token CEKs; also the published encryption key's <c>kid</c>.</summary>
-    public string EncryptionKeyName { get; set; } = "oidc-enc";
-
-    /// <summary>
-    /// JWS algorithm the signing key uses (default <c>RS256</c>). Must be one Key Vault provisions: RS256/384/512,
-    /// PS256/384/512, or ES256/384/512 (the EC ones need an EC Key Vault key of the matching curve).
-    /// </summary>
-    public string SigningAlgorithm { get; set; } = SigningAlgorithms.RS256;
-
-    /// <summary>
-    /// JWE key-management algorithm the encryption key uses (default <c>RSA-OAEP-256</c>). Key Vault also
-    /// provisions <c>RSA-OAEP</c> and <c>RSA1_5</c>.
-    /// </summary>
-    public string EncryptionAlgorithm { get; set; } = EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
     /// <summary>
     /// How long a pooled HTTP connection is reused before it is recycled. The Azure SDK keeps one client for the

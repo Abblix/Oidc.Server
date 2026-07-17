@@ -24,58 +24,49 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace Abblix.Oidc.Server.Vault.UnitTests;
+namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddVaultExternalKeys</c>: the Transit client is registered as the external
-/// key store behind the shared custodian and key provider, and the typed Transit client is pointed at the mount
-/// with its auth header.
+/// Verifies what is specific to <c>AddAzureCustodian</c>: the vault client is registered as the custodian, and the
+/// tier call chained onto it installs the key provider. What the tier call itself enforces is custodian-agnostic
+/// and lives in the core's own wiring tests.
 /// </summary>
-public class AddVaultExternalKeysTests
+public class AddAzureCustodianTests
 {
-    private static IServiceCollection Configure()
+    private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
+    {
+        // The tier call composes onto the in-process crypto backends, so they must be registered first - the same
+        // order a host follows via AddOidcServices.
+        services.AddJsonWebTokens();
+
+        return services.AddAzureCustodian(options => options.KeyVaultUri = "https://contoso.vault.azure.net/");
+    }
+
+    [Fact]
+    public void RegistersCustodianAndKeyProvider()
     {
         var services = new ServiceCollection();
-        services.AddVaultExternalKeys(options =>
+        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
         {
-            options.Address = "https://vault.test:8200";
-            options.Token = "s.test-token";
-            options.TransitMount = "transit";
-            options.SigningKeyName = "oidc-sign";
-            options.EncryptionKeyName = "oidc-enc";
+            SigningKeyName = "oidc-sign",
+            EncryptionKeyName = "oidc-enc",
         });
 
         // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
         // AddOidcServices. Mirror that minimally here so the provider resolves without the whole OIDC stack.
         services.AddOptions();
         services.AddSingleton(TimeProvider.System);
-        return services;
-    }
-
-    [Fact]
-    public void RegistersCustodianAndKeyProvider()
-    {
-        var services = Configure();
 
         Assert.Contains(services, d => d.ServiceType == typeof(IKeyCustodian));
 
         using var provider = services.BuildServiceProvider();
 
-        // The Transit client itself serves as the external key custodian, and the provider publishes its keys.
-        Assert.IsType<VaultTransitClient>(provider.GetRequiredService<IKeyCustodian>());
+        // The vault client itself serves as the external key custodian, and the provider publishes its keys.
+        Assert.IsType<AzureKeyVaultClient>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
-    [Fact]
-    public void ConfiguresTypedClient_WithTransitBaseAddressAndAuthHeader()
-    {
-        using var provider = Configure().BuildServiceProvider();
-
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IKeyCustodian));
-
-        Assert.Equal("https://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
-        Assert.Equal("s.test-token", Assert.Single(http.DefaultRequestHeaders.GetValues("X-Vault-Token")));
-    }
 }

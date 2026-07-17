@@ -28,22 +28,28 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Azure;
 
 /// <summary>
-/// Wires the Azure Key Vault custodian into the Abblix OIDC Server crypto seam and JWKS publishing.
+/// Registers the Azure Key Vault custodian for the Abblix OIDC Server.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Integrates Azure Key Vault as the OIDC provider's external key store: a signing key routes its signing to
-    /// the vault and an encryption key its RSA-OAEP-256 unwrap, both addressed by the key's <c>kid</c> (the Key
-    /// Vault key name), while the keys' public halves are fetched from the vault and published to the <c>/jwks</c>
-    /// endpoint and local signature verification. Registers the vault client, wires the custodian into both
-    /// crypto seams via <c>AddKeyCustodian</c>, and replaces the default key provider - so call this AFTER the
-    /// OIDC registration for the last singular registration to win.
+    /// Registers Azure Key Vault as the custodian of the OIDC provider's keys and opens the tier choice that
+    /// completes the wiring. This call is only the transport: it registers the vault client and its credential.
+    /// Which keys are used - and whether their private halves ever enter this process - is the tier call chained
+    /// onto the returned builder, which must follow: a custodian without one fails loud on first key use rather
+    /// than silently falling back to the static keys in <c>OidcOptions</c>.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
-    /// <param name="configureOptions">Configures the vault URI, service-principal credentials and key names.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddAzureExternalKeys(
+    /// <param name="configureOptions">Configures the vault URI and the service-principal credentials.</param>
+    /// <returns>The builder whose tier call completes the wiring.</returns>
+    /// <example>
+    /// <code>
+    /// services
+    ///     .AddAzureCustodian(azure =&gt; configuration.GetSection("Azure").Bind(azure))
+    ///     .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    /// </code>
+    /// </example>
+    public static IKeyCustodianBuilder AddAzureCustodian(
         this IServiceCollection services, Action<AzureKeyVaultOptions> configureOptions)
     {
         services.Configure(configureOptions);
@@ -65,10 +71,8 @@ public static class ServiceCollectionExtensions
             })
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // AzureKeyVaultOptions implements IExternalKeyConfiguration, so the options flow straight through with no
-        // mapping: the provider reads the signing/encryption key names and algorithms off them.
-        services.AddExternalKeys(serviceProvider =>
-            serviceProvider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
-        return services;
+        // AddHttpClient above already registered the typed client as the IKeyCustodian, so this only opens the
+        // tier choice on top of it.
+        return services.AddCustodian();
     }
 }
