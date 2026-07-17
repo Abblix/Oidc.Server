@@ -83,4 +83,50 @@ public static class ServiceCollectionExtensions
         // tier choice on top of it.
         return services.AddCustodian();
     }
+
+    /// <summary>
+    /// Keeps the ring of minted keys in this Vault's KV version 2 engine, on the same server that holds the key
+    /// protecting them.
+    /// </summary>
+    /// <param name="builder">The builder returned by <c>MintKeysInProcess</c>.</param>
+    /// <param name="configureOptions">Configures the KV mount and the path the ring lives under.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// It hangs off the minting tier rather than the service collection because a ring belongs to that tier and to
+    /// no other: the tier where the custodian holds every key has nothing to store.
+    /// <para>
+    /// The engine must be KV v2. Its <c>cas=0</c> write is the insert-if-absent the ring is built on, and it is
+    /// what makes exactly one pod mint a period without a lock service. What lands there is a JWE the server
+    /// sealed to the custodian's key, so the engine holds ciphertext and never a secret.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection PersistRingToVaultKeyValue(
+        this IMintedKeysBuilder builder,
+        Action<VaultKeyValueOptions>? configureOptions = null)
+    {
+        var services = builder.Services;
+        services.Configure(configureOptions ?? (_ => { }));
+
+        // The ring rides the same server and token as the custodian, so the address comes from its options: one
+        // Vault holds both the key that protects the ring and the ring itself. The base address stops at /v1/
+        // rather than a mount, since KV lives on a different mount than Transit.
+        services.AddHttpClient<IKeyRingStore, VaultKeyValueStore>((provider, http) =>
+        {
+            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
+            http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
+            if (!string.IsNullOrWhiteSpace(options.Token))
+                http.DefaultRequestHeaders.Add("X-Vault-Token", options.Token);
+        })
+        .ConfigurePrimaryHttpMessageHandler(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
+            return new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
+            };
+        })
+        .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
+        return services;
+    }
 }

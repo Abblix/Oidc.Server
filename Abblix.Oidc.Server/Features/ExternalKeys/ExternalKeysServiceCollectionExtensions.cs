@@ -150,7 +150,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// </summary>
     /// <param name="builder">The builder returned by the custodian registration.</param>
     /// <param name="policy">What to mint, how often, and which key seals it.</param>
-    /// <returns>The service collection, for chaining.</returns>
+    /// <returns>The builder whose <c>PersistRingTo...</c> call says where the ring lives.</returns>
     /// <remarks>
     /// This is the weaker posture of the two, which is why it is named rather than defaulted: the private half is
     /// unwrapped into process memory and stays there, so a compromised process yields the key itself, not merely
@@ -164,7 +164,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// A store must also be registered for the ring; the packages supply one.
     /// </para>
     /// </remarks>
-    public static IServiceCollection MintKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
+    public static IMintedKeysBuilder MintKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
     {
         var services = builder.Services;
 
@@ -175,6 +175,18 @@ public static class ExternalKeysServiceCollectionExtensions
 
         // Satisfies the startup validation AddCustodian armed: the wiring is now complete.
         services.Configure<CustodianTierValidation>(tier => tier.ChosenTier = nameof(MintKeysInProcess));
+
+        // This tier, unlike the other, needs somewhere to keep the ring, and a builder cannot force the call that
+        // supplies it. Nothing else in the container reveals the omission: the ring simply fails to resolve on
+        // first use, long after startup. Checking here is what the recorded tier name is for.
+        services.AddOptions<CustodianTierValidation>()
+            .Validate<IServiceProvider>(
+                (tier, serviceProvider) =>
+                    tier.ChosenTier != nameof(MintKeysInProcess) ||
+                    serviceProvider.GetService<IKeyRingStore>() is not null,
+                "MintKeysInProcess needs a key ring to share the keys it mints, and none is registered. Follow it " +
+                "with a PersistRingTo... call from the custodian's package.")
+            .ValidateOnStart();
 
         // Signing never reaches the custodian in this tier, but opening an envelope does: the KEK is published
         // public-only, which is exactly the signal that routes its unwrap out of process. So the external
@@ -191,6 +203,6 @@ public static class ExternalKeysServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
         services.Replace(ServiceDescriptor.Singleton<IAuthServiceKeysProvider, MintedKeysProvider>());
 
-        return services;
+        return new MintedKeysBuilder(services);
     }
 }
