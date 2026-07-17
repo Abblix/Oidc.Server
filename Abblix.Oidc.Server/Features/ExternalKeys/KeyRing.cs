@@ -50,8 +50,11 @@ internal sealed class KeyRing(
 {
     private volatile IReadOnlyList<OpenedKey> _keys = [];
 
-    /// <summary>One opened entry: the key itself, and when it was minted, which is what orders the set.</summary>
-    private sealed record OpenedKey(JsonWebKey Key, DateTimeOffset CreatedAt);
+    /// <summary>
+    /// One opened entry: the key itself, when it was minted, which is what orders the set, and the id it is
+    /// stored under, which is what retires it.
+    /// </summary>
+    private sealed record OpenedKey(string Id, JsonWebKey Key, DateTimeOffset CreatedAt);
 
     /// <summary>
     /// Returns the keys for a role, produce-first: the active one leads and the rest trail, so the produce role
@@ -87,10 +90,57 @@ internal sealed class KeyRing(
         foreach (var entry in entries)
         {
             var key = await envelope.OpenAsync(entry.Jwe, kekVersions, cancellationToken);
-            opened.Add(new OpenedKey(key, entry.CreatedAt));
+            opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 
-        _keys = opened;
+        _keys = await RetireExpiredAsync(opened, cancellationToken);
+    }
+
+    /// <summary>
+    /// Drops the keys whose last token has expired, and returns what remains.
+    /// </summary>
+    /// <remarks>
+    /// Without this the ring only grows, and every refresh opens one more envelope, which is a custodian
+    /// round-trip apiece.
+    /// <para>
+    /// A key retires when its successor starts signing, not when the successor appears, so the moment is derived
+    /// rather than stored: the successor is active at its own creation plus the propagation window, and from then
+    /// the retired key only has to outlive the tokens it already signed. Every pod computes the same instant from
+    /// the same entries, so they need no agreement about it, and a removal race is harmless - two pods dropping
+    /// the same expired key is the outcome either wanted.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<OpenedKey>> RetireExpiredAsync(
+        IReadOnlyList<OpenedKey> opened,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var propagation = options.Value.KeyRolloverPropagation;
+        var keepRetiredFor = policy.KeepRetiredFor ?? policy.RotateEvery;
+
+        var live = new List<OpenedKey>(opened.Count);
+        foreach (var group in opened.GroupBy(key => key.Key.Usage))
+        {
+            // Oldest first, so each key's successor is simply the next one along. The newest of a role has no
+            // successor and therefore never retires: it is the key currently signing, or the one about to.
+            var byOldest = group.OrderBy(key => key.CreatedAt).ToList();
+
+            for (var index = 0; index < byOldest.Count; index++)
+            {
+                var key = byOldest[index];
+                var successor = index + 1 < byOldest.Count ? byOldest[index + 1] : null;
+
+                if (successor is null || now <= successor.CreatedAt + propagation + keepRetiredFor)
+                {
+                    live.Add(key);
+                    continue;
+                }
+
+                await store.RemoveAsync(key.Id, cancellationToken);
+            }
+        }
+
+        return live;
     }
 
     /// <summary>
@@ -102,12 +152,16 @@ internal sealed class KeyRing(
 
         foreach (var (usage, algorithm) in Roles())
         {
-            var id = PeriodId(usage, algorithm, out var periodStart);
+            var id = PeriodId(usage, algorithm);
             if (entries.Any(entry => entry.Id == id))
                 continue;
 
             var jwe = await SealNewKeyAsync(usage, algorithm, cancellationToken);
-            var entry = new StoredKey { Id = id, Jwe = jwe, CreatedAt = periodStart };
+
+            // Minted now, not at the start of the period. The period is a coordinate on the rotation grid and can
+            // lie weeks in the past; dating the key by it would make it born already old, so the propagation
+            // window would be long spent and it would start signing before any client could have fetched it.
+            var entry = new StoredKey { Id = id, Jwe = jwe, CreatedAt = timeProvider.GetUtcNow() };
 
             // False means another pod claimed this period first. Its key is as good as ours, and the ring must
             // hold exactly one, so the loser simply drops what it generated. Nothing is retried.
@@ -171,14 +225,15 @@ internal sealed class KeyRing(
     /// The id every pod computes identically for the current period, which is what makes exactly one insert win.
     /// </summary>
     /// <remarks>
-    /// The period start is floored to the rotation grid rather than read off the clock, so two pods minting
-    /// seconds apart still race for one id instead of creating two keys.
+    /// It is floored to the rotation grid rather than read off the clock, which is the whole point: two pods
+    /// minting seconds apart still compute one id and race for it, instead of each creating a key. This is a
+    /// coordinate, not a timestamp - when a key was actually minted is recorded separately, since the period may
+    /// have begun long before the pod got to it.
     /// </remarks>
-    private string PeriodId(string usage, string algorithm, out DateTimeOffset periodStart)
+    private string PeriodId(string usage, string algorithm)
     {
-        var now = timeProvider.GetUtcNow();
-        var periods = now.UtcTicks / policy.RotateEvery.Ticks;
-        periodStart = new DateTimeOffset(periods * policy.RotateEvery.Ticks, TimeSpan.Zero);
+        var periods = timeProvider.GetUtcNow().UtcTicks / policy.RotateEvery.Ticks;
+        var periodStart = new DateTimeOffset(periods * policy.RotateEvery.Ticks, TimeSpan.Zero);
 
         return $"{usage}-{algorithm}-{periodStart:yyyyMMddTHHmmssZ}";
     }

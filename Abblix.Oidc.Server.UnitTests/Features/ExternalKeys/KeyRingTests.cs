@@ -94,7 +94,8 @@ public sealed class KeyRingTests : IDisposable
         FakeStore? store = null,
         TimeSpan? propagation = null,
         DateTimeOffset? now = null,
-        string? encryptionAlgorithm = null)
+        string? encryptionAlgorithm = null,
+        TimeSpan? keepRetiredFor = null)
     {
         store ??= new FakeStore();
 
@@ -122,6 +123,7 @@ public sealed class KeyRingTests : IDisposable
                 KekName = KekName,
                 RotateEvery = TimeSpan.FromDays(30),
                 EncryptionAlgorithm = encryptionAlgorithm,
+                KeepRetiredFor = keepRetiredFor,
             },
             Options.Create(new OidcOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
             time.Object);
@@ -220,6 +222,94 @@ public sealed class KeyRingTests : IDisposable
         var fromSecond = Assert.Single(second.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
         Assert.Equal(fromFirst.KeyId, fromSecond.KeyId);
         Assert.Equal(entry.CreatedAt, Now.Subtract(Now - entry.CreatedAt));
+    }
+
+    [Fact]
+    public async Task AFreshKeyIsAnnouncedBeforeItSigns_HoweverLongItsPeriodHasBeenRunning()
+    {
+        var shared = new FakeStore();
+        var (first, _) = CreateRing(shared);
+        await first.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Mint the next period late, well after that period began. The key must still be announced for the full
+        // propagation window: dating it by the period start would make it born already old, so it would start
+        // signing at once, before any client could have fetched it from /jwks.
+        var lateInThePeriod = Now.AddDays(31);
+        var (second, _) = CreateRing(shared, now: lateInThePeriod);
+        await second.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Produce-first: the leader is what the signer takes. The fresh key trails until it clears the window.
+        var producing = second.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First();
+        var oldest = shared.Entries.MinBy(entry => entry.CreatedAt)!;
+
+        Assert.Equal(2, shared.Entries.Count);
+        Assert.Equal(oldest.CreatedAt, Now);
+        Assert.Equal(lateInThePeriod, shared.Entries.MaxBy(entry => entry.CreatedAt)!.CreatedAt);
+
+        // The still-announced key is not the one signing, so a stale client never meets a token it cannot verify.
+        var afterWindow = CreateRing(shared, now: lateInThePeriod.AddHours(2)).Ring;
+        await afterWindow.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.NotEqual(
+            producing.KeyId,
+            afterWindow.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId);
+    }
+
+    [Fact]
+    public async Task RetiresAKey_OnceItsSuccessorHasOutlivedTheTokensItSigned()
+    {
+        var shared = new FakeStore();
+        var keepRetiredFor = TimeSpan.FromHours(1);
+
+        // The clock has to move three times, because retirement is not about a key's own age. The first key is
+        // minted, a rotation later the second is minted, and only after that one has been SIGNING for the
+        // retention window is the first one safe to drop.
+        var (first, _) = CreateRing(shared, keepRetiredFor: keepRetiredFor);
+        await first.RefreshAsync(TestContext.Current.CancellationToken);
+        var original = Assert.Single(shared.Entries).Id;
+
+        var (second, _) = CreateRing(shared, now: Now.AddDays(31), keepRetiredFor: keepRetiredFor);
+        await second.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, shared.Entries.Count);
+
+        var (third, _) = CreateRing(shared, now: Now.AddDays(31).AddHours(3), keepRetiredFor: keepRetiredFor);
+        await third.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Gone from the store, not merely hidden: leaving it would grow the ring forever, and every entry costs a
+        // custodian round-trip to open on each refresh.
+        Assert.DoesNotContain(shared.Entries, entry => entry.Id == original);
+    }
+
+    [Fact]
+    public async Task KeepsAPredecessor_WhileTheTokensItSignedCanStillBeAlive()
+    {
+        var shared = new FakeStore();
+
+        var (first, _) = CreateRing(shared);
+        await first.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // A rotation later, but well inside the retention window: the successor signs now, and yet the old key
+        // must stay published, or every unexpired token it signed stops verifying.
+        var justAfterRotation = Now.AddDays(31);
+        var (later, _) = CreateRing(shared, now: justAfterRotation);
+        await later.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, shared.Entries.Count);
+        Assert.Equal(2, later.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Count());
+    }
+
+    [Fact]
+    public async Task NeverRetiresTheOnlyKey_HoweverOldItIs()
+    {
+        var shared = new FakeStore();
+        var (ring, _) = CreateRing(shared);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Age alone retires nothing: a key retires when its SUCCESSOR takes over, and the newest key of a role
+        // has none. Dropping it on age would leave the provider with no key to sign with at all.
+        var (aged, _) = CreateRing(shared, now: Now.AddYears(5));
+        await aged.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotEmpty(aged.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
     }
 
     [Fact]

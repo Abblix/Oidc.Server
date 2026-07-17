@@ -75,6 +75,18 @@ public sealed record MintedKeys
     /// </remarks>
     public TimeSpan RotateEvery { get; init; } = TimeSpan.FromDays(30);
 
+    /// <summary>
+    /// How long a key is kept after it stops signing, before it leaves the ring. Null keeps it for one full
+    /// rotation period, which is the safe reading of <see cref="RotateEvery"/>.
+    /// </summary>
+    /// <remarks>
+    /// This must outlast every token the key signed. Removing it early does not degrade anything gracefully: the
+    /// key vanishes from <c>/jwks</c> and every unexpired token it signed stops verifying, which is why the
+    /// default errs long rather than short. Set it explicitly only to say "no token of mine lives longer than
+    /// this", and remember refresh tokens are signed too, not just access tokens.
+    /// </remarks>
+    public TimeSpan? KeepRetiredFor { get; init; }
+
     /// <summary>The JWE <c>alg</c> sealing an entry: how its data-encryption key is wrapped under the KEK.</summary>
     public string KeyWrapAlgorithm { get; init; } = EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
