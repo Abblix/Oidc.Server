@@ -51,7 +51,7 @@ builder.Services
     {
         // The Transit key names. Each version publishes under its own kid, "oidc-sign:1" and so on.
         SigningKeyName = "oidc-sign",
-        EncryptionKeyName = "oidc-enc",   // omit it if you issue no encrypted tokens: none is published
+        EncryptionKeyName = "oidc-enc",   // omit it if nothing encrypts to this provider: none is published
 
         // Optional: defaults to RS256.
         SigningAlgorithm = SigningAlgorithms.RS256,

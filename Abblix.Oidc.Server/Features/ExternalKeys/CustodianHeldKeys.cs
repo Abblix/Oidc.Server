@@ -54,10 +54,15 @@ public sealed record CustodianHeldKeys
     public string SigningAlgorithm { get; init; } = SigningAlgorithms.RS256;
 
     /// <summary>
-    /// The custodian's name for the encryption key, whose versions are published and unwrapped with. Optional: a
-    /// provider that issues no encrypted token needs no encryption key, and leaving it unset publishes none,
-    /// rather than guessing a name the custodian may not hold.
+    /// The custodian's name for the encryption key, whose versions are published and unwrapped with. Name it when
+    /// anything encrypts to this provider: it both encrypts the provider's own tokens (a service token configured
+    /// to be encrypted) and decrypts inbound JWE a client sent, such as an encrypted request object or client
+    /// assertion, and its published half is what tells a client where to encrypt.
     /// </summary>
+    /// <remarks>
+    /// Optional, and unset means no encryption key is published at all, rather than a guessed name the custodian
+    /// may not hold: a signing-only deployment is the common high-assurance case.
+    /// </remarks>
     public string? EncryptionKeyName { get; init; }
 
     /// <summary>
