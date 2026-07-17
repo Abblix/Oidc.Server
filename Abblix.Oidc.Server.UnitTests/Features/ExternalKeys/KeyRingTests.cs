@@ -1,0 +1,236 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
+
+/// <summary>
+/// Covers the tier where the server mints its own keys and the custodian only protects them: a key is sealed to
+/// the KEK and opened back through the real JWE seam, a period is minted exactly once across pods, and the set is
+/// served produce-first with the private half gated.
+/// </summary>
+/// <remarks>
+/// The custodian here is a stub that unwraps with the KEK's private half in memory, standing in for the remote
+/// call a real one makes. That keeps the envelope, the ring projection and the minting race under test without a
+/// live Vault, while the crypto itself is the library's own shipped JWE path rather than a test double.
+/// </remarks>
+public sealed class KeyRingTests : IDisposable
+{
+    private const string KekName = "oidc-kek";
+
+    // The JWE seam resolves its keyed algorithms from the provider on every call, so the provider must outlive
+    // the ring it built. Kept here and disposed with the test rather than at the end of the factory.
+    private readonly List<ServiceProvider> _providers = [];
+
+    // One KEK per test, shared by every ring it builds: pods look at ONE custodian, so a key sealed by one pod
+    // must open on another. A KEK per ring would make that impossible and hide the very thing under test.
+    private readonly JsonWebKey _kek =
+        JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)
+            with { KeyId = $"{KekName}:1" };
+
+    public void Dispose()
+    {
+        foreach (var provider in _providers)
+            provider.Dispose();
+    }
+    private static readonly DateTimeOffset Now = new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>An in-memory ring store, standing in for the shared one a deployment uses.</summary>
+    private sealed class FakeStore : IKeyRingStore
+    {
+        public List<StoredKey> Entries { get; } = [];
+
+        public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<StoredKey>>(Entries.ToList());
+
+        public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+        {
+            if (Entries.Any(entry => entry.Id == key.Id))
+                return Task.FromResult(false);
+
+            Entries.Add(key);
+            return Task.FromResult(true);
+        }
+
+        public Task RemoveAsync(string id, CancellationToken cancellationToken)
+        {
+            Entries.RemoveAll(entry => entry.Id == id);
+            return Task.CompletedTask;
+        }
+    }
+
+    private (KeyRing Ring, FakeStore Store) CreateRing(
+        FakeStore? store = null,
+        TimeSpan? propagation = null,
+        DateTimeOffset? now = null,
+        string? encryptionAlgorithm = null)
+    {
+        store ??= new FakeStore();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_kek));
+
+        // Opening an envelope is a custodian unwrap, so the external decryption backend must be on the seam: the
+        // KEK is public-only, and that is what routes its unwrap out of process.
+        services.ComposeExternalKeyBackends();
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var envelope = new KeyEnvelope(provider.GetRequiredService<IJsonWebTokenEncryptor>());
+        var time = new Mock<TimeProvider>();
+        time.Setup(t => t.GetUtcNow()).Returns(now ?? Now);
+
+        var ring = new KeyRing(
+            store,
+            provider.GetRequiredService<IKeyCustodian>(),
+            envelope,
+            new MintedKeys
+            {
+                KekName = KekName,
+                RotateEvery = TimeSpan.FromDays(30),
+                EncryptionAlgorithm = encryptionAlgorithm,
+            },
+            Options.Create(new OidcOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
+            time.Object);
+
+        return (ring, store);
+    }
+
+    /// <summary>A custodian that holds the KEK: it publishes the public half and unwraps with the private one.</summary>
+    private static IKeyCustodian StubCustodian(JsonWebKey kek)
+    {
+        var custodian = new Mock<IKeyCustodian>();
+
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KekName, It.IsAny<CancellationToken>()))
+            .Returns(new[] { new KeyVersion(kek.Sanitize(false), Now.AddDays(-100)) }.ToAsyncEnumerable());
+
+        custodian
+            .Setup(c => c.UnwrapKeyAsync(
+                kek.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
+                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)kek, algorithm, encryptedKey)));
+
+        return custodian.Object;
+    }
+
+    private static byte[] UnwrapLocally(RsaJsonWebKey kek, string algorithm, byte[] encryptedKey)
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create();
+        rsa.ImportParameters(kek.ToRsaParameters());
+
+        var padding = algorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256
+            ? System.Security.Cryptography.RSAEncryptionPadding.OaepSHA256
+            : System.Security.Cryptography.RSAEncryptionPadding.OaepSHA1;
+
+        return rsa.Decrypt(encryptedKey, padding);
+    }
+
+    [Fact]
+    public async Task MintsASigningKey_SealsIt_AndOpensItBackWithItsPrivateHalf()
+    {
+        var (ring, store) = CreateRing();
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // The ring holds ciphertext, never a secret: what is shared is a JWE, and the store cannot read it.
+        var entry = Assert.Single(store.Entries);
+        Assert.Equal(5, entry.Jwe.Split('.').Length);
+
+        // What comes back out is a usable signing key, which is the whole tier: the in-process signer owns it.
+        var key = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: true));
+        Assert.True(key.HasPrivateKey);
+        Assert.Equal(SigningAlgorithms.RS256, key.Algorithm);
+    }
+
+    [Fact]
+    public async Task PublishingNeverCarriesThePrivateHalf()
+    {
+        var (ring, _) = CreateRing();
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Not sharing the key is necessary but not sufficient: the other leak channel is publication.
+        var published = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+        Assert.True(published.HasPublicKey);
+        Assert.False(published.HasPrivateKey);
+    }
+
+    [Fact]
+    public async Task MintsNothingNew_WhenThePeriodAlreadyHasAKey()
+    {
+        var (ring, store) = CreateRing();
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // The period id is derived, not random, so a second refresh recognises the period is served.
+        Assert.Single(store.Entries);
+    }
+
+    [Fact]
+    public async Task SecondPodTakesTheWinnersKey_WhenBothMintTheSamePeriod()
+    {
+        var shared = new FakeStore();
+        var (first, _) = CreateRing(shared);
+        var (second, _) = CreateRing(shared);
+
+        await first.RefreshAsync(TestContext.Current.CancellationToken);
+        await second.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Exactly one key exists for the period: the loser discards what it generated rather than adding a second
+        // key that only it could publish.
+        var entry = Assert.Single(shared.Entries);
+
+        var fromFirst = Assert.Single(first.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+        var fromSecond = Assert.Single(second.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+        Assert.Equal(fromFirst.KeyId, fromSecond.KeyId);
+        Assert.Equal(entry.CreatedAt, Now.Subtract(Now - entry.CreatedAt));
+    }
+
+    [Fact]
+    public async Task MintsAnEncryptionKey_OnlyWhenTheAlgorithmIsNamed()
+    {
+        var (without, _) = CreateRing();
+        await without.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Empty(without.Get(PublicKeyUsages.Encryption, includePrivateKeys: false));
+
+        var (with, _) = CreateRing(encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await with.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Single(with.Get(PublicKeyUsages.Encryption, includePrivateKeys: false));
+    }
+}

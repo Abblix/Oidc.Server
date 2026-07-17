@@ -26,6 +26,7 @@ using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
@@ -137,6 +138,58 @@ public static class ExternalKeysServiceCollectionExtensions
         // registered the custodian and reached this builder by another route.
         services.Replace(ServiceDescriptor.Singleton<IAuthServiceKeysProvider>(serviceProvider =>
             serviceProvider.CreateService<ExternalKeysProvider>(Dependency.Override(keys(serviceProvider)))));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Chooses the tier where the server MINTS its own keys and the custodian only protects them: each key is
+    /// generated in process, encrypted to the custodian's key-encryption key, shared as ciphertext through
+    /// <see cref="IKeyRingStore"/>, and rotated on the policy's schedule. Signing then runs in process, so the
+    /// custodian is touched once per key rather than once per token.
+    /// </summary>
+    /// <param name="builder">The builder returned by the custodian registration.</param>
+    /// <param name="policy">What to mint, how often, and which key seals it.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// This is the weaker posture of the two, which is why it is named rather than defaulted: the private half is
+    /// unwrapped into process memory and stays there, so a compromised process yields the key itself, not merely
+    /// the ability to ask the custodian to sign while its credential lives. Use
+    /// <see cref="HoldKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/> when the key must never be in
+    /// memory at all.
+    /// <para>
+    /// Call this AFTER the OIDC registration (<c>AddOidcServices</c> / <c>AddOidcCore</c>), for the same reason
+    /// the custodian-held tier does: opening an envelope IS a custodian unwrap, so the external decryption
+    /// backend has to be composed with its in-process peer, and a composition needs that peer registered first.
+    /// A store must also be registered for the ring; the packages supply one.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection MintKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
+    {
+        var services = builder.Services;
+
+        if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
+            throw new InvalidOperationException(
+                "Call MintKeysInProcess after the OIDC registration (AddOidcServices / AddOidcCore). It composes " +
+                "the external crypto backends with their in-process peers, and none are registered yet.");
+
+        // Satisfies the startup validation AddCustodian armed: the wiring is now complete.
+        services.Configure<CustodianTierValidation>(tier => tier.ChosenTier = nameof(MintKeysInProcess));
+
+        // Signing never reaches the custodian in this tier, but opening an envelope does: the KEK is published
+        // public-only, which is exactly the signal that routes its unwrap out of process. So the external
+        // backends belong on the seam here too - the decryptor carries the envelope, and the signer simply never
+        // matches a minted key, since that key carries its private half and the in-process signer owns it.
+        services.ComposeExternalKeyBackends();
+
+        services.TryAddSingleton<KeyEnvelope>();
+
+        // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
+        // container knows nothing about: everything else the ring needs is resolved normally.
+        services.TryAddSingleton(serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(policy)));
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
+        services.Replace(ServiceDescriptor.Singleton<IAuthServiceKeysProvider, MintedKeysProvider>());
 
         return services;
     }
