@@ -85,11 +85,11 @@ internal sealed class KeyRing(
             entries = await store.LoadAsync(cancellationToken);
         }
 
-        var kekVersions = KekVersions(cancellationToken);
+        var kekVersions = await KekVersions(cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
         var opened = new List<OpenedKey>(entries.Count);
         foreach (var entry in entries)
         {
-            var key = await envelope.OpenAsync(entry.Jwe, kekVersions, cancellationToken);
+            var key = await envelope.OpenAsync(entry.Jwe, kekVersions.ToAsyncEnumerable(), cancellationToken);
             opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 

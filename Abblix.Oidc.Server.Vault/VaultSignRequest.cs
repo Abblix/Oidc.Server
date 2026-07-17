@@ -43,7 +43,7 @@ internal sealed record VaultSignRequest
     /// Transit applies <see cref="HashAlgorithm"/> to them.
     /// </summary>
     [JsonPropertyName("prehashed")]
-    public bool Prehashed => false;
+    public bool Prehashed { get; init; }
 
     /// <summary>The digest Transit applies, in its own spelling (<c>sha2-256</c> and so on).</summary>
     [JsonPropertyName("hash_algorithm")]
