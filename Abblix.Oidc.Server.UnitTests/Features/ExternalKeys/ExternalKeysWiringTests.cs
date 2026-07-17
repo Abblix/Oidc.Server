@@ -24,20 +24,27 @@ using System;
 using System.Security.Cryptography;
 using Abblix.Jwt;
 using Abblix.Jwt.Signing;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
-/// Pins the ordering contract of the custodian wiring. The tier call composes the external crypto backends with
-/// their in-process peers, so those peers must already be registered: run first, it finds a one-member family,
-/// composes nothing, and the external backend then loses the singular resolve to the local one that arrives after
-/// it. Nothing detects that at runtime - the signing seam simply reports it cannot sign a key it should have
-/// routed to the custodian - so the ordering is asserted here instead.
+/// Pins the wiring contract every custodian shares, against a stub one, since none of it depends on which
+/// custodian is registered: the tier choice is enforced at startup, the key provider guards a resolve until the
+/// choice arrives, and the tier call must follow the OIDC registration.
 /// </summary>
+/// <remarks>
+/// The ordering is the subtle one. The tier call composes the external crypto backends with their in-process
+/// peers, so those peers must already be registered: run first, it finds a one-member family, composes nothing,
+/// and the external backend then loses the singular resolve to the local one that arrives after it. Nothing
+/// detects that at runtime - the signing seam simply reports it cannot sign a key it should have routed to the
+/// custodian - so it is asserted here.
+/// </remarks>
 public class ExternalKeysWiringTests
 {
     private static JsonWebKey PublicOnlyKey()
@@ -78,5 +85,51 @@ public class ExternalKeysWiringTests
             () => services.AddCustodian().HoldKeysInCustodian(Keys));
 
         Assert.Contains("AddOidcServices", error.Message);
+    }
+
+    [Fact]
+    public void StartupValidationFails_WhenTheTierIsNeverChosen()
+    {
+        var services = WithCustodian(new ServiceCollection());
+        services.AddJsonWebTokens();
+        services.AddCustodian();
+
+        using var provider = services.BuildServiceProvider();
+
+        // The host runs the startup validators before it starts the hosted service that opens the HTTP port, so
+        // this is the failure a misconfigured deployment actually meets: no port, no token, and no silent
+        // fallback to the static keys of OidcOptions.
+        var error = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains("HoldKeysIn", Assert.Single(error.Failures));
+    }
+
+    [Fact]
+    public void StartupValidationPasses_WhenTheTierIsChosen()
+    {
+        var services = WithCustodian(new ServiceCollection());
+        services.AddJsonWebTokens();
+        services.AddCustodian().HoldKeysInCustodian(Keys);
+
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IStartupValidator>().Validate();
+    }
+
+    [Fact]
+    public void KeyProviderStillGuards_WhenTheTierIsNeverChosen()
+    {
+        var services = WithCustodian(new ServiceCollection());
+        services.AddJsonWebTokens();
+        services.AddCustodian();
+
+        using var provider = services.BuildServiceProvider();
+        var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
+
+        // The second line, for a host that resolves keys with no host lifetime to run the startup validation.
+        var error = Assert.Throws<InvalidOperationException>(() => keysProvider.GetSigningKeys());
+
+        Assert.Contains("HoldKeysIn", error.Message);
     }
 }

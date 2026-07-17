@@ -30,9 +30,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Verifies the wiring performed by <c>AddAzureCustodian</c>: the vault client is registered as the custodian, the
-/// tier call chained onto it installs the key provider, and omitting that tier call fails at startup instead of
-/// silently serving the static keys from the options.
+/// Verifies what is specific to <c>AddAzureCustodian</c>: the vault client is registered as the custodian, and the
+/// tier call chained onto it installs the key provider. What the tier call itself enforces is custodian-agnostic
+/// and lives in the core's own wiring tests.
 /// </summary>
 public class AddAzureCustodianTests
 {
@@ -69,21 +69,4 @@ public class AddAzureCustodianTests
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
-    [Fact]
-    public void StartupValidationFails_WhenTheTierIsNeverChosen()
-    {
-        var services = new ServiceCollection();
-        AddCustodian(services);
-        services.AddSingleton(TimeProvider.System);
-
-        using var provider = services.BuildServiceProvider();
-
-        // The host runs the startup validators before it starts the hosted service that opens the HTTP port, so
-        // this is the failure a misconfigured deployment actually meets: no port, no token, no silent fallback to
-        // the static keys of OidcOptions.
-        var validator = provider.GetRequiredService<IStartupValidator>();
-
-        var error = Assert.Throws<OptionsValidationException>(validator.Validate);
-        Assert.Contains("HoldKeysIn", Assert.Single(error.Failures));
-    }
 }
