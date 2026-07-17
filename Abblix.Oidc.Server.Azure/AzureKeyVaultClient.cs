@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using System.Net;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Azure;
@@ -112,20 +113,23 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
         SigningAlgorithms.RS256 => SignatureAlgorithm.RS256,
         SigningAlgorithms.RS384 => SignatureAlgorithm.RS384,
         SigningAlgorithms.RS512 => SignatureAlgorithm.RS512,
+
         SigningAlgorithms.PS256 => SignatureAlgorithm.PS256,
         SigningAlgorithms.PS384 => SignatureAlgorithm.PS384,
         SigningAlgorithms.PS512 => SignatureAlgorithm.PS512,
+
         SigningAlgorithms.ES256 => SignatureAlgorithm.ES256,
         SigningAlgorithms.ES384 => SignatureAlgorithm.ES384,
         SigningAlgorithms.ES512 => SignatureAlgorithm.ES512,
+        
         _ => throw new NotSupportedException($"The Azure Key Vault store does not sign '{algorithm}'."),
     };
 
     /// <summary>
     /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
-    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null on failure so a wrong
-    /// key or tampered ciphertext is indistinguishable, which the seam's padding-oracle mitigation relies on. The
-    /// JWE header is unused: an RSA unwrap needs only the ciphertext.
+    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null when the vault rejects
+    /// the ciphertext, so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
+    /// mitigation relies on. The JWE header is unused: an RSA unwrap needs only the ciphertext.
     /// </summary>
     public async Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
@@ -137,8 +141,13 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
             var result = await client.DecryptAsync(encryptionAlgorithm, encryptedKey, cancellationToken);
             return result.Plaintext;
         }
-        catch (RequestFailedException)
+        catch (RequestFailedException failure) when (failure.Status == (int)HttpStatusCode.BadRequest)
         {
+            // Only a rejected ciphertext becomes null, and only because the seam requires it: null is the contract's
+            // way of saying "this did not decrypt", which keeps a wrong key indistinguishable from bad padding.
+            // Everything else must throw. A 429 (Key Vault throttles per vault, and this key is on the token path),
+            // a 403 (the identity lost its Crypto User role), a 5xx: none of those are decryption failures, and
+            // reporting them as one would tell the caller its client sent a bad JWE while the real fault is ours.
             return null;
         }
     }

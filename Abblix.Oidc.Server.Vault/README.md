@@ -71,7 +71,7 @@ Reach Vault over TLS in every environment that is not a local dev container: the
 
 Rotate in Transit:
 
-```bash
+```bashAzureKeyVaultClient
 vault write -f transit/keys/oidc-sign/rotate
 ```
 

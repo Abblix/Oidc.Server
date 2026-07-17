@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net;
+using Azure;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -172,19 +173,46 @@ public class AzureKeyVaultClientTests
     }
 
     [Fact]
-    public async Task DecryptAsync_ReturnsNull_OnVaultFailure()
+    public async Task DecryptAsync_ReturnsNull_OnBadRequest()
+    {
+        // A rejected ciphertext is the ONE case that becomes null: the seam needs a wrong key to be
+        // indistinguishable from bad padding, which is what closes the padding oracle.
+        var result = await DecryptWithVaultAnswering(
+            HttpStatusCode.BadRequest, """{"error":{"code":"BadParameter","message":"invalid ciphertext"}}""");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task DecryptAsync_Throws_OnForbidden()
+    {
+        // The identity lost its Crypto User role. That is our fault, not the client's, and reporting it as a
+        // failed decryption would tell every caller its JWE is bad while the vault is simply refusing us.
+        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+            HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}"""));
+    }
+
+    [Fact]
+    public async Task DecryptAsync_Throws_OnThrottling()
+    {
+        // Key Vault throttles per vault, and this key sits on the token path, so 429 is routine rather than
+        // exotic. Swallowing it as null would reject every encrypted token for as long as the throttle lasts,
+        // silently, and blame the clients.
+        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+            HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
+    }
+
+    private static async Task<byte[]?> DecryptWithVaultAnswering(HttpStatusCode status, string body)
     {
         using var rsa = RSA.Create(2048);
         var handler = new StubHttpMessageHandler(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
-                ? StubHttpMessageHandler.Json(HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}""")
+                ? StubHttpMessageHandler.Json(status, body)
                 : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        var result = await ClientOver(handler).UnwrapKeyAsync(
+        return await ClientOver(handler).UnwrapKeyAsync(
             "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [5, 5], TestContext.Current.CancellationToken);
-
-        Assert.Null(result);
     }
 
     // The crypto client may fetch the key (a JIT GET) before the remote sign; return the key bundle for the GET and

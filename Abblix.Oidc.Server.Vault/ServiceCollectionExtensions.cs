@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Vault;
@@ -56,19 +57,24 @@ public static class ServiceCollectionExtensions
         Action<VaultTransitOptions> configureOptions)
     {
         services.Configure(configureOptions);
+        services.TryAddTransient<VaultTokenHandler>();
 
         // Typed client pointed at the Transit mount, carrying the auth token header. Options are read at client
         // creation so the configured address and token drive the base address and header. The external-key store is
         // a singleton, so this client is held long-lived: rather than per-call CreateClient, disable handler rotation
         // and let SocketsHttpHandler.PooledConnectionLifetime recycle connections to pick up DNS changes, the pattern
         // Microsoft recommends for a long-lived HttpClient.
-        services.AddHttpClient<IKeyCustodian, VaultTransitClient>((provider, http) =>
+        services.AddHttpClient<VaultTransitClient>((provider, http) =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
             http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/{options.TransitMount}/");
-            if (!string.IsNullOrWhiteSpace(options.Token))
-                http.DefaultRequestHeaders.Add("X-Vault-Token", options.Token);
         })
+        .AddHttpMessageHandler<VaultTokenHandler>()
+
+        // The token is a bearer credential that can sign as this provider. IHttpClientFactory's own logging
+        // writes request headers at Trace and redacts nothing by default, so debugging a Vault connectivity
+        // problem - exactly when Trace gets turned on - would print it in the clear.
+        .RedactLoggedHeaders([VaultTokenHandler.TokenHeader])
         .ConfigurePrimaryHttpMessageHandler(provider =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
@@ -79,8 +85,12 @@ public static class ServiceCollectionExtensions
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // AddHttpClient above already registered the typed client as the IKeyCustodian, so this only opens the
-        // tier choice on top of it.
+        // TryAdd rather than the typed-client registration itself: AddHttpClient registers its client TRANSIENT,
+        // which would both build one custodian per consumer (four of them, each with its own credential and
+        // caches) and silently beat a host that pre-registered its own. Pinning the contract here keeps the
+        // custodian single and lets the host's registration win, as the repo's DI rule requires.
+        services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<VaultTransitClient>());
+
         return services.AddCustodian();
     }
 
@@ -106,17 +116,18 @@ public static class ServiceCollectionExtensions
     {
         var services = builder.Services;
         services.Configure(configureOptions ?? (_ => { }));
+        services.TryAddTransient<VaultTokenHandler>();
 
         // The ring rides the same server and token as the custodian, so the address comes from its options: one
         // Vault holds both the key that protects the ring and the ring itself. The base address stops at /v1/
         // rather than a mount, since KV lives on a different mount than Transit.
-        services.AddHttpClient<IKeyRingStore, VaultKeyValueStore>((provider, http) =>
+        services.AddHttpClient<VaultKeyValueStore>((provider, http) =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
             http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
-            if (!string.IsNullOrWhiteSpace(options.Token))
-                http.DefaultRequestHeaders.Add("X-Vault-Token", options.Token);
         })
+        .AddHttpMessageHandler<VaultTokenHandler>()
+        .RedactLoggedHeaders([VaultTokenHandler.TokenHeader])
         .ConfigurePrimaryHttpMessageHandler(provider =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
@@ -126,6 +137,9 @@ public static class ServiceCollectionExtensions
             };
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
+        // Singular contract, pinned so a host that brings its own ring keeps it: see the custodian registration.
+        services.TryAddSingleton<IKeyRingStore>(provider => provider.GetRequiredService<VaultKeyValueStore>());
 
         return services;
     }

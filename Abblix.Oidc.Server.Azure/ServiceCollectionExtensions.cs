@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
+using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -34,6 +35,9 @@ namespace Abblix.Oidc.Server.Azure;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>Names the HTTP client the blob ring rides, so it shares the package's pipeline conventions.</summary>
+    private const string BlobRingClient = "Abblix.Oidc.Server.Azure.KeyRing";
+
     /// <summary>
     /// Registers Azure Key Vault as the custodian of the OIDC provider's keys and opens the tier choice that
     /// completes the wiring. This call is only the transport: it registers the vault client and its credential.
@@ -62,7 +66,7 @@ public static class ServiceCollectionExtensions
         // held long-lived: disable handler rotation and let SocketsHttpHandler.PooledConnectionLifetime recycle
         // connections to pick up DNS changes, the pattern Microsoft recommends for a long-lived HttpClient.
         services
-            .AddHttpClient<IKeyCustodian, AzureKeyVaultClient>()
+            .AddHttpClient<AzureKeyVaultClient>()
             .ConfigurePrimaryHttpMessageHandler(provider =>
             {
                 var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
@@ -73,8 +77,13 @@ public static class ServiceCollectionExtensions
             })
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // AddHttpClient above already registered the typed client as the IKeyCustodian, so this only opens the
-        // tier choice on top of it.
+        // TryAdd rather than the typed-client registration itself: AddHttpClient registers its client TRANSIENT,
+        // so each of the four singletons that inject a custodian would get its own AzureKeyVaultClient, and with
+        // it its own DefaultAzureCredential, its own Entra token cache and its own per-key CryptographyClient
+        // cache - defeating the caching this client exists for. It also let the library silently beat a host that
+        // pre-registered its own custodian, which the repo's DI rule forbids.
+        services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<AzureKeyVaultClient>());
+
         return services.AddCustodian();
     }
 
@@ -102,6 +111,22 @@ public static class ServiceCollectionExtensions
         var services = builder.Services;
         services.Configure(configureOptions);
 
+        // Named rather than typed, because the store takes a container client rather than an HttpClient. The
+        // pipeline matters all the same: every other client in this package rides IHttpClientFactory, the README
+        // promises it, and without it the ring gets none of the host's handlers or logging, and no
+        // PooledConnectionLifetime to recycle connections for DNS changes.
+        services
+            .AddHttpClient(BlobRingClient)
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+            {
+                var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
+                return new SocketsHttpHandler
+                {
+                    PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
+                };
+            })
+            .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
         services.TryAddSingleton<IKeyRingStore>(provider =>
         {
             var ring = provider.GetRequiredService<IOptions<AzureBlobKeyRingOptions>>().Value;
@@ -111,7 +136,10 @@ public static class ServiceCollectionExtensions
             var credential = AzureKeyVaultClient.BuildCredential(
                 provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
 
-            var service = new BlobServiceClient(new Uri(ring.ServiceUri), credential);
+            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(BlobRingClient);
+            var options = new BlobClientOptions { Transport = new HttpClientTransport(httpClient) };
+
+            var service = new BlobServiceClient(new Uri(ring.ServiceUri), credential, options);
             return new AzureBlobKeyRingStore(service.GetBlobContainerClient(ring.Container));
         });
 

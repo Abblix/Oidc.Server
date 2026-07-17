@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -81,13 +82,30 @@ public class AddVaultCustodianTests
     }
 
     [Fact]
-    public void ConfiguresTypedClient_WithTransitBaseAddressAndAuthHeader()
+    public void ConfiguresTypedClient_WithTransitBaseAddress()
     {
         using var provider = Configure().BuildServiceProvider();
 
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IKeyCustodian));
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(VaultTransitClient));
 
         Assert.Equal("https://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
-        Assert.Equal("s.test-token", Assert.Single(http.DefaultRequestHeaders.GetValues("X-Vault-Token")));
+
+        // The token is NOT here: stamping it on the client would pin it for the process lifetime, and a token
+        // minted by AppRole or Kubernetes auth is short-lived by design. It is applied per request instead.
+        Assert.False(http.DefaultRequestHeaders.Contains(VaultTokenHandler.TokenHeader));
+    }
+
+    [Fact]
+    public void KeepsTheTokenOutOfLogs()
+    {
+        using var provider = Configure().BuildServiceProvider();
+
+        // The token can sign tokens as this provider. IHttpClientFactory logs request headers at Trace and
+        // redacts nothing by default, and Trace is exactly what an operator turns on to debug a Vault problem.
+        var options = provider
+            .GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
+            .Get(nameof(VaultTransitClient));
+
+        Assert.True(options.ShouldRedactHeaderValue(VaultTokenHandler.TokenHeader));
     }
 }
