@@ -72,19 +72,37 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     // Maps a JWS algorithm to the Transit sign request pinned to the given key version; an unmapped algorithm is
     // rejected. key_version pins the exact version the kid names, so the produce role signs with the active
     // version even when a newer version is already published but still propagating.
-    private static object BuildSignRequest(string input, string algorithm, int version) => algorithm switch
+    private static VaultSignRequest BuildSignRequest(string input, string algorithm, int version)
     {
-        SigningAlgorithms.RS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pkcs1V15, key_version = version },
-        SigningAlgorithms.RS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pkcs1V15, key_version = version },
-        SigningAlgorithms.RS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pkcs1V15, key_version = version },
+        // An algorithm decides two things independently: which digest, and how the signature is formed. RSA picks
+        // a padding, EC picks an encoding, so the request differs by exactly one field between the families.
+        var request = new VaultSignRequest
+        {
+            Input = input,
+            HashAlgorithm = HashAlgorithmFor(algorithm),
+            KeyVersion = version,
+        };
 
-        SigningAlgorithms.PS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pss, key_version = version },
-        SigningAlgorithms.PS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pss, key_version = version },
-        SigningAlgorithms.PS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pss, key_version = version },
+        return algorithm switch
+        {
+            SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512
+                => request with { SignatureAlgorithm = Pkcs1V15 },
 
-        SigningAlgorithms.ES256 => new { input, prehashed = false, hash_algorithm = Sha2With256, marshaling_algorithm = JwsMarshaling, key_version = version },
-        SigningAlgorithms.ES384 => new { input, prehashed = false, hash_algorithm = Sha2With384, marshaling_algorithm = JwsMarshaling, key_version = version },
-        SigningAlgorithms.ES512 => new { input, prehashed = false, hash_algorithm = Sha2With512, marshaling_algorithm = JwsMarshaling, key_version = version },
+            SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512
+                => request with { SignatureAlgorithm = Pss },
+
+            SigningAlgorithms.ES256 or SigningAlgorithms.ES384 or SigningAlgorithms.ES512
+                => request with { MarshalingAlgorithm = JwsMarshaling },
+
+            _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
+        };
+    }
+
+    private static string HashAlgorithmFor(string algorithm) => algorithm switch
+    {
+        SigningAlgorithms.RS256 or SigningAlgorithms.PS256 or SigningAlgorithms.ES256 => Sha2With256,
+        SigningAlgorithms.RS384 or SigningAlgorithms.PS384 or SigningAlgorithms.ES384 => Sha2With384,
+        SigningAlgorithms.RS512 or SigningAlgorithms.PS512 or SigningAlgorithms.ES512 => Sha2With512,
 
         _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
     };
