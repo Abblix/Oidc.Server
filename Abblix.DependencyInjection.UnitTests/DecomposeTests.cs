@@ -118,6 +118,24 @@ public class DecomposeTests
     }
 
     [Fact]
+    public void AddFirst_ComposesTheExactMemberTypesInOrder()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>().AddFirst(Step<StepC>());
+
+        using var provider = services.BuildServiceProvider();
+
+        // The whole contract in one assertion: the singular resolve yields the composite, and the composite holds
+        // the edited family as concrete instances in execution order. The sibling tests read the Name projection,
+        // which would still pass if two steps merely reported the same name.
+        var composite = Assert.IsType<PipelineComposite>(provider.GetRequiredService<IPipelineStep>());
+        Assert.Equal(
+            [typeof(StepC), typeof(StepA), typeof(StepB)],
+            composite.Steps.Select(step => step.GetType()).ToArray());
+    }
+
+    [Fact]
     public void AddAfter_InsertsRightAfterTheAnchor()
     {
         var services = ComposedFamily();
