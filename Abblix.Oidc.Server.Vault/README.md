@@ -2,7 +2,7 @@
 
 **Abblix.OIDC.Server.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys held in the HashiCorp Vault / OpenBao Transit secrets engine. The keys live inside Transit as non-exportable keys (software-protected, inside Vault's encrypted barrier), so their private halves never enter your process. Signing and Content Encryption Key unwrapping run as Transit round-trips; the public halves are published at `/jwks` and verified locally, which never calls Transit.
 
-**Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first.** It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
+Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
 
 ## Installation
 

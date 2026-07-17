@@ -2,7 +2,7 @@
 
 **Abblix.OIDC.Server.Azure** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys held in Azure Key Vault. The keys live in the vault, so their private halves never enter your process. Signing and Content Encryption Key unwrapping run as Key Vault round-trips; the public halves are published at `/jwks` and verified locally, which never calls the vault. The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy; no key material crosses that pipeline in the clear, only digests and wrapped keys.
 
-**Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first.** It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Azure Key Vault.
+Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Azure Key Vault.
 
 ## Installation
 
