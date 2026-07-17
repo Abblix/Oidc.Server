@@ -29,11 +29,11 @@ using Xunit;
 namespace Abblix.Oidc.Server.Vault.UnitTests;
 
 /// <summary>
-/// Exercises the KV v2 wire contract of <see cref="VaultKeyValueStore"/> against a stub transport: the cas=0 write
+/// Exercises the KV v2 wire contract of <see cref="KeyValueStore"/> against a stub transport: the cas=0 write
 /// that decides which pod mints a period, the losing side of that race, and the empty-ring and deleted-entry cases
 /// a running deployment meets.
 /// </summary>
-public sealed class VaultKeyValueStoreTests : IDisposable
+public sealed class KeyValueStoreTests : IDisposable
 {
     private readonly List<HttpClient> _httpClients = [];
 
@@ -44,15 +44,16 @@ public sealed class VaultKeyValueStoreTests : IDisposable
         CreatedAt = new DateTimeOffset(2026, 7, 17, 0, 0, 0, TimeSpan.Zero),
     };
 
-    private VaultKeyValueStore StoreOver(StubHttpMessageHandler handler)
+    private KeyValueStore StoreOver(StubHttpMessageHandler handler)
     {
         // The base address stops at /v1/, not at a mount: KV lives on a different mount than Transit, so the
         // store spells its mount into every path.
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
         _httpClients.Add(httpClient);
 
-        return new VaultKeyValueStore(
-            httpClient,
+        return new KeyValueStore(
+            new ApiClient(httpClient),
+
             Options.Create(new VaultKeyValueOptions { Mount = "secret", Path = "oidc-keyring" }));
     }
 

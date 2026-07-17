@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Vault.UnitTests;
 /// Covers the one thing that makes a short-lived Vault token usable: the header is read per request, so a token
 /// renewed by AppRole or Kubernetes auth takes effect without restarting the process.
 /// </summary>
-public sealed class VaultTokenHandlerTests : IDisposable
+public sealed class TokenHandlerTests : IDisposable
 {
     private readonly List<HttpClient> _httpClients = [];
 
@@ -46,7 +46,7 @@ public sealed class VaultTokenHandlerTests : IDisposable
 
     private HttpClient ClientOver(MutableMonitor monitor, StubHttpMessageHandler transport)
     {
-        var handler = new VaultTokenHandler(monitor) { InnerHandler = transport };
+        var handler = new TokenHandler(monitor) { InnerHandler = transport };
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
         _httpClients.Add(httpClient);
         return httpClient;
@@ -65,7 +65,7 @@ public sealed class VaultTokenHandlerTests : IDisposable
         var seen = new List<string?>();
         var transport = new StubHttpMessageHandler((request, _) =>
         {
-            seen.Add(request.Headers.TryGetValues(VaultTokenHandler.TokenHeader, out var values)
+            seen.Add(request.Headers.TryGetValues(TokenHandler.TokenHeaderName, out var values)
                 ? values.Single()
                 : null);
             return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
@@ -96,6 +96,6 @@ public sealed class VaultTokenHandlerTests : IDisposable
 
         await ClientOver(monitor, transport).GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
 
-        Assert.False(seen!.Headers.Contains(VaultTokenHandler.TokenHeader));
+        Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
     }
 }

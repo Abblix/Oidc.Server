@@ -25,27 +25,33 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Vault.UnitTests;
 
 /// <summary>
-/// Exercises the Transit wire contract of <see cref="VaultTransitClient"/> against a stub transport: the RSA and
+/// Exercises the Transit wire contract of <see cref="TransitCustodian"/> against a stub transport: the RSA and
 /// EC sign request shapes, the <c>vault:v&lt;n&gt;:</c> envelope framing, the 400-to-null decryption semantics,
 /// the algorithm gate, and the RSA / EC public-key import.
 /// </summary>
 public sealed class VaultTransitClientTests : IDisposable
 {
-    // Each test builds a client over a stub transport. In production IHttpClientFactory owns the HttpClient and
-    // VaultTransitClient deliberately does not dispose it (a typed client never owns the factory's handler), so
-    // here the test owns that lifetime: track every created HttpClient and dispose them at test-class teardown.
+    // Each test builds a custodian over a stub transport. In production IHttpClientFactory owns the HttpClient and
+    // nothing here disposes it (a client from the factory never owns the factory's handler), so the test owns that
+    // lifetime instead: track every created HttpClient and dispose them at test-class teardown.
     private readonly List<HttpClient> _httpClients = [];
 
-    private VaultTransitClient ClientOver(StubHttpMessageHandler handler)
+    private TransitCustodian ClientOver(StubHttpMessageHandler handler)
     {
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/transit/") };
+        // The address stops at the server root, as the shared transport's does: the mount is the custodian's to
+        // spell into every path, because the key ring rides this same client on a different one.
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
         _httpClients.Add(httpClient);
-        return new VaultTransitClient(httpClient);
+
+        return new TransitCustodian(
+            new ApiClient(httpClient),
+            Options.Create(new VaultTransitOptions { TransitMount = "transit" }));
     }
 
     public void Dispose()
@@ -66,6 +72,11 @@ public sealed class VaultTransitClientTests : IDisposable
         var result = await client.SignAsync("oidc-sign:2", SigningAlgorithms.RS256, data, TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
+
+        // The mount is spelled into the path, not baked into the address: the transport is shared with the key
+        // ring, which lives on a different mount of the same server.
+        Assert.Equal("https://vault.test/v1/transit/sign/oidc-sign", handler.LastRequest!.RequestUri!.ToString());
+
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
         var root = body.RootElement;
         Assert.Equal(Convert.ToBase64String(data), root.GetProperty("input").GetString());

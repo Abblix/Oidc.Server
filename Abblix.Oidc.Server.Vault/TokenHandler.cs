@@ -34,10 +34,10 @@ namespace Abblix.Oidc.Server.Vault;
 /// Reading through <see cref="IOptionsMonitor{TOptions}"/> per request lets a token minted by AppRole or
 /// Kubernetes auth be renewed and picked up, without restarting the process.
 /// </remarks>
-internal sealed class VaultTokenHandler(IOptionsMonitor<VaultTransitOptions> options) : DelegatingHandler
+internal sealed class TokenHandler(IOptionsMonitor<VaultTransitOptions> options) : DelegatingHandler
 {
     /// <summary>Vault's authentication header, and the name to keep out of logs.</summary>
-    internal const string TokenHeader = "X-Vault-Token";
+    internal const string TokenHeaderName = "X-Vault-Token";
 
     /// <inheritdoc />
     protected override Task<HttpResponseMessage> SendAsync(
@@ -49,8 +49,8 @@ internal sealed class VaultTokenHandler(IOptionsMonitor<VaultTransitOptions> opt
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
             // would make Vault reject it.
-            request.Headers.Remove(TokenHeader);
-            request.Headers.Add(TokenHeader, token);
+            request.Headers.Remove(TokenHeaderName);
+            request.Headers.Add(TokenHeaderName, token);
         }
 
         return base.SendAsync(request, cancellationToken);

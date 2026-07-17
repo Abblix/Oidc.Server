@@ -77,22 +77,24 @@ public class AddVaultCustodianTests
         using var provider = services.BuildServiceProvider();
 
         // The Transit client itself serves as the external key custodian, and the provider publishes its keys.
-        Assert.IsType<VaultTransitClient>(provider.GetRequiredService<IKeyCustodian>());
+        Assert.IsType<TransitCustodian>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]
-    public void ConfiguresTypedClient_WithTransitBaseAddress()
+    public void ConfiguresTheSharedClient_WithTheServerRootAddress()
     {
         using var provider = Configure().BuildServiceProvider();
 
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(VaultTransitClient));
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(ApiClient.ClientName);
 
-        Assert.Equal("https://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
+        // The address stops at the server root rather than a mount: this one client also carries the key ring,
+        // which lives on a different mount, so each engine spells its own into every path.
+        Assert.Equal("https://vault.test:8200/v1/", http.BaseAddress!.ToString());
 
         // The token is NOT here: stamping it on the client would pin it for the process lifetime, and a token
         // minted by AppRole or Kubernetes auth is short-lived by design. It is applied per request instead.
-        Assert.False(http.DefaultRequestHeaders.Contains(VaultTokenHandler.TokenHeader));
+        Assert.False(http.DefaultRequestHeaders.Contains(TokenHandler.TokenHeaderName));
     }
 
     [Fact]
@@ -104,8 +106,8 @@ public class AddVaultCustodianTests
         // redacts nothing by default, and Trace is exactly what an operator turns on to debug a Vault problem.
         var options = provider
             .GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
-            .Get(nameof(VaultTransitClient));
+            .Get(ApiClient.ClientName);
 
-        Assert.True(options.ShouldRedactHeaderValue(VaultTokenHandler.TokenHeader));
+        Assert.True(options.ShouldRedactHeaderValue(TokenHandler.TokenHeaderName));
     }
 }

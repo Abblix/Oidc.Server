@@ -35,12 +35,11 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers Vault / OpenBao Transit as the custodian of the OIDC provider's keys and opens the tier choice
-    /// that completes the wiring. This call is only the transport: it configures the typed
-    /// <see cref="VaultTransitClient"/> against the Transit mount and carries the auth token. Which keys are used
-    /// - and whether their private halves ever enter this process - is the tier call chained onto the returned
-    /// builder, which must follow: a custodian without one fails at startup rather than silently falling back to
-    /// the static keys in <c>OidcOptions</c>. Chain both calls AFTER the OIDC registration, which the tier call
-    /// composes onto.
+    /// that completes the wiring. This call is only the transport: it points a client at the Vault server and
+    /// carries the auth token. Which keys are used - and whether their private halves ever enter this process - is
+    /// the tier call chained onto the returned builder, which must follow: a custodian without one fails at
+    /// startup rather than silently falling back to the static keys in <c>OidcOptions</c>. Chain both calls AFTER
+    /// the OIDC registration, which the tier call composes onto.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the Vault address, auth token and Transit mount.</param>
@@ -57,39 +56,11 @@ public static class ServiceCollectionExtensions
         Action<VaultTransitOptions> configureOptions)
     {
         services.Configure(configureOptions);
-        services.TryAddTransient<VaultTokenHandler>();
+        services.AddVaultApiClient();
 
-        // Typed client pointed at the Transit mount, carrying the auth token header. Options are read at client
-        // creation so the configured address and token drive the base address and header. The external-key store is
-        // a singleton, so this client is held long-lived: rather than per-call CreateClient, disable handler rotation
-        // and let SocketsHttpHandler.PooledConnectionLifetime recycle connections to pick up DNS changes, the pattern
-        // Microsoft recommends for a long-lived HttpClient.
-        services.AddHttpClient<VaultTransitClient>((provider, http) =>
-        {
-            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
-            http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/{options.TransitMount}/");
-        })
-        .AddHttpMessageHandler<VaultTokenHandler>()
-
-        // The token is a bearer credential that can sign as this provider. IHttpClientFactory's own logging
-        // writes request headers at Trace and redacts nothing by default, so debugging a Vault connectivity
-        // problem - exactly when Trace gets turned on - would print it in the clear.
-        .RedactLoggedHeaders([VaultTokenHandler.TokenHeader])
-        .ConfigurePrimaryHttpMessageHandler(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
-            return new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
-            };
-        })
-        .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
-
-        // TryAdd rather than the typed-client registration itself: AddHttpClient registers its client TRANSIENT,
-        // which would both build one custodian per consumer (four of them, each with its own credential and
-        // caches) and silently beat a host that pre-registered its own. Pinning the contract here keeps the
-        // custodian single and lets the host's registration win, as the repo's DI rule requires.
-        services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<VaultTransitClient>());
+        // Singular contract, TryAdd so a host that brought its own custodian keeps it, as the repo's DI rule
+        // requires.
+        services.TryAddSingleton<IKeyCustodian, TransitCustodian>();
 
         return services.AddCustodian();
     }
@@ -116,18 +87,44 @@ public static class ServiceCollectionExtensions
     {
         var services = builder.Services;
         services.Configure(configureOptions ?? (_ => { }));
-        services.TryAddTransient<VaultTokenHandler>();
+        services.AddVaultApiClient();
 
-        // The ring rides the same server and token as the custodian, so the address comes from its options: one
-        // Vault holds both the key that protects the ring and the ring itself. The base address stops at /v1/
-        // rather than a mount, since KV lives on a different mount than Transit.
-        services.AddHttpClient<VaultKeyValueStore>((provider, http) =>
+        // Singular contract, pinned so a host that brings its own ring keeps it: see the custodian registration.
+        services.TryAddSingleton<IKeyRingStore, KeyValueStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Configures the one transport both engines talk through, once however many of them are wired.
+    /// </summary>
+    /// <remarks>
+    /// The ring rides the same server and token as the custodian - one Vault holds both the key that protects the
+    /// ring and the ring itself - so a second client would only mean a second connection pool to the same place,
+    /// and a second copy of the auth, redaction and lifetime settings to keep in step.
+    /// </remarks>
+    private static void AddVaultApiClient(this IServiceCollection services)
+    {
+        // AddHttpClient appends its configuration rather than replacing it, so a second call would run the whole
+        // chain twice. The transport's own registration is what says it has been wired already.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(IApiClient)))
+            return;
+
+        services.TryAddTransient<TokenHandler>();
+
+        services.AddHttpClient(ApiClient.ClientName, (provider, http) =>
         {
+            // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
+            // different ones, so each spells its own into every path.
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
             http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
         })
-        .AddHttpMessageHandler<VaultTokenHandler>()
-        .RedactLoggedHeaders([VaultTokenHandler.TokenHeader])
+        .AddHttpMessageHandler<TokenHandler>()
+
+        // The token is a bearer credential that can sign as this provider. IHttpClientFactory's own logging
+        // writes request headers at Trace and redacts nothing by default, so debugging a Vault connectivity
+        // problem - exactly when Trace gets turned on - would print it in the clear.
+        .RedactLoggedHeaders([TokenHandler.TokenHeaderName])
         .ConfigurePrimaryHttpMessageHandler(provider =>
         {
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
@@ -138,9 +135,11 @@ public static class ServiceCollectionExtensions
         })
         .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
-        // Singular contract, pinned so a host that brings its own ring keeps it: see the custodian registration.
-        services.TryAddSingleton<IKeyRingStore>(provider => provider.GetRequiredService<VaultKeyValueStore>());
-
-        return services;
+        // A named client resolved here, rather than AddHttpClient<ApiClient>: the typed-client registration
+        // is TRANSIENT, so each of the singletons above would hold its own. Its consumers are long-lived, which
+        // is why handler rotation is off and SocketsHttpHandler.PooledConnectionLifetime recycles the connections
+        // underneath instead - the pattern Microsoft recommends for a long-lived HttpClient.
+        services.TryAddSingleton<IApiClient>(provider => new ApiClient(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(ApiClient.ClientName)));
     }
 }

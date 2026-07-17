@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// anonymous object carries the wire format in its member names, where nothing checks them and every algorithm
 /// branch repeats them. Here the names are stated once, as attributes, and each branch supplies only what differs.
 /// </remarks>
-internal sealed record VaultSignRequest
+internal sealed record SignRequest
 {
     /// <summary>The signing input, base64-encoded, which Transit hashes itself.</summary>
     [JsonPropertyName("input")]
