@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Azure;
 public sealed class AzureKeyVaultOptions
 {
     /// <summary>The vault URI, e.g. <c>https://my-vault.vault.azure.net/</c>.</summary>
-    public string KeyVaultUri { get; set; } = "";
+    public required Uri KeyVaultUri { get; set; }
 
     /// <summary>
     /// Tenant ID of the service principal. When <see cref="TenantId"/>, <see cref="ClientId"/> and

@@ -42,7 +42,7 @@ public class AddAzureCustodianTests
         // order a host follows via AddOidcServices.
         services.AddJsonWebTokens();
 
-        return services.AddAzureCustodian(options => options.KeyVaultUri = "https://contoso.vault.azure.net/");
+        return services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"));
     }
 
     [Fact]

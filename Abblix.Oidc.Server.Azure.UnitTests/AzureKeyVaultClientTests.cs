@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Azure.UnitTests;
 /// </summary>
 public class AzureKeyVaultClientTests
 {
-    private const string VaultUri = "https://contoso.vault.azure.net/";
+    private static readonly Uri VaultUri = new("https://contoso.vault.azure.net/");
 
     private static AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
         => new(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), new HttpClient(handler));
@@ -126,7 +126,7 @@ public class AzureKeyVaultClientTests
         var handler = SignResponder("oidc-sign", signature, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false)));
 
         var result = await ClientOver(handler).SignAsync(
-            "oidc-sign", SigningAlgorithms.RS256, [9, 9], TestContext.Current.CancellationToken);
+            "oidc-sign/v1", SigningAlgorithms.RS256, [9, 9], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
     }
@@ -139,7 +139,7 @@ public class AzureKeyVaultClientTests
         var handler = SignResponder("oidc-sign", signature, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false)));
 
         var result = await ClientOver(handler).SignAsync(
-            "oidc-sign", SigningAlgorithms.ES256, [9, 9], TestContext.Current.CancellationToken);
+            "oidc-sign/v1", SigningAlgorithms.ES256, [9, 9], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
     }
@@ -150,7 +150,7 @@ public class AzureKeyVaultClientTests
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
         await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler)
-            .SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken));
+            .SignAsync("oidc-sign/v1", "HS256", [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
@@ -166,7 +166,7 @@ public class AzureKeyVaultClientTests
                 : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
         var result = await ClientOver(handler).UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [5, 5], TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
@@ -211,7 +211,7 @@ public class AzureKeyVaultClientTests
                 : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
         return await ClientOver(handler).UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [5, 5], TestContext.Current.CancellationToken);
     }
 
