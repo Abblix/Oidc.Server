@@ -101,7 +101,7 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		// - RSA1_5: key_size - 11 bytes
 		// - RSA-OAEP (SHA-1): key_size - 42 bytes (2 * hash_length + 2)
 		// - RSA-OAEP-256 (SHA-256): key_size - 66 bytes (2 * hash_length + 2)
-		var maxCekSize = algorithm switch
+		var maxContentEncryptionKeySize = algorithm switch
 		{
 			EncryptionAlgorithms.KeyManagement.Rsa1_5 => keySizeBytes - 11,
 			EncryptionAlgorithms.KeyManagement.RsaOaep => keySizeBytes - 42,
@@ -110,12 +110,12 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		};
 
 		// Log diagnostic information before throwing
-		LogEncryptionFailed(algorithm, rsa.KeySize, keyToEncrypt.Length, maxCekSize);
+		LogEncryptionFailed(algorithm, rsa.KeySize, keyToEncrypt.Length, maxContentEncryptionKeySize);
 
 		// Encryption failed - provide detailed error message per RFC 7518 Section 4
 		return new CryptographicException(
 			$"Failed to encrypt Content Encryption Key using {algorithm} with {rsa.KeySize}-bit RSA key. " +
-			$"CEK size: {keyToEncrypt.Length} bytes, theoretical maximum: {maxCekSize} bytes. " +
+			$"CEK size: {keyToEncrypt.Length} bytes, theoretical maximum: {maxContentEncryptionKeySize} bytes. " +
 			$"The CEK may be too large for the RSA key size per RFC 7518 Section 4, which limits the maximum " +
 			$"plaintext size based on the key size and padding overhead.");
 	}

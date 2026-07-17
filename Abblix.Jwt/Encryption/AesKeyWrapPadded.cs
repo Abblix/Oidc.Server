@@ -40,27 +40,27 @@ internal static class AesKeyWrapPadded
     private const int SemiblockSize = 8;
 
     /// <summary>
-    /// Wraps <paramref name="plaintext"/> under <paramref name="kek"/>. Deterministic: the same inputs always
+    /// Wraps <paramref name="plaintext"/> under <paramref name="keyEncryptionKey"/>. Deterministic: the same inputs always
     /// return the same bytes.
     /// </summary>
-    public static byte[] Wrap(byte[] kek, ReadOnlySpan<byte> plaintext)
+    public static byte[] Wrap(byte[] keyEncryptionKey, ReadOnlySpan<byte> plaintext)
     {
 #if NET10_0_OR_GREATER
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
         return aes.EncryptKeyWrapPadded(plaintext);
 #else
-        return Rfc5649KeyWrap.Wrap(kek, plaintext);
+        return Rfc5649KeyWrap.Wrap(keyEncryptionKey, plaintext);
 #endif
     }
 
     /// <summary>
-    /// Unwraps a value produced by <see cref="Wrap"/> under the same <paramref name="kek"/>, verifying its embedded
+    /// Unwraps a value produced by <see cref="Wrap"/> under the same <paramref name="keyEncryptionKey"/>, verifying its embedded
     /// integrity value.
     /// </summary>
     /// <returns>True with the recovered plaintext when the integrity check passes; otherwise false and null (the
     /// value is malformed, tampered, or was wrapped under a different key).</returns>
-    public static bool TryUnwrap(byte[] kek, byte[] wrapped, out byte[]? plaintext)
+    public static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrapped, out byte[]? plaintext)
     {
         plaintext = null;
 
@@ -71,7 +71,7 @@ internal static class AesKeyWrapPadded
 
 #if NET10_0_OR_GREATER
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
         try
         {
             plaintext = aes.DecryptKeyWrapPadded(wrapped);
@@ -84,7 +84,7 @@ internal static class AesKeyWrapPadded
             return false;
         }
 #else
-        return Rfc5649KeyWrap.TryUnwrap(kek, wrapped, out plaintext);
+        return Rfc5649KeyWrap.TryUnwrap(keyEncryptionKey, wrapped, out plaintext);
 #endif
     }
 }

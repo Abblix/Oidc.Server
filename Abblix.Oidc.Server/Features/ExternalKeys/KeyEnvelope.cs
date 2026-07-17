@@ -41,18 +41,18 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
 {
     /// <summary>
-    /// Encrypts <paramref name="privateKey"/> to <paramref name="kek"/>, returning the JWE to store.
+    /// Encrypts <paramref name="privateKey"/> to <paramref name="keyEncryptionKey"/>, returning the JWE to store.
     /// </summary>
     /// <param name="privateKey">The key to seal, private half included.</param>
-    /// <param name="kek">The KEK version to seal to, public half only; its <c>kid</c> lands in the JWE header and
-    /// is what later selects the version that opens the envelope.</param>
+    /// <param name="keyEncryptionKey">The key-encryption key version to seal to, public half only; its <c>kid</c>
+    /// lands in the JWE header and is what later selects the version that opens the envelope.</param>
     /// <param name="keyWrapAlgorithm">The JWE <c>alg</c>: how the data-encryption key is wrapped under the KEK.</param>
     /// <param name="contentEncryptionAlgorithm">The JWE <c>enc</c>: how the key itself is encrypted.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>The envelope, JWE compact serialization.</returns>
     public async Task<string> SealAsync(
         JsonWebKey privateKey,
-        JsonWebKey kek,
+        JsonWebKey keyEncryptionKey,
         string keyWrapAlgorithm,
         string contentEncryptionAlgorithm,
         CancellationToken cancellationToken)
@@ -63,7 +63,7 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
 
         return await encryptor.EncryptAsync(
             plaintext,
-            kek,
+            keyEncryptionKey,
             tokenType: null,
             keyWrapAlgorithm,
             contentEncryptionAlgorithm,
@@ -74,17 +74,17 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
     /// Opens an envelope, returning the private key it holds.
     /// </summary>
     /// <param name="jwe">The envelope, JWE compact serialization.</param>
-    /// <param name="kekVersions">The KEK's versions, public half only. The decrypt selects among them by the
-    /// <c>kid</c> in the envelope's header, so passing every version is what lets a KEK rotation need no
-    /// re-wrapping: an older envelope still names the version that sealed it.</param>
+    /// <param name="keyEncryptionKeyVersions">The key-encryption key's versions, public half only. The decrypt
+    /// selects among them by the <c>kid</c> in the envelope's header, so passing every version is what lets a
+    /// rotation need no re-wrapping: an older envelope still names the version that sealed it.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>The private key.</returns>
     public async Task<JsonWebKey> OpenAsync(
         string jwe,
-        IAsyncEnumerable<JsonWebKey> kekVersions,
+        IAsyncEnumerable<JsonWebKey> keyEncryptionKeyVersions,
         CancellationToken cancellationToken)
     {
-        var result = await encryptor.DecryptAsync(jwe.Split('.'), kekVersions, cancellationToken);
+        var result = await encryptor.DecryptAsync(jwe.Split('.'), keyEncryptionKeyVersions, cancellationToken);
 
         // A decrypt failure is deliberately indistinguishable from a wrong key upstream, which is right for an
         // inbound token and wrong here: at startup it means the key did not come up. The likeliest cause is an

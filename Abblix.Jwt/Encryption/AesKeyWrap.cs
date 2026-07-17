@@ -61,11 +61,11 @@ internal static class AesKeyWrap
     /// Wraps key material per RFC 3394 §2.2.1. The output is 8 bytes longer than the input:
     /// the integrity check register followed by the transformed key blocks.
     /// </summary>
-    /// <param name="kek">The AES key encryption key (16, 24 or 32 bytes).</param>
+    /// <param name="keyEncryptionKey">The AES key encryption key (16, 24 or 32 bytes).</param>
     /// <param name="keyData">The key material to wrap; at least 16 bytes and a multiple of 8 bytes.</param>
     /// <returns>The wrapped key, <c>keyData.Length + 8</c> bytes.</returns>
     /// <exception cref="ArgumentException">Thrown when the key data length is not wrappable.</exception>
-    public static byte[] Wrap(byte[] kek, byte[] keyData)
+    public static byte[] Wrap(byte[] keyEncryptionKey, byte[] keyData)
     {
         // NIST SP 800-38F §5.3.1: the plaintext must span at least two semiblocks. Shorter or unaligned
         // key material cannot be represented in the R[1..n] block structure at all.
@@ -85,7 +85,7 @@ internal static class AesKeyWrap
         keyData.CopyTo(output.AsSpan(SemiblockSize));
 
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
         AesKeyWrapCore.Wrap(aes, output, n);
         return output;
     }
@@ -93,7 +93,7 @@ internal static class AesKeyWrap
     /// <summary>
     /// Unwraps key material per RFC 3394 §2.2.2 and verifies the integrity check register.
     /// </summary>
-    /// <param name="kek">The AES key encryption key (16, 24 or 32 bytes).</param>
+    /// <param name="keyEncryptionKey">The AES key encryption key (16, 24 or 32 bytes).</param>
     /// <param name="wrappedKey">The wrapped key; at least 24 bytes and a multiple of 8 bytes.</param>
     /// <param name="keyData">The recovered key material when unwrapping succeeds; null otherwise.</param>
     /// <returns>True when the integrity check register matches after unwrapping; otherwise false.</returns>
@@ -102,7 +102,7 @@ internal static class AesKeyWrap
     /// key was tampered with or produced under a different KEK, and no key material is returned.
     /// The comparison is constant-time so the failure reveals nothing about how close the forgery was.
     /// </remarks>
-    public static bool TryUnwrap(byte[] kek, byte[] wrappedKey, [NotNullWhen(true)] out byte[]? keyData)
+    public static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrappedKey, [NotNullWhen(true)] out byte[]? keyData)
     {
         keyData = null;
 
@@ -116,7 +116,7 @@ internal static class AesKeyWrap
         var state = (byte[])wrappedKey.Clone();
 
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
         AesKeyWrapCore.Unwrap(aes, state, n);
 
         if (!CryptographicOperations.FixedTimeEquals(state.AsSpan(0, SemiblockSize), IntegrityCheckValue))

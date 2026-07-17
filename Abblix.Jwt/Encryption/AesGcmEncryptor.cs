@@ -48,12 +48,12 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 
 	/// <inheritdoc />
 	public EncryptedData Encrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		byte[] plaintext,
 		byte[] additionalAuthenticatedData)
 	{
-		if (cek.Length != _keySize)
-			throw new ArgumentException($"CEK must be {_keySize} bytes for {algorithm}", nameof(cek));
+		if (contentEncryptionKey.Length != _keySize)
+			throw new ArgumentException($"CEK must be {_keySize} bytes for {algorithm}", nameof(contentEncryptionKey));
 
 		// Per RFC 7518 Section 5.3: Generate random 96-bit IV for AES-GCM
 		var initializationVector = CryptoRandom.GetRandomBytes(12); // 96 bits
@@ -63,7 +63,7 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 		var ciphertext = new byte[plaintext.Length];
 
 		// Per RFC 7518 Section 5.3: AES-GCM uses the CEK directly as the encryption key
-		using var aesGcm = new AesGcm(cek, authenticationTag.Length);
+		using var aesGcm = new AesGcm(contentEncryptionKey, authenticationTag.Length);
 
 		// AES-GCM Encrypt: encrypts and generates authentication tag in one operation
 		aesGcm.Encrypt(
@@ -78,13 +78,13 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 
 	/// <inheritdoc />
 	public bool TryDecrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		EncryptedData encryptedData,
 		byte[] additionalAuthenticatedData,
 		[NotNullWhen(true)] out byte[]? plaintext)
 	{
 		// Check CEK length
-		if (cek.Length != _keySize)
+		if (contentEncryptionKey.Length != _keySize)
 		{
 			plaintext = null;
 			return false;
@@ -93,7 +93,7 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 		try
 		{
 			// Per RFC 7518 Section 5.3: AES-GCM uses the CEK directly as the encryption key
-			using var aesGcm = new AesGcm(cek, encryptedData.AuthenticationTag.Length);
+			using var aesGcm = new AesGcm(contentEncryptionKey, encryptedData.AuthenticationTag.Length);
 
 			plaintext = new byte[encryptedData.Ciphertext.Length];
 

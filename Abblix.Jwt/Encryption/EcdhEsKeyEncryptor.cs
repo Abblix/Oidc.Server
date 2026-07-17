@@ -53,7 +53,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	/// The RFC 3394 KEK size in bytes for the key-wrapping variants, or null for Direct Key Agreement,
 	/// where the derived key is the CEK itself and no wrapping occurs.
 	/// </summary>
-	private readonly int? _kekSize = algorithm switch
+	private readonly int? _keyEncryptionKeySize = algorithm switch
 	{
 		EncryptionAlgorithms.KeyManagement.EcdhEs => null,
 		EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW => 16,
@@ -74,7 +74,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		JsonWebTokenHeader header,
 		EllipticCurveJsonWebKey recipientKey,
 		int keySizeInBytes)
-		=> _kekSize == null
+		=> _keyEncryptionKeySize == null
 			? DeriveKeyForEncryption(header, recipientKey, keySizeInBytes)
 			: CryptoRandom.GetRandomBytes(keySizeInBytes);
 
@@ -87,11 +87,11 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	/// </remarks>
 	public byte[] EncryptKey(JsonWebTokenHeader header, EllipticCurveJsonWebKey recipientKey, byte[] keyToEncrypt)
 	{
-		if (_kekSize is not { } kekSize)
+		if (_keyEncryptionKeySize is not { } keyEncryptionKeySize)
 			return [];
 
-		var kek = DeriveKeyForEncryption(header, recipientKey, kekSize);
-		return AesKeyWrap.Wrap(kek, keyToEncrypt);
+		var keyEncryptionKey = DeriveKeyForEncryption(header, recipientKey, keyEncryptionKeySize);
+		return AesKeyWrap.Wrap(keyEncryptionKey, keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -120,10 +120,10 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 			    || !string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
 				return false;
 
-			if (_kekSize is { } kekSize)
+			if (_keyEncryptionKeySize is { } keyEncryptionKeySize)
 			{
-				var kek = DeriveKey(recipientKey, ephemeralKey, algorithm, apu, apv, kekSize);
-				return AesKeyWrap.TryUnwrap(kek, encryptedKey, out decryptedKey);
+				var keyEncryptionKey = DeriveKey(recipientKey, ephemeralKey, algorithm, apu, apv, keyEncryptionKeySize);
+				return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out decryptedKey);
 			}
 
 			// Direct Key Agreement: the encrypted key must be empty and the derived key IS the CEK,
@@ -179,7 +179,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		EllipticCurveJsonWebKey recipientKey,
 		int keySizeInBytes)
 	{
-		var algorithmId = _kekSize == null
+		var algorithmId = _keyEncryptionKeySize == null
 			? header.EncryptionAlgorithm
 			  ?? throw new InvalidOperationException(
 				  "ECDH-ES Direct Key Agreement requires the 'enc' header to be set before key derivation")

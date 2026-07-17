@@ -46,25 +46,25 @@ internal interface IContentEncryptionAlgorithm
 	/// <summary>
 	/// Encrypts plaintext using the provided Content Encryption Key (CEK).
 	/// </summary>
-	/// <param name="cek">The Content Encryption Key to use for encryption.</param>
+	/// <param name="contentEncryptionKey">The Content Encryption Key to use for encryption.</param>
 	/// <param name="plaintext">The plaintext to encrypt.</param>
 	/// <param name="additionalAuthenticatedData">Additional authenticated data (typically the BASE64URL(UTF8(JWE Protected Header))).</param>
 	/// <returns>The encrypted data containing the initialization vector, ciphertext, and authentication tag.</returns>
 	EncryptedData Encrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		byte[] plaintext,
 		byte[] additionalAuthenticatedData);
 
 	/// <summary>
 	/// Tries to decrypt JWE ciphertext using the provided Content Encryption Key (CEK).
 	/// </summary>
-	/// <param name="cek">The Content Encryption Key obtained by decrypting the JWE encrypted key.</param>
+	/// <param name="contentEncryptionKey">The Content Encryption Key obtained by decrypting the JWE encrypted key.</param>
 	/// <param name="encryptedData">The encrypted data containing initialization vector, ciphertext, and authentication tag.</param>
 	/// <param name="additionalAuthenticatedData">Additional authenticated data (typically the BASE64URL(UTF8(JWE Protected Header))).</param>
 	/// <param name="plaintext">The decrypted plaintext if successful; otherwise, null.</param>
 	/// <returns>True if decryption and authentication succeeded; otherwise, false.</returns>
 	bool TryDecrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		EncryptedData encryptedData,
 		byte[] additionalAuthenticatedData,
 		[NotNullWhen(true)] out byte[]? plaintext);

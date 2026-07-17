@@ -85,11 +85,13 @@ internal sealed class KeyRing(
             entries = await store.LoadAsync(cancellationToken);
         }
 
-        var kekVersions = await KekVersions(cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
+        var versions = await KeyEncryptionKeyVersions(cancellationToken)
+            .ToArrayAsync(cancellationToken: cancellationToken);
+
         var opened = new List<OpenedKey>(entries.Count);
         foreach (var entry in entries)
         {
-            var key = await envelope.OpenAsync(entry.Jwe, kekVersions.ToAsyncEnumerable(), cancellationToken);
+            var key = await envelope.OpenAsync(entry.Jwe, versions.ToAsyncEnumerable(), cancellationToken);
             opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 
@@ -175,42 +177,46 @@ internal sealed class KeyRing(
     private async Task<string> SealNewKeyAsync(string usage, string algorithm, CancellationToken cancellationToken)
     {
         var key = JsonWebKeyFactory.CreateRsa(usage, algorithm, policy.RsaKeySize);
-        var kek = await NewestKekAsync(cancellationToken);
+        var keyEncryptionKey = await NewestKeyEncryptionKeyAsync(cancellationToken);
 
         return await envelope.SealAsync(
-            key, kek, policy.KeyWrapAlgorithm, policy.ContentEncryptionAlgorithm, cancellationToken);
+            key, keyEncryptionKey, policy.KeyWrapAlgorithm, policy.ContentEncryptionAlgorithm, cancellationToken);
     }
 
     /// <summary>
     /// The KEK version to seal with: the newest one. A KEK needs no propagation window, unlike a signing key,
     /// because it has no external consumer waiting to learn it - every reader of an envelope is this server.
     /// </summary>
-    private async Task<JsonWebKey> NewestKekAsync(CancellationToken cancellationToken)
+    private async Task<JsonWebKey> NewestKeyEncryptionKeyAsync(CancellationToken cancellationToken)
     {
         var versions = await custodian
-            .GetKeyVersionsAsync(policy.KekName, cancellationToken)
+            .GetKeyVersionsAsync(policy.KeyEncryptionKeyName, cancellationToken)
             .ToListAsync(cancellationToken);
 
         if (versions.Count == 0)
         {
             throw new InvalidOperationException(
-                $"The custodian holds no key named '{policy.KekName}', so nothing can seal a minted key.");
+                $"The custodian holds no key named '{policy.KeyEncryptionKeyName}', so nothing can seal a minted key.");
         }
 
         var newest = versions.MaxBy(version => version.CreatedAt).PublicKey;
         if (!newest.HasPublicKey)
         {
             throw new InvalidOperationException(
-                $"The KEK '{policy.KekName}' must be an asymmetric key: sealing uses its public half in process, " +
-                "and a symmetric key has none.");
+                $"The key-encryption key '{policy.KeyEncryptionKeyName}' must be asymmetric: sealing uses its " +
+                "public half in process, and a symmetric key has none.");
         }
 
         return newest;
     }
 
-    /// <summary>The KEK's versions, public half only, which is what routes an unwrap to the custodian.</summary>
-    private IAsyncEnumerable<JsonWebKey> KekVersions(CancellationToken cancellationToken)
-        => custodian.GetKeyVersionsAsync(policy.KekName, cancellationToken).Select(version => version.PublicKey);
+    /// <summary>
+    /// The key-encryption key's versions, public half only, which is what routes an unwrap to the custodian.
+    /// </summary>
+    private IAsyncEnumerable<JsonWebKey> KeyEncryptionKeyVersions(CancellationToken cancellationToken)
+        => custodian
+            .GetKeyVersionsAsync(policy.KeyEncryptionKeyName, cancellationToken)
+            .Select(version => version.PublicKey);
 
     /// <summary>The roles this policy mints for: always signing, and encryption only when asked for.</summary>
     private IEnumerable<(string Usage, string Algorithm)> Roles()

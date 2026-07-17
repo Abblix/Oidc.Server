@@ -455,21 +455,21 @@ public class SymmetricKeyEncryptionTests
 	[Fact]
 	public void AesGcmKeyWrap_EncryptKey_EmitsRfc7518HeaderIvAndTag()
 	{
-		var kek = new OctetJsonWebKey
+		var keyEncryptionKey = new OctetJsonWebKey
 		{
 			KeyId = "kek",
 			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
 			KeyValue = CryptoRandom.GetRandomBytes(32),
 		};
-		var cek = CryptoRandom.GetRandomBytes(32);
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
 
 		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
 		var header = new JsonWebTokenHeader(new JsonObject());
 
-		var encryptedKey = encryptor.EncryptKey(header, kek, cek);
+		var encryptedKey = encryptor.EncryptKey(header, keyEncryptionKey, contentEncryptionKey);
 
 		// Encrypted Key carries only the wrapped-CEK ciphertext (same length as the CEK).
-		Assert.Equal(cek.Length, encryptedKey.Length);
+		Assert.Equal(contentEncryptionKey.Length, encryptedKey.Length);
 
 		// IV and tag live in the header, base64url-encoded, 96 and 128 bits respectively.
 		var ivParam = header.Json["iv"]?.GetValue<string>();
@@ -480,8 +480,8 @@ public class SymmetricKeyEncryptionTests
 		Assert.Equal(16, Base64Url.DecodeFromChars(tagParam).Length);
 
 		// Round-trips: decrypt reads iv/tag from the header and treats encrypted_key as the ciphertext.
-		Assert.True(encryptor.TryDecryptKey(header, kek, encryptedKey, out var recoveredCek));
-		Assert.Equal(cek, recoveredCek);
+		Assert.True(encryptor.TryDecryptKey(header, keyEncryptionKey, encryptedKey, out var recoveredKey));
+		Assert.Equal(contentEncryptionKey, recoveredKey);
 	}
 
 	/// <summary>
@@ -493,20 +493,20 @@ public class SymmetricKeyEncryptionTests
 	public void AesGcmKeyWrap_DecryptKey_ReadsRfc7518HeaderIvAndTag()
 	{
 		var keyValue = CryptoRandom.GetRandomBytes(32);
-		var kek = new OctetJsonWebKey
+		var keyEncryptionKey = new OctetJsonWebKey
 		{
 			KeyId = "kek",
 			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
 			KeyValue = keyValue,
 		};
-		var cek = CryptoRandom.GetRandomBytes(32);
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
 
 		// Produce a standard RFC 7518 §4.7 wrap exactly as a conformant external producer would.
 		var iv = CryptoRandom.GetRandomBytes(12);
-		var ciphertext = new byte[cek.Length];
+		var ciphertext = new byte[contentEncryptionKey.Length];
 		var tag = new byte[16];
 		using (var aesGcm = new AesGcm(keyValue, tag.Length))
-			aesGcm.Encrypt(iv, cek, ciphertext, tag);
+			aesGcm.Encrypt(iv, contentEncryptionKey, ciphertext, tag);
 
 		var header = new JsonWebTokenHeader(new JsonObject
 		{
@@ -516,7 +516,7 @@ public class SymmetricKeyEncryptionTests
 
 		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
 
-		Assert.True(encryptor.TryDecryptKey(header, kek, ciphertext, out var recoveredCek));
-		Assert.Equal(cek, recoveredCek);
+		Assert.True(encryptor.TryDecryptKey(header, keyEncryptionKey, ciphertext, out var recoveredKey));
+		Assert.Equal(contentEncryptionKey, recoveredKey);
 	}
 }

@@ -72,9 +72,9 @@ public class AesKeyWrapPaddedTests
     public void Rfc5649KeyWrap_WrongKey_FailsToUnwrap()
     {
         var wrapped = Rfc5649KeyWrap.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
-        var wrongKek = Convert.FromHexString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
+        var wrongKeyEncryptionKey = Convert.FromHexString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
 
-        Assert.False(Rfc5649KeyWrap.TryUnwrap(wrongKek, wrapped, out var recovered));
+        Assert.False(Rfc5649KeyWrap.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var recovered));
         Assert.Null(recovered);
     }
 
@@ -94,17 +94,17 @@ public class AesKeyWrapPaddedTests
     [InlineData(64)]
     public void Rfc5649KeyWrap_AgreesWithDispatcher(int plaintextLength)
     {
-        var kek = Convert.FromHexString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+        var keyEncryptionKey = Convert.FromHexString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         var plaintext = new byte[plaintextLength];
         for (var i = 0; i < plaintextLength; i++)
             plaintext[i] = (byte)(i * 7 + 1);
 
-        var transcribed = Rfc5649KeyWrap.Wrap(kek, plaintext);
-        var dispatched = AesKeyWrapPadded.Wrap(kek, plaintext);
+        var transcribed = Rfc5649KeyWrap.Wrap(keyEncryptionKey, plaintext);
+        var dispatched = AesKeyWrapPadded.Wrap(keyEncryptionKey, plaintext);
 
         Assert.Equal(dispatched, transcribed);
 
-        Assert.True(AesKeyWrapPadded.TryUnwrap(kek, transcribed, out var recovered));
+        Assert.True(AesKeyWrapPadded.TryUnwrap(keyEncryptionKey, transcribed, out var recovered));
         Assert.Equal(plaintext, recovered);
     }
 }

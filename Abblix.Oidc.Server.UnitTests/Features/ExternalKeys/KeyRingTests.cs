@@ -47,7 +47,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 /// </remarks>
 public sealed class KeyRingTests : IDisposable
 {
-    private const string KekName = "oidc-kek";
+    private const string KeyEncryptionKeyName = "oidc-kek";
 
     // The JWE seam resolves its keyed algorithms from the provider on every call, so the provider must outlive
     // the ring it built. Kept here and disposed with the test rather than at the end of the factory.
@@ -55,9 +55,9 @@ public sealed class KeyRingTests : IDisposable
 
     // One KEK per test, shared by every ring it builds: pods look at ONE custodian, so a key sealed by one pod
     // must open on another. A KEK per ring would make that impossible and hide the very thing under test.
-    private readonly JsonWebKey _kek =
+    private readonly JsonWebKey _keyEncryptionKey =
         JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)
-            with { KeyId = $"{KekName}:1" };
+            with { KeyId = $"{KeyEncryptionKeyName}:1" };
 
     public void Dispose()
     {
@@ -102,7 +102,7 @@ public sealed class KeyRingTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddSingleton(StubCustodian(_kek));
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
 
         // Opening an envelope is a custodian unwrap, so the external decryption backend must be on the seam: the
         // KEK is public-only, and that is what routes its unwrap out of process.
@@ -120,7 +120,7 @@ public sealed class KeyRingTests : IDisposable
             envelope,
             new MintedKeys
             {
-                KekName = KekName,
+                KeyEncryptionKeyName = KeyEncryptionKeyName,
                 RotateEvery = TimeSpan.FromDays(30),
                 EncryptionAlgorithm = encryptionAlgorithm,
                 KeepRetiredFor = keepRetiredFor,
@@ -132,28 +132,28 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>A custodian that holds the KEK: it publishes the public half and unwraps with the private one.</summary>
-    private static IKeyCustodian StubCustodian(JsonWebKey kek)
+    private static IKeyCustodian StubCustodian(JsonWebKey keyEncryptionKey)
     {
         var custodian = new Mock<IKeyCustodian>();
 
         custodian
-            .Setup(c => c.GetKeyVersionsAsync(KekName, It.IsAny<CancellationToken>()))
-            .Returns(new[] { new KeyVersion(kek.Sanitize(false), Now.AddDays(-100)) }.ToAsyncEnumerable());
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(new[] { new KeyVersion(keyEncryptionKey.Sanitize(false), Now.AddDays(-100)) }.ToAsyncEnumerable());
 
         custodian
             .Setup(c => c.UnwrapKeyAsync(
-                kek.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
+                keyEncryptionKey.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
                 It.IsAny<CancellationToken>()))
             .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
-                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)kek, algorithm, encryptedKey)));
+                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)keyEncryptionKey, algorithm, encryptedKey)));
 
         return custodian.Object;
     }
 
-    private static byte[] UnwrapLocally(RsaJsonWebKey kek, string algorithm, byte[] encryptedKey)
+    private static byte[] UnwrapLocally(RsaJsonWebKey keyEncryptionKey, string algorithm, byte[] encryptedKey)
     {
         using var rsa = System.Security.Cryptography.RSA.Create();
-        rsa.ImportParameters(kek.ToRsaParameters());
+        rsa.ImportParameters(keyEncryptionKey.ToRsaParameters());
 
         var padding = algorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256
             ? System.Security.Cryptography.RSAEncryptionPadding.OaepSHA256

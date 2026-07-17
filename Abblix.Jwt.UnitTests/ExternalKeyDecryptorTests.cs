@@ -229,7 +229,7 @@ public class ExternalKeyDecryptorTests
             CancellationToken cancellationToken)
         {
             UnwrapCalls++;
-            var cek = fullKey switch
+            var contentEncryptionKey = fullKey switch
             {
                 RsaJsonWebKey rsaKey => RsaDecrypt(rsaKey, algorithm, encryptedKey),
 
@@ -238,7 +238,7 @@ public class ExternalKeyDecryptorTests
 
                 _ => null,
             };
-            return Task.FromResult(cek);
+            return Task.FromResult(contentEncryptionKey);
         }
 
         public Task<byte[]> AgreeKeyAsync(

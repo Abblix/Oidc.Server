@@ -72,17 +72,17 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 	/// parameters 'iv' and 'tag' (base64url), and the returned JWE Encrypted Key holds only the
 	/// wrapped-CEK ciphertext, so a standard JOSE recipient can process the token.
 	/// </remarks>
-	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey kek, byte[] keyToEncrypt)
+	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey keyEncryptionKey, byte[] keyToEncrypt)
 	{
 		// Key Encryption Key (KEK) validation
-		if (kek.KeyValue == null)
+		if (keyEncryptionKey.KeyValue == null)
 			throw new InvalidOperationException("Key Encryption Key (KEK) value is null");
 
-		if (kek.KeyValue.Length != _keySize)
+		if (keyEncryptionKey.KeyValue.Length != _keySize)
 		{
 			throw new InvalidOperationException(
 				$"Key Encryption Key (KEK) size must be {_keySize} bytes for {algorithm}. " +
-				$"Actual size: {kek.KeyValue.Length} bytes.");
+				$"Actual size: {keyEncryptionKey.KeyValue.Length} bytes.");
 		}
 
 		// Generate random 96-bit IV per RFC 7518 Section 4.7.1.1
@@ -92,7 +92,7 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 		var tag = new byte[TagSize];
 
 		// Encrypt using AES-GCM
-		using var aesGcm = new AesGcm(kek.KeyValue, TagSize);
+		using var aesGcm = new AesGcm(keyEncryptionKey.KeyValue, TagSize);
 		aesGcm.Encrypt(iv, keyToEncrypt, ciphertext, tag);
 
 		// Per RFC 7518 Section 4.7.1.1/4.7.1.2 the IV and tag are carried as JOSE header parameters, not
@@ -107,14 +107,14 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 	/// <inheritdoc />
 	public bool TryDecryptKey(
 		JsonWebTokenHeader header,
-		OctetJsonWebKey kek,
+		OctetJsonWebKey keyEncryptionKey,
 		byte[] encryptedKey,
 		[NotNullWhen(true)] out byte[]? decryptedKey)
 	{
 		try
 		{
 			// Validate KEK
-			if (kek.KeyValue == null || kek.KeyValue.Length != _keySize)
+			if (keyEncryptionKey.KeyValue == null || keyEncryptionKey.KeyValue.Length != _keySize)
 			{
 				decryptedKey = null;
 				return false;
@@ -143,7 +143,7 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 			decryptedKey = new byte[encryptedKey.Length];
 
 			// Decrypt using AES-GCM
-			using var aesGcm = new AesGcm(kek.KeyValue, TagSize);
+			using var aesGcm = new AesGcm(keyEncryptionKey.KeyValue, TagSize);
 			aesGcm.Decrypt(iv, encryptedKey, tag, decryptedKey);
 
 			return true;

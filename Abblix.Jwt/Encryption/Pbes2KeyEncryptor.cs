@@ -51,7 +51,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	/// <summary>
 	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
 	/// </summary>
-	private readonly (HashAlgorithmName Prf, int KekSize) _parameters = algorithm switch
+	private readonly (HashAlgorithmName Prf, int KeyEncryptionKeySize) _parameters = algorithm switch
 	{
 		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16),
 		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW => (HashAlgorithmName.SHA384, 24),
@@ -94,8 +94,8 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		header.Pbes2SaltInput = Base64Url.EncodeToString(saltInput);
 		header.Pbes2IterationCount = DefaultIterationCount;
 
-		var kek = DeriveKek(password, saltInput, DefaultIterationCount);
-		return AesKeyWrap.Wrap(kek, keyToEncrypt);
+		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, DefaultIterationCount);
+		return AesKeyWrap.Wrap(keyEncryptionKey, keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -132,10 +132,10 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		if (saltInput.Length < MinSaltInputSize)
 			return false;
 
-		var kek = DeriveKek(password, saltInput, iterationCount);
+		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, iterationCount);
 
 		// The unwrap's integrity register check rejects tampered input and wrong-password attempts.
-		return AesKeyWrap.TryUnwrap(kek, encryptedKey, out decryptedKey);
+		return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out decryptedKey);
 	}
 
 	/// <summary>
@@ -143,7 +143,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	/// <c>UTF8(alg) || 0x00 || p2s</c>, the algorithm's HMAC PRF and the KEK length the
 	/// algorithm name declares.
 	/// </summary>
-	private byte[] DeriveKek(byte[] password, byte[] saltInput, int iterationCount)
+	private byte[] DeriveKeyEncryptionKey(byte[] password, byte[] saltInput, int iterationCount)
 	{
 		var algorithmName = Encoding.UTF8.GetBytes(algorithm);
 
@@ -152,6 +152,6 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		salt[algorithmName.Length] = 0;
 		saltInput.CopyTo(salt, algorithmName.Length + 1);
 
-		return Rfc2898DeriveBytes.Pbkdf2(password, salt, iterationCount, _parameters.Prf, _parameters.KekSize);
+		return Rfc2898DeriveBytes.Pbkdf2(password, salt, iterationCount, _parameters.Prf, _parameters.KeyEncryptionKeySize);
 	}
 }

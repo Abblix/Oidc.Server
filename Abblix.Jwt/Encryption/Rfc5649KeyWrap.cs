@@ -54,7 +54,7 @@ internal static class Rfc5649KeyWrap
     /// carries an extra 8-byte block, so it is <c>8 * (ceil(len/8) + 1)</c> bytes for a two-or-more-semiblock input
     /// and 16 bytes for a single-semiblock input.
     /// </summary>
-    public static byte[] Wrap(byte[] kek, ReadOnlySpan<byte> plaintext)
+    public static byte[] Wrap(byte[] keyEncryptionKey, ReadOnlySpan<byte> plaintext)
     {
         // RFC 5649 §3: the AIV is A65959A6 followed by the unpadded length as a 32-bit big-endian integer, and the
         // plaintext is zero-padded to a whole number of 64-bit semiblocks.
@@ -70,7 +70,7 @@ internal static class Rfc5649KeyWrap
         plaintext.CopyTo(padded);
 
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
 
         // RFC 5649 §4.1: a single padded semiblock is wrapped as one AES-ECB block over AIV || padded; the general
         // case runs the RFC 3394 wrapping with the register seeded by the AIV instead of the fixed A6A6... value.
@@ -96,7 +96,7 @@ internal static class Rfc5649KeyWrap
     /// the zero padding before returning any plaintext.
     /// </summary>
     /// <returns>True with the recovered plaintext when every check passes; otherwise false and null.</returns>
-    public static bool TryUnwrap(byte[] kek, byte[] wrapped, out byte[]? plaintext)
+    public static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrapped, out byte[]? plaintext)
     {
         plaintext = null;
 
@@ -107,7 +107,7 @@ internal static class Rfc5649KeyWrap
         var n = wrapped.Length / SemiblockSize - 1;
 
         using var aes = Aes.Create();
-        aes.Key = kek;
+        aes.Key = keyEncryptionKey;
 
         Span<byte> aiv = stackalloc byte[SemiblockSize];
         byte[] padded;

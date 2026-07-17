@@ -88,18 +88,18 @@ public class JweKeyManagementInteropTests
 	public async Task Create_AbblixAesKeyWrapJwt_MicrosoftDecrypts_Success(
 		string abblixKeyEncAlg,
 		string microsoftKeyEncAlg,
-		int kekSize,
+		int keyEncryptionKeySize,
 		string abblixContentEncAlg,
 		string microsoftContentEncAlg)
 	{
 		// Arrange
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-		var kek = CreateKek(abblixKeyEncAlg, kekSize);
+		var keyEncryptionKey = CreateKeyEncryptionKey(abblixKeyEncAlg, keyEncryptionKeySize);
 
 		// Abblix creates the signed and encrypted JWT
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
 		var jwt = await creator.IssueAsync(
-			CreateAbblixToken(), signingKey, kek, abblixKeyEncAlg, abblixContentEncAlg);
+			CreateAbblixToken(), signingKey, keyEncryptionKey, abblixKeyEncAlg, abblixContentEncAlg);
 
 		// Act - Microsoft decrypts and validates
 		var result = await _microsoftHandler.ValidateTokenAsync(jwt, new TokenValidationParameters
@@ -109,7 +109,7 @@ public class JweKeyManagementInteropTests
 			ValidIssuer = Issuer,
 			ValidAudience = Audience,
 			TokenDecryptionKey = new EncryptingCredentials(
-				kek.ToSecurityKey(), microsoftKeyEncAlg, microsoftContentEncAlg).Key,
+				keyEncryptionKey.ToSecurityKey(), microsoftKeyEncAlg, microsoftContentEncAlg).Key,
 		});
 
 		// Assert
@@ -123,13 +123,13 @@ public class JweKeyManagementInteropTests
 	public async Task Create_MicrosoftAesKeyWrapJwt_AbblixDecrypts_Success(
 		string abblixKeyEncAlg,
 		string microsoftKeyEncAlg,
-		int kekSize,
+		int keyEncryptionKeySize,
 		string abblixContentEncAlg,
 		string microsoftContentEncAlg)
 	{
 		// Arrange
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-		var kek = CreateKek(abblixKeyEncAlg, kekSize);
+		var keyEncryptionKey = CreateKeyEncryptionKey(abblixKeyEncAlg, keyEncryptionKeySize);
 
 		// Microsoft creates the signed and encrypted JWT
 		var descriptor = new SecurityTokenDescriptor
@@ -142,13 +142,13 @@ public class JweKeyManagementInteropTests
 			Expires = TimeProvider.System.GetUtcNow().UtcDateTime.AddHours(1),
 			SigningCredentials = new SigningCredentials(signingKey.ToSecurityKey(), SecurityAlgorithms.RsaSha256),
 			EncryptingCredentials = new EncryptingCredentials(
-				kek.ToSecurityKey(), microsoftKeyEncAlg, microsoftContentEncAlg),
+				keyEncryptionKey.ToSecurityKey(), microsoftKeyEncAlg, microsoftContentEncAlg),
 		};
 
 		var jwt = _microsoftHandler.CreateToken(descriptor);
 
 		// Act - Abblix decrypts and validates
-		var result = await ValidateWithAbblix(jwt, signingKey, kek);
+		var result = await ValidateWithAbblix(jwt, signingKey, keyEncryptionKey);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var token),
@@ -183,8 +183,8 @@ public class JweKeyManagementInteropTests
 	public void Create_AbblixEcdhEsWrappedKey_MicrosoftPrimitivesUnwrap_Success(
 		string keyEncAlg,
 		string contentEncAlg,
-		int kekSize,
-		int cekSize)
+		int keyEncryptionKeySize,
+		int contentEncryptionKeySize)
 	{
 		// Arrange: recipient EC key and a header carrying the agreement parties
 		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
@@ -198,8 +198,8 @@ public class JweKeyManagementInteropTests
 
 		// Abblix derives the KEK, wraps a random CEK and publishes 'epk'
 		var encryptor = new EcdhEsKeyEncryptor(keyEncAlg, ServiceProvider);
-		var cek = encryptor.GenerateContentEncryptionKey(header, recipientKey, cekSize);
-		var encryptedKey = encryptor.EncryptKey(header, recipientKey, cek);
+		var contentEncryptionKey = encryptor.GenerateContentEncryptionKey(header, recipientKey, contentEncryptionKeySize);
+		var encryptedKey = encryptor.EncryptKey(header, recipientKey, contentEncryptionKey);
 
 		// Act - the Microsoft primitives re-derive the KEK from the recipient private key and our 'epk',
 		// then unwrap the CEK
@@ -209,14 +209,14 @@ public class JweKeyManagementInteropTests
 			(ECDsaSecurityKey)recipientKey.ToSecurityKey(), ephemeralPublicKey, keyEncAlg, contentEncAlg);
 		var kdf = exchangeProvider.GenerateKdf(header.AgreementPartyUInfo, header.AgreementPartyVInfo);
 
-		Assert.Equal(kekSize, ((SymmetricSecurityKey)kdf).Key.Length);
+		Assert.Equal(keyEncryptionKeySize, ((SymmetricSecurityKey)kdf).Key.Length);
 
 		var keyWrapProvider = kdf.CryptoProviderFactory.CreateKeyWrapProviderForUnwrap(
 			kdf, ToKeyWrapAlgorithm(keyEncAlg));
-		var unwrappedCek = keyWrapProvider.UnwrapKey(encryptedKey);
+		var unwrappedKey = keyWrapProvider.UnwrapKey(encryptedKey);
 
 		// Assert - byte-exact agreement across the whole KDF + RFC 3394 pipeline
-		Assert.Equal(cek, unwrappedCek);
+		Assert.Equal(contentEncryptionKey, unwrappedKey);
 	}
 
 	[Theory]
@@ -224,8 +224,8 @@ public class JweKeyManagementInteropTests
 	public void Create_MicrosoftEcdhEsWrappedKey_AbblixDecrypts_Success(
 		string keyEncAlg,
 		string contentEncAlg,
-		int kekSize,
-		int cekSize)
+		int keyEncryptionKeySize,
+		int contentEncryptionKeySize)
 	{
 		// Arrange: the Microsoft primitives act as the producer — the sender key plays the ephemeral
 		// role and its public part travels as 'epk', exactly what their RFC-mode handler would emit
@@ -238,12 +238,12 @@ public class JweKeyManagementInteropTests
 			(ECDsaSecurityKey)senderKey.ToSecurityKey(), recipientPublicKey, keyEncAlg, contentEncAlg);
 		var kdf = exchangeProvider.GenerateKdf("QWxpY2U", "Qm9i");
 
-		Assert.Equal(kekSize, ((SymmetricSecurityKey)kdf).Key.Length);
+		Assert.Equal(keyEncryptionKeySize, ((SymmetricSecurityKey)kdf).Key.Length);
 
-		var cek = CryptoRandom.GetRandomBytes(cekSize);
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(contentEncryptionKeySize);
 		var keyWrapProvider = kdf.CryptoProviderFactory.CreateKeyWrapProvider(
 			kdf, ToKeyWrapAlgorithm(keyEncAlg));
-		var encryptedKey = keyWrapProvider.WrapKey(cek);
+		var encryptedKey = keyWrapProvider.WrapKey(contentEncryptionKey);
 
 		var header = new JsonWebTokenHeader(new JsonObject())
 		{
@@ -256,11 +256,11 @@ public class JweKeyManagementInteropTests
 
 		// Act - Abblix re-derives the KEK from the recipient private key and their 'epk', then unwraps
 		var encryptor = new EcdhEsKeyEncryptor(keyEncAlg, ServiceProvider);
-		var succeeded = encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var unwrappedCek);
+		var succeeded = encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var unwrappedKey);
 
 		// Assert - byte-exact agreement across the whole KDF + RFC 3394 pipeline
 		Assert.True(succeeded, $"Abblix failed to unwrap the Microsoft-wrapped CEK for {keyEncAlg}/{contentEncAlg}");
-		Assert.Equal(cek, unwrappedCek);
+		Assert.Equal(contentEncryptionKey, unwrappedKey);
 	}
 
 	/// <summary>
@@ -274,7 +274,7 @@ public class JweKeyManagementInteropTests
 		_ => SecurityAlgorithms.Aes256KW,
 	};
 
-	private static OctetJsonWebKey CreateKek(string algorithm, int size) => new()
+	private static OctetJsonWebKey CreateKeyEncryptionKey(string algorithm, int size) => new()
 	{
 		KeyId = $"interop-kek-{size * 8}",
 		Algorithm = algorithm,

@@ -47,7 +47,7 @@ public sealed record MintedKeys
     /// and needs no custodian round-trip; a symmetric KEK has no public half and would require one. Both Vault
     /// Transit and Azure Key Vault provision RSA keys, so this costs nothing in practice.
     /// </remarks>
-    public required string KekName { get; init; }
+    public required string KeyEncryptionKeyName { get; init; }
 
     /// <summary>The JWS algorithm the minted signing keys use, which also decides what is generated.</summary>
     public string SigningAlgorithm { get; init; } = SigningAlgorithms.RS256;
