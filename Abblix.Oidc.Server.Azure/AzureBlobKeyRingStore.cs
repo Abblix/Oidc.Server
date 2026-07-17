@@ -78,10 +78,16 @@ internal sealed class AzureBlobKeyRingStore(BlobContainerClient container) : IKe
 
             return true;
         }
-        catch (RequestFailedException failure) when (failure.Status == (int)HttpStatusCode.Conflict)
+        catch (RequestFailedException failure)
+            when (failure.Status == (int)HttpStatusCode.Conflict
+                  && failure.ErrorCode == BlobErrorCode.BlobAlreadyExists)
         {
             // Another pod minted this period first. Its key is as good as ours, so the caller drops what it
             // generated rather than publishing a second key for the period.
+            //
+            // The error code, not the status alone: 409 also carries ContainerBeingDeleted, LeaseAlreadyPresent
+            // and others. Reading those as "someone won" would make this pod discard a key nobody stored, and the
+            // period would then have no key at all.
             return false;
         }
     }

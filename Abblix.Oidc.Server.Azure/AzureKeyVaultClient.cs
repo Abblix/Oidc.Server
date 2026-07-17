@@ -186,9 +186,18 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
             if (properties.Enabled != true)
                 continue;
 
+            // A creation time is not decoration: it decides which version signs and when a rotation takes over.
+            // Substituting a default would date the version to year one, so it could never be chosen to produce
+            // with and would read as long past its propagation window. A version whose age is unknown cannot be
+            // ordered, so it fails loud rather than sorting wrong, which is what the Vault client does too.
+            var createdAt = properties.CreatedOn
+                ?? throw new InvalidOperationException(
+                    $"Key Vault reported no creation time for '{keyName}/{properties.Version}', so its place in " +
+                    "the rotation cannot be determined.");
+
             var key = await _keyClient.GetKeyAsync(keyName, properties.Version, cancellationToken);
             var publicKey = ImportPublicKey(key.Value.Key) with { KeyId = $"{keyName}/{properties.Version}" };
-            yield return new KeyVersion(publicKey, properties.CreatedOn ?? DateTimeOffset.MinValue);
+            yield return new KeyVersion(publicKey, createdAt);
         }
     }
 

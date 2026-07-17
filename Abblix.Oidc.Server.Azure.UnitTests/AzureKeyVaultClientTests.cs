@@ -35,12 +35,26 @@ namespace Abblix.Oidc.Server.Azure.UnitTests;
 /// transport for every Key Vault call, so RSA and EC signing, unwrapping and public-key fetch round-trip without a
 /// live vault.
 /// </summary>
-public class AzureKeyVaultClientTests
+public sealed class AzureKeyVaultClientTests : IDisposable
 {
     private static readonly Uri VaultUri = new("https://contoso.vault.azure.net/");
 
-    private static AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
-        => new(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), new HttpClient(handler));
+    // In production IHttpClientFactory owns the HttpClient and the custodian deliberately does not dispose it (a
+    // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
+    private readonly List<HttpClient> _httpClients = [];
+
+    private AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler);
+        _httpClients.Add(httpClient);
+        return new AzureKeyVaultClient(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), httpClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var httpClient in _httpClients)
+            httpClient.Dispose();
+    }
 
     private static async Task<JsonWebKey> FirstPublicKeyAsync(IAsyncEnumerable<KeyVersion> versions)
     {
@@ -202,7 +216,7 @@ public class AzureKeyVaultClientTests
             HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
     }
 
-    private static async Task<byte[]?> DecryptWithVaultAnswering(HttpStatusCode status, string body)
+    private async Task<byte[]?> DecryptWithVaultAnswering(HttpStatusCode status, string body)
     {
         using var rsa = RSA.Create(2048);
         var handler = new StubHttpMessageHandler(request =>

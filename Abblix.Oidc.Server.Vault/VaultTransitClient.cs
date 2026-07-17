@@ -230,7 +230,19 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
         CancellationToken cancellationToken)
     {
         var (status, document) = await TrySendAsync(method, path, body, cancellationToken);
-        EnsureSuccess(status, document, path);
+        try
+        {
+            EnsureSuccess(status, document, path);
+        }
+        catch
+        {
+            // JsonDocument rents its buffer from the shared pool and returns it on dispose. Throwing past it
+            // leaks that buffer for good, and a failing Vault fails every call, so the leak compounds exactly
+            // when the process can least afford it.
+            document?.Dispose();
+            throw;
+        }
+
         return document!;
     }
 
