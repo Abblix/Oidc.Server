@@ -1,0 +1,82 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System;
+using System.Security.Cryptography;
+using Abblix.Jwt;
+using Abblix.Jwt.Signing;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
+
+/// <summary>
+/// Pins the ordering contract of the custodian wiring. The tier call composes the external crypto backends with
+/// their in-process peers, so those peers must already be registered: run first, it finds a one-member family,
+/// composes nothing, and the external backend then loses the singular resolve to the local one that arrives after
+/// it. Nothing detects that at runtime - the signing seam simply reports it cannot sign a key it should have
+/// routed to the custodian - so the ordering is asserted here instead.
+/// </summary>
+public class ExternalKeysWiringTests
+{
+    private static JsonWebKey PublicOnlyKey()
+    {
+        using var rsa = RSA.Create(2048);
+        return new RsaJsonWebKey { KeyId = "oidc-sign" }.Apply(rsa.ExportParameters(false));
+    }
+
+    private static IServiceCollection WithCustodian(IServiceCollection services)
+    {
+        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        return services;
+    }
+
+    private static CustodianHeldKeys Keys => new() { SigningKeyName = "oidc-sign" };
+
+    [Fact]
+    public void ExternalSignerOwnsAPublicOnlyKey_WhenTheTierCallFollowsTheOidcRegistration()
+    {
+        var services = WithCustodian(new ServiceCollection());
+        services.AddJsonWebTokens();
+        services.AddCustodian().HoldKeysInCustodian(Keys);
+
+        using var provider = services.BuildServiceProvider();
+
+        // A public-only key is the signal that routes signing to the custodian, so the composed seam must own it.
+        // The in-process signer alone would not, having no private material to sign with.
+        Assert.True(provider.GetRequiredService<IDataSigner>().CanSign(PublicOnlyKey()));
+    }
+
+    [Fact]
+    public void TierCallFailsFast_WhenItRunsBeforeTheOidcRegistration()
+    {
+        var services = WithCustodian(new ServiceCollection());
+
+        // The mistake: the tier call has no in-process peer to compose with yet.
+        var error = Assert.Throws<InvalidOperationException>(
+            () => services.AddCustodian().HoldKeysInCustodian(Keys));
+
+        Assert.Contains("AddOidcServices", error.Message);
+    }
+}

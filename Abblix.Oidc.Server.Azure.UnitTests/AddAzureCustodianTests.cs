@@ -37,7 +37,13 @@ namespace Abblix.Oidc.Server.Azure.UnitTests;
 public class AddAzureCustodianTests
 {
     private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
-        => services.AddAzureCustodian(options => options.KeyVaultUri = "https://contoso.vault.azure.net/");
+    {
+        // The tier call composes onto the in-process crypto backends, so they must be registered first - the same
+        // order a host follows via AddOidcServices.
+        services.AddJsonWebTokens();
+
+        return services.AddAzureCustodian(options => options.KeyVaultUri = "https://contoso.vault.azure.net/");
+    }
 
     [Fact]
     public void RegistersCustodianAndKeyProvider()

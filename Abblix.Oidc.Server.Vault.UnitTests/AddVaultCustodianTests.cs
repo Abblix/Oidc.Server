@@ -37,12 +37,18 @@ namespace Abblix.Oidc.Server.Vault.UnitTests;
 public class AddVaultCustodianTests
 {
     private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
-        => services.AddVaultCustodian(options =>
+    {
+        // The tier call composes onto the in-process crypto backends, so they must be registered first - the same
+        // order a host follows via AddOidcServices.
+        services.AddJsonWebTokens();
+
+        return services.AddVaultCustodian(options =>
         {
             options.Address = "https://vault.test:8200";
             options.Token = "s.test-token";
             options.TransitMount = "transit";
         });
+    }
 
     private static IServiceCollection Configure()
     {

@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -112,6 +113,15 @@ public static class ExternalKeysServiceCollectionExtensions
         Func<IServiceProvider, CustodianHeldKeys> keys)
     {
         var services = builder.Services;
+
+        // Composition needs the in-process backends to compose WITH, and Compose short-circuits on a one-member
+        // family: running before the OIDC registration would build no composite, and the external backend would
+        // then lose the singular resolve to the local one registered after it. Nothing detects that later - the
+        // seam simply reports it cannot sign a key it should have routed here - so fail where the mistake is.
+        if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
+            throw new InvalidOperationException(
+                "Call HoldKeysInCustodian after the OIDC registration (AddOidcServices / AddOidcCore). It " +
+                "composes the external crypto backends with their in-process peers, and none are registered yet.");
 
         // Satisfies the startup validation AddCustodian armed: the wiring is now complete.
         services.Configure<CustodianTierValidation>(
