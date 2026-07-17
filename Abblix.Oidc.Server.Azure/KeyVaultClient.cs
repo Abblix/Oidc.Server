@@ -45,7 +45,7 @@ namespace Abblix.Oidc.Server.Azure;
 /// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
 /// resolves the key's metadata on first use.
 /// </summary>
-public sealed class AzureKeyVaultClient : IKeyCustodian
+public sealed class KeyVaultClient : IKeyCustodian
 {
     private readonly KeyVault.KeyClient _keyClient;
     private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
@@ -58,7 +58,7 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
     /// Azure SDK rides the host's HTTP pipeline.</param>
     [ActivatorUtilitiesConstructor]
-    public AzureKeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
+    public KeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
         : this(options.Value, BuildCredential(options.Value), httpClient)
     {
     }
@@ -71,7 +71,7 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// <param name="settings">The Azure Key Vault options.</param>
     /// <param name="credential">The credential the SDK authenticates with.</param>
     /// <param name="httpClient">The transport for every Key Vault call.</param>
-    internal AzureKeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
+    internal KeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
     {
         // The only client this type builds. Everything else it needs comes off this one: the SDK hands the
         // credential, the options and the pipeline down to the per-key crypto clients, so the injected transport

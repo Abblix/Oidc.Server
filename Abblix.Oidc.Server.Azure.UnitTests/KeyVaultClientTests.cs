@@ -30,12 +30,12 @@ using Xunit;
 namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Exercises <see cref="AzureKeyVaultClient"/> against a stub transport and a fake credential, proving the
+/// Exercises <see cref="KeyVaultClient"/> against a stub transport and a fake credential, proving the
 /// IHttpClientFactory seam drives the Azure SDK end to end: the injected <see cref="HttpMessageHandler"/> is the
 /// transport for every Key Vault call, so RSA and EC signing, unwrapping and public-key fetch round-trip without a
 /// live vault.
 /// </summary>
-public sealed class AzureKeyVaultClientTests : IDisposable
+public sealed class KeyVaultClientTests : IDisposable
 {
     private static readonly Uri VaultUri = new("https://contoso.vault.azure.net/");
 
@@ -43,11 +43,11 @@ public sealed class AzureKeyVaultClientTests : IDisposable
     // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
     private readonly List<HttpClient> _httpClients = [];
 
-    private AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
+    private KeyVaultClient ClientOver(StubHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
-        return new AzureKeyVaultClient(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), httpClient);
+        return new KeyVaultClient(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), httpClient);
     }
 
     public void Dispose()

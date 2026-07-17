@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.Azure;
 /// Storage-side encryption is a second layer, not the one the design leans on.
 /// </para>
 /// </remarks>
-internal sealed class AzureBlobKeyRingStore(BlobContainerClient container) : IKeyRingStore
+internal sealed class BlobKeyRingStore(BlobContainerClient container) : IKeyRingStore
 {
     /// <inheritdoc />
     public async Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)

@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
 /// Records the requests the Azure SDK sends through its transport and returns the canned response the responder
-/// builds, so <see cref="AzureKeyVaultClient"/> is exercised against Key Vault wire shapes without a live vault.
+/// builds, so <see cref="KeyVaultClient"/> is exercised against Key Vault wire shapes without a live vault.
 /// </summary>
 internal sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
     : HttpMessageHandler

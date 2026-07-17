@@ -66,7 +66,7 @@ public static class ServiceCollectionExtensions
         // held long-lived: disable handler rotation and let SocketsHttpHandler.PooledConnectionLifetime recycle
         // connections to pick up DNS changes, the pattern Microsoft recommends for a long-lived HttpClient.
         services
-            .AddHttpClient<AzureKeyVaultClient>()
+            .AddHttpClient<KeyVaultClient>()
             .ConfigurePrimaryHttpMessageHandler(provider =>
             {
                 var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
@@ -78,11 +78,11 @@ public static class ServiceCollectionExtensions
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
         // TryAdd rather than the typed-client registration itself: AddHttpClient registers its client TRANSIENT,
-        // so each of the four singletons that inject a custodian would get its own AzureKeyVaultClient, and with
+        // so each of the four singletons that inject a custodian would get its own KeyVaultClient, and with
         // it its own DefaultAzureCredential, its own Entra token cache and its own per-key CryptographyClient
         // cache - defeating the caching this client exists for. It also let the library silently beat a host that
         // pre-registered its own custodian, which the repo's DI rule forbids.
-        services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<AzureKeyVaultClient>());
+        services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<KeyVaultClient>());
 
         return services.AddCustodian();
     }
@@ -133,14 +133,14 @@ public static class ServiceCollectionExtensions
 
             // The same credential chain the custodian uses: the ring is not a second identity to manage, and the
             // container is reached by whatever already reaches the vault.
-            var credential = AzureKeyVaultClient.BuildCredential(
+            var credential = KeyVaultClient.BuildCredential(
                 provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
 
             var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(BlobRingClient);
             var options = new BlobClientOptions { Transport = new HttpClientTransport(httpClient) };
 
             var service = new BlobServiceClient(new Uri(ring.ServiceUri), credential, options);
-            return new AzureBlobKeyRingStore(service.GetBlobContainerClient(ring.Container));
+            return new BlobKeyRingStore(service.GetBlobContainerClient(ring.Container));
         });
 
         return services;

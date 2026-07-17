@@ -65,7 +65,7 @@ public class AddAzureCustodianTests
         using var provider = services.BuildServiceProvider();
 
         // The vault client itself serves as the external key custodian, and the provider publishes its keys.
-        Assert.IsType<AzureKeyVaultClient>(provider.GetRequiredService<IKeyCustodian>());
+        Assert.IsType<KeyVaultClient>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
