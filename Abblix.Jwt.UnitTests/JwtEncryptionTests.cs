@@ -246,7 +246,7 @@ public class JwtEncryptionTests
     {
         // A spy content decryptor records the CEK length the JWE decryptor hands it and reports the
         // A256GCM key size so the mitigation's length comparison targets 32 bytes.
-        var spy = new CekLengthRecordingEncryptor(keySizeInBytes: 32);
+        var spy = new KeyLengthRecordingEncryptor(keySizeInBytes: 32);
 
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
@@ -287,7 +287,7 @@ public class JwtEncryptionTests
 
         // The content decryptor must run on a correct-length CEK (32 bytes for A256GCM), not on the
         // 5-byte value RSA1_5 decrypted — otherwise the fast length-fail leaks PKCS1 padding validity.
-        Assert.Equal(32, spy.LastCekLength);
+        Assert.Equal(32, spy.LastKeyLength);
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
@@ -296,24 +296,24 @@ public class JwtEncryptionTests
         Justification = "Signatures are mandated by IContentEncryptionAlgorithm; this spy records only the CEK length.")]
     [SuppressMessage("Minor Code Smell", "S2325:Methods and properties that don't access instance data should be static",
         Justification = "Explicit IContentEncryptionAlgorithm interface implementation cannot be static.")]
-    private sealed class CekLengthRecordingEncryptor(int keySizeInBytes) : IContentEncryptionAlgorithm
+    private sealed class KeyLengthRecordingEncryptor(int keySizeInBytes) : IContentEncryptionAlgorithm
     {
-        public int LastCekLength { get; private set; } = -1;
+        public int LastKeyLength { get; private set; } = -1;
 
         public string Algorithm => EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
         public int KeySizeInBytes { get; } = keySizeInBytes;
 
-        public EncryptedData Encrypt(byte[] cek, byte[] plaintext, byte[] additionalAuthenticatedData)
+        public EncryptedData Encrypt(byte[] contentEncryptionKey, byte[] plaintext, byte[] additionalAuthenticatedData)
             => throw new NotSupportedException();
 
         public bool TryDecrypt(
-            byte[] cek,
+            byte[] contentEncryptionKey,
             EncryptedData encryptedData,
             byte[] additionalAuthenticatedData,
             [NotNullWhen(true)] out byte[]? plaintext)
         {
-            LastCekLength = cek.Length;
+            LastKeyLength = contentEncryptionKey.Length;
             plaintext = null;
             return false;
         }

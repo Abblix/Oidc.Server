@@ -99,10 +99,10 @@ public class Pbes2KeyEncryptionTests
 			CreateAppendixCHeader(),
 			CreateAppendixCPasswordKey(),
 			Base64Url.DecodeFromChars(AppendixCEncryptedKey),
-			out var cek);
+			out var contentEncryptionKey);
 
 		Assert.True(succeeded);
-		Assert.Equal(AppendixCContentEncryptionKey, cek);
+		Assert.Equal(AppendixCContentEncryptionKey, contentEncryptionKey);
 	}
 
 	[Fact]
@@ -199,11 +199,11 @@ public class Pbes2KeyEncryptionTests
 			Algorithm = EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
 			EncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
 		};
-		var cek = CryptoRandom.GetRandomBytes(32);
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
 
 		var encryptor = new Pbes2KeyEncryptor(EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW);
 
-		var encryptedKey = encryptor.EncryptKey(header, passwordKey, cek);
+		var encryptedKey = encryptor.EncryptKey(header, passwordKey, contentEncryptionKey);
 
 		Assert.NotNull(header.Pbes2SaltInput);
 		Assert.True(Base64Url.DecodeFromChars(header.Pbes2SaltInput).Length >= 8);
@@ -213,8 +213,8 @@ public class Pbes2KeyEncryptionTests
 		Assert.NotNull(header.Pbes2IterationCount);
 		Assert.InRange(header.Pbes2IterationCount.Value, 1000, 10_000);
 
-		Assert.True(encryptor.TryDecryptKey(header, passwordKey, encryptedKey, out var recoveredCek));
-		Assert.Equal(cek, recoveredCek);
+		Assert.True(encryptor.TryDecryptKey(header, passwordKey, encryptedKey, out var recoveredKey));
+		Assert.Equal(contentEncryptionKey, recoveredKey);
 	}
 
 	/// <summary>

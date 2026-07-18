@@ -22,22 +22,42 @@
 
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Text.Json;
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Vault;
 
 /// <summary>
-/// Thin HTTP client over the Vault / OpenBao Transit secrets engine. Every private-key operation is a network
-/// round-trip: the key is created inside Transit as non-exportable, so its private half never leaves the engine
-/// and this client only moves bytes across the boundary. The typed <see cref="HttpClient"/> is configured by
-/// <c>AddVaultCustodian</c> with the Transit base address (<c>{Address}/v1/{mount}/</c>) and the auth header.
+/// Holds the provider's keys in the Vault / OpenBao Transit secrets engine. Every private-key operation is a
+/// network round-trip: the key is created inside Transit as non-exportable, so its private half never leaves the
+/// engine and this custodian only moves bytes across the boundary.
 /// </summary>
-public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
+/// <remarks>
+/// What Transit can do decides what this custodian supports: it signs and it unwraps RSA-OAEP, and it exposes no
+/// key-agreement primitive, so ECDH-ES is out. That is a property of the engine, which is why the engine is in
+/// the name.
+/// </remarks>
+internal sealed partial class TransitCustodian(
+    ILogger<TransitCustodian> logger,
+    IHttpClientFactory httpClientFactory,
+    IOptions<VaultTransitOptions> options)
+    : IKeyCustodian
 {
+    /// <summary>
+    /// The shared client, held for this singleton's lifetime. Resolved by name rather than injected, because the
+    /// factory's own clients are transient and the key ring shares this one.
+    /// </summary>
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(Transport.ClientName);
+
+    /// <summary>
+    /// The Transit mount, spelled into every path. The client stops at <c>/v1/</c> because it is shared with the
+    /// key ring, which lives on a different mount.
+    /// </summary>
+    private string Mount => options.Value.TransitMount;
+
     /// <summary>
     /// Signs the JWS signing input with a Transit key under the given JWS algorithm. RSA maps to PKCS#1 v1.5
     /// (<c>RS*</c>) or PSS (<c>PS*</c>); EC (<c>ES*</c>) uses Transit's <c>jws</c> marshaling so the signature is
@@ -52,39 +72,71 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
     {
         var (name, version) = ParseKeyId(keyId);
         var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
+        var path = $"{Mount}/sign/{name}";
 
-        using var document = await SendAsync(HttpMethod.Post, $"sign/{name}", request, cancellationToken);
-        var signature = document.RootElement.GetProperty("data").GetProperty("signature").GetString()!;
+        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        response.EnsureSuccess(path);
+
+        var signature = response.Body(path).RootElement.GetProperty("data").GetProperty("signature").GetString()!;
 
         // Transit returns "vault:v<version>:<base64(signature)>"; the wire signature is the last segment.
         return Convert.FromBase64String(signature[(signature.LastIndexOf(':') + 1)..]);
     }
 
-    // Transit sign-request field values. RSA sets signature_algorithm (PKCS#1 v1.5 / PSS); EC sets
-    // marshaling_algorithm=jws so Transit returns the R||S form JWS needs instead of ASN.1 DER.
-    private const string Pkcs1V15 = "pkcs1v15";
-    private const string Pss = "pss";
-    private const string Sha2With256 = "sha2-256";
-    private const string Sha2With384 = "sha2-384";
-    private const string Sha2With512 = "sha2-512";
-    private const string JwsMarshaling = "jws";
+    private static class SignatureAlgorithms
+    {
+        public const string Pkcs1V15 = "pkcs1v15";
+        public const string Pss = "pss";
+    }
+
+    private static class HashAlgorithms
+    {
+        public const string Sha2With256 = "sha2-256";
+        public const string Sha2With384 = "sha2-384";
+        public const string Sha2With512 = "sha2-512";
+    }
+
+    private static class MarshalingAlgorithms
+    {
+        public const string Jws = "jws";
+    }
 
     // Maps a JWS algorithm to the Transit sign request pinned to the given key version; an unmapped algorithm is
     // rejected. key_version pins the exact version the kid names, so the produce role signs with the active
     // version even when a newer version is already published but still propagating.
-    private static object BuildSignRequest(string input, string algorithm, int version) => algorithm switch
+    private static SignRequest BuildSignRequest(string input, string algorithm, int version)
     {
-        SigningAlgorithms.RS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pkcs1V15, key_version = version },
-        SigningAlgorithms.RS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pkcs1V15, key_version = version },
-        SigningAlgorithms.RS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pkcs1V15, key_version = version },
+        // An algorithm decides two things independently: which digest, and how the signature is formed. RSA picks
+        // a padding, EC picks an encoding, so the request differs by exactly one field between the families.
+        var request = new SignRequest
+        {
+            Input = input,
+            HashAlgorithm = HashAlgorithmFor(algorithm),
+            KeyVersion = version,
+        };
 
-        SigningAlgorithms.PS256 => new { input, prehashed = false, hash_algorithm = Sha2With256, signature_algorithm = Pss, key_version = version },
-        SigningAlgorithms.PS384 => new { input, prehashed = false, hash_algorithm = Sha2With384, signature_algorithm = Pss, key_version = version },
-        SigningAlgorithms.PS512 => new { input, prehashed = false, hash_algorithm = Sha2With512, signature_algorithm = Pss, key_version = version },
+        // Transit sign-request field values. RSA sets signature_algorithm (PKCS#1 v1.5 / PSS); EC sets
+        // marshaling_algorithm=jws so Transit returns the R||S form JWS needs instead of ASN.1 DER.
+        return algorithm switch
+        {
+            SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512
+                => request with { SignatureAlgorithm = SignatureAlgorithms.Pkcs1V15 },
 
-        SigningAlgorithms.ES256 => new { input, prehashed = false, hash_algorithm = Sha2With256, marshaling_algorithm = JwsMarshaling, key_version = version },
-        SigningAlgorithms.ES384 => new { input, prehashed = false, hash_algorithm = Sha2With384, marshaling_algorithm = JwsMarshaling, key_version = version },
-        SigningAlgorithms.ES512 => new { input, prehashed = false, hash_algorithm = Sha2With512, marshaling_algorithm = JwsMarshaling, key_version = version },
+            SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512
+                => request with { SignatureAlgorithm = SignatureAlgorithms.Pss },
+
+            SigningAlgorithms.ES256 or SigningAlgorithms.ES384 or SigningAlgorithms.ES512
+                => request with { MarshalingAlgorithm = MarshalingAlgorithms.Jws },
+
+            _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
+        };
+    }
+
+    private static string HashAlgorithmFor(string algorithm) => algorithm switch
+    {
+        SigningAlgorithms.RS256 or SigningAlgorithms.PS256 or SigningAlgorithms.ES256 => HashAlgorithms.Sha2With256,
+        SigningAlgorithms.RS384 or SigningAlgorithms.PS384 or SigningAlgorithms.ES384 => HashAlgorithms.Sha2With384,
+        SigningAlgorithms.RS512 or SigningAlgorithms.PS512 or SigningAlgorithms.ES512 => HashAlgorithms.Sha2With512,
 
         _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
     };
@@ -111,17 +163,18 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
 
         var (name, version) = ParseKeyId(keyId);
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
+        var path = $"{Mount}/decrypt/{name}";
 
-        var (status, document) = await TrySendAsync(HttpMethod.Post, $"decrypt/{name}", request, cancellationToken);
-        using (document)
+        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        if (response.Status == HttpStatusCode.BadRequest)
         {
-            if (status == HttpStatusCode.BadRequest)
-                return null;
-
-            EnsureSuccess(status, document, $"decrypt/{name}");
-            var plaintext = document!.RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
-            return Convert.FromBase64String(plaintext);
+            LogUnwrapRejected(keyId);
+            return null;
         }
+
+        response.EnsureSuccess(path);
+        var plaintext = response.Body(path).RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
+        return Convert.FromBase64String(plaintext);
     }
 
     /// <summary>
@@ -154,8 +207,11 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
         string keyName,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var document = await SendAsync(HttpMethod.Get, $"keys/{keyName}", body: null, cancellationToken);
-        var data = document.RootElement.GetProperty("data");
+        var path = $"{Mount}/keys/{keyName}";
+        using var response = await _httpClient.SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
+        response.EnsureSuccess(path);
+
+        var data = response.Body(path).RootElement.GetProperty("data");
         var keyType = data.GetProperty("type").GetString()!;
 
         // Transit returns every version under "keys" as { "<version>": { public_key, creation_time } }. Publish
@@ -203,41 +259,5 @@ public sealed class VaultTransitClient(HttpClient httpClient) : IKeyCustodian
         }
 
         throw new NotSupportedException($"The Vault Transit store does not publish key type '{keyType}'.");
-    }
-
-    private async Task<JsonDocument> SendAsync(
-        HttpMethod method,
-        string path,
-        object? body,
-        CancellationToken cancellationToken)
-    {
-        var (status, document) = await TrySendAsync(method, path, body, cancellationToken);
-        EnsureSuccess(status, document, path);
-        return document!;
-    }
-
-    private async Task<(HttpStatusCode Status, JsonDocument? Document)> TrySendAsync(
-        HttpMethod method,
-        string path,
-        object? body,
-        CancellationToken cancellationToken)
-    {
-        using var request = new HttpRequestMessage(method, path);
-        if (body is not null)
-            request.Content = JsonContent.Create(body);
-
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-        var document = string.IsNullOrEmpty(payload) ? null : JsonDocument.Parse(payload);
-        return (response.StatusCode, document);
-    }
-
-    private static void EnsureSuccess(HttpStatusCode status, JsonDocument? document, string path)
-    {
-        if (status is >= HttpStatusCode.OK and < HttpStatusCode.Ambiguous)
-            return;
-
-        var errors = document?.RootElement.TryGetProperty("errors", out var e) == true ? e.ToString() : "(none)";
-        throw new InvalidOperationException($"Vault Transit '{path}' failed with {(int)status}: {errors}");
     }
 }

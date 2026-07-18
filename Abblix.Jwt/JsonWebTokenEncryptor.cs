@@ -63,7 +63,7 @@ internal class JsonWebTokenEncryptor(
                 "in process, and wrapping is never routed to an external custodian; failing closed.");
         }
 
-        var (cek, encryptedKey) = EncryptKeyLocally(
+        var (contentEncryptionKey, encryptedKey) = EncryptKeyLocally(
             header, encryptionKey, keyEncryptionAlgorithm, contentEncryptor.KeySizeInBytes);
 
         // Encode header AFTER key encryption (in case it was modified)
@@ -73,7 +73,7 @@ internal class JsonWebTokenEncryptor(
         var additionalAuthenticatedData = Encoding.ASCII.GetBytes(headerEncoded);
 
         var (iv, ciphertext, authTag) = contentEncryptor.Encrypt(
-            cek,
+            contentEncryptionKey,
             plaintext,
             additionalAuthenticatedData);
 
@@ -103,8 +103,8 @@ internal class JsonWebTokenEncryptor(
         (byte[], byte[]) EncryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
             var keyEncryptor = serviceProvider.GetRequiredKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(algorithm);
-            var cek = keyEncryptor.GenerateContentEncryptionKey(header, jwk, contentKeySizeInBytes);
-            return (cek, keyEncryptor.EncryptKey(header, jwk, cek));
+            var contentEncryptionKey = keyEncryptor.GenerateContentEncryptionKey(header, jwk, contentKeySizeInBytes);
+            return (contentEncryptionKey, keyEncryptor.EncryptKey(header, jwk, contentEncryptionKey));
         }
     }
 

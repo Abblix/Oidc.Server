@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -53,14 +54,15 @@ public class AddVaultCustodianTests
     private static IServiceCollection Configure()
     {
         var services = new ServiceCollection();
-        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
+        AddCustodian(services).UseKeysInCustodian(new CustodianHeldKeys
         {
             SigningKeyName = "oidc-sign",
             EncryptionKeyName = "oidc-enc",
         });
 
-        // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
-        // AddOidcServices. Mirror that minimally here so the provider resolves without the whole OIDC stack.
+        // The external-keys provider is an add-on to an OIDC server, which supplies the options, the clock and
+        // logging via AddOidcServices. Mirror that minimally here so the provider resolves without the whole stack.
+        services.AddLogging();
         services.AddOptions();
         services.AddSingleton(TimeProvider.System);
         return services;
@@ -76,18 +78,37 @@ public class AddVaultCustodianTests
         using var provider = services.BuildServiceProvider();
 
         // The Transit client itself serves as the external key custodian, and the provider publishes its keys.
-        Assert.IsType<VaultTransitClient>(provider.GetRequiredService<IKeyCustodian>());
+        Assert.IsType<TransitCustodian>(provider.GetRequiredService<IKeyCustodian>());
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]
-    public void ConfiguresTypedClient_WithTransitBaseAddressAndAuthHeader()
+    public void ConfiguresTheSharedClient_WithTheServerRootAddress()
     {
         using var provider = Configure().BuildServiceProvider();
 
-        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IKeyCustodian));
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(Transport.ClientName);
 
-        Assert.Equal("https://vault.test:8200/v1/transit/", http.BaseAddress!.ToString());
-        Assert.Equal("s.test-token", Assert.Single(http.DefaultRequestHeaders.GetValues("X-Vault-Token")));
+        // The address stops at the server root rather than a mount: this one client also carries the key ring,
+        // which lives on a different mount, so each engine spells its own into every path.
+        Assert.Equal("https://vault.test:8200/v1/", http.BaseAddress!.ToString());
+
+        // The token is NOT here: stamping it on the client would pin it for the process lifetime, and a token
+        // minted by AppRole or Kubernetes auth is short-lived by design. It is applied per request instead.
+        Assert.False(http.DefaultRequestHeaders.Contains(TokenHandler.TokenHeaderName));
+    }
+
+    [Fact]
+    public void KeepsTheTokenOutOfLogs()
+    {
+        using var provider = Configure().BuildServiceProvider();
+
+        // The token can sign tokens as this provider. IHttpClientFactory logs request headers at Trace and
+        // redacts nothing by default, and Trace is exactly what an operator turns on to debug a Vault problem.
+        var options = provider
+            .GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>()
+            .Get(Transport.ClientName);
+
+        Assert.True(options.ShouldRedactHeaderValue(TokenHandler.TokenHeaderName));
     }
 }

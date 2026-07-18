@@ -66,7 +66,7 @@ public class ExternalKeysWiringTests
     {
         var services = WithCustodian(new ServiceCollection());
         services.AddJsonWebTokens();
-        services.AddCustodian().HoldKeysInCustodian(Keys);
+        services.AddCustodian().UseKeysInCustodian(Keys);
 
         using var provider = services.BuildServiceProvider();
 
@@ -82,7 +82,7 @@ public class ExternalKeysWiringTests
 
         // The mistake: the tier call has no in-process peer to compose with yet.
         var error = Assert.Throws<InvalidOperationException>(
-            () => services.AddCustodian().HoldKeysInCustodian(Keys));
+            () => services.AddCustodian().UseKeysInCustodian(Keys));
 
         Assert.Contains("AddOidcServices", error.Message);
     }
@@ -110,7 +110,7 @@ public class ExternalKeysWiringTests
     {
         var services = WithCustodian(new ServiceCollection());
         services.AddJsonWebTokens();
-        services.AddCustodian().HoldKeysInCustodian(Keys);
+        services.AddCustodian().UseKeysInCustodian(Keys);
 
         using var provider = services.BuildServiceProvider();
 

@@ -69,18 +69,18 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 		OctetJsonWebKey sharedKey,
 		int keySizeInBytes)
 	{
-		var cek = sharedKey.KeyValue
+		var contentEncryptionKey = sharedKey.KeyValue
 		          ?? throw new InvalidOperationException(
 			          "Direct key agreement (dir) requires an OctetJsonWebKey with KeyValue");
 
-		if (cek.Length != keySizeInBytes)
+		if (contentEncryptionKey.Length != keySizeInBytes)
 		{
 			throw new InvalidOperationException(
 				$"Direct key agreement (dir) requires the shared symmetric key to match the content " +
-				$"encryption key size. Expected {keySizeInBytes} bytes, actual: {cek.Length} bytes.");
+				$"encryption key size. Expected {keySizeInBytes} bytes, actual: {contentEncryptionKey.Length} bytes.");
 		}
 
-		return cek;
+		return contentEncryptionKey;
 	}
 
 	/// <inheritdoc />

@@ -92,10 +92,10 @@ public class EcdhEsKeyAgreementTests
 		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
 
 		var succeeded = encryptor.TryDecryptKey(
-			CreateAppendixCHeader(), CreateAppendixCRecipientKey(), [], out var cek);
+			CreateAppendixCHeader(), CreateAppendixCRecipientKey(), [], out var contentEncryptionKey);
 
 		Assert.True(succeeded);
-		Assert.Equal("VqqN6vgjbSBcIijNcacQGg", Base64Url.EncodeToString(cek));
+		Assert.Equal("VqqN6vgjbSBcIijNcacQGg", Base64Url.EncodeToString(contentEncryptionKey));
 	}
 
 	/// <summary>
@@ -108,10 +108,10 @@ public class EcdhEsKeyAgreementTests
 		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
 
 		var succeeded = encryptor.TryDecryptKey(
-			CreateAppendixCHeader(), CreateAppendixCRecipientKey(), CryptoRandom.GetRandomBytes(16), out var cek);
+			CreateAppendixCHeader(), CreateAppendixCRecipientKey(), CryptoRandom.GetRandomBytes(16), out var contentEncryptionKey);
 
 		Assert.False(succeeded);
-		Assert.Null(cek);
+		Assert.Null(contentEncryptionKey);
 	}
 
 	/// <summary>
@@ -196,8 +196,8 @@ public class EcdhEsKeyAgreementTests
 		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
 
 		// Act: encryption-side derivation
-		var cek = encryptor.GenerateContentEncryptionKey(header, recipientKey, 32);
-		var encryptedKey = encryptor.EncryptKey(header, recipientKey, cek);
+		var contentEncryptionKey = encryptor.GenerateContentEncryptionKey(header, recipientKey, 32);
+		var encryptedKey = encryptor.EncryptKey(header, recipientKey, contentEncryptionKey);
 
 		// Assert: 'epk' carries a public-only EC key on the recipient's curve; encrypted key is empty
 		Assert.Empty(encryptedKey);
@@ -209,8 +209,8 @@ public class EcdhEsKeyAgreementTests
 			.ContainsKey(JsonWebKeyPropertyNames.PrivateExponent));
 
 		// Assert: the recipient re-derives exactly the same CEK from the published header
-		Assert.True(encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var rederivedCek));
-		Assert.Equal(cek, rederivedCek);
+		Assert.True(encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var rederivedKey));
+		Assert.Equal(contentEncryptionKey, rederivedKey);
 	}
 
 	/// <summary>

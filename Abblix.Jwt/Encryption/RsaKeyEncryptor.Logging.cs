@@ -29,6 +29,6 @@ partial class RsaKeyEncryptor
 	[LoggerMessage(
 		EventId = LogEvents.Jwt.RsaEncryptionFailed,
 		Level = LogLevel.Error,
-		Message = "RSA key encryption failed: Algorithm={Algorithm}, KeySize={KeySize} bits, CEK size={CekSize} bytes, Theoretical max CEK={MaxCekSize} bytes")]
-	private partial void LogEncryptionFailed(string Algorithm, int KeySize, int CekSize, int MaxCekSize);
+		Message = "RSA key encryption failed: Algorithm={Algorithm}, KeySize={KeySize} bits, CEK size={ContentEncryptionKeySize} bytes, Theoretical max CEK={MaxContentEncryptionKeySize} bytes")]
+	private partial void LogEncryptionFailed(string Algorithm, int KeySize, int ContentEncryptionKeySize, int MaxContentEncryptionKeySize);
 }

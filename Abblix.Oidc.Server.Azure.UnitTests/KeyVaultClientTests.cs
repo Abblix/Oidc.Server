@@ -21,25 +21,45 @@
 // info@abblix.com
 
 using System.Net;
+using Azure;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
 
 /// <summary>
-/// Exercises <see cref="AzureKeyVaultClient"/> against a stub transport and a fake credential, proving the
+/// Exercises <see cref="KeyVaultClient"/> against a stub transport and a fake credential, proving the
 /// IHttpClientFactory seam drives the Azure SDK end to end: the injected <see cref="HttpMessageHandler"/> is the
 /// transport for every Key Vault call, so RSA and EC signing, unwrapping and public-key fetch round-trip without a
 /// live vault.
 /// </summary>
-public class AzureKeyVaultClientTests
+public sealed class KeyVaultClientTests : IDisposable
 {
-    private const string VaultUri = "https://contoso.vault.azure.net/";
+    private static readonly Uri VaultUri = new("https://contoso.vault.azure.net/");
 
-    private static AzureKeyVaultClient ClientOver(StubHttpMessageHandler handler)
-        => new(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), new HttpClient(handler));
+    // In production IHttpClientFactory owns the HttpClient and the custodian deliberately does not dispose it (a
+    // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
+    private readonly List<HttpClient> _httpClients = [];
+
+    private KeyVaultClient ClientOver(StubHttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler);
+        _httpClients.Add(httpClient);
+        return new KeyVaultClient(
+            NullLogger<KeyVaultClient>.Instance,
+            new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
+            new StaticTokenCredential(),
+            httpClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var httpClient in _httpClients)
+            httpClient.Dispose();
+    }
 
     private static async Task<JsonWebKey> FirstPublicKeyAsync(IAsyncEnumerable<KeyVersion> versions)
     {
@@ -125,7 +145,7 @@ public class AzureKeyVaultClientTests
         var handler = SignResponder("oidc-sign", signature, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false)));
 
         var result = await ClientOver(handler).SignAsync(
-            "oidc-sign", SigningAlgorithms.RS256, [9, 9], TestContext.Current.CancellationToken);
+            "oidc-sign/v1", SigningAlgorithms.RS256, [9, 9], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
     }
@@ -138,7 +158,7 @@ public class AzureKeyVaultClientTests
         var handler = SignResponder("oidc-sign", signature, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false)));
 
         var result = await ClientOver(handler).SignAsync(
-            "oidc-sign", SigningAlgorithms.ES256, [9, 9], TestContext.Current.CancellationToken);
+            "oidc-sign/v1", SigningAlgorithms.ES256, [9, 9], TestContext.Current.CancellationToken);
 
         Assert.Equal(signature, result);
     }
@@ -149,7 +169,7 @@ public class AzureKeyVaultClientTests
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
         await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler)
-            .SignAsync("oidc-sign", "HS256", [1], TestContext.Current.CancellationToken));
+            .SignAsync("oidc-sign/v1", "HS256", [1], TestContext.Current.CancellationToken));
 
         Assert.Null(handler.LastRequest);
     }
@@ -165,26 +185,53 @@ public class AzureKeyVaultClientTests
                 : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
         var result = await ClientOver(handler).UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [5, 5], TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
     }
 
     [Fact]
-    public async Task DecryptAsync_ReturnsNull_OnVaultFailure()
+    public async Task DecryptAsync_ReturnsNull_OnBadRequest()
+    {
+        // A rejected ciphertext is the ONE case that becomes null: the seam needs a wrong key to be
+        // indistinguishable from bad padding, which is what closes the padding oracle.
+        var result = await DecryptWithVaultAnswering(
+            HttpStatusCode.BadRequest, """{"error":{"code":"BadParameter","message":"invalid ciphertext"}}""");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task DecryptAsync_Throws_OnForbidden()
+    {
+        // The identity lost its Crypto User role. That is our fault, not the client's, and reporting it as a
+        // failed decryption would tell every caller its JWE is bad while the vault is simply refusing us.
+        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+            HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}"""));
+    }
+
+    [Fact]
+    public async Task DecryptAsync_Throws_OnThrottling()
+    {
+        // Key Vault throttles per vault, and this key sits on the token path, so 429 is routine rather than
+        // exotic. Swallowing it as null would reject every encrypted token for as long as the throttle lasts,
+        // silently, and blame the clients.
+        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+            HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
+    }
+
+    private async Task<byte[]?> DecryptWithVaultAnswering(HttpStatusCode status, string body)
     {
         using var rsa = RSA.Create(2048);
         var handler = new StubHttpMessageHandler(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
-                ? StubHttpMessageHandler.Json(HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}""")
+                ? StubHttpMessageHandler.Json(status, body)
                 : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        var result = await ClientOver(handler).UnwrapKeyAsync(
-            "oidc-enc", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+        return await ClientOver(handler).UnwrapKeyAsync(
+            "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [5, 5], TestContext.Current.CancellationToken);
-
-        Assert.Null(result);
     }
 
     // The crypto client may fetch the key (a JIT GET) before the remote sign; return the key bundle for the GET and

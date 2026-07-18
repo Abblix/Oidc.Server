@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Collections.Concurrent;
+using System.Net;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Azure;
@@ -29,6 +30,7 @@ using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 // Azure.Security.KeyVault.Keys also declares a JsonWebKey; alias the namespace so the bare JsonWebKey stays the
@@ -44,11 +46,9 @@ namespace Abblix.Oidc.Server.Azure;
 /// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
 /// resolves the key's metadata on first use.
 /// </summary>
-public sealed class AzureKeyVaultClient : IKeyCustodian
+public sealed partial class KeyVaultClient : IKeyCustodian
 {
-    private readonly Uri _vaultUri;
-    private readonly TokenCredential _credential;
-    private readonly HttpClient _httpClient;
+    private readonly ILogger<KeyVaultClient> _logger;
     private readonly KeyVault.KeyClient _keyClient;
     private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
 
@@ -56,12 +56,13 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// Creates the client for the vault named by <paramref name="options"/>, selecting a client-secret
     /// credential when the service-principal fields are set, or the default Azure credential chain otherwise.
     /// </summary>
+    /// <param name="logger">Logs an unwrap the vault rejected.</param>
     /// <param name="options">The configured Azure Key Vault options.</param>
     /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
     /// Azure SDK rides the host's HTTP pipeline.</param>
     [ActivatorUtilitiesConstructor]
-    public AzureKeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
-        : this(options.Value, BuildCredential(options.Value), httpClient)
+    public KeyVaultClient(ILogger<KeyVaultClient> logger, IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
+        : this(logger, options.Value, BuildCredential(options.Value), httpClient)
     {
     }
 
@@ -70,25 +71,38 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
     /// Azure SDK against a stub <see cref="HttpMessageHandler"/> and a fake credential, so signing, unwrapping and
     /// public-key fetch can be exercised without a live vault.
     /// </summary>
+    /// <param name="logger">Logs an unwrap the vault rejected.</param>
     /// <param name="settings">The Azure Key Vault options.</param>
     /// <param name="credential">The credential the SDK authenticates with.</param>
     /// <param name="httpClient">The transport for every Key Vault call.</param>
-    internal AzureKeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
+    internal KeyVaultClient(
+        ILogger<KeyVaultClient> logger,
+        AzureKeyVaultOptions settings,
+        TokenCredential credential,
+        HttpClient httpClient)
     {
-        _vaultUri = new Uri(settings.KeyVaultUri);
-        _credential = credential;
-        _httpClient = httpClient;
+        _logger = logger;
+
+        // The only client this type builds. Everything else it needs comes off this one: the SDK hands the
+        // credential, the options and the pipeline down to the per-key crypto clients, so the injected transport
+        // reaches them without being restated, and no key URI is ever composed by hand here.
         _keyClient = new KeyVault.KeyClient(
-            _vaultUri, _credential, new KeyVault.KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
+            settings.KeyVaultUri,
+            credential,
+            new KeyVault.KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
     }
 
     // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
     // DefaultAzureCredential, which covers a managed identity, an Azure CLI sign-in, or the AZURE_* environment
     // variables. Production on Azure uses a managed identity and needs none of these set.
-    private static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
-        => !string.IsNullOrWhiteSpace(settings.TenantId)
-                && !string.IsNullOrWhiteSpace(settings.ClientId)
-                && !string.IsNullOrWhiteSpace(settings.ClientSecret)
+    /// <remarks>
+    /// Internal rather than private so the key ring authenticates with the very same chain: the ring is not a
+    /// second identity to configure, it is reached by whatever already reaches the vault.
+    /// </remarks>
+    internal static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
+        => !string.IsNullOrWhiteSpace(settings.TenantId) &&
+           !string.IsNullOrWhiteSpace(settings.ClientId) &&
+           !string.IsNullOrWhiteSpace(settings.ClientSecret)
             ? new ClientSecretCredential(settings.TenantId, settings.ClientId, settings.ClientSecret)
             : new DefaultAzureCredential();
 
@@ -108,20 +122,23 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
         SigningAlgorithms.RS256 => SignatureAlgorithm.RS256,
         SigningAlgorithms.RS384 => SignatureAlgorithm.RS384,
         SigningAlgorithms.RS512 => SignatureAlgorithm.RS512,
+
         SigningAlgorithms.PS256 => SignatureAlgorithm.PS256,
         SigningAlgorithms.PS384 => SignatureAlgorithm.PS384,
         SigningAlgorithms.PS512 => SignatureAlgorithm.PS512,
+
         SigningAlgorithms.ES256 => SignatureAlgorithm.ES256,
         SigningAlgorithms.ES384 => SignatureAlgorithm.ES384,
         SigningAlgorithms.ES512 => SignatureAlgorithm.ES512,
+
         _ => throw new NotSupportedException($"The Azure Key Vault store does not sign '{algorithm}'."),
     };
 
     /// <summary>
     /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
-    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null on failure so a wrong
-    /// key or tampered ciphertext is indistinguishable, which the seam's padding-oracle mitigation relies on. The
-    /// JWE header is unused: an RSA unwrap needs only the ciphertext.
+    /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null when the vault rejects
+    /// the ciphertext, so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
+    /// mitigation relies on. The JWE header is unused: an RSA unwrap needs only the ciphertext.
     /// </summary>
     public async Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
@@ -133,8 +150,14 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
             var result = await client.DecryptAsync(encryptionAlgorithm, encryptedKey, cancellationToken);
             return result.Plaintext;
         }
-        catch (RequestFailedException)
+        catch (RequestFailedException failure) when (failure.Status == (int)HttpStatusCode.BadRequest)
         {
+            // Only a rejected ciphertext becomes null, and only because the seam requires it: null is the contract's
+            // way of saying "this did not decrypt", which keeps a wrong key indistinguishable from bad padding.
+            // Everything else must throw. A 429 (Key Vault throttles per vault, and this key is on the token path),
+            // a 403 (the identity lost its Crypto User role), a 5xx: none of those are decryption failures, and
+            // reporting them as one would tell the caller its client sent a bad JWE while the real fault is ours.
+            LogUnwrapRejected(_logger, keyId);
             return null;
         }
     }
@@ -174,9 +197,18 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
             if (properties.Enabled != true)
                 continue;
 
+            // A creation time is not decoration: it decides which version signs and when a rotation takes over.
+            // Substituting a default would date the version to year one, so it could never be chosen to produce
+            // with and would read as long past its propagation window. A version whose age is unknown cannot be
+            // ordered, so it fails loud rather than sorting wrong, which is what the Vault client does too.
+            var createdAt = properties.CreatedOn
+                ?? throw new InvalidOperationException(
+                    $"Key Vault reported no creation time for '{keyName}/{properties.Version}', so its place in " +
+                    "the rotation cannot be determined.");
+
             var key = await _keyClient.GetKeyAsync(keyName, properties.Version, cancellationToken);
             var publicKey = ImportPublicKey(key.Value.Key) with { KeyId = $"{keyName}/{properties.Version}" };
-            yield return new KeyVersion(publicKey, properties.CreatedOn ?? DateTimeOffset.MinValue);
+            yield return new KeyVersion(publicKey, createdAt);
         }
     }
 
@@ -198,12 +230,41 @@ public sealed class AzureKeyVaultClient : IKeyCustodian
         throw new NotSupportedException($"The Azure Key Vault store does not publish key type '{webKey.KeyType}'.");
     }
 
-    private CryptographyClient GetCryptographyClient(string keyName)
+    /// <summary>
+    /// The crypto client for a key version, cached because building one costs a metadata resolve on first use.
+    /// </summary>
+    /// <param name="keyId">The published <c>kid</c>: the key name and its version, as this client stamped it.</param>
+    /// <remarks>
+    /// The SDK builds the client from the parent <see cref="KeyVault.KeyClient"/>, which hands down its own
+    /// credential, options and pipeline - so the injected transport carries through without being restated, and
+    /// the key's URI is composed by the SDK rather than by string concatenation here.
+    /// </remarks>
+    private CryptographyClient GetCryptographyClient(string keyId)
+        => _cryptographyClients.GetOrAdd(
+            keyId,
+            id =>
+            {
+                var (name, version) = ParseKeyId(id);
+                return _keyClient.GetCryptographyClient(name, version);
+            });
+
+    /// <summary>
+    /// Splits a published <c>kid</c> back into the name and version the SDK addresses a key by.
+    /// </summary>
+    /// <remarks>
+    /// The kid is minted as <c>name/version</c> when the versions are published, and a Key Vault key name cannot
+    /// contain a slash, so the split is unambiguous. A kid without a version is not one this client published.
+    /// </remarks>
+    private static (string Name, string Version) ParseKeyId(string keyId)
     {
-        return _cryptographyClients.GetOrAdd(
-            keyName,
-            name => new CryptographyClient(
-                new Uri($"{_vaultUri}keys/{name}"), _credential,
-                new CryptographyClientOptions { Transport = new HttpClientTransport(_httpClient) }));
+        var separator = keyId.IndexOf('/');
+        if (separator <= 0 || separator == keyId.Length - 1)
+        {
+            throw new InvalidOperationException(
+                $"Malformed external key id '{keyId}': expected '<name>/<version>', which is what this client " +
+                "publishes as the kid of each key version.");
+        }
+
+        return (keyId[..separator], keyId[(separator + 1)..]);
     }
 }

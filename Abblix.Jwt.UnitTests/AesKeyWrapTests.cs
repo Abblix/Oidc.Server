@@ -48,7 +48,7 @@ public class AesKeyWrapTests
 	/// <summary>
 	/// The 128-bit KEK of the RFC 3394 §4.1 vector, shared with the negative tests below.
 	/// </summary>
-	private const string Kek128Hex = "000102030405060708090A0B0C0D0E0F";
+	private const string KeyEncryptionKey128Hex = "000102030405060708090A0B0C0D0E0F";
 
 	/// <summary>
 	/// The six complete known-answer vectors of RFC 3394 §4.1–§4.6, covering every
@@ -58,7 +58,7 @@ public class AesKeyWrapTests
 	{
 		// §4.1: 128 bits of Key Data with a 128-bit KEK
 		{
-			Kek128Hex,
+			KeyEncryptionKey128Hex,
 			"00112233445566778899AABBCCDDEEFF",
 			"1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5"
 		},
@@ -96,18 +96,18 @@ public class AesKeyWrapTests
 
 	[Theory]
 	[MemberData(nameof(Rfc3394Vectors))]
-	public void Wrap_Rfc3394KnownAnswerVectors_ProducesExpectedCiphertext(string kekHex, string keyHex, string expectedHex)
+	public void Wrap_Rfc3394KnownAnswerVectors_ProducesExpectedCiphertext(string keyEncryptionKeyHex, string keyHex, string expectedHex)
 	{
-		var wrapped = AesKeyWrap.Wrap(Convert.FromHexString(kekHex), Convert.FromHexString(keyHex));
+		var wrapped = AesKeyWrap.Wrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(keyHex));
 
 		Assert.Equal(Convert.FromHexString(expectedHex), wrapped);
 	}
 
 	[Theory]
 	[MemberData(nameof(Rfc3394Vectors))]
-	public void TryUnwrap_Rfc3394KnownAnswerVectors_RecoversKeyData(string kekHex, string keyHex, string wrappedHex)
+	public void TryUnwrap_Rfc3394KnownAnswerVectors_RecoversKeyData(string keyEncryptionKeyHex, string keyHex, string wrappedHex)
 	{
-		Assert.True(AesKeyWrap.TryUnwrap(Convert.FromHexString(kekHex), Convert.FromHexString(wrappedHex), out var keyData));
+		Assert.True(AesKeyWrap.TryUnwrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(wrappedHex), out var keyData));
 		Assert.Equal(Convert.FromHexString(keyHex), keyData);
 	}
 
@@ -119,7 +119,7 @@ public class AesKeyWrapTests
 	[Fact]
 	public void TryUnwrap_AnySingleByteTampered_Fails()
 	{
-		var kek = Convert.FromHexString(Kek128Hex);
+		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 		var wrapped = Convert.FromHexString("1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5");
 
 		for (var position = 0; position < wrapped.Length; position++)
@@ -128,7 +128,7 @@ public class AesKeyWrapTests
 			tampered[position] ^= 0x01;
 
 			Assert.False(
-				AesKeyWrap.TryUnwrap(kek, tampered, out var keyData),
+				AesKeyWrap.TryUnwrap(keyEncryptionKey, tampered, out var keyData),
 				$"Unwrap must fail when byte {position} is tampered");
 			Assert.Null(keyData);
 		}
@@ -137,10 +137,10 @@ public class AesKeyWrapTests
 	[Fact]
 	public void TryUnwrap_WrongKek_Fails()
 	{
-		var wrongKek = Convert.FromHexString("0F0E0D0C0B0A09080706050403020100");
+		var wrongKeyEncryptionKey = Convert.FromHexString("0F0E0D0C0B0A09080706050403020100");
 		var wrapped = Convert.FromHexString("1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5");
 
-		Assert.False(AesKeyWrap.TryUnwrap(wrongKek, wrapped, out var keyData));
+		Assert.False(AesKeyWrap.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -151,9 +151,9 @@ public class AesKeyWrapTests
 	[InlineData(25)] // not a multiple of 8
 	public void TryUnwrap_InvalidWrappedKeyLength_Fails(int length)
 	{
-		var kek = Convert.FromHexString(Kek128Hex);
+		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.False(AesKeyWrap.TryUnwrap(kek, new byte[length], out var keyData));
+		Assert.False(AesKeyWrap.TryUnwrap(keyEncryptionKey, new byte[length], out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -163,9 +163,9 @@ public class AesKeyWrapTests
 	[InlineData(20)] // not a multiple of 8
 	public void Wrap_InvalidKeyDataLength_Throws(int length)
 	{
-		var kek = Convert.FromHexString(Kek128Hex);
+		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.Throws<ArgumentException>(() => AesKeyWrap.Wrap(kek, new byte[length]));
+		Assert.Throws<ArgumentException>(() => AesKeyWrap.Wrap(keyEncryptionKey, new byte[length]));
 	}
 
 	/// <summary>
@@ -193,22 +193,22 @@ public class AesKeyWrapTests
 	[InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, 32, EncryptionAlgorithms.ContentEncryption.Aes256Gcm)]
 	public async Task AesKeyWrap_JweRoundTrip_AllContentEncryptionAlgorithms_Success(
 		string keyManagementAlgorithm,
-		int kekSize,
+		int keyEncryptionKeySize,
 		string contentEncryption)
 	{
 		// Arrange
-		var kek = new OctetJsonWebKey
+		var keyEncryptionKey = new OctetJsonWebKey
 		{
-			KeyId = $"test-kw-{kekSize * 8}",
+			KeyId = $"test-kw-{keyEncryptionKeySize * 8}",
 			Algorithm = keyManagementAlgorithm,
-			KeyValue = CryptoRandom.GetRandomBytes(kekSize),
+			KeyValue = CryptoRandom.GetRandomBytes(keyEncryptionKeySize),
 		};
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 		var token = CreateTestToken();
 
 		// Act: Encrypt
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
-		var jwe = await creator.IssueAsync(token, signingKey, kek, keyManagementAlgorithm, contentEncryption);
+		var jwe = await creator.IssueAsync(token, signingKey, keyEncryptionKey, keyManagementAlgorithm, contentEncryption);
 
 		// Assert: JWE compact serialization with a non-empty encrypted_key (CEK + 8-byte register)
 		var parts = jwe.Split('.');
@@ -221,7 +221,7 @@ public class AesKeyWrapTests
 		{
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
-			ResolveTokenDecryptionKeys = _ => kek.ToAsync(),
+			ResolveTokenDecryptionKeys = _ => keyEncryptionKey.ToAsync(),
 			ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),
 		});
 
@@ -238,7 +238,7 @@ public class AesKeyWrapTests
 	[Fact]
 	public async Task AesKeyWrap_WrongKekSize_ThrowsException()
 	{
-		var wrongSizeKek = new OctetJsonWebKey
+		var wrongSizeKeyEncryptionKey = new OctetJsonWebKey
 		{
 			KeyId = "wrong-size",
 			Algorithm = EncryptionAlgorithms.KeyManagement.Aes128KW,
@@ -250,7 +250,7 @@ public class AesKeyWrapTests
 		await Assert.ThrowsAsync<InvalidOperationException>(() => creator.IssueAsync(
 			CreateTestToken(),
 			signingKey,
-			wrongSizeKek,
+			wrongSizeKeyEncryptionKey,
 			EncryptionAlgorithms.KeyManagement.Aes128KW,
 			EncryptionAlgorithms.ContentEncryption.Aes256Gcm));
 	}

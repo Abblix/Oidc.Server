@@ -72,8 +72,8 @@ internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : ICon
         byte[]? TryDecryptBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {
             var keyEncryptor = serviceProvider.GetKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(algorithm);
-            return keyEncryptor != null && keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out var cek)
-                ? cek
+            return keyEncryptor != null && keyEncryptor.TryDecryptKey(header, jwk, encryptedKey, out var contentEncryptionKey)
+                ? contentEncryptionKey
                 : null;
         }
     }

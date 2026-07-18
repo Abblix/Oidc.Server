@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// The continuation of a custodian registration: the host has said WHICH custodian holds its keys and must now say
 /// HOW the library uses it. These are two independent choices, and the second one is the security posture - where
 /// the private half of a key lives - so it is named at the call site and never defaulted. Today that name is
-/// <c>HoldKeysInCustodian</c>: the private half never enters this process, and every signature and every CEK
+/// <c>UseKeysInCustodian</c>: the private half never enters this process, and every signature and every CEK
 /// unwrap is a round-trip to the custodian.
 /// </summary>
 /// <remarks>

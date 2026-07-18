@@ -55,37 +55,37 @@ internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgo
 	};
 
 	/// <inheritdoc />
-	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey kek, byte[] keyToEncrypt)
+	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey keyEncryptionKey, byte[] keyToEncrypt)
 	{
 		// Key Encryption Key (KEK) validation
-		if (kek.KeyValue == null)
+		if (keyEncryptionKey.KeyValue == null)
 			throw new InvalidOperationException("Key Encryption Key (KEK) value is null");
 
-		if (kek.KeyValue.Length != _keySize)
+		if (keyEncryptionKey.KeyValue.Length != _keySize)
 		{
 			throw new InvalidOperationException(
 				$"Key Encryption Key (KEK) size must be {_keySize} bytes for {algorithm}. " +
-				$"Actual size: {kek.KeyValue.Length} bytes.");
+				$"Actual size: {keyEncryptionKey.KeyValue.Length} bytes.");
 		}
 
-		return AesKeyWrap.Wrap(kek.KeyValue, keyToEncrypt);
+		return AesKeyWrap.Wrap(keyEncryptionKey.KeyValue, keyToEncrypt);
 	}
 
 	/// <inheritdoc />
 	public bool TryDecryptKey(
 		JsonWebTokenHeader header,
-		OctetJsonWebKey kek,
+		OctetJsonWebKey keyEncryptionKey,
 		byte[] encryptedKey,
 		[NotNullWhen(true)] out byte[]? decryptedKey)
 	{
 		// Validate KEK
-		if (kek.KeyValue == null || kek.KeyValue.Length != _keySize)
+		if (keyEncryptionKey.KeyValue == null || keyEncryptionKey.KeyValue.Length != _keySize)
 		{
 			decryptedKey = null;
 			return false;
 		}
 
 		// The unwrap's integrity register check rejects tampered input and wrong-KEK attempts.
-		return AesKeyWrap.TryUnwrap(kek.KeyValue, encryptedKey, out decryptedKey);
+		return AesKeyWrap.TryUnwrap(keyEncryptionKey.KeyValue, encryptedKey, out decryptedKey);
 	}
 }

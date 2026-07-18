@@ -48,20 +48,20 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 
 	/// <inheritdoc />
 	public EncryptedData Encrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		byte[] plaintext,
 		byte[] additionalAuthenticatedData)
 	{
 		// Check CEK length
-		var expectedCekLength = KeySizeInBytes;
-		if (cek.Length != expectedCekLength)
-			throw new ArgumentException($"CEK must be {expectedCekLength} bytes for {algorithm}", nameof(cek));
+		var expectedLength = KeySizeInBytes;
+		if (contentEncryptionKey.Length != expectedLength)
+			throw new ArgumentException($"CEK must be {expectedLength} bytes for {algorithm}", nameof(contentEncryptionKey));
 
 		// Split CEK into HMAC key (first half) and AES key (second half)
 		var macKey = new byte[_keySize];
 		var encKey = new byte[_keySize];
-		Buffer.BlockCopy(cek, 0, macKey, 0, _keySize);
-		Buffer.BlockCopy(cek, _keySize, encKey, 0, _keySize);
+		Buffer.BlockCopy(contentEncryptionKey, 0, macKey, 0, _keySize);
+		Buffer.BlockCopy(contentEncryptionKey, _keySize, encKey, 0, _keySize);
 
 		// Generate random IV
 		var initializationVector = CryptoRandom.GetRandomBytes(16); // AES block size is always 128 bits
@@ -99,14 +99,14 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 
 	/// <inheritdoc />
 	public bool TryDecrypt(
-		byte[] cek,
+		byte[] contentEncryptionKey,
 		EncryptedData encryptedData,
 		byte[] additionalAuthenticatedData,
 		[NotNullWhen(true)] out byte[]? plaintext)
 	{
 		// Check CEK length
-		var expectedCekLength = _keySize * 2;
-		if (cek.Length != expectedCekLength)
+		var expectedLength = _keySize * 2;
+		if (contentEncryptionKey.Length != expectedLength)
 		{
 			plaintext = null;
 			return false;
@@ -115,8 +115,8 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 		// Split CEK into HMAC key (first half) and AES key (second half)
 		var macKey = new byte[_keySize];
 		var encKey = new byte[_keySize];
-		Buffer.BlockCopy(cek, 0, macKey, 0, _keySize);
-		Buffer.BlockCopy(cek, _keySize, encKey, 0, _keySize);
+		Buffer.BlockCopy(contentEncryptionKey, 0, macKey, 0, _keySize);
+		Buffer.BlockCopy(contentEncryptionKey, _keySize, encKey, 0, _keySize);
 
 		// Per RFC 7518 Section 5.2.2.1: Verify authentication tag
 		var al = BitConverter.GetBytes((long)additionalAuthenticatedData.Length * 8);

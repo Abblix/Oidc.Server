@@ -109,10 +109,10 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
             var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
             try
             {
-                if (KeyWrapSize(algorithm) is { } kekSize)
+                if (KeyWrapSize(algorithm) is { } keyEncryptionKeySize)
                 {
-                    var kek = ConcatKeyDerivation.DeriveKey(sharedSecretZ, algorithm, apu, apv, kekSize);
-                    return AesKeyWrap.TryUnwrap(kek, encryptedKey, out var cek) ? cek : null;
+                    var keyEncryptionKey = ConcatKeyDerivation.DeriveKey(sharedSecretZ, algorithm, apu, apv, keyEncryptionKeySize);
+                    return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out var contentEncryptionKey) ? contentEncryptionKey : null;
                 }
 
                 // Direct Key Agreement: the encrypted key must be empty and the derived key IS the CEK, sized

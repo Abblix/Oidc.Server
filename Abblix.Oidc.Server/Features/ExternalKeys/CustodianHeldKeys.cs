@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
 /// Selects which of the custodian's keys the OIDC provider produces with, for a host that chose the tier where
-/// the private halves never leave the custodian (<c>HoldKeysInCustodian</c>). The keys belong to the operator:
+/// the private halves never leave the custodian (<c>UseKeysInCustodian</c>). The keys belong to the operator:
 /// they are already provisioned in the custodian, so this only names them. Each algorithm is advertised on the
 /// published key and forwarded to the custodian on every operation, so it must be one the custodian provisions
 /// for that key.
