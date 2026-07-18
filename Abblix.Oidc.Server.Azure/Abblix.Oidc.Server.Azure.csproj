@@ -55,7 +55,7 @@
     <None Include="..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
     <!-- The custodian model shared by every external-key package. Kept in one place at the repo root and packed
          into each of them, so the README here carries only what is specific to this backend. -->
-    <None Include="..\EXTERNAL-KEYS.md" Link="EXTERNAL-KEYS.md" Pack="true" PackagePath="" />
+    <None Include="..\EXTERNAL_KEYS.md" Link="EXTERNAL_KEYS.md" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 

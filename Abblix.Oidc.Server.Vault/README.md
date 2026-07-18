@@ -1,8 +1,8 @@
 # Abblix.OIDC.Server.Vault
 
-**Abblix.OIDC.Server.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys held in the HashiCorp Vault / OpenBao Transit secrets engine. The keys live inside Transit as non-exportable keys (software-protected, inside Vault's encrypted barrier), so their private halves never enter your process. Signing and Content Encryption Key unwrapping run as Transit round-trips; the public halves are published at `/jwks` and verified locally, which never calls Transit.
+**Abblix.OIDC.Server.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way the public halves are published at `/jwks` and verified locally, which never calls Transit.
 
-Read [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
+Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
 
 ## Installation
 
@@ -12,7 +12,11 @@ dotnet add package Abblix.OIDC.Server.Vault
 
 ## Provisioning
 
-Create the keys in Transit before the first run, and leave them non-exportable, which is the default:
+What you create depends on the tier ([EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the choice). Scope the provider's token to the paths of the tier you pick and nothing else. Never a root or admin token.
+
+### Keys held in Transit (`UseKeysInCustodian`)
+
+Create the signing key, and an encryption key if you issue encrypted tokens, before the first run. They stay non-exportable, which is the default:
 
 ```bash
 vault secrets enable transit
@@ -20,14 +24,36 @@ vault write -f transit/keys/oidc-sign type=rsa-2048        # exportable stays fa
 vault write -f transit/keys/oidc-enc  type=rsa-2048        # only if you issue encrypted tokens
 ```
 
-Scope the provider's token to the paths it uses and nothing else. Never a root or admin token:
-
 ```hcl
 path "transit/keys/oidc-sign"    { capabilities = ["read"] }    # publish the public halves
 path "transit/sign/oidc-sign"    { capabilities = ["update"] }  # sign tokens
 path "transit/keys/oidc-enc"     { capabilities = ["read"] }
 path "transit/decrypt/oidc-enc"  { capabilities = ["update"] }  # unwrap a CEK
 ```
+
+The token reads, signs and decrypts only. It never needs to create, import, delete or export a key.
+
+### Keys minted in-process (`UseKeysInProcess`)
+
+Create one key-encryption key, and a KV version 2 engine for the ring. The server mints the signing keys itself and seals each to the key-encryption key, so you provision no signing key by hand:
+
+```bash
+vault secrets enable transit
+vault write -f transit/keys/oidc-kek type=rsa-2048         # asymmetric: sealed locally, unwrapped in Vault
+vault secrets enable -path=secret -version=2 kv            # the ring; matches the Mount option below
+```
+
+```hcl
+path "transit/keys/oidc-kek"          { capabilities = ["read"] }                      # publish the KEK public half to seal locally
+path "transit/decrypt/oidc-kek"       { capabilities = ["update"] }                    # unwrap a sealed key
+path "secret/data/oidc-keyring/*"     { capabilities = ["create", "update", "read"] }  # write and read ring entries
+path "secret/metadata/oidc-keyring/*" { capabilities = ["delete"] }                    # retire an entry
+path "secret/metadata/oidc-keyring"   { capabilities = ["list"] }                      # list the ring
+```
+
+The `update` on the data path is not spare: two pods reaching a new period both write it, and the one that loses needs `update` to receive Vault's routine "already written" answer instead of a 403.
+
+A default Transit key is software-protected inside Vault's barrier, so the ring holding only ciphertext protects you against a stolen store but not against a Vault operator or root token. Where your Vault supports it, back the key-encryption key with an HSM seal or Managed Keys so the at-rest guarantee holds against the custodian's own operators too.
 
 ## Usage
 
@@ -47,7 +73,7 @@ builder.Services
         vault.Token = builder.Configuration["Vault:Token"]; // from the environment, never hardcoded
         vault.TransitMount = "transit";                     // optional: this is the default mount
     })
-    .HoldKeysInCustodian(new CustodianHeldKeys
+    .UseKeysInCustodian(new CustodianHeldKeys
     {
         // The Transit key names. Each version publishes under its own kid, "oidc-sign:1" and so on.
         SigningKeyName = "oidc-sign",
@@ -61,25 +87,49 @@ builder.Services
     });
 ```
 
+To mint the keys in-process and keep them sealed in Vault instead, name the key-encryption key and where the ring lives:
+
+```csharp
+builder.Services
+    .AddVaultCustodian(vault => { /* the same address and token as above */ })
+    .UseKeysInProcess(new MintedKeys
+    {
+        // The Transit key that seals every minted key. Asymmetric, so the seal is local.
+        KeyEncryptionKeyName = "oidc-kek",
+
+        EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256, // omit unless you issue encrypted tokens
+        RotateEvery = TimeSpan.FromDays(30),                                 // optional: this is the default
+    })
+    .PersistRingToVaultKeyValue(kv =>
+    {
+        kv.Mount = "secret";        // optional: the KV v2 mount, this is the default
+        kv.Path = "oidc-keyring";   // optional: the path the ring lives under, this is the default
+    });
+```
+
 ### Authentication
 
 The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
 
-Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy above.
+Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the tier you chose above.
 
 ## Rotation
 
-Rotate in Transit:
+With `UseKeysInCustodian`, rotate in Transit:
 
-```bashAzureKeyVaultClient
+```bash
 vault write -f transit/keys/oidc-sign/rotate
 ```
 
-Every version is published under its own `kid`, `oidc-sign:1` and so on, and each signing request pins the exact version its `kid` names, so a token is never signed by a version the client cannot resolve. Older versions keep verifying and unwrapping until you remove them from Transit. [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md) explains the propagation window that decides when a fresh version starts signing.
+Every version is published under its own `kid`, `oidc-sign:1` and so on, and each signing request pins the exact version its `kid` names, so a token is never signed by a version the client cannot resolve. Older versions keep verifying and unwrapping until you remove them from Transit.
+
+With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with no `vault write` at all: it mints the next key, seals it into the ring, and retires the old one on its own. [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the propagation window that decides when a fresh key starts signing, for both tiers.
 
 ## What it costs on Transit
 
-Every issued token costs at least two Transit round-trips: one to list the signing key's versions, one to sign. An encrypted token adds a third. Nothing here is cached, and Transit is a hard dependency of token issuance, so size it for your peak token rate. Set an explicit HTTP timeout: a hung call is otherwise bounded only by `HttpClient.Timeout`, which defaults to 100 seconds. The full picture is in [EXTERNAL-KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL-KEYS.md).
+With `UseKeysInCustodian`, every issued token costs at least two Transit round-trips: one to list the signing key's versions, one to sign. Decrypting an inbound encrypted request object or client assertion adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Nothing here is cached, and Transit is a hard dependency of token issuance, so size it for your peak token rate. Set an explicit HTTP timeout: a hung call is otherwise bounded only by `HttpClient.Timeout`, which defaults to 100 seconds.
+
+With `UseKeysInProcess`, token issuance makes no Transit call: the server signs locally and reaches Transit only to open a sealed key when a pod loads or refreshes its ring, and, for the winning key of each new period, on any pod that did not mint it. Minting needs Transit only for the key-encryption key's public half, which the server caches. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
 
 ## Supported algorithms
 
