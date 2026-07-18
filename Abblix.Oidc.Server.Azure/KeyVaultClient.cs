@@ -157,7 +157,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
             // Everything else must throw. A 429 (Key Vault throttles per vault, and this key is on the token path),
             // a 403 (the identity lost its Crypto User role), a 5xx: none of those are decryption failures, and
             // reporting them as one would tell the caller its client sent a bad JWE while the real fault is ours.
-            LogUnwrapRejected(keyId);
+            LogUnwrapRejected(_logger, keyId);
             return null;
         }
     }
