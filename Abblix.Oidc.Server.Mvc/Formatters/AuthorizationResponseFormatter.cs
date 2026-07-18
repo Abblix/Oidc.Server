@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Handles the formatting of authorization responses in compliance with OpenID Connect and OAuth 2.0 protocols.
 /// Protocol-level decisions (parameter assembly, iss/scope gating, JARM packing) are made upstream by the core
 /// response encoder; this formatter maps the encoded response onto the MVC wire DTO and delivers it to the
-/// client's redirect URI via query, fragment or form_post — for both successful and error responses.
+/// client's redirect URI via query, fragment or form_post - for both successful and error responses.
 /// </summary>
 /// <param name="options">Provides the configured interaction URIs (login, consent, …) and request-uri
 /// parameter name used when redirecting the user agent to the authorization server's own UI.</param>
@@ -91,7 +91,7 @@ public class AuthorizationResponseFormatter(
                     options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
             // prompt=create (Initiating User Registration via OpenID Connect 1.0): a dedicated
-            // registration UI when the host configured one, otherwise the login UI — the original
+            // registration UI when the host configured one, otherwise the login UI - the original
             // request parameters (including prompt=create) travel in the redirect, so a combined
             // login/registration page can still branch on them.
             case RegistrationRequired:
@@ -103,7 +103,7 @@ public class AuthorizationResponseFormatter(
             // iss/scope gating and JARM packing are applied upstream by the core response encoder (run from
             // the handler); here we only map the encoded response onto the MVC wire DTO and deliver it.
 
-            // JARM (*.jwt): success and error alike deliver an identical wire shape — the single `response`
+            // JARM (*.jwt): success and error alike deliver an identical wire shape - the single `response`
             // JWT packed by the encoder. Matched before the plaintext branches so any JWT-bearing response
             // (of either type) takes this path.
             case ClientDeliveredResponse { ResponseJwt: { } responseJwt } jarm:
@@ -151,15 +151,15 @@ public class AuthorizationResponseFormatter(
             ResponseModes.FormPost => new OkObjectResult(dto)
             {
                 Formatters = { new AutoPostFormatter(parametersProvider, redirectUri) },
-            },
+            }.WithAntiFramingHeaders(),
 
-            ResponseModes.Query => new RedirectResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
-            ResponseModes.Fragment => new RedirectResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
+            ResponseModes.Query => new SeeOtherResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
+            ResponseModes.Fragment => new SeeOtherResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
 
             _ => throw new InvalidOperationException($"Response mode '{response.ResponseMode}' is not supported"),
         };
 
-        // The session_state cookie is set for a successful authentication independent of JARM/plaintext —
+        // The session_state cookie is set for a successful authentication independent of JARM/plaintext -
         // keyed on the runtime type, so a JARM success (matched by the *.jwt branch above) still receives it.
         if (response is SuccessfullyAuthenticated authenticated &&
             sessionManagementService.Enabled &&
@@ -234,7 +234,7 @@ public class AuthorizationResponseFormatter(
             uri = uriResolver.Content(uri.OriginalString);
         }
 
-        return new RedirectResult(new UriBuilder(uri)
+        return new SeeOtherResult(new UriBuilder(uri)
         {
             Query =
             {

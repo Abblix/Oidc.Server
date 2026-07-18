@@ -62,7 +62,7 @@ public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
             var response = context.HttpContext.Response;
             response.StatusCode = StatusCodes.Status200OK;
             response.ContentType = MediaTypeNames.Text.Html;
-            response.Headers["Content-Security-Policy"] = $"default-src 'none'; script-src 'nonce-{nonce}'";
+            response.Headers.ContentSecurityPolicy = $"default-src 'none'; script-src 'nonce-{nonce}'";
 
             return response.WriteAsync(htmlContent);
         }

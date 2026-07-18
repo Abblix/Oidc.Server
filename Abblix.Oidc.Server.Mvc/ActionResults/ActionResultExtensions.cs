@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -67,6 +68,19 @@ public static class ActionResultExtensions
 	/// <returns>A decorated <see cref="ActionResult"/> that appends the specified header.</returns>
 	public static ActionResult WithHeader(this ActionResult innerResult, string name, string value)
 		=> new ActionResultDecorator(innerResult, response => response.Headers[name] = value);
+
+	/// <summary>
+	/// Decorates a self-rendered HTML result (the form_post auto-submit page) with the anti-framing headers so it
+	/// can never be embedded in another origin's frame (clickjacking defense, RFC 9700 Section 4.16). The check_session
+	/// page cannot use this path: its CSP carries a per-request nonce generated inside the result, so it sets the
+	/// header itself.
+	/// </summary>
+	/// <param name="innerResult">The HTML-producing <see cref="ActionResult"/> to protect.</param>
+	/// <returns>A decorated <see cref="ActionResult"/> that emits the anti-framing headers.</returns>
+	public static ActionResult WithAntiFramingHeaders(this ActionResult innerResult)
+		=> innerResult
+			.WithHeader(HeaderNames.ContentSecurityPolicy, AntiFramingHeaders.ContentSecurityPolicy)
+			.WithHeader(HeaderNames.XFrameOptions, AntiFramingHeaders.XFrameOptions);
 
 	/// <summary>
 	/// Decorates an <see cref="ActionResult"/> to append each value as a separate header line.

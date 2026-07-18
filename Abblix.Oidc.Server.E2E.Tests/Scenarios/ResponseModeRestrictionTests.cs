@@ -51,7 +51,7 @@ public class ResponseModeRestrictionTests(TestFactory factory) : TestBase(factor
         var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
 
         Assert.True(
-            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
             $"/authorize returned {(int)response.StatusCode}, expected an error redirect. Body: " +
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
@@ -98,5 +98,11 @@ public class ResponseModeRestrictionTests(TestFactory factory) : TestBase(factor
         // The auto-submitting form POSTs the authorization response back to the registered redirect_uri.
         Assert.Contains(TestConstants.RedirectUri, body);
         Assert.Contains(TokenRequest.Parameters.Code, body);
+
+        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 §4.16).
+        Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var csp));
+        Assert.Contains("frame-ancestors 'none'", csp);
+        Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));
+        Assert.Contains("DENY", xFrameOptions);
     }
 }

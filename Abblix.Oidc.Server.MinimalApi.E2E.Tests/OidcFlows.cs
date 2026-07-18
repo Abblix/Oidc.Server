@@ -74,7 +74,7 @@ internal static class OidcFlows
     {
         var response = await client.GetAsync(
             BuildQuery(authorizeEndpoint, query), TestContext.Current.CancellationToken);
-        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
             $"/authorize returned {(int)response.StatusCode}, expected redirect");
         var location = response.Headers.Location
             ?? throw new InvalidOperationException("/authorize did not set Location");
