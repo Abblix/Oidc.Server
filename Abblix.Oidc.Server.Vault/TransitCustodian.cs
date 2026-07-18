@@ -25,6 +25,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Vault;
@@ -39,7 +40,10 @@ namespace Abblix.Oidc.Server.Vault;
 /// key-agreement primitive, so ECDH-ES is out. That is a property of the engine, which is why the engine is in
 /// the name.
 /// </remarks>
-internal sealed class TransitCustodian(IHttpClientFactory httpClientFactory, IOptions<VaultTransitOptions> options)
+internal sealed partial class TransitCustodian(
+    ILogger<TransitCustodian> logger,
+    IHttpClientFactory httpClientFactory,
+    IOptions<VaultTransitOptions> options)
     : IKeyCustodian
 {
     /// <summary>
@@ -163,7 +167,10 @@ internal sealed class TransitCustodian(IHttpClientFactory httpClientFactory, IOp
 
         using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
         if (response.Status == HttpStatusCode.BadRequest)
+        {
+            LogUnwrapRejected(keyId);
             return null;
+        }
 
         response.EnsureSuccess(path);
         var plaintext = response.Body(path).RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;

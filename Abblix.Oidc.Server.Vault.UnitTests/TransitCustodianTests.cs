@@ -25,6 +25,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -50,6 +51,7 @@ public sealed class VaultTransitClientTests : IDisposable
         _httpClients.Add(httpClient);
 
         return new TransitCustodian(
+            NullLogger<TransitCustodian>.Instance,
             new StubHttpClientFactory(httpClient),
             Options.Create(new VaultTransitOptions { TransitMount = "transit" }));
     }

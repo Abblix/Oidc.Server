@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
 /// The policy for the tier where the server mints its own keys and the custodian only protects them
-/// (<c>MintKeysInProcess</c>): it generates them, encrypts them to the custodian's key-encryption key, keeps the
+/// (<c>UseKeysInProcess</c>): it generates them, encrypts them to the custodian's key-encryption key, keeps the
 /// ciphertext in a shared ring, and rotates on schedule. No key names here - the server names what it creates.
 /// </summary>
 /// <remarks>

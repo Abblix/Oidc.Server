@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// the first; this supplies the second, so a custodian and a tier compose freely instead of multiplying into one
 /// method per pair.
 /// </summary>
-public static class ExternalKeysServiceCollectionExtensions
+public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Opens the tier choice for a custodian already registered by the caller, which is how the packages wire a
@@ -97,19 +97,19 @@ public static class ExternalKeysServiceCollectionExtensions
     /// already registered: run first, it would find a one-member family, skip the composite, and leave the
     /// external backend to lose the singular resolve to the local one that arrives later.
     /// </remarks>
-    public static IServiceCollection HoldKeysInCustodian(this IKeyCustodianBuilder builder, CustodianHeldKeys keys)
-        => builder.HoldKeysInCustodian(_ => keys);
+    public static IServiceCollection UseKeysInCustodian(this IKeyCustodianBuilder builder, CustodianHeldKeys keys)
+        => builder.UseKeysInCustodian(_ => keys);
 
     /// <summary>
     /// Chooses the tier where the private halves never enter this process, resolving the key selection from the
     /// container. Suits a host whose key names come from a service (configuration, a tenant lookup); a host with
-    /// literal names uses <see cref="HoldKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>. See that
+    /// literal names uses <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>. See that
     /// overload for what the tier means and when to call it.
     /// </summary>
     /// <param name="builder">The builder returned by the custodian registration.</param>
     /// <param name="keys">Resolves the key selection from the service provider, once.</param>
     /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection HoldKeysInCustodian(
+    public static IServiceCollection UseKeysInCustodian(
         this IKeyCustodianBuilder builder,
         Func<IServiceProvider, CustodianHeldKeys> keys)
     {
@@ -121,12 +121,12 @@ public static class ExternalKeysServiceCollectionExtensions
         // seam simply reports it cannot sign a key it should have routed here - so fail where the mistake is.
         if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
             throw new InvalidOperationException(
-                "Call HoldKeysInCustodian after the OIDC registration (AddOidcServices / AddOidcCore). It " +
+                "Call UseKeysInCustodian after the OIDC registration (AddOidcServices / AddOidcCore). It " +
                 "composes the external crypto backends with their in-process peers, and none are registered yet.");
 
         // Satisfies the startup validation AddCustodian armed: the wiring is now complete.
         services.Configure<CustodianTierValidation>(
-            tier => tier.ChosenTier = nameof(HoldKeysInCustodian));
+            tier => tier.ChosenTier = nameof(UseKeysInCustodian));
 
         // The external backends belong to THIS tier rather than to the custodian: they route a private operation
         // out of process, which is precisely what this tier is. A tier that unwraps the key into memory signs with
@@ -155,7 +155,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// This is the weaker posture of the two, which is why it is named rather than defaulted: the private half is
     /// unwrapped into process memory and stays there, so a compromised process yields the key itself, not merely
     /// the ability to ask the custodian to sign while its credential lives. Use
-    /// <see cref="HoldKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/> when the key must never be in
+    /// <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/> when the key must never be in
     /// memory at all.
     /// <para>
     /// Call this AFTER the OIDC registration (<c>AddOidcServices</c> / <c>AddOidcCore</c>), for the same reason
@@ -164,17 +164,17 @@ public static class ExternalKeysServiceCollectionExtensions
     /// A store must also be registered for the ring; the packages supply one.
     /// </para>
     /// </remarks>
-    public static IMintedKeysBuilder MintKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
+    public static IMintedKeysBuilder UseKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
     {
         var services = builder.Services;
 
         if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
             throw new InvalidOperationException(
-                "Call MintKeysInProcess after the OIDC registration (AddOidcServices / AddOidcCore). It composes " +
+                "Call UseKeysInProcess after the OIDC registration (AddOidcServices / AddOidcCore). It composes " +
                 "the external crypto backends with their in-process peers, and none are registered yet.");
 
         // Satisfies the startup validation AddCustodian armed: the wiring is now complete.
-        services.Configure<CustodianTierValidation>(tier => tier.ChosenTier = nameof(MintKeysInProcess));
+        services.Configure<CustodianTierValidation>(tier => tier.ChosenTier = nameof(UseKeysInProcess));
 
         // This tier, unlike the other, needs somewhere to keep the ring, and a builder cannot force the call that
         // supplies it. Nothing else in the container reveals the omission: the ring simply fails to resolve on
@@ -182,9 +182,9 @@ public static class ExternalKeysServiceCollectionExtensions
         services.AddOptions<CustodianTierValidation>()
             .Validate<IServiceProvider>(
                 (tier, serviceProvider) =>
-                    tier.ChosenTier != nameof(MintKeysInProcess) ||
+                    tier.ChosenTier != nameof(UseKeysInProcess) ||
                     serviceProvider.GetService<IKeyRingStore>() is not null,
-                "MintKeysInProcess needs a key ring to share the keys it mints, and none is registered. Follow it " +
+                "UseKeysInProcess needs a key ring to share the keys it mints, and none is registered. Follow it " +
                 "with a PersistRingTo... call from the custodian's package.")
             .ValidateOnStart();
 

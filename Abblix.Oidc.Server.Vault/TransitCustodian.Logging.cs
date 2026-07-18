@@ -20,21 +20,16 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Oidc.Server.Vault;
 
-/// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the tier that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
-/// </summary>
-/// <remarks>
-/// A ring store belongs to this tier and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the tier that needs one was chosen. The tier where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+partial class TransitCustodian
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    [LoggerMessage(
+        EventId = LogEvents.TransitCustodian.UnwrapRejected,
+        Level = LogLevel.Warning,
+        Message = "Vault Transit rejected an unwrap for key '{KeyId}': the ciphertext is a wrong or tampered key, " +
+                  "or the version that wrapped it has been retired. No key material is logged.")]
+    private partial void LogUnwrapRejected(string keyId);
 }

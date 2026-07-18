@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Vault;
 /// <summary>
 /// The body of a KV v2 write, and the shape of what comes back out of a read.
 /// </summary>
-internal sealed record KeyValueWrite
+internal sealed record KeyValueRequest
 {
     /// <summary>The write options, which for this store means only the check-and-set guard.</summary>
     [JsonPropertyName("options")]

@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
@@ -57,7 +58,9 @@ public sealed class BlobKeyRingStoreTests : IDisposable
             new StaticTokenCredential(),
             new BlobClientOptions { Transport = new HttpClientTransport(httpClient) });
 
-        return new BlobKeyRingStore(service.GetBlobContainerClient("oidc-keyring"));
+        return new BlobKeyRingStore(
+            NullLogger<BlobKeyRingStore>.Instance,
+            service.GetBlobContainerClient("oidc-keyring"));
     }
 
     public void Dispose()

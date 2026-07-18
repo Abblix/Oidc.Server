@@ -23,6 +23,7 @@
 using System.Net;
 using System.Text.Json;
 using Abblix.Oidc.Server.Features.ExternalKeys;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -52,6 +53,7 @@ public sealed class KeyValueStoreTests : IDisposable
         _httpClients.Add(httpClient);
 
         return new KeyValueStore(
+            NullLogger<KeyValueStore>.Instance,
             new StubHttpClientFactory(httpClient),
             Options.Create(new VaultKeyValueOptions { Mount = "secret", Path = "oidc-keyring" }));
     }
@@ -88,15 +90,45 @@ public sealed class KeyValueStoreTests : IDisposable
     [Fact]
     public async Task TryAddAsync_ReportsLost_WhenAnotherPodTookThePeriod()
     {
-        // Vault rejects a lost cas race with 400 and this message. Losing is routine, not an error: the winner's
-        // key is as good as ours, so the caller drops what it generated.
-        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
-            HttpStatusCode.BadRequest,
-            new { errors = new[] { "check-and-set parameter did not match the current version" } }));
+        // The winner wrote version 1, so our cas=0 write loses with this 400. Reading the entry back finds the
+        // winner's key, which is how a genuine race is told from a wedge: losing is routine, its key is as good
+        // as ours, and the caller drops what it generated.
+        var handler = new StubHttpMessageHandler((request, _) => request.Method.Method switch
+        {
+            "POST" => StubHttpMessageHandler.Json(
+                HttpStatusCode.BadRequest,
+                new { errors = new[] { "check-and-set parameter did not match the current version" } }),
+
+            _ => StubHttpMessageHandler.Json(
+                HttpStatusCode.OK,
+                new { data = new { data = new { jwe = Entry.Jwe, createdAt = Entry.CreatedAt.ToString("O") } } }),
+        });
 
         var won = await StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken);
 
         Assert.False(won);
+    }
+
+    [Fact]
+    public async Task TryAddAsync_Throws_WhenASoftDeletedVersionWedgesThePeriod()
+    {
+        // An operator's `vault kv delete` leaves the metadata, so cas=0 keeps failing, but the data reads 404.
+        // No pod can win this period: fail loud so it is diagnosed, not wedged forever as "another pod won".
+        var handler = new StubHttpMessageHandler((request, _) => request.Method.Method switch
+        {
+            "POST" => StubHttpMessageHandler.Json(
+                HttpStatusCode.BadRequest,
+                new { errors = new[] { "check-and-set parameter did not match the current version" } }),
+
+            _ => StubHttpMessageHandler.Json(HttpStatusCode.NotFound, new { errors = Array.Empty<string>() }),
+        });
+
+        var store = StoreOver(handler);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
+
+        Assert.Contains("soft-deleted", error.Message);
     }
 
     [Fact]

@@ -24,6 +24,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Abblix.Oidc.Server.Features.ExternalKeys;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Vault;
@@ -40,7 +41,10 @@ namespace Abblix.Oidc.Server.Vault;
 /// secret. Vault's own encryption of it is a second layer, not the one the design leans on.
 /// </para>
 /// </remarks>
-internal sealed class KeyValueStore(IHttpClientFactory httpClientFactory, IOptions<VaultKeyValueOptions> options)
+internal sealed partial class KeyValueStore(
+    ILogger<KeyValueStore> logger,
+    IHttpClientFactory httpClientFactory,
+    IOptions<VaultKeyValueOptions> options)
     : IKeyRingStore
 {
     /// <summary>The shared client, held for this singleton's lifetime; see the custodian for why it is by name.</summary>
@@ -66,26 +70,54 @@ internal sealed class KeyValueStore(IHttpClientFactory httpClientFactory, IOptio
     /// <inheritdoc />
     public async Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
     {
-        var body = new KeyValueWrite
+        var body = new KeyValueRequest
         {
             // cas=0: create only if this path never existed. Two pods minting the same period both send this, and
             // Vault lets exactly one through.
-            Options = new KeyValueWrite.CheckAndSet { Cas = 0 },
-            Data = new KeyValueWrite.Entry { Jwe = key.Jwe, CreatedAt = key.CreatedAt.ToString("O") },
+            Options = new KeyValueRequest.CheckAndSet { Cas = 0 },
+            Data = new KeyValueRequest.Entry { Jwe = key.Jwe, CreatedAt = key.CreatedAt.ToString("O") },
         };
 
         using var response = await _httpClient.SendAsync(HttpMethod.Post, DataPath(key.Id), body, cancellationToken);
         if (response.IsSuccess)
+        {
+            LogPeriodMinted(key.Id);
             return true;
+        }
 
         // Vault answers a lost cas race with 400, which is also how it reports a malformed request, so the two
-        // are told apart by the message rather than the status. Losing is routine: another pod minted this
-        // period first, and its key is as good as ours.
+        // are told apart by the message rather than the status.
         if (response.Status == HttpStatusCode.BadRequest
             && response.Errors.Contains("check-and-set", StringComparison.OrdinalIgnoreCase))
-            return false;
+        {
+            return await LostRaceOrWedged(key.Id, cancellationToken);
+        }
 
         throw response.Failure(DataPath(key.Id));
+    }
+
+    /// <summary>
+    /// Disambiguates a cas=0 rejection, which has two causes that must not be conflated.
+    /// </summary>
+    /// <remarks>
+    /// Usually another pod minted this period first: reading the entry back finds its key, and dropping the one
+    /// generated here is routine. But cas=0 rejects any path that has ever held a version, and an operator's
+    /// <c>vault kv delete</c> soft-deletes the latest version while leaving the metadata, so cas=0 keeps failing
+    /// though the data reads as absent - the period could never be minted and would otherwise read as a race
+    /// nobody wins. Reading the entry back tells the two apart, so the wedge fails loud instead of looping.
+    /// </remarks>
+    private async Task<bool> LostRaceOrWedged(string id, CancellationToken cancellationToken)
+    {
+        if (await ReadAsync(id, cancellationToken) is not null)
+        {
+            LogMintRaceLost(id);
+            return false;
+        }
+
+        throw new InvalidOperationException(
+            $"Vault KV '{DataPath(id)}' is wedged by a soft-deleted version: cas=0 cannot write over it, yet its " +
+            "data reads as absent, so this period can never be minted. Destroy its metadata with " +
+            $"`vault kv metadata delete {Options.Mount}/{Options.Path}/{id}` to clear it.");
     }
 
     /// <inheritdoc />
@@ -135,7 +167,7 @@ internal sealed class KeyValueStore(IHttpClientFactory httpClientFactory, IOptio
         // KV v2 nests the entry one level down: the outer "data" is the response envelope, the inner one is what
         // was written.
         var entry = response.Body(DataPath(id)).RootElement.GetProperty("data").GetProperty("data")
-            .Deserialize<KeyValueWrite.Entry>()
+            .Deserialize<KeyValueRequest.Entry>()
             ?? throw response.Failure(DataPath(id));
 
         return new StoredKey
@@ -145,7 +177,9 @@ internal sealed class KeyValueStore(IHttpClientFactory httpClientFactory, IOptio
 
             // Written with "O", so read it back the same way: round-trip, culture-independent.
             CreatedAt = DateTimeOffset.Parse(
-                entry.CreatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                entry.CreatedAt,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind),
         };
     }
 

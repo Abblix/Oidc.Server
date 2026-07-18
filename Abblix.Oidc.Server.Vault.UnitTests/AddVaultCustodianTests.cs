@@ -54,14 +54,15 @@ public class AddVaultCustodianTests
     private static IServiceCollection Configure()
     {
         var services = new ServiceCollection();
-        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
+        AddCustodian(services).UseKeysInCustodian(new CustodianHeldKeys
         {
             SigningKeyName = "oidc-sign",
             EncryptionKeyName = "oidc-enc",
         });
 
-        // The external-keys provider is an add-on to an OIDC server, which supplies the options and the clock via
-        // AddOidcServices. Mirror that minimally here so the provider resolves without the whole OIDC stack.
+        // The external-keys provider is an add-on to an OIDC server, which supplies the options, the clock and
+        // logging via AddOidcServices. Mirror that minimally here so the provider resolves without the whole stack.
+        services.AddLogging();
         services.AddOptions();
         services.AddSingleton(TimeProvider.System);
         return services;

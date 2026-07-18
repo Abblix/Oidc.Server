@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure.Core.Pipeline;
@@ -52,13 +53,22 @@ public static class ServiceCollectionExtensions
     /// <code>
     /// services
     ///     .AddAzureCustodian(azure =&gt; configuration.GetSection("Azure").Bind(azure))
-    ///     .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    ///     .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
     /// </code>
     /// </example>
     public static IKeyCustodianBuilder AddAzureCustodian(
         this IServiceCollection services, Action<AzureKeyVaultOptions> configureOptions)
     {
-        services.Configure(configureOptions);
+        // Validate at startup, not on first key use: a missing or relative vault URI is a deployment mistake, and
+        // catching it here names the option rather than surfacing an opaque SDK error the first time a token is
+        // signed. required guards a `new` the compiler sees; the config binder builds this by reflection, so the
+        // URI can still arrive null and the check is what holds.
+        services.AddOptions<AzureKeyVaultOptions>()
+            .Configure(configureOptions)
+            .Validate(
+                options => options.KeyVaultUri is { IsAbsoluteUri: true },
+                "AddAzureCustodian needs KeyVaultUri set to the vault endpoint, e.g. https://<name>.vault.azure.net/.")
+            .ValidateOnStart();
 
         // Typed client so the Azure SDK's transport is the host's IHttpClientFactory pipeline, mirroring the Vault
         // package. The SDK sets absolute request URIs and authenticates via the credential, so the HttpClient needs
@@ -91,7 +101,7 @@ public static class ServiceCollectionExtensions
     /// Keeps the ring of minted keys in an Azure Blob Storage container, using the same credential the custodian
     /// authenticates with.
     /// </summary>
-    /// <param name="builder">The builder returned by <c>MintKeysInProcess</c>.</param>
+    /// <param name="builder">The builder returned by <c>UseKeysInProcess</c>.</param>
     /// <param name="configureOptions">Configures the blob service endpoint and the container.</param>
     /// <returns>The service collection, for chaining.</returns>
     /// <remarks>
@@ -109,7 +119,15 @@ public static class ServiceCollectionExtensions
         Action<AzureBlobKeyRingOptions> configureOptions)
     {
         var services = builder.Services;
-        services.Configure(configureOptions);
+
+        // Validated at startup for the same reason as the vault URI: a missing or relative endpoint is a
+        // deployment mistake, and catching it here names the option instead of failing later inside the blob SDK.
+        services.AddOptions<AzureBlobKeyRingOptions>()
+            .Configure(configureOptions)
+            .Validate(
+                options => options.ServiceUri is { IsAbsoluteUri: true },
+                "PersistRingToAzureBlob needs ServiceUri set to the blob endpoint, e.g. https://<account>.blob.core.windows.net.")
+            .ValidateOnStart();
 
         // Named rather than typed, because the store takes a container client rather than an HttpClient. The
         // pipeline matters all the same: every other client in this package rides IHttpClientFactory, the README
@@ -139,8 +157,12 @@ public static class ServiceCollectionExtensions
             var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(BlobRingClient);
             var options = new BlobClientOptions { Transport = new HttpClientTransport(httpClient) };
 
-            var service = new BlobServiceClient(new Uri(ring.ServiceUri), credential, options);
-            return new BlobKeyRingStore(service.GetBlobContainerClient(ring.Container));
+            var service = new BlobServiceClient(ring.ServiceUri, credential, options);
+
+            // Override only the container client; the provider resolves the rest of the store's dependencies,
+            // the logger included, so none of them is restated here.
+            return provider.CreateService<BlobKeyRingStore>(
+                Dependency.Override(service.GetBlobContainerClient(ring.Container)));
         });
 
         return services;

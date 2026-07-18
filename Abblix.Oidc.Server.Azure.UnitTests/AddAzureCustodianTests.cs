@@ -39,7 +39,8 @@ public class AddAzureCustodianTests
     private static IKeyCustodianBuilder AddCustodian(IServiceCollection services)
     {
         // The tier call composes onto the in-process crypto backends, so they must be registered first - the same
-        // order a host follows via AddOidcServices.
+        // order a host follows via AddOidcServices, which also brings logging the custodian now takes.
+        services.AddLogging();
         services.AddJsonWebTokens();
 
         return services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"));
@@ -49,7 +50,7 @@ public class AddAzureCustodianTests
     public void RegistersCustodianAndKeyProvider()
     {
         var services = new ServiceCollection();
-        AddCustodian(services).HoldKeysInCustodian(new CustodianHeldKeys
+        AddCustodian(services).UseKeysInCustodian(new CustodianHeldKeys
         {
             SigningKeyName = "oidc-sign",
             EncryptionKeyName = "oidc-enc",
@@ -69,4 +70,44 @@ public class AddAzureCustodianTests
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
+    [Fact]
+    public void AddAzureCustodian_FailsValidation_WhenKeyVaultUriIsMissing()
+    {
+        var services = new ServiceCollection();
+        services.AddJsonWebTokens();
+        services.AddAzureCustodian(_ => { }).UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "k" });
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
+
+        using var provider = services.BuildServiceProvider();
+
+        // required guards a `new` the compiler sees, but the options binder builds this by reflection, so an
+        // unset URI arrives null. ValidateOnStart is suppressed in the test host; the lazy check fires here on
+        // first .Value access, and names the option so the mistake is diagnosable.
+        var error = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
+
+        Assert.Contains("KeyVaultUri", error.Message);
+    }
+
+    [Fact]
+    public void PersistRingToAzureBlob_FailsValidation_WhenServiceUriIsMissing()
+    {
+        var services = new ServiceCollection();
+        services.AddJsonWebTokens();
+        services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"))
+            .UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
+
+            // The endpoint the host forgot: Container is set, ServiceUri is left to arrive null.
+            .PersistRingToAzureBlob(blob => blob.Container = "oidc-keyring");
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
+
+        using var provider = services.BuildServiceProvider();
+
+        var error = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<AzureBlobKeyRingOptions>>().Value);
+
+        Assert.Contains("ServiceUri", error.Message);
+    }
 }

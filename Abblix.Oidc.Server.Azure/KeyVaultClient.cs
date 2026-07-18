@@ -30,6 +30,7 @@ using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 // Azure.Security.KeyVault.Keys also declares a JsonWebKey; alias the namespace so the bare JsonWebKey stays the
@@ -45,8 +46,9 @@ namespace Abblix.Oidc.Server.Azure;
 /// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
 /// resolves the key's metadata on first use.
 /// </summary>
-public sealed class KeyVaultClient : IKeyCustodian
+public sealed partial class KeyVaultClient : IKeyCustodian
 {
+    private readonly ILogger<KeyVaultClient> _logger;
     private readonly KeyVault.KeyClient _keyClient;
     private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
 
@@ -54,12 +56,13 @@ public sealed class KeyVaultClient : IKeyCustodian
     /// Creates the client for the vault named by <paramref name="options"/>, selecting a client-secret
     /// credential when the service-principal fields are set, or the default Azure credential chain otherwise.
     /// </summary>
+    /// <param name="logger">Logs an unwrap the vault rejected.</param>
     /// <param name="options">The configured Azure Key Vault options.</param>
     /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
     /// Azure SDK rides the host's HTTP pipeline.</param>
     [ActivatorUtilitiesConstructor]
-    public KeyVaultClient(IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
-        : this(options.Value, BuildCredential(options.Value), httpClient)
+    public KeyVaultClient(ILogger<KeyVaultClient> logger, IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
+        : this(logger, options.Value, BuildCredential(options.Value), httpClient)
     {
     }
 
@@ -68,11 +71,18 @@ public sealed class KeyVaultClient : IKeyCustodian
     /// Azure SDK against a stub <see cref="HttpMessageHandler"/> and a fake credential, so signing, unwrapping and
     /// public-key fetch can be exercised without a live vault.
     /// </summary>
+    /// <param name="logger">Logs an unwrap the vault rejected.</param>
     /// <param name="settings">The Azure Key Vault options.</param>
     /// <param name="credential">The credential the SDK authenticates with.</param>
     /// <param name="httpClient">The transport for every Key Vault call.</param>
-    internal KeyVaultClient(AzureKeyVaultOptions settings, TokenCredential credential, HttpClient httpClient)
+    internal KeyVaultClient(
+        ILogger<KeyVaultClient> logger,
+        AzureKeyVaultOptions settings,
+        TokenCredential credential,
+        HttpClient httpClient)
     {
+        _logger = logger;
+
         // The only client this type builds. Everything else it needs comes off this one: the SDK hands the
         // credential, the options and the pipeline down to the per-key crypto clients, so the injected transport
         // reaches them without being restated, and no key URI is ever composed by hand here.
@@ -90,9 +100,9 @@ public sealed class KeyVaultClient : IKeyCustodian
     /// second identity to configure, it is reached by whatever already reaches the vault.
     /// </remarks>
     internal static TokenCredential BuildCredential(AzureKeyVaultOptions settings)
-        => !string.IsNullOrWhiteSpace(settings.TenantId)
-                && !string.IsNullOrWhiteSpace(settings.ClientId)
-                && !string.IsNullOrWhiteSpace(settings.ClientSecret)
+        => !string.IsNullOrWhiteSpace(settings.TenantId) &&
+           !string.IsNullOrWhiteSpace(settings.ClientId) &&
+           !string.IsNullOrWhiteSpace(settings.ClientSecret)
             ? new ClientSecretCredential(settings.TenantId, settings.ClientId, settings.ClientSecret)
             : new DefaultAzureCredential();
 
@@ -147,6 +157,7 @@ public sealed class KeyVaultClient : IKeyCustodian
             // Everything else must throw. A 429 (Key Vault throttles per vault, and this key is on the token path),
             // a 403 (the identity lost its Crypto User role), a 5xx: none of those are decryption failures, and
             // reporting them as one would tell the caller its client sent a bad JWE while the real fault is ours.
+            LogUnwrapRejected(keyId);
             return null;
         }
     }

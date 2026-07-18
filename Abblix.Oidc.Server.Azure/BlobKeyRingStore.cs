@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Azure;
 
@@ -41,7 +42,8 @@ namespace Abblix.Oidc.Server.Azure;
 /// Storage-side encryption is a second layer, not the one the design leans on.
 /// </para>
 /// </remarks>
-internal sealed class BlobKeyRingStore(BlobContainerClient container) : IKeyRingStore
+internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger, BlobContainerClient container)
+    : IKeyRingStore
 {
     /// <inheritdoc />
     public async Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
@@ -76,6 +78,7 @@ internal sealed class BlobKeyRingStore(BlobContainerClient container) : IKeyRing
                 new BlobUploadOptions { Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All } },
                 cancellationToken);
 
+            LogPeriodMinted(key.Id);
             return true;
         }
         catch (RequestFailedException failure)
@@ -88,6 +91,7 @@ internal sealed class BlobKeyRingStore(BlobContainerClient container) : IKeyRing
             // The error code, not the status alone: 409 also carries ContainerBeingDeleted, LeaseAlreadyPresent
             // and others. Reading those as "someone won" would make this pod discard a key nobody stored, and the
             // period would then have no key at all.
+            LogMintRaceLost(key.Id);
             return false;
         }
     }

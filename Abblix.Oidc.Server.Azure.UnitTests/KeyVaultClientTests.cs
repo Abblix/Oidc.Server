@@ -25,6 +25,7 @@ using Azure;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Azure.UnitTests;
@@ -47,7 +48,11 @@ public sealed class KeyVaultClientTests : IDisposable
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
-        return new KeyVaultClient(new AzureKeyVaultOptions { KeyVaultUri = VaultUri }, new StaticTokenCredential(), httpClient);
+        return new KeyVaultClient(
+            NullLogger<KeyVaultClient>.Instance,
+            new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
+            new StaticTokenCredential(),
+            httpClient);
     }
 
     public void Dispose()

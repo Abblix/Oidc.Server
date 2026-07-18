@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
     /// <code>
     /// services
     ///     .AddVaultCustodian(vault =&gt; configuration.GetSection("Vault").Bind(vault))
-    ///     .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    ///     .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
     /// </code>
     /// </example>
     public static IKeyCustodianBuilder AddVaultCustodian(
@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
     /// Keeps the ring of minted keys in this Vault's KV version 2 engine, on the same server that holds the key
     /// protecting them.
     /// </summary>
-    /// <param name="builder">The builder returned by <c>MintKeysInProcess</c>.</param>
+    /// <param name="builder">The builder returned by <c>UseKeysInProcess</c>.</param>
     /// <param name="configureOptions">Configures the KV mount and the path the ring lives under.</param>
     /// <returns>The service collection, for chaining.</returns>
     /// <remarks>

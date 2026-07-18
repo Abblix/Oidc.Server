@@ -36,6 +36,7 @@ public class DiProbeTests
     private static IServiceCollection Configure()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddJsonWebTokens();
         services.AddOptions();
         services.AddSingleton(TimeProvider.System);
@@ -47,7 +48,7 @@ public class DiProbeTests
     {
         var services = Configure();
         services.AddVaultCustodian(options => options.Address = "https://vault.test:8200")
-            .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "k" });
+            .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "k" });
 
         using var provider = services.BuildServiceProvider();
 
@@ -61,7 +62,7 @@ public class DiProbeTests
     {
         var services = Configure();
         services.AddVaultCustodian(options => options.Address = "https://vault.test:8200")
-            .MintKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
+            .UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
             .PersistRingToVaultKeyValue();
 
         // Both engines wire the transport, but it must land once: AddHttpClient appends, so a second wiring would
@@ -89,7 +90,7 @@ public class DiProbeTests
         var services = Configure();
         services.AddSingleton(custodian);
         services.AddVaultCustodian(options => options.Address = "https://vault.test:8200")
-            .HoldKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "k" });
+            .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "k" });
 
         using var provider = services.BuildServiceProvider();
 

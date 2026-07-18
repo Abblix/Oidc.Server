@@ -36,7 +36,7 @@ public sealed class AzureBlobKeyRingOptions
     /// The blob service endpoint, for example <c>https://myaccount.blob.core.windows.net</c>. The credential is
     /// the one the custodian already uses, so no second identity is configured.
     /// </summary>
-    public string ServiceUri { get; set; } = "";
+    public required Uri ServiceUri { get; set; }
 
     /// <summary>The container holding the ring. It is created on first use if it does not exist.</summary>
     public string Container { get; set; } = "oidc-keyring";
