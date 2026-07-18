@@ -97,7 +97,7 @@ public abstract class TestBase(TestFactory factory)
 
     /// <summary>
     /// Drives /authorize for a JARM (JWT Secured Authorization Response Mode) request and returns the value of
-    /// the single <c>response</c> callback parameter — the signed (and optionally encrypted) response JWT.
+    /// the single <c>response</c> callback parameter - the signed (and optionally encrypted) response JWT.
     /// </summary>
     protected static async Task<string> AuthorizeAndExtractResponseJwtAsync(
         HttpClient client,
@@ -119,7 +119,7 @@ public abstract class TestBase(TestFactory factory)
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
         var response = await client.GetAsync(uri);
         Assert.True(
-            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
             $"/authorize returned {(int)response.StatusCode}, expected redirect. Body: {await response.Content.ReadAsStringAsync()}");
         var location = response.Headers.Location ?? throw new InvalidOperationException("/authorize did not set Location header");
         var query = System.Web.HttpUtility.ParseQueryString(location.Query);
@@ -141,7 +141,7 @@ public abstract class TestBase(TestFactory factory)
 
     /// <summary>
     /// Drives a plain auth-code flow with <c>offline_access</c> for the confidential test client and
-    /// returns the parsed token response — its <c>refresh_token</c> is the first member of a fresh
+    /// returns the parsed token response - its <c>refresh_token</c> is the first member of a fresh
     /// family. Shared by the refresh-token rotation and tampering scenarios so the flow lives in one place.
     /// </summary>
     protected static async Task<JsonObject> ObtainConfidentialOfflineTokensAsync(
@@ -187,7 +187,7 @@ public abstract class TestBase(TestFactory factory)
     /// <summary>
     /// Drives PAR -> /authorize -> /token for the supplied client and
     /// authorization_details payload. Returns the parsed token response
-    /// JsonObject. Throws on any non-success HTTP status — use the
+    /// JsonObject. Throws on any non-success HTTP status - use the
     /// lower-level helpers for negative scenarios.
     /// </summary>
     protected async Task<JsonObject> PerformParFlowAsync(

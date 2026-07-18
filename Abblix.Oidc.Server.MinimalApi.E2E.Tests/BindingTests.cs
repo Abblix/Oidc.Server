@@ -62,7 +62,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query, ResponseParameters.Code);
         Assert.False(string.IsNullOrEmpty(code));
 
-        // The code is real and redeemable — closes the loop that the bound request produced a usable grant.
+        // The code is real and redeemable - closes the loop that the bound request produced a usable grant.
         var token = await client.ExchangeCodeAsync(discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
         Assert.NotNull(token[ResponseParameters.AccessToken]);
     }
@@ -116,7 +116,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             OidcFlows.BuildQuery(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.EndSessionEndpoint), query),
             TestContext.Current.CancellationToken);
 
-        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
             $"/endsession returned {(int)response.StatusCode}, expected a redirect to the post-logout URI");
         Assert.StartsWith(MinimalApiTestConstants.PostLogoutRedirectUri, response.Headers.Location!.ToString());
     }
@@ -230,7 +230,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var url = OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query);
 
-        // Under TestServer a BindAsync throw does not translate to an HTTP status — it propagates out of the awaited
+        // Under TestServer a BindAsync throw does not translate to an HTTP status - it propagates out of the awaited
         // call. Pre-fix the converter throws JsonException / CultureNotFoundException / TimeSpan overflow; post-fix
         // FormValues shapes every one into a BadHttpRequestException carrying the 400 the MVC binder would have
         // produced. Asserting the thrown type is the genuine red (wrong exception) to green (BadHttpRequestException).

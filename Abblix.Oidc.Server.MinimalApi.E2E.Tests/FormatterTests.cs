@@ -20,7 +20,7 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
 /// <summary>
-/// Coverage for the adapter's parallel <c>IResult</c> formatter set — the half that does not exist in the core and
+/// Coverage for the adapter's parallel <c>IResult</c> formatter set - the half that does not exist in the core and
 /// differs from the MVC <c>ActionResult</c> formatters: JARM response packaging, RFC 6749 cache headers, the JWT vs
 /// JSON introspection content negotiation, the form_post HTML response, the check-session document and the
 /// UserInfo challenge.
@@ -109,7 +109,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var state = Guid.NewGuid().ToString("N");
 
         // response_mode=form_post answers with a 200 text/html auto-submitting form that POSTs the authorization
-        // response back to redirect_uri — a custom IResult (the ported AutoPostFormatter), not a redirect.
+        // response back to redirect_uri - a custom IResult (the ported AutoPostFormatter), not a redirect.
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
@@ -130,6 +130,12 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.Contains("<form", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(TestConstants.RedirectUri, html);
         Assert.Contains(state, html);
+
+        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 §4.16).
+        Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var csp));
+        Assert.Contains("frame-ancestors 'none'", csp);
+        Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));
+        Assert.Contains("DENY", xFrameOptions);
     }
 
     [Fact]
@@ -144,7 +150,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        // The UserInfo formatter advertises both an RFC 6750 Bearer and an RFC 9449 DPoP challenge on a 401 —
+        // The UserInfo formatter advertises both an RFC 6750 Bearer and an RFC 9449 DPoP challenge on a 401 -
         // the dual-challenge OidcResults.Format overload that does not exist in the MVC formatter set.
         Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.Bearer);
         Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.DPoP);

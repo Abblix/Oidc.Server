@@ -24,7 +24,7 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
 /// <summary>
-/// Coverage for the adapter's routing and host-configuration surface — the parts that live in
+/// Coverage for the adapter's routing and host-configuration surface - the parts that live in
 /// <c>MapOidcEndpoints</c> rather than in the core: the optional route prefix, the per-endpoint enable flags, and the
 /// HTTP-method gating each <c>MapPost</c>/<c>MapMethods</c> produces.
 /// </summary>
@@ -95,7 +95,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var introspectPath = new Uri((await ClientOf(factory).FetchDiscoveryAsync())
             [ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath;
 
-        // Reset the host to the default OidcEndpoints.Base set — the state of a server that opts into nothing.
+        // Reset the host to the default OidcEndpoints.Base set - the state of a server that opts into nothing.
         using var baseHost = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
@@ -126,7 +126,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var (_, challenge) = OidcFlows.Pkce();
 
         // prompt has a spec-fixed value set; "bogus" is not one of them. The OAuth-shaped contract (matching the
-        // MVC adapter) is a 400 with {"error":"invalid_request"} served as application/json — not the framework
+        // MVC adapter) is a 400 with {"error":"invalid_request"} served as application/json - not the framework
         // default ValidationProblemDetails (application/problem+json), which omits the error code OIDC clients read.
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
@@ -151,7 +151,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Host_registered_formatter_overrides_the_adapter_default()
     {
         // The adapter registers every formatter via TryAdd, so a host that registers its own implementation is used
-        // instead of the default — this is the host-extensibility contract the adapter promises.
+        // instead of the default - this is the host-extensibility contract the adapter promises.
         using var overridden = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddScoped<IConfigurationResultFormatter, MarkerConfigurationFormatter>()));
@@ -173,7 +173,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var client = ClientOf(prefixed);
 
         // MapOidcEndpoints(RoutePrefix) mounts the token endpoint at /oauth/connect/token, so discovery must advertise
-        // the prefixed URL — a bare /connect/token would 404 every discovery-driven client.
+        // the prefixed URL - a bare /connect/token would 404 every discovery-driven client.
         var discovery = await client.FetchDiscoveryAsync(RoutePrefix);
 
         foreach (var key in new[]
@@ -277,7 +277,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         using var content = new FormUrlEncodedContent(form);
         var response = await client.PostAsync(url, content, TestContext.Current.CancellationToken);
 
-        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found,
+        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
             $"/authorize returned {(int)response.StatusCode}, expected a redirect");
         var echoedState = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query)["state"];
         Assert.Equal(formState, echoedState);

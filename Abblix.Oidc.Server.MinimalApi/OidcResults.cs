@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
@@ -122,6 +123,17 @@ public static class OidcResults
             foreach (var value in values)
                 response.Headers.Append(name, value);
         });
+
+    /// <summary>
+    /// Decorates a self-rendered HTML result (the form_post auto-submit page) with the anti-framing headers so it
+    /// can never be embedded in another origin's frame (clickjacking defense, RFC 9700 Section 4.16). The check_session
+    /// page cannot use this path: its CSP carries a per-request nonce generated inside the result, so it sets the
+    /// header itself.
+    /// </summary>
+    public static IResult WithAntiFramingHeaders(this IResult inner)
+        => inner
+            .WithHeader(HeaderNames.ContentSecurityPolicy, AntiFramingHeaders.ContentSecurityPolicy)
+            .WithHeader(HeaderNames.XFrameOptions, AntiFramingHeaders.XFrameOptions);
 
     /// <summary>Decorates a result to append a cookie to the response before the inner result executes.</summary>
     public static IResult WithAppendCookie(

@@ -68,7 +68,7 @@ public class AuthorizationResultFormatter(
                 return await RedirectAsync(
                     options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
-            // prompt=create: a dedicated registration UI when configured, otherwise the login UI — the original
+            // prompt=create: a dedicated registration UI when configured, otherwise the login UI - the original
             // request parameters travel in the redirect so a combined page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
@@ -115,9 +115,9 @@ public class AuthorizationResultFormatter(
 
         IResult result = response.ResponseMode switch
         {
-            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri),
-            ResponseModes.Query => Results.Redirect(redirectUri.AddToQuery(GetParametersFrom(dto))),
-            ResponseModes.Fragment => Results.Redirect(redirectUri.AddToFragment(GetParametersFrom(dto))),
+            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri).WithAntiFramingHeaders(),
+            ResponseModes.Query => new SeeOtherResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
+            ResponseModes.Fragment => new SeeOtherResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
             _ => throw new InvalidOperationException($"Response mode '{response.ResponseMode}' is not supported"),
         };
 
@@ -173,7 +173,7 @@ public class AuthorizationResultFormatter(
         var stored = await authorizationRequestStorage.StoreAsync(request, options.Value.LoginSessionExpiresIn);
         var resolved = ResolveContent(uri);
         var target = resolved.AddToQuery([(options.Value.RequestUriParameterName, stored.RequestUri.OriginalString)]);
-        return Results.Redirect(target);
+        return new SeeOtherResult(target);
     }
 
     /// <summary>
