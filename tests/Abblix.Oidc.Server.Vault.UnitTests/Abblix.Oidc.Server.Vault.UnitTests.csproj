@@ -19,7 +19,7 @@
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
         <PackageReference Include="Microsoft.Extensions.Http" />
         <PackageReference Include="Microsoft.Extensions.Options" />
-        <PackageReference Include="xunit.v3" />
+        <PackageReference Include="xunit.v3.mtp-v2" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
         <PackageReference Update="SonarAnalyzer.CSharp">
