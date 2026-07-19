@@ -80,13 +80,14 @@ jobs:
         # --no-restore reuses the cached restore; the project's dependency closure still builds here,
         # so allow more room than the 3-minute step baseline for the largest shard.
         run: |
-          dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore -- \
+          dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore \
             --report-trx --report-trx-filename test-results.trx \
             --coverage --coverage-output-format cobertura \
             --results-directory ./TestResults
 
-      # `dotnet test <project> -- --results-directory ./TestResults` resolves the relative path from
-      # the project working directory, so files land at tests/<Project>/TestResults/.
+      # The new dotnet test experience (Microsoft.Testing.Platform runner, opted in via global.json)
+      # takes MTP options directly, without the VSTest separator. --results-directory ./TestResults
+      # resolves from the working directory (repo root), so files land at ./TestResults/.
         timeout-minutes: 5
       - name: Upload test results
         if: always()
