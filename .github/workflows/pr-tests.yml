@@ -73,20 +73,20 @@ jobs:
 
         timeout-minutes: 3
       - name: Restore
-        run: dotnet restore "$PROJECT/$PROJECT.csproj"
+        run: dotnet restore "tests/$PROJECT/$PROJECT.csproj"
 
         timeout-minutes: 3
       - name: Test
         # --no-restore reuses the cached restore; the project's dependency closure still builds here,
         # so allow more room than the 3-minute step baseline for the largest shard.
         run: |
-          dotnet test "$PROJECT/$PROJECT.csproj" --configuration Release --no-restore -- \
+          dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore -- \
             --report-trx --report-trx-filename test-results.trx \
             --coverage --coverage-output-format cobertura \
             --results-directory ./TestResults
 
       # `dotnet test <project> -- --results-directory ./TestResults` resolves the relative path from
-      # the project working directory, so files land at <Project>/TestResults/.
+      # the project working directory, so files land at tests/<Project>/TestResults/.
         timeout-minutes: 5
       - name: Upload test results
         if: always()
