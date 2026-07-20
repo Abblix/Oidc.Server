@@ -26,7 +26,7 @@ namespace Abblix.Jwt.Signing;
 /// The signing seam (<see cref="IDataSigner"/>) as a composition of signing backends: it holds every registered
 /// backend and, per call, routes to the first that owns the key. Ownership is decided by the key, not the
 /// algorithm - <see cref="LocalKeySigner"/> owns private-bearing keys, external custodian backends
-/// (<see cref="ExternalKeySigner"/>) own their public-only keys - so in-process signing, one or more custodians,
+/// (<see cref="ExternalKeys.ExternalKeySigner"/>) own their public-only keys - so in-process signing, one or more custodians,
 /// and any combination coexist as peers. When no backend owns the key the seam fails closed: it throws rather
 /// than emit an unsigned or empty signature (a public-only key whose custodian was never wired lands here). The
 /// backends are keyed by this composite's type so it enumerates them without resolving itself.

@@ -31,7 +31,7 @@ namespace Abblix.Jwt.Encryption;
 /// a custodian and never passes through this seam - it stays in <see cref="IJsonWebTokenEncryptor"/>, exactly as
 /// signature verification stays out of <see cref="Signing.IDataSigner"/>. Backends compose as peers behind
 /// <see cref="CompositeDecryptor"/>: <see cref="LocalKeyDecryptor"/> unwraps in process, an external
-/// custodian backend (<see cref="ExternalKeyDecryptor"/>) unwraps against an HSM/KMS/vault.
+/// custodian backend (<see cref="ExternalKeys.ExternalKeyDecryptor"/>) unwraps against an HSM/KMS/vault.
 /// </summary>
 public interface IContentKeyDecryptor
 {
