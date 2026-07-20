@@ -38,13 +38,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// Tests cover public client authentication without secrets, validation of client types,
 /// and various error conditions.
 /// </summary>
-[Collection("License")]
 public class NoneClientAuthenticatorTests
 {
     private const string PublicClientId = "public_client_123";
     private const string ConfidentialClientId = "confidential_client_456";
 
-    public NoneClientAuthenticatorTests(TestInfrastructure.LicenseFixture fixture)
+    public NoneClientAuthenticatorTests()
     {
         // Fixture auto-configures license
     }

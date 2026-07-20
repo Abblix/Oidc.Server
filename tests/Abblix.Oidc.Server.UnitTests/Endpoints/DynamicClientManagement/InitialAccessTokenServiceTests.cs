@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// Unit tests for <see cref="InitialAccessTokenService"/> verifying token issuance
 /// per RFC 7591 Section 3.
 /// </summary>
-[Collection("License")]
 public class InitialAccessTokenServiceTests
 {
     private static readonly DateTimeOffset FixedIssuedAt = new(2026, 3, 12, 10, 0, 0, TimeSpan.Zero);

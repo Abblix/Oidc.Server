@@ -119,8 +119,14 @@ public static partial class LicenseChecker
 
         if (currentLicense.ValidIssuers is { Count: > 0 } && !currentLicense.ValidIssuers.Contains(issuer))
         {
-            // Log error: the allowed list of issuers does not contain current value.
-            LogIssuerNotInWhitelist(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
+            // Throttled like every other licence log site. A misconfigured issuer is reported on every single
+            // request, so an unthrottled Critical record here floods the log - and on Windows the Event Log -
+            // with one entry per request, drowning the very message an operator needs to find.
+            if (LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))
+            {
+                // Log error: the allowed list of issuers does not contain current value.
+                LogIssuerNotInWhitelist(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
+            }
 
             throw new InvalidOperationException("The license terms violation detected");
         }
@@ -129,14 +135,20 @@ public static partial class LicenseChecker
         {
             _knownIssuers ??= new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
             _knownIssuers.TryAdd(issuer, null!);
-            if (currentLicense.IssuerLimit.Value < _knownIssuers.Count &&
-                LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))
+            if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
             {
-                // Log error: Exceeded the licensed limit of issuers.
-                LogIssuerLimitExceeded(
-                    LicenseLogger.Instance,
-                    currentLicense.IssuerLimit.Value,
-                    _knownIssuers.Keys);
+                // The decision is taken first and stands on its own; only the record of it is throttled. This
+                // mirrors the client-limit block above, where the refusal sits outside the logging guard and
+                // just the message inside it. Conditioning the decision on the logger would make the limit
+                // hold only while the logger felt like speaking, and lapse silently in between.
+                if (LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))
+                {
+                    // Log error: Exceeded the licensed limit of issuers.
+                    LogIssuerLimitExceeded(
+                        LicenseLogger.Instance,
+                        currentLicense.IssuerLimit.Value,
+                        _knownIssuers.Keys);
+                }
 
                 throw new InvalidOperationException("The license terms violation detected");
             }

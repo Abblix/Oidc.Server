@@ -37,7 +37,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// as defined in RFC 6749 section 2.3.1.
 /// Tests cover credential extraction from request body, validation, and various error conditions.
 /// </summary>
-[Collection("License")]
 public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<ClientSecretPostAuthenticator>
 {
     protected override string ExpectedAuthenticationMethod => ClientAuthenticationMethods.ClientSecretPost;
