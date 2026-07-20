@@ -20,20 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Client;
+namespace Abblix.Oidc.Client.Features.Discovery;
 
 /// <summary>
-/// Configuration for the Abblix OIDC/OAuth client.
+/// Supplies the OpenID Provider's discovery metadata to the rest of the client.
 /// </summary>
 /// <remarks>
-/// Holds what the client is, not who it talks to. Where the provider's endpoints come from is configured with
-/// the metadata source the host registers, so a client that discovers its provider and one that is told its
-/// endpoints do not share a settings surface neither of them fully uses.
+/// Every consumer reads the provider's endpoints through this contract rather than from configuration, so a
+/// provider that moves an endpoint is followed automatically. Implementations are expected to cache: this is
+/// called on every authorization request, and the document changes rarely.
 /// </remarks>
-public sealed class OidcClientOptions
+public interface IProviderMetadataProvider
 {
     /// <summary>
-    /// The client identifier issued by the OpenID Provider, sent as the <c>client_id</c> parameter.
+    /// Returns the provider's metadata, fetching it if no valid cached copy is held.
     /// </summary>
-    public required string ClientId { get; set; }
+    /// <param name="cancellationToken">Cancels the fetch.</param>
+    /// <returns>The provider's discovery metadata.</returns>
+    /// <exception cref="ProviderMetadataException">
+    /// The document could not be fetched, could not be parsed, or failed the issuer check.
+    /// </exception>
+    Task<ProviderMetadata> GetMetadataAsync(CancellationToken cancellationToken = default);
 }

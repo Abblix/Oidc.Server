@@ -20,20 +20,31 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Client;
+namespace Abblix.Oidc.Client.Features.Discovery;
 
 /// <summary>
-/// Configuration for the Abblix OIDC/OAuth client.
+/// Thrown when the OpenID Provider's discovery metadata cannot be obtained or cannot be trusted.
 /// </summary>
 /// <remarks>
-/// Holds what the client is, not who it talks to. Where the provider's endpoints come from is configured with
-/// the metadata source the host registers, so a client that discovers its provider and one that is told its
-/// endpoints do not share a settings surface neither of them fully uses.
+/// A distinct type so a host can tell "the provider is unreachable or misconfigured" apart from a protocol
+/// error returned by a provider that is working. Every failure here is loud: a client that proceeds on
+/// metadata it could not verify would be signing in against an unverified authority.
 /// </remarks>
-public sealed class OidcClientOptions
+public sealed class ProviderMetadataException : Exception
 {
     /// <summary>
-    /// The client identifier issued by the OpenID Provider, sent as the <c>client_id</c> parameter.
+    /// Creates the exception with a message describing what about the metadata failed.
     /// </summary>
-    public required string ClientId { get; set; }
+    public ProviderMetadataException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>
+    /// Creates the exception with a message and the underlying transport or parsing failure.
+    /// </summary>
+    public ProviderMetadataException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

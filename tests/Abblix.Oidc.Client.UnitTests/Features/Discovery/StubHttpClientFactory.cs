@@ -20,20 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Client;
+namespace Abblix.Oidc.Client.UnitTests.Features.Discovery;
 
 /// <summary>
-/// Configuration for the Abblix OIDC/OAuth client.
+/// An <see cref="IHttpClientFactory"/> that hands out clients over a single stub handler, whatever name is
+/// asked for.
 /// </summary>
-/// <remarks>
-/// Holds what the client is, not who it talks to. Where the provider's endpoints come from is configured with
-/// the metadata source the host registers, so a client that discovers its provider and one that is told its
-/// endpoints do not share a settings surface neither of them fully uses.
-/// </remarks>
-public sealed class OidcClientOptions
+public sealed class StubHttpClientFactory : IHttpClientFactory
 {
+    private readonly HttpMessageHandler _handler;
+
     /// <summary>
-    /// The client identifier issued by the OpenID Provider, sent as the <c>client_id</c> parameter.
+    /// Creates the factory over the handler every client will send through.
     /// </summary>
-    public required string ClientId { get; set; }
+    public StubHttpClientFactory(HttpMessageHandler handler) => _handler = handler;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The handler is deliberately not disposed with the client: a test keeps asserting against the recorded
+    /// requests after the client is gone.
+    /// </remarks>
+    public HttpClient CreateClient(string name) => new(_handler, disposeHandler: false);
 }

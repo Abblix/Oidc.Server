@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Features.Discovery;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client;
@@ -35,12 +36,17 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection the client services are added to.</param>
     /// <param name="configureOptions">A delegate that configures <see cref="OidcClientOptions"/>.</param>
     /// <returns>The same <paramref name="services"/> instance, so calls can be chained.</returns>
+    /// <remarks>
+    /// This call alone does not say where the provider's endpoints come from. Follow it with
+    /// <c>AddDiscovery</c> for a provider that publishes a discovery document, or
+    /// <c>AddConfiguredMetadata</c> for one that does not.
+    /// </remarks>
     public static IServiceCollection AddOidcClientCore(
         this IServiceCollection services, Action<OidcClientOptions> configureOptions)
     {
-        // Skeleton: options are bound here. Feature services and the composed request and
-        // validation pipelines are registered in the following units of the client build-out.
         services.Configure(configureOptions);
-        return services;
+
+        return services
+            .AddMetadataSourcePlaceholder();
     }
 }
