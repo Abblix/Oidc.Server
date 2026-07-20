@@ -179,9 +179,12 @@ internal class JsonWebTokenValidator(
     {
         try
         {
-            jsonObject = HasRepeatedMemberName(jwtPart)
-                ? null
-                : JsonNode.Parse(Encoding.UTF8.GetString(jwtPart)) as JsonObject;
+            var json = Encoding.UTF8.GetString(jwtPart);
+#if NET10_0_OR_GREATER
+            jsonObject = JsonNode.Parse(json, documentOptions: RejectRepeatedMemberNames) as JsonObject;
+#else
+            jsonObject = HasRepeatedMemberName(jwtPart) ? null : JsonNode.Parse(json) as JsonObject;
+#endif
         }
         catch (JsonException)
         {
@@ -190,17 +193,28 @@ internal class JsonWebTokenValidator(
         return jsonObject is not null;
     }
 
+#if NET10_0_OR_GREATER
+    /// <summary>
+    /// Makes the parser itself reject a repeated member name, which is the first of the two options
+    /// RFC 7519 Section 4 and RFC 7515 Section 4 allow a recipient. It reports the repetition as a
+    /// <see cref="JsonException"/> at parse time, alongside every other malformed-JSON verdict.
+    /// </summary>
+    private static readonly JsonDocumentOptions RejectRepeatedMemberNames = new()
+    {
+        AllowDuplicateProperties = false,
+    };
+#else
     /// <summary>
     /// Reports whether any JSON object in <paramref name="json"/> names the same member twice, at any depth.
     /// </summary>
     /// <remarks>
-    /// RFC 7519 Section 4 and RFC 7515 Section 4 give a recipient two options: reject a token with duplicate
-    /// names, or use a parser that keeps only the lexically last one. <see cref="JsonNode"/> does neither.
-    /// It builds its members lazily, so the repetition is not a parse error at all: the parse reports success
-    /// and the duplicate surfaces later as an <see cref="ArgumentException"/> from whichever property the
-    /// caller reads first, or, for a duplicate nested inside a structured claim that validation never reads,
-    /// not until the token has already been accepted and handed on. The input is attacker-supplied, so the
-    /// scan runs ahead of the parse and takes the first of the two options the specifications allow.
+    /// This is the pre-net10 stand-in for <c>JsonDocumentOptions.AllowDuplicateProperties</c>. Left to itself,
+    /// <see cref="JsonNode"/> neither rejects a repeated name nor keeps only the lexically last one, which are
+    /// the two outcomes the specifications allow. It builds its members lazily, so the repetition is not a parse
+    /// error at all: the parse reports success and the duplicate surfaces later as an
+    /// <see cref="ArgumentException"/> from whichever property the caller reads first, or, for a duplicate nested
+    /// inside a structured claim that validation never reads, not until the token has already been accepted and
+    /// handed on. The input is attacker-supplied, so the scan runs ahead of the parse.
     /// </remarks>
     private static bool HasRepeatedMemberName(ReadOnlySpan<byte> json)
     {
@@ -226,6 +240,7 @@ internal class JsonWebTokenValidator(
 
         return false;
     }
+#endif
 
     /// <summary>
     /// Validates the JWS signature according to validation parameters. Returns the token
