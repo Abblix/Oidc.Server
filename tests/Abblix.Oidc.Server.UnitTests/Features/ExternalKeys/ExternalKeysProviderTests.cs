@@ -28,6 +28,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.Options;
 using Moq;

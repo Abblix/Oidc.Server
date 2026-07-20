@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.Options;
@@ -36,8 +37,30 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
-internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthServiceKeysProvider
+internal class OidcOptionsKeysProvider(
+	IOptions<OidcOptions> options,
+	IOptions<KeyPlacementChoice> placement,
+	IKeyCustodian? custodian = null) : IAuthServiceKeysProvider
 {
+	/// <summary>
+	/// Refuses to answer when a custodian is registered and nothing said where its keys live.
+	/// </summary>
+	/// <remarks>
+	/// This provider is the fallback the core registers, so it is what a half-wired host lands on: a custodian
+	/// registered, the placement call forgotten. Serving configured keys there would be the worst outcome
+	/// available - the host believes its private keys are in the HSM, and they are in its configuration file,
+	/// with nothing anywhere saying so.
+	///
+	/// Startup validation catches the same mistake earlier and names it better, but only for a host that runs
+	/// validators. This covers the host that resolves keys without one, and it does so without the custodian
+	/// packages having to arm anything: the thing a downgrade would land on simply declines to be landed on.
+	/// </remarks>
+	private void RefuseIfPlacementNotChosen()
+	{
+		if (custodian is not null && placement.Value.ChosenPlacement is null)
+			throw new InvalidOperationException(KeyPlacementChoice.PlacementNotChosenMessage);
+	}
+
 	/// <summary>
 	/// Retrieves a collection of JSON Web Keys used for encryption, based on the configured encryption certificates.
 	/// </summary>
@@ -59,6 +82,8 @@ internal class OidcOptionsKeysProvider(IOptions<OidcOptions> options) : IAuthSer
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for signing purposes.</returns>
 	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
 	{
+		RefuseIfPlacementNotChosen();
+
 		var jsonWebKeys =
 			from jwk in options.Value.SigningKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);

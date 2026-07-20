@@ -24,6 +24,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Abblix.Jwt.Encryption;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
