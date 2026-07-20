@@ -969,6 +969,97 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// The same token, with <see cref="ValidationOptions.RequireExpirationTime"/> set, is rejected.
+    /// That flag is the caller saying its token class makes <c>exp</c> REQUIRED - an ID Token
+    /// (OpenID Connect Core 1.0 section 2), a JWT access token (RFC 9068 section 2.2), a client
+    /// assertion (RFC 7523 section 3).
+    /// </summary>
+    [Fact]
+    public async Task TokenWithoutExp_WithRequireExpirationTime_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = null;
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// An <c>nbf</c> is not a substitute: it bounds when the token starts being usable, not when
+    /// it stops, so a token carrying only <c>nbf</c> still never expires.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithNbfOnly_WithRequireExpirationTime_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.ExpiresAt = null;
+        token.Payload.NotBefore = TimeProvider.System.GetUtcNow().AddMinutes(-5);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// With the flag set and an <c>exp</c> present, nothing changes.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithExp_WithRequireExpirationTime_Validates()
+    {
+        var token = CreateValidToken();
+        token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Presence is asked separately from validity, so the flag works on its own. This is the shape
+    /// <see cref="ValidationOptions.RequireIssuer"/> already has next to
+    /// <see cref="ValidationOptions.ValidateIssuer"/>.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithoutExp_WithRequireExpirationTimeButNoLifetimeValidation_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = null;
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = (ValidationOptions.Default & ~ValidationOptions.ValidateLifetime)
+                      | ValidationOptions.RequireExpirationTime;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
     /// Verifies that JWTs with only exp claim (no nbf) validate successfully.
     /// Tests that nbf is optional even when ValidateLifetime is enabled.
     /// Only validates exp when present.

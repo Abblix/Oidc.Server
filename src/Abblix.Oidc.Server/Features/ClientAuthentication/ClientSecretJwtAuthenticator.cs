@@ -78,7 +78,10 @@ public partial class ClientSecretJwtAuthenticator(
             jwt,
             new ValidationParameters
             {
-                Options = ValidationOptions.Default,
+                // A client assertion must carry its own expiry: RFC 7521 Section 5.2 requires an
+                // "Expires At entity that limits the time window during which the assertion can be
+                // used", and RFC 7523 Section 3 item 4 states it as a MUST on the exp claim.
+                Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = issuer => ValidateIssuer(issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(issuer, context),

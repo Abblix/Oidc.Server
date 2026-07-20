@@ -540,14 +540,36 @@ internal class JsonWebTokenValidator(
     /// <summary>
     /// Validates the lifetime claims (nbf and exp) according to validation parameters.
     /// </summary>
+    /// <remarks>
+    /// Presence and value are two separate questions here, gated by two separate flags, the same
+    /// way <see cref="ValidationOptions.RequireIssuer"/> and <see cref="ValidationOptions.ValidateIssuer"/>
+    /// split them. The distinction is not academic: a token carrying neither <c>nbf</c> nor
+    /// <c>exp</c> has no instant at which it is expired, so a pure lifetime comparison finds
+    /// nothing wrong with it and lets it through forever. Whether that is correct depends
+    /// entirely on the token class, which only the caller knows -
+    /// <see cref="ValidationOptions.RequireExpirationTime"/> is how it says so.
+    /// </remarks>
     private Result<JsonWebToken, JwtValidationError> ValidateLifetime(
         JsonWebToken token, ValidationParameters parameters)
     {
-        if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
+        var requireExpiration = parameters.Options.HasFlag(ValidationOptions.RequireExpirationTime);
+        var validateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime);
+
+        // Neither flag set means the claims are not this caller's business, and reading them is
+        // not free of consequence: the accessors throw on a timestamp outside DateTimeOffset's
+        // range, which a caller who opted out of time handling should never have to meet.
+        if (!requireExpiration && !validateLifetime)
             return token;
 
         var notBefore = token.Payload.NotBefore;
         var expiresAt = token.Payload.ExpiresAt;
+
+        if (requireExpiration && !expiresAt.HasValue)
+            return new JwtValidationError(JwtError.InvalidToken, "Missing expiration time in JWT payload");
+
+        if (!validateLifetime)
+            return token;
+
         if (!notBefore.HasValue && !expiresAt.HasValue)
             return token;
 
