@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -96,7 +97,7 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         var response = await FormPostHelpers.PostFormAsync(
             client,
             discovery.RevocationEndpoint!,
-            new Dictionary<string, string> { ["token"] = refreshToken });
+            new Dictionary<string, string> { [RevocationRequest.Parameters.Token] = refreshToken });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 
@@ -120,7 +121,7 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         HttpClient client, DiscoveryDocument discovery, string token) =>
         await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
         {
-            ["token"] = token,
+            [RevocationRequest.Parameters.Token] = token,
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
@@ -142,6 +143,6 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
     }
 }

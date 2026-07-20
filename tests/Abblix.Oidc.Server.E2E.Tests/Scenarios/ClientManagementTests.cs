@@ -24,7 +24,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
+using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -45,24 +48,12 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </remarks>
 public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
-    /// <summary>
-    /// The registration members this suite reads and writes, spelled once.
-    /// </summary>
-    private static class Members
-    {
-        public const string ClientId = "client_id";
-        public const string ClientName = "client_name";
-        public const string RedirectUris = "redirect_uris";
-        public const string RegistrationAccessToken = "registration_access_token";
-        public const string RegistrationClientUri = "registration_client_uri";
-    }
-
     private static JsonObject NewClientMetadata(string clientName) => new()
     {
-        [Members.ClientName] = clientName,
-        [Members.RedirectUris] = new JsonArray("https://client.example.com/callback"),
-        ["grant_types"] = new JsonArray("authorization_code"),
-        ["response_types"] = new JsonArray("code"),
+        [RequestMembers.ClientName] = clientName,
+        [RequestMembers.RedirectUris] = new JsonArray("https://client.example.com/callback"),
+        [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode),
+        [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
     };
 
     private sealed record Registration(string ClientId, string AccessToken, Uri ConfigurationUri);
@@ -73,9 +64,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var registered = await RegisterClientAsync(client, discovery, NewClientMetadata(clientName));
 
         return new Registration(
-            registered[Members.ClientId]!.GetValue<string>(),
-            registered[Members.RegistrationAccessToken]!.GetValue<string>(),
-            new Uri(registered[Members.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute));
+            registered[ResponseMembers.ClientId]!.GetValue<string>(),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>(),
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute));
     }
 
     private static HttpRequestMessage Request(HttpMethod method, Uri uri, string? accessToken)
@@ -103,7 +94,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await ReadJsonAsync(response);
-        Assert.Equal(registration.ClientId, body[Members.ClientId]!.GetValue<string>());
+        Assert.Equal(registration.ClientId, body[ResponseMembers.ClientId]!.GetValue<string>());
     }
 
     [Fact]
@@ -152,7 +143,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var registration = await RegisterAsync(client, discovery, "before-update");
 
         var updated = NewClientMetadata("after-update");
-        updated[Members.ClientId] = registration.ClientId;
+        updated[RequestMembers.ClientId] = registration.ClientId;
 
         var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
         update.Content = JsonContent.Create(updated);
@@ -164,7 +155,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // with the token from registration would then fail, so the response is the authority on which token
         // is current - a client that keeps using the old one locks itself out of its own registration.
         var updateBody = await ReadJsonAsync(updateResponse);
-        var currentToken = updateBody[Members.RegistrationAccessToken]?.GetValue<string>()
+        var currentToken = updateBody[ResponseMembers.RegistrationAccessToken]?.GetValue<string>()
                            ?? registration.AccessToken;
 
         var read = await client.SendAsync(
@@ -172,7 +163,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
-        Assert.Equal("after-update", (await ReadJsonAsync(read))[Members.ClientName]!.GetValue<string>());
+        Assert.Equal("after-update", (await ReadJsonAsync(read))[RequestMembers.ClientName]!.GetValue<string>());
     }
 
     [Fact]
@@ -187,14 +178,14 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var registration = await RegisterAsync(client, discovery, "rotating");
 
         var updated = NewClientMetadata("rotating");
-        updated[Members.ClientId] = registration.ClientId;
+        updated[RequestMembers.ClientId] = registration.ClientId;
 
         var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
         update.Content = JsonContent.Create(updated);
         var updateBody = await ReadJsonAsync(
             await client.SendAsync(update, TestContext.Current.CancellationToken));
 
-        var rotated = updateBody[Members.RegistrationAccessToken]!.GetValue<string>();
+        var rotated = updateBody[ResponseMembers.RegistrationAccessToken]!.GetValue<string>();
         Assert.NotEqual(registration.AccessToken, rotated);
 
         var withSupersededToken = await client.SendAsync(
@@ -216,8 +207,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var attacker = await RegisterAsync(client, discovery, "write-attacker");
 
         var hijacked = NewClientMetadata("write-victim");
-        hijacked[Members.ClientId] = victim.ClientId;
-        hijacked[Members.RedirectUris] = new JsonArray("https://attacker.example.com/callback");
+        hijacked[RequestMembers.ClientId] = victim.ClientId;
+        hijacked[RequestMembers.RedirectUris] = new JsonArray("https://attacker.example.com/callback");
 
         var update = Request(HttpMethod.Put, victim.ConfigurationUri, attacker.AccessToken);
         update.Content = JsonContent.Create(hijacked);
@@ -232,7 +223,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             Request(HttpMethod.Get, victim.ConfigurationUri, victim.AccessToken),
             TestContext.Current.CancellationToken);
 
-        var redirectUris = (await ReadJsonAsync(read))[Members.RedirectUris]!.AsArray();
+        var redirectUris = (await ReadJsonAsync(read))[RequestMembers.RedirectUris]!.AsArray();
         Assert.DoesNotContain(
             redirectUris,
             uri => uri!.GetValue<string>().Contains("attacker.example.com", StringComparison.Ordinal));
