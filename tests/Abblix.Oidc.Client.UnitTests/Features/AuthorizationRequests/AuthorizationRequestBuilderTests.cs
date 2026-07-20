@@ -163,7 +163,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), store)
             .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
 
-        var stored = await store.TakeAsync(request.State.State, TestContext.Current.CancellationToken);
+        var stored = await store.FindAsync(request.State.State, TestContext.Current.CancellationToken);
         Assert.NotNull(stored);
         Assert.Equal(request.State.CodeVerifier, stored.CodeVerifier);
     }

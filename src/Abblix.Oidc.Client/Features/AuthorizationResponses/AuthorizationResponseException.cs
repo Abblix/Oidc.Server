@@ -34,10 +34,49 @@ namespace Abblix.Oidc.Client.Features.AuthorizationResponses;
 public sealed class AuthorizationResponseException : Exception
 {
     /// <summary>
-    /// Creates the exception describing why the response was refused.
+    /// Creates the exception for a response this client refused: a wrong issuer, a shape no
+    /// specification defines, a parameter that arrived twice.
     /// </summary>
     public AuthorizationResponseException(string message)
         : base(message)
     {
     }
+
+    /// <summary>
+    /// Creates the exception for a response in which the provider itself refused, carrying the code it
+    /// returned so a caller can act on it.
+    /// </summary>
+    /// <remarks>
+    /// This overload is used only once the issuer has been confirmed. Before that, per RFC 9207
+    /// section 2.4 - "For error responses, clients MUST NOT assume that the error originates from the
+    /// intended authorization server" - the code is an unverified string and must not be presented as
+    /// the provider's answer.
+    /// </remarks>
+    public AuthorizationResponseException(string message, string error, string? errorDescription)
+        : base(message)
+    {
+        Error = error;
+        ErrorDescription = errorDescription;
+    }
+
+    /// <summary>
+    /// The error code the provider returned, or <see langword="null"/> when this client refused the
+    /// response for its own reasons rather than relaying the provider's.
+    /// </summary>
+    /// <remarks>
+    /// Carried apart from the message because a caller acts on it: <c>access_denied</c> is a user who
+    /// pressed Cancel and deserves a different answer from <c>server_error</c>. One of
+    /// <see cref="ErrorCodes"/>, or a value from an extension this client does not know.
+    /// </remarks>
+    public string? Error { get; }
+
+    /// <summary>
+    /// The provider's human-readable elaboration on <see cref="Error"/>, when it gave one.
+    /// </summary>
+    /// <remarks>
+    /// Text the provider chose. Bounded in character set by RFC 6749 section 4.1.2.1 but not in
+    /// meaning, so treat it as untrusted: a log entry naming its source, never a page rendered to the
+    /// user and never markup.
+    /// </remarks>
+    public string? ErrorDescription { get; }
 }

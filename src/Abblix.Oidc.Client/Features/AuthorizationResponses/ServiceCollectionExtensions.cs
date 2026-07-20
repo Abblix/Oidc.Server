@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Features.AuthorizationState;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -66,6 +67,32 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAuthorizationResponseParsing(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthorizationResponseParser, AuthorizationResponseParser>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the handler that runs an authorization response through every check in order, and the three
+    /// pieces it draws on.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="configure">Adjusts the RFC 9207 policies the specification leaves to the deployment.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// Composes the parser, the state consumer and the issuer validator so a host gets the whole
+    /// callback-handling seam from one call, rather than three it has to remember to make in the right
+    /// combination. Each part is still added through <c>TryAdd</c>, so a host that registered its own
+    /// parser or store beforehand keeps it.
+    /// </remarks>
+    public static IServiceCollection AddAuthorizationResponseHandling(
+        this IServiceCollection services,
+        Action<ResponseIssuerOptions>? configure = null)
+    {
+        services.AddAuthorizationResponseParsing();
+        services.AddResponseIssuerValidation(configure);
+        services.AddAuthorizationStateConsumption();
+
+        services.TryAddSingleton<IAuthorizationResponseHandler, AuthorizationResponseHandler>();
 
         return services;
     }

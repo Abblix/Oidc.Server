@@ -82,14 +82,25 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
     }
 
     /// <inheritdoc />
-    public Task<AuthorizationState?> TakeAsync(string state, CancellationToken cancellationToken = default)
+    public Task<AuthorizationState?> FindAsync(string state, CancellationToken cancellationToken = default)
     {
-        if (!_states.TryRemove(state, out var stored))
+        // A read, never a removal: an entry looked up here may still be refused by a later check, and
+        // removing it now would spend a login the response has not yet earned.
+        if (!_states.TryGetValue(state, out var stored) || _timeProvider.GetUtcNow() >= stored.ExpiresAt)
             return Task.FromResult<AuthorizationState?>(null);
 
-        // Removed either way: an expired entry is spent, not retryable.
-        var result = _timeProvider.GetUtcNow() < stored.ExpiresAt ? stored.State : null;
-        return Task.FromResult(result);
+        return Task.FromResult<AuthorizationState?>(stored.State);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> RemoveAsync(string state, CancellationToken cancellationToken = default)
+    {
+        if (!_states.TryRemove(state, out var stored))
+            return Task.FromResult(false);
+
+        // An entry removed past its lifetime does not count as a live spend: it was already dead, and a
+        // race that removed it is not the winner of a genuine callback.
+        return Task.FromResult(_timeProvider.GetUtcNow() < stored.ExpiresAt);
     }
 
     private void RemoveExpired()

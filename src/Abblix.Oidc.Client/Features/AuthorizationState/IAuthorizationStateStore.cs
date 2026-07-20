@@ -47,16 +47,34 @@ public interface IAuthorizationStateStore
     Task StoreAsync(AuthorizationState state, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Takes the state matching the value the provider echoed, removing it in the same step.
+    /// Looks up the state matching the value the provider echoed, WITHOUT removing it.
     /// </summary>
     /// <param name="state">The <c>state</c> parameter from the authorization response.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The stored state, or <c>null</c> when nothing matches.</returns>
+    /// <returns>The stored state, or <c>null</c> when nothing matches or it has expired.</returns>
     /// <remarks>
-    /// Taking and removing is one operation on purpose. A stored state is good for exactly one callback: if
-    /// reading left it in place, a captured authorization response could be replayed, and each replay would
-    /// find its state waiting and look entirely legitimate. Returning null the second time is what makes the
-    /// second attempt fail.
+    /// Reading is separate from spending on purpose, and the separation is load-bearing rather than
+    /// tidy. Whether the response may be acted on is decided from what this returns - the issuer it was
+    /// sent to, above all - and those decisions can fail. If the lookup removed the entry, a response
+    /// that fails a later check would have spent a login it was never entitled to, letting an attacker
+    /// who merely knows the (non-secret) <c>state</c> value burn a victim's pending sign-in. So this
+    /// only reads; <see cref="RemoveAsync"/> spends, and only once the response has earned it.
     /// </remarks>
-    Task<AuthorizationState?> TakeAsync(string state, CancellationToken cancellationToken = default);
+    Task<AuthorizationState?> FindAsync(string state, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes the state matching the value, and reports whether this call is the one that removed a
+    /// live entry.
+    /// </summary>
+    /// <param name="state">The <c>state</c> parameter from the authorization response.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns><c>true</c> when this call removed a live entry; <c>false</c> when there was none to
+    /// remove or it had expired.</returns>
+    /// <remarks>
+    /// This is the single-use gate. A stored state is good for exactly one callback, so removal must be
+    /// atomic and must report the winner: of two callbacks racing on the same state, the one that gets
+    /// <c>true</c> proceeds and the one that gets <c>false</c> is a replay to refuse. That the removal
+    /// runs only after the response has been checked is the caller's duty, not this method's.
+    /// </remarks>
+    Task<bool> RemoveAsync(string state, CancellationToken cancellationToken = default);
 }

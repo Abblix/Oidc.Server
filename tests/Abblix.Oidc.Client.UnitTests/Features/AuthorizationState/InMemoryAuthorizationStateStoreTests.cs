@@ -52,31 +52,37 @@ public class InMemoryAuthorizationStateStoreTests
     }
 
     /// <summary>
-    /// What was put aside comes back.
+    /// What was put aside comes back, and a look-up leaves it in place.
     /// </summary>
     [Fact]
-    public async Task ReturnsWhatWasStored()
+    public async Task FindReturnsWhatWasStored_AndDoesNotRemoveIt()
     {
         var store = CreateStore(new FakeTimeProvider());
         await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
 
-        var taken = await store.TakeAsync("first", TestContext.Current.CancellationToken);
+        var found = await store.FindAsync("first", TestContext.Current.CancellationToken);
+        Assert.Equal("verifier", found?.CodeVerifier);
 
-        Assert.Equal("verifier", taken?.CodeVerifier);
+        // Still there: FindAsync reads without spending, so a second look-up sees it too. That the spend
+        // is separate is what stops a response that fails a later check from burning a held sign-in.
+        Assert.NotNull(await store.FindAsync("first", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
-    /// A state is good for exactly one callback. Were it left in place, a captured authorization response
-    /// could be replayed and each replay would find its state waiting and look entirely legitimate.
+    /// A state is spent exactly once. The first removal wins and reports it; a second finds nothing to
+    /// remove, which is what turns a replayed callback away.
     /// </summary>
     [Fact]
-    public async Task AStateIsGoodForOneCallbackOnly()
+    public async Task AStateIsRemovedExactlyOnce()
     {
         var store = CreateStore(new FakeTimeProvider());
         await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
 
-        Assert.NotNull(await store.TakeAsync("first", TestContext.Current.CancellationToken));
-        Assert.Null(await store.TakeAsync("first", TestContext.Current.CancellationToken));
+        Assert.True(await store.RemoveAsync("first", TestContext.Current.CancellationToken));
+        Assert.False(await store.RemoveAsync("first", TestContext.Current.CancellationToken));
+
+        // And it is gone from a look-up too.
+        Assert.Null(await store.FindAsync("first", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -87,12 +93,13 @@ public class InMemoryAuthorizationStateStoreTests
     {
         var store = CreateStore(new FakeTimeProvider());
 
-        Assert.Null(await store.TakeAsync("never-issued", TestContext.Current.CancellationToken));
+        Assert.Null(await store.FindAsync("never-issued", TestContext.Current.CancellationToken));
+        Assert.False(await store.RemoveAsync("never-issued", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
-    /// A sign-in that took longer than allowed is not honoured, bounding how long a captured authorization
-    /// request stays useful to whoever captured it.
+    /// A sign-in that took longer than allowed is honoured by neither operation, bounding how long a
+    /// captured authorization request stays useful to whoever captured it.
     /// </summary>
     [Fact]
     public async Task AStateThatOutlivedItsWindowIsNotHonoured()
@@ -103,7 +110,9 @@ public class InMemoryAuthorizationStateStoreTests
         await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
         timeProvider.Advance(TimeSpan.FromMinutes(16));
 
-        Assert.Null(await store.TakeAsync("first", TestContext.Current.CancellationToken));
+        Assert.Null(await store.FindAsync("first", TestContext.Current.CancellationToken));
+        // Removing an entry past its lifetime is not a live spend, so it reports false.
+        Assert.False(await store.RemoveAsync("first", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -122,7 +131,7 @@ public class InMemoryAuthorizationStateStoreTests
         // Storing anything sweeps what has aged out, so the abandoned entry is gone before this one is added.
         await store.StoreAsync(StateFor("current"), TestContext.Current.CancellationToken);
 
-        Assert.Null(await store.TakeAsync("abandoned", TestContext.Current.CancellationToken));
-        Assert.NotNull(await store.TakeAsync("current", TestContext.Current.CancellationToken));
+        Assert.Null(await store.FindAsync("abandoned", TestContext.Current.CancellationToken));
+        Assert.NotNull(await store.FindAsync("current", TestContext.Current.CancellationToken));
     }
 }

@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 /// <param name="store">Where the state was put aside when the request was built.</param>
 internal sealed class AuthorizationStateConsumer(IAuthorizationStateStore store) : IAuthorizationStateConsumer
 {
-    public async Task<AuthorizationState> ConsumeAsync(
+    public async Task<AuthorizationState> FindAsync(
         string? state, CancellationToken cancellationToken = default)
     {
         // No state to look up. This client sends one on every request, so its absence is not an
@@ -40,9 +40,9 @@ internal sealed class AuthorizationStateConsumer(IAuthorizationStateStore store)
                 "The authorization response carried no state, but this client sends one on every request.");
         }
 
-        // Take-and-remove: the second attempt on the same state finds nothing, which is what makes a
-        // replayed authorization response fail rather than look legitimate a second time.
-        var stored = await store.TakeAsync(state, cancellationToken);
+        // A read, not a spend: the login is located but left in place, so a response that fails a later
+        // check does not burn a sign-in it was not entitled to.
+        var stored = await store.FindAsync(state, cancellationToken);
         if (stored is null)
         {
             throw new AuthorizationStateException(
@@ -53,5 +53,19 @@ internal sealed class AuthorizationStateConsumer(IAuthorizationStateStore store)
         }
 
         return stored;
+    }
+
+    public async Task ConsumeAsync(string state, CancellationToken cancellationToken = default)
+    {
+        // The atomic single-use spend. A false return is a login that was already spent between the
+        // look-up and here - a replay racing a genuine callback - and it is refused as the same Unknown
+        // a caller cannot act on.
+        if (!await store.RemoveAsync(state, cancellationToken))
+        {
+            throw new AuthorizationStateException(
+                AuthorizationStateFailure.Unknown,
+                "The authorization response's state was already spent. A callback is good for one use, so "
+                + "a second attempt on the same one is refused.");
+        }
     }
 }

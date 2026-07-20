@@ -51,23 +51,26 @@ public class AuthorizationStateConsumerTests
     }
 
     /// <summary>
-    /// A response naming a held state gets it back, with everything the request put aside.
+    /// Finding a held state returns it, with everything the request put aside, and leaves it in place.
     /// </summary>
     [Fact]
-    public async Task ConsumesAHeldState()
+    public async Task FindsAHeldState_WithoutSpendingIt()
     {
         var (consumer, store) = Create();
         await store.StoreAsync(StateFor("the-state"), TestContext.Current.CancellationToken);
 
-        var consumed = await consumer.ConsumeAsync("the-state", TestContext.Current.CancellationToken);
+        var found = await consumer.FindAsync("the-state", TestContext.Current.CancellationToken);
 
-        Assert.Equal("the-nonce", consumed.Nonce);
-        Assert.Equal("the-verifier", consumed.CodeVerifier);
+        Assert.Equal("the-nonce", found.Nonce);
+        Assert.Equal("the-verifier", found.CodeVerifier);
+
+        // Still held: finding is a look-up, so a response that fails a later check has not spent it.
+        Assert.NotNull(await store.FindAsync("the-state", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
-    /// The second attempt on the same state finds nothing, which is what makes a replayed response fail.
-    /// RFC 9700 section 4.7 counts authorization-response replay as a threat to close.
+    /// After the state is spent, the same one cannot be spent again - the second attempt is the replay
+    /// this refuses. RFC 9700 section 4.7 counts authorization-response replay as a threat to close.
     /// </summary>
     [Fact]
     public async Task ConsumingTwice_FailsTheSecondTimeAsUnknown()
@@ -93,14 +96,14 @@ public class AuthorizationStateConsumerTests
         var (consumer, _) = Create();
 
         var error = await Assert.ThrowsAsync<AuthorizationStateException>(
-            () => consumer.ConsumeAsync("never-issued", TestContext.Current.CancellationToken));
+            () => consumer.FindAsync("never-issued", TestContext.Current.CancellationToken));
 
         Assert.Equal(AuthorizationStateFailure.Unknown, error.Failure);
     }
 
     /// <summary>
     /// No state at all is a distinct failure, because this client sends one on every request, so its
-    /// absence cannot be an expired login to restart.
+    /// absence cannot be an expired login to restart. The look-up is where it surfaces.
     /// </summary>
     [Theory]
     [InlineData(null)]
@@ -110,7 +113,7 @@ public class AuthorizationStateConsumerTests
         var (consumer, _) = Create();
 
         var error = await Assert.ThrowsAsync<AuthorizationStateException>(
-            () => consumer.ConsumeAsync(state, TestContext.Current.CancellationToken));
+            () => consumer.FindAsync(state, TestContext.Current.CancellationToken));
 
         Assert.Equal(AuthorizationStateFailure.Missing, error.Failure);
     }
@@ -118,7 +121,7 @@ public class AuthorizationStateConsumerTests
     /// <summary>
     /// A state that expired before the response arrived reads as Unknown, indistinguishable from a
     /// forged one - which is the point. The store drops an entry older than its lifetime, so the
-    /// consumer never sees it.
+    /// consumer never finds it.
     /// </summary>
     [Fact]
     public async Task AnExpiredState_IsUnknown()
@@ -132,7 +135,7 @@ public class AuthorizationStateConsumerTests
         time.Advance(TimeSpan.FromMinutes(16));
 
         var error = await Assert.ThrowsAsync<AuthorizationStateException>(
-            () => consumer.ConsumeAsync("the-state", TestContext.Current.CancellationToken));
+            () => consumer.FindAsync("the-state", TestContext.Current.CancellationToken));
 
         Assert.Equal(AuthorizationStateFailure.Unknown, error.Failure);
     }
