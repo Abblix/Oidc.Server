@@ -107,6 +107,49 @@ public sealed class VaultTransitClientTests : IDisposable
         Assert.False(root.TryGetProperty("signature_algorithm", out _)); // EC has no signature_algorithm
     }
 
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, "pkcs1v15", "sha2-256")]
+    [InlineData(SigningAlgorithms.RS384, "pkcs1v15", "sha2-384")]
+    [InlineData(SigningAlgorithms.RS512, "pkcs1v15", "sha2-512")]
+    [InlineData(SigningAlgorithms.PS256, "pss", "sha2-256")]
+    [InlineData(SigningAlgorithms.PS384, "pss", "sha2-384")]
+    [InlineData(SigningAlgorithms.PS512, "pss", "sha2-512")]
+    public async Task SignAsync_SendsTheTransitNameOfEveryRsaAlgorithmItAccepts(
+        string algorithm, string expectedSignatureAlgorithm, string expectedHashAlgorithm)
+    {
+        // A hand-written mapping table invites transposition, and a transposed arm here is not a crash: Vault
+        // signs happily with whatever it was told, so the token goes out signed under one algorithm while its JWS
+        // header advertises another. Nothing local notices - the failure lands on whoever verifies it.
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.OK, new { data = new { signature = "vault:v1:AQID" } }));
+
+        await ClientOver(handler).SignAsync("oidc-sign:1", algorithm, [1], TestContext.Current.CancellationToken);
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody!);
+        var root = body.RootElement;
+        Assert.Equal(expectedSignatureAlgorithm, root.GetProperty("signature_algorithm").GetString());
+        Assert.Equal(expectedHashAlgorithm, root.GetProperty("hash_algorithm").GetString());
+    }
+
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256, "sha2-256")]
+    [InlineData(SigningAlgorithms.ES384, "sha2-384")]
+    [InlineData(SigningAlgorithms.ES512, "sha2-512")]
+    public async Task SignAsync_SendsTheTransitHashOfEveryEcAlgorithmItAccepts(
+        string algorithm, string expectedHashAlgorithm)
+    {
+        // Same exposure on the EC side, where the algorithm is carried by the hash alone.
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.OK, new { data = new { signature = "vault:v1:AQID" } }));
+
+        await ClientOver(handler).SignAsync("oidc-sign:1", algorithm, [1], TestContext.Current.CancellationToken);
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody!);
+        var root = body.RootElement;
+        Assert.Equal(expectedHashAlgorithm, root.GetProperty("hash_algorithm").GetString());
+        Assert.Equal("jws", root.GetProperty("marshaling_algorithm").GetString());
+    }
+
     [Fact]
     public async Task SignAsync_RejectsUnsupportedAlgorithm_WithoutCallingTransit()
     {
@@ -162,6 +205,46 @@ public sealed class VaultTransitClientTests : IDisposable
         await Assert.ThrowsAsync<InvalidOperationException>(() => client.UnwrapKeyAsync(
             "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [1], TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task DecryptAsync_Throws_WhenTheFailureIsOurs(HttpStatusCode status)
+    {
+        // Only a rejected ciphertext may become null, because null is how the seam says "this did not decrypt" and
+        // that is what keeps a wrong key indistinguishable from bad padding. A throttled, sealed or broken Vault is
+        // not a decryption failure. Reporting one as null would reject every encrypted token for as long as the
+        // fault lasts, silently, and blame the clients for a JWE that is perfectly good.
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            status, new { errors = new[] { "not a decryption failure" } }));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ClientOver(handler).UnwrapKeyAsync(
+            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GetKeyVersionsAsync_RefusesAKeyTypeItCannotPublish()
+    {
+        // Transit will happily hold an ed25519 or a symmetric key, and an operator can point this store at one by
+        // configuring a key name. Publishing it is impossible, so the refusal has to name the type - otherwise the
+        // failure surfaces as an import error from deep inside the crypto stack, far from the configuration that
+        // caused it.
+        using var rsa = RSA.Create(2048);
+        var handler = KeyResponse("ed25519", rsa.ExportSubjectPublicKeyInfoPem());
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        {
+            await foreach (var _ in ClientOver(handler).GetKeyVersionsAsync(
+                               "oidc-sign", TestContext.Current.CancellationToken))
+            {
+                // Enumerating is the act under test; the refusal arrives before any version is produced.
+            }
+        });
+
+        Assert.Contains("ed25519", exception.Message);
     }
 
     [Fact]
