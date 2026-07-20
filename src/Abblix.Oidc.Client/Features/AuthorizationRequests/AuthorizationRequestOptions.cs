@@ -32,11 +32,11 @@ public sealed class AuthorizationRequestOptions
     /// this client, and is repeated verbatim when the authorization code is exchanged.
     /// </summary>
     /// <remarks>
-    /// Absolute, and a relative value is refused when a request is built. The provider is what resolves
-    /// this address - it redirects the browser here once authentication succeeds - so a relative one
-    /// resolves against the provider's own address and the user lands on the provider's site, signed in,
-    /// having never reached this application. RFC 6749 section 3.1.2: "The redirection endpoint URI MUST
-    /// be an absolute URI as defined by [RFC3986] Section 4.3."
+    /// Absolute, and a relative value is refused when a request is built. The provider hands this
+    /// address to the browser, and the browser resolves it from where it is standing - the provider's
+    /// own page - so a relative one points back into the provider's site and the user lands there,
+    /// signed in, having never reached this application. RFC 6749 section 3.1.2: "The redirection
+    /// endpoint URI MUST be an absolute URI as defined by [RFC3986] Section 4.3."
     /// <see cref="Uri"/> holds a relative address just as happily, so the type cannot say this.
     /// </remarks>
     public required Uri RedirectUri { get; set; }

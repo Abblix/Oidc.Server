@@ -143,15 +143,16 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
     /// </summary>
     /// <remarks>
     /// The opposite requirement to the return address, and for a reason worth stating as a
-    /// consequence rather than as a rule. This address is resolved by the OpenID Provider, because
-    /// that is where it is used: the provider redirects the browser to it once authentication
-    /// succeeds. A relative one therefore resolves against the PROVIDER's own address, and the user
-    /// lands somewhere on the provider's site having successfully signed in - never reaching this
-    /// application at all. RFC 6749 section 3.1.2 says it plainly: "The redirection endpoint URI MUST
-    /// be an absolute URI as defined by [RFC3986] Section 4.3."
-    /// The two addresses are easy to confuse, both being places a login returns to, and the confusion
-    /// is exactly why each is checked: one is resolved here and must not name a host, the other is
-    /// resolved there and must.
+    /// consequence rather than as a rule. The provider does not resolve this address; it hands it to
+    /// the browser, and the browser resolves it from where it is standing at that moment, which is the
+    /// provider's own page. So a relative value points back into the provider's site: the user
+    /// authenticates successfully and lands there, never reaching this application at all. RFC 6749
+    /// section 3.1.2 says it plainly: "The redirection endpoint URI MUST be an absolute URI as defined
+    /// by [RFC3986] Section 4.3."
+    /// The two addresses are easy to confuse, both being places a login returns to. Each is checked
+    /// because the browser resolves them standing in different places: the return address while it is
+    /// already here, so it must not name a host, and this one while it is still at the provider, so it
+    /// must.
     /// The type cannot carry this: <see cref="Uri"/> holds relative addresses just as happily.
     /// </remarks>
     private static string RequireAbsolute(Uri redirectUri)
@@ -159,9 +160,9 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         if (!redirectUri.IsAbsoluteUri)
         {
             throw new AuthorizationRequestException(
-                $"The configured redirect address '{redirectUri.OriginalString}' is relative. The provider "
-                + "resolves it against its own address when it sends the user back, so a relative one "
-                + "leads into the provider's site instead of this application. It must be absolute.");
+                $"The configured redirect address '{redirectUri}' is relative. The browser "
+                + "resolves it while it is still on the provider's page, so a relative one leads back "
+                + "into the provider's site instead of this application. It must be absolute.");
         }
 
         return redirectUri.ToString();
