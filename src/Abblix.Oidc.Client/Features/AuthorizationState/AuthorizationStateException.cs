@@ -1,0 +1,48 @@
+// Abblix OIDC Client Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+namespace Abblix.Oidc.Client.Features.AuthorizationState;
+
+/// <summary>
+/// Thrown when an authorization response cannot be matched to a login this client started.
+/// </summary>
+/// <remarks>
+/// Carries a <see cref="Failure"/> so an adapter can decide what the user sees - an expired login is a
+/// routine event that deserves a fresh start, a missing state is not - without parsing the message.
+/// The message is for the log; the enum is for the code.
+/// </remarks>
+public sealed class AuthorizationStateException : Exception
+{
+    /// <summary>
+    /// Creates the exception for a response that matched no held state.
+    /// </summary>
+    public AuthorizationStateException(AuthorizationStateFailure failure, string message)
+        : base(message)
+    {
+        Failure = failure;
+    }
+
+    /// <summary>
+    /// Which way the match failed.
+    /// </summary>
+    public AuthorizationStateFailure Failure { get; }
+}
