@@ -36,6 +36,18 @@ public sealed record DiscoveryDocument
     [JsonPropertyName("revocation_endpoint")]
     public Uri? RevocationEndpoint { get; init; }
 
+    [JsonPropertyName("device_authorization_endpoint")]
+    public Uri? DeviceAuthorizationEndpoint { get; init; }
+
+    [JsonPropertyName("backchannel_authentication_endpoint")]
+    public Uri? BackChannelAuthenticationEndpoint { get; init; }
+
+    [JsonPropertyName("end_session_endpoint")]
+    public Uri? EndSessionEndpoint { get; init; }
+
+    [JsonPropertyName("check_session_iframe")]
+    public Uri? CheckSessionIframe { get; init; }
+
     [JsonPropertyName("userinfo_endpoint")]
     public Uri? UserInfoEndpoint { get; init; }
 
