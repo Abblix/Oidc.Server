@@ -2,7 +2,7 @@
 
 **Abblix.Jwt.Azure** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way the public halves are published at `/jwks` and verified locally, which never calls the vault. The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy. No provider private key crosses that pipeline; what does is the signing input, the wrapped keys, and the plaintext key an unwrap returns, which a handler on this pipeline can observe, so scope logging accordingly.
 
-Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Azure Key Vault.
+Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the placement call is required. This README covers only what is specific to Azure Key Vault.
 
 ## Installation
 
@@ -12,7 +12,7 @@ dotnet add package Abblix.Jwt.Azure
 
 ## Provisioning
 
-What you create depends on the tier ([EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the choice).
+What you create depends on where you keep the keys ([EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the choice).
 
 Protection level is a property of the key you create, not of this package. A Standard-tier key is software-protected; Premium and Managed HSM keys (`--kty RSA-HSM`) are HSM-protected and FIPS-validated. Choose HSM-backed keys when your compliance profile requires HSM custody, or when the at-rest guarantee must hold against the vault's own operators and not only against your process.
 
@@ -106,7 +106,7 @@ az keyvault key rotate --vault-name my-vault --name oidc-sign
 
 Every enabled version is published under its own `kid`, `oidc-sign/<version>`. Disabling a version removes it from publication and from production immediately, so it is the fastest way to retire one; do that only after every token signed by it has expired.
 
-With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with no `az keyvault` call: it mints the next key, seals it into the container, and retires the old one on its own. [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the propagation window that decides when a fresh key starts signing, for both tiers.
+With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with no `az keyvault` call: it mints the next key, seals it into the container, and retires the old one on its own. [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the propagation window that decides when a fresh key starts signing, for both placements.
 
 ## What it costs on Key Vault
 

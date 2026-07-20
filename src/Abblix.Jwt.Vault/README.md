@@ -2,7 +2,7 @@
 
 **Abblix.Jwt.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way the public halves are published at `/jwks` and verified locally, which never calls Transit.
 
-Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the tier call is required. This README covers only what is specific to Vault.
+Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the placement call is required. This README covers only what is specific to Vault.
 
 ## Installation
 
@@ -12,7 +12,7 @@ dotnet add package Abblix.Jwt.Vault
 
 ## Provisioning
 
-What you create depends on the tier ([EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the choice). Scope the provider's token to the paths of the tier you pick and nothing else. Never a root or admin token.
+What you create depends on where you keep the keys ([EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the choice). Scope the provider's token to the paths of the placement you pick and nothing else. Never a root or admin token.
 
 ### Keys held in Transit (`UseKeysInCustodian`)
 
@@ -111,7 +111,7 @@ builder.Services
 
 The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
 
-Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the tier you chose above.
+Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the placement you chose above.
 
 ## Rotation
 
@@ -123,7 +123,7 @@ vault write -f transit/keys/oidc-sign/rotate
 
 Every version is published under its own `kid`, `oidc-sign:1` and so on, and each signing request pins the exact version its `kid` names, so a token is never signed by a version the client cannot resolve. Older versions keep verifying and unwrapping until you remove them from Transit.
 
-With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with no `vault write` at all: it mints the next key, seals it into the ring, and retires the old one on its own. [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the propagation window that decides when a fresh key starts signing, for both tiers.
+With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with no `vault write` at all: it mints the next key, seals it into the ring, and retires the old one on its own. [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) explains the propagation window that decides when a fresh key starts signing, for both placements.
 
 ## What it costs on Transit
 
