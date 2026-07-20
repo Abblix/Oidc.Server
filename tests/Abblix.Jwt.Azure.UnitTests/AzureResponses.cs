@@ -26,14 +26,14 @@ internal static class AzureResponses
         });
 
     /// <summary>A public-only P-256 EC key bundle, the shape the SDK expects for an EC key.</summary>
-    public static string EcKeyBundle(Uri vaultUri, string keyName, ECParameters publicKey)
+    public static string EcKeyBundle(Uri vaultUri, string keyName, ECParameters publicKey, string curve = "P-256")
         => JsonSerializer.Serialize(new
         {
             key = new
             {
                 kid = $"{vaultUri}keys/{keyName}/v1",
                 kty = "EC",
-                crv = "P-256",
+                crv = curve,
                 key_ops = new[] { "sign", "verify" },
                 x = Base64Url(publicKey.Q.X!),
                 y = Base64Url(publicKey.Q.Y!),
@@ -48,12 +48,30 @@ internal static class AzureResponses
     /// <summary>A "get key versions" page: each version's identifier, creation time (Unix seconds) and enabled
     /// flag, the shape <c>KeyClient.GetPropertiesOfKeyVersions</c> pages over.</summary>
     public static string KeyVersionsList(Uri vaultUri, string keyName, params (string Version, long CreatedUnix)[] versions)
+        => KeyVersionsList(
+            vaultUri, keyName, versions.Select(v => (v.Version, (long?)v.CreatedUnix, true)).ToArray());
+
+    /// <summary>
+    /// The same page, with the two attributes an operator can actually change: whether a version is enabled, and
+    /// whether the vault reports a creation time at all.
+    /// </summary>
+    /// <remarks>
+    /// Both are load-bearing rather than decorative. Disabling a version is how a compromised key is taken out of
+    /// service, and a version with no creation time cannot be placed in the rotation order. Neither can be
+    /// expressed by the simpler overload, which is why the paths that honour them went untested.
+    /// </remarks>
+    public static string KeyVersionsList(
+        Uri vaultUri, string keyName, params (string Version, long? CreatedUnix, bool Enabled)[] versions)
         => JsonSerializer.Serialize(new
         {
             value = versions.Select(version => new
             {
                 kid = $"{vaultUri}keys/{keyName}/{version.Version}",
-                attributes = new { enabled = true, created = version.CreatedUnix },
+
+                // A vault that reports no creation time omits the member; sending null is not the same shape.
+                attributes = version.CreatedUnix is { } created
+                    ? new Dictionary<string, object> { ["enabled"] = version.Enabled, ["created"] = created }
+                    : new Dictionary<string, object> { ["enabled"] = version.Enabled },
             }).ToArray(),
             nextLink = (string?)null,
         });

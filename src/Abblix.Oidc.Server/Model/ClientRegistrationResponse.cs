@@ -312,7 +312,13 @@ public record ClientRegistrationResponse
     /// Wire-level member names of the client registration response (RFC 7591 §3.2.1, RFC 7592 §3,
     /// OIDC Dynamic Client Registration §3.2).
     /// </summary>
-    private static class Parameters
+    /// <remarks>
+    /// Public for the same reason <see cref="ClientRegistrationRequest.Parameters"/> is: these are the member
+    /// names of a published wire contract, and a consumer reading the response has to name them somehow. Left
+    /// private, every caller spells the literal again, which is how a member name drifts between the server
+    /// that writes it and the code that reads it.
+    /// </remarks>
+    public static class Parameters
     {
         /// <summary>The <c>client_id</c> response member carrying the issued client identifier.</summary>
         public const string ClientId = "client_id";

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Text.Json.Nodes;
@@ -8,6 +8,7 @@ using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -53,7 +54,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
 
         var requested = new JsonObject
         {
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { "code" },
             ["token_endpoint_auth_method"] = "client_secret_post",

@@ -43,7 +43,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// path (no settings, no client), so this fills the gap. It runs in the License collection because the client lookup
 /// runs a licence check.
 /// </summary>
-[Collection("License")]
 public class JwtSubjectTokenResolverPairwiseTests
 {
     private const string TokenWire = "header.payload.signature";
@@ -62,7 +61,7 @@ public class JwtSubjectTokenResolverPairwiseTests
     private readonly ClientInfo _pairwiseClient;
     private readonly JwtSubjectTokenResolver _resolver;
 
-    public JwtSubjectTokenResolverPairwiseTests(LicenseFixture fixture)
+    public JwtSubjectTokenResolverPairwiseTests()
     {
         _pairwiseClient = new ClientInfo(OriginalClientId)
         {

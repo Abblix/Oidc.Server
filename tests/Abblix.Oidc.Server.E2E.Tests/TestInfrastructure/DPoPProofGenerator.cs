@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -120,7 +120,7 @@ public sealed class DPoPProofGenerator : IDisposable
         }
 
         if (nonce is not null)
-            payload["nonce"] = nonce;
+            payload[IanaClaimTypes.Nonce] = nonce;
 
         var headerB64 = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(header.ToJsonString()));
         var payloadB64 = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payload.ToJsonString()));

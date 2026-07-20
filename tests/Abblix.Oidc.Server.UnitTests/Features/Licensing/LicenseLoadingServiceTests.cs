@@ -52,7 +52,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 ///
 /// Full integration testing with valid licenses requires actual Abblix license JWTs.
 /// </remarks>
-[Collection("License")]
 public class LicenseLoadingServiceTests
 {
     #region Helper Classes
@@ -199,8 +198,11 @@ public class LicenseLoadingServiceTests
         var service = new LicenseLoadingService(loggerFactory, provider);
         using var cts = new CancellationTokenSource();
 
-        // Act - Cancel before enumeration completes
-        cts.CancelAfter(10);
+        // Act - the token is already cancelled when enumeration starts, so the first await inside the sequence
+        // observes it. Cancelling on a timer instead raced the delay above: under a loaded run the timer callback
+        // is queued behind everything else, the delay wins, and the test fails for want of a free thread rather
+        // than for anything about the code. Same path through the service, no clock involved.
+        await cts.CancelAsync();
 
         // Assert - Should throw OperationCanceledException or TaskCanceledException
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>

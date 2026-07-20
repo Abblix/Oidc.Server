@@ -41,7 +41,6 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 /// Unit tests for <see cref="UserInfoRequestProcessor"/> verifying user claims retrieval logic
 /// per OIDC Core UserInfo Endpoint specification.
 /// </summary>
-[Collection("License")]
 public class UserInfoRequestProcessorTests
 {
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
@@ -50,7 +49,7 @@ public class UserInfoRequestProcessorTests
     private readonly Mock<IUserClaimsProvider> _userClaimsProvider;
     private readonly UserInfoRequestProcessor _processor;
 
-    public UserInfoRequestProcessorTests(TestInfrastructure.LicenseFixture fixture)
+    public UserInfoRequestProcessorTests()
     {
         _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -86,7 +87,7 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
             $"/token unexpectedly succeeded: {await tokenResponse.Content.ReadAsStringAsync()}");
         Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
         var body = JsonNode.Parse(await tokenResponse.Content.ReadAsStringAsync())!.AsObject();
-        return body["error"]!.GetValue<string>();
+        return body[ResponseParameters.Error]!.GetValue<string>();
     }
 
     /// <summary>

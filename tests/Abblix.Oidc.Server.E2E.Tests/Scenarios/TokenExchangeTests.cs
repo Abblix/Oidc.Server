@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Text.Json.Nodes;
@@ -6,6 +6,9 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
+using Abblix.Jwt;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -103,7 +106,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 
         var requested = new JsonObject
         {
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { "code" },
             ["token_endpoint_auth_method"] = "client_secret_post",
@@ -134,12 +137,12 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var issued = await PerformParFlowAsync(
             clientA, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var idToken = issued["id_token"]!.GetValue<string>();
+        var idToken = issued[ResponseParameters.IdToken]!.GetValue<string>();
 
         // Premise of the finding: the id_token's aud is client A and it has no client_id claim.
         var idPayload = DecodeJwtPayload(idToken);
         Assert.Equal(clientA, idPayload["aud"]!.GetValue<string>());
-        Assert.Null(idPayload["client_id"]);
+        Assert.Null(idPayload[IanaClaimTypes.ClientId]);
 
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -157,7 +160,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected cross-client exchange to be rejected, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, error?["error"]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, error?[ResponseParameters.Error]?.GetValue<string>());
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)

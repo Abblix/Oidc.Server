@@ -32,7 +32,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// <summary>
 /// Tests for AggregationExtensions methods used in license merging and comparison operations.
 /// </summary>
-[Collection("License")]
 public class AggregationExtensionsTests
 {
     #region Greater<T> Tests

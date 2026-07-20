@@ -41,7 +41,6 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 /// Unit tests for <see cref="EndSessionRequestProcessor"/> verifying logout logic
 /// per OIDC Session Management specification.
 /// </summary>
-[Collection("License")]
 public class EndSessionRequestProcessorTests
 {
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
@@ -53,7 +52,7 @@ public class EndSessionRequestProcessorTests
     private readonly Mock<ILogoutNotifier> _logoutNotifier;
     private readonly EndSessionRequestProcessor _processor;
 
-    public EndSessionRequestProcessorTests(TestInfrastructure.LicenseFixture fixture)
+    public EndSessionRequestProcessorTests()
     {
         _logger = new Mock<ILogger<EndSessionRequestProcessor>>();
         _authSessionService = new Mock<IAuthSessionService>(MockBehavior.Strict);

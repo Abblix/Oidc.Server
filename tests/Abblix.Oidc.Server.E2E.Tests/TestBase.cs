@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Net;
@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
 
@@ -276,7 +277,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected error response but got {(int)response.StatusCode}: {raw}");
         var body = JsonNode.Parse(raw)?.AsObject();
-        var errorCode = body?["error"]?.GetValue<string>();
+        var errorCode = body?[ResponseParameters.Error]?.GetValue<string>();
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, errorCode);
     }
 

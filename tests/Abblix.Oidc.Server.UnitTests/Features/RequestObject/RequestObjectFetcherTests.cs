@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -37,6 +37,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using RequestParameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.RequestObject;
 
@@ -122,7 +123,7 @@ public class RequestObjectFetcherTests
 
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
-        var payload = new JsonObject { ["client_id"] = "c1" };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -203,7 +204,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId, ["state"] = "newstate" };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId, [RequestParameters.State] = "newstate" };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -277,7 +278,7 @@ public class RequestObjectFetcherTests
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject { ["alg"] = SigningAlgorithms.RS384 }),
-            Payload = new JsonWebTokenPayload(new JsonObject { ["client_id"] = TestConstants.DefaultClientId })
+            Payload = new JsonWebTokenPayload(new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId })
         };
         var clientInfo = new ClientInfo("test-client") { RequestObjectSigningAlgorithm = SigningAlgorithms.RS256 };
 
@@ -304,7 +305,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "header.payload.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject { ["alg"] = SigningAlgorithms.RS256 }),
@@ -364,7 +365,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -402,7 +403,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -439,7 +440,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -473,7 +474,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -508,8 +509,8 @@ public class RequestObjectFetcherTests
         var request2 = new TestRequest(TestConstants.AlternativeClientId, "https://example.com/callback2", null);
         var jwt1 = "jwt1";
         var jwt2 = "jwt2";
-        var payload1 = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
-        var payload2 = new JsonObject { ["client_id"] = TestConstants.AlternativeClientId };
+        var payload1 = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
+        var payload2 = new JsonObject { [RequestParameters.ClientId] = TestConstants.AlternativeClientId };
         var token1 = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -606,9 +607,9 @@ public class RequestObjectFetcherTests
         var jwt = "eyJhbGciOiJSUzI1NiJ9.complex.signature";
         var payload = new JsonObject
         {
-            ["client_id"] = TestConstants.DefaultClientId,
+            [RequestParameters.ClientId] = TestConstants.DefaultClientId,
             ["redirect_uri"] = "https://new.example.com/callback",
-            ["state"] = "complex_state_123",
+            [RequestParameters.State] = "complex_state_123",
             ["nonce"] = "nonce_value",
             ["response_type"] = "code"
         };
@@ -647,7 +648,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -741,7 +742,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var request = new { ClientId = TestConstants.DefaultClientId, Scope = TestConstants.DefaultScope };
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -783,8 +784,8 @@ public class RequestObjectFetcherTests
         var unsignedJwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIiwic3RhdGUiOiJ0ZXN0X3N0YXRlIn0.";
         var payload = new JsonObject
         {
-            ["client_id"] = TestConstants.DefaultClientId,
-            ["state"] = "test_state"
+            [RequestParameters.ClientId] = TestConstants.DefaultClientId,
+            [RequestParameters.State] = "test_state"
         };
         var token = new JsonWebToken
         {
@@ -894,7 +895,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var outerRequest = new Abblix.Oidc.Server.Model.AuthorizationRequest { State = "outer-state" };
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { ["client_id"] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.RS256 },
