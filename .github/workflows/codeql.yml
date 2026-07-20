@@ -6,12 +6,15 @@ name: CodeQL
 # full control. See .github/codeql/README.md for the policy and the
 # May 2026 incident that led to the restrictions.
 #
-# The push-to-develop auto-trigger is disabled: autobuild of the
-# multi-target (net8/9/10) solution exceeded the 5-minute step cap and
-# burned ~5m on every develop push with no result. Run on demand via
-# workflow_dispatch (raise the autobuild timeout first — see README).
+# Analysis runs buildless (build-mode: none). Autobuild used to compile the
+# multi-target (net8/9/10) solution, which exceeded the 5-minute step cap and
+# left every run with nothing extracted - a green job that analysed no code.
+# The C# extractor reads the sources directly, so the compile is not needed
+# at all and the run finishes in a couple of minutes.
 on:
   workflow_dispatch:
+  push:
+    branches: ["develop"]
 
 permissions:
   contents: read
@@ -24,10 +27,10 @@ jobs:
   analyze:
     name: Analyze (CodeQL)
     runs-on: ubuntu-latest
-    # 15m total cap covers compile + analyze. Higher than the 5m
-    # baseline because CodeQL semantic analysis needs the project to
-    # build first; historical runs sat around 7-9m wall-clock.
-    timeout-minutes: 15
+    # 10m total cap. Higher than the 5m baseline because CodeQL still has to
+    # extract every source file and run the full query suite, but well below
+    # the old 15m, which existed only to leave room for the compile.
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -41,19 +44,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        timeout-minutes: 3
-        with:
-          dotnet-version: '10.0.x'
-
+      # No SDK setup and no autobuild step: build-mode none never invokes a
+      # compiler, so neither would contribute anything but wall-clock.
       - uses: github/codeql-action/init@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
         timeout-minutes: 3
         with:
           languages: ${{ matrix.language }}
+          build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
 
-      - uses: github/codeql-action/autobuild@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
-        timeout-minutes: 5
-
       - uses: github/codeql-action/analyze@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
-        timeout-minutes: 5
+        timeout-minutes: 6
