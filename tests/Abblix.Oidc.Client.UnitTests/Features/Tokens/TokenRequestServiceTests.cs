@@ -22,6 +22,7 @@
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Web;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Tokens;
@@ -51,7 +52,7 @@ public class TokenRequestServiceTests
                                        """;
 
     private static TokenRequestService CreateService(
-        RecordingHttpMessageHandler handler,
+        HttpMessageHandler handler,
         string authenticationMethod = ClientAuthenticationMethods.None,
         string? clientSecret = null,
         string? tokenEndpoint = TokenEndpoint)
@@ -258,5 +259,64 @@ public class TokenRequestServiceTests
         await Assert.ThrowsAsync<TokenRequestException>(
             () => CreateService(handler, tokenEndpoint: null)
                 .RefreshAsync("token", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A provider that cannot be reached at all is reported as a token-request failure carrying the transport
+    /// fault, so a caller can tell an unreachable provider from one that refused.
+    /// </summary>
+    [Fact]
+    public async Task TranslatesATransportFailure()
+    {
+        var handler = new ThrowingHttpMessageHandler(new HttpRequestException("connection refused"));
+
+        var exception = await Assert.ThrowsAsync<TokenRequestException>(
+            () => CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken));
+
+        Assert.Null(exception.Error);
+        Assert.IsType<HttpRequestException>(exception.InnerException);
+    }
+
+    /// <summary>
+    /// A success whose body cannot be read is a failure, not an empty set of tokens. Returning something
+    /// blank here would put a client into a signed-in state holding no token at all.
+    /// </summary>
+    [Fact]
+    public async Task ASuccessWithAnUnreadableBodyIsAFailure()
+    {
+        var handler = new RecordingHttpMessageHandler("<html>not json</html>");
+
+        var exception = await Assert.ThrowsAsync<TokenRequestException>(
+            () => CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken));
+
+        Assert.IsType<JsonException>(exception.InnerException);
+    }
+
+    /// <summary>
+    /// A success carrying a literal JSON null is refused for the same reason.
+    /// </summary>
+    [Fact]
+    public async Task ASuccessCarryingNothingIsAFailure()
+    {
+        var handler = new RecordingHttpMessageHandler("null");
+
+        await Assert.ThrowsAsync<TokenRequestException>(
+            () => CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A method this client cannot present is named rather than attempted.
+    /// </summary>
+    [Fact]
+    public async Task AnUnsupportedAuthenticationMethodIsNamed()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+        var service = CreateService(handler, "private_key_jwt", "the-secret");
+
+        var exception = await Assert.ThrowsAsync<TokenRequestException>(
+            () => service.RefreshAsync("token", TestContext.Current.CancellationToken));
+
+        Assert.Contains("private_key_jwt", exception.Message);
+        Assert.Equal(0, handler.RequestCount);
     }
 }
