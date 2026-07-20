@@ -76,14 +76,20 @@ public static class HashCalculator
 
         return signingAlgorithm switch
         {
-            SigningAlgorithms.RS256 or SigningAlgorithms.PS256
-                or SigningAlgorithms.ES256 or SigningAlgorithms.HS256 => SHA256.HashData(octets),
+            SigningAlgorithms.RS256 or
+            SigningAlgorithms.PS256 or
+            SigningAlgorithms.ES256 or
+            SigningAlgorithms.HS256 => SHA256.HashData(octets),
 
-            SigningAlgorithms.RS384 or SigningAlgorithms.PS384
-                or SigningAlgorithms.ES384 or SigningAlgorithms.HS384 => SHA384.HashData(octets),
+            SigningAlgorithms.RS384 or
+            SigningAlgorithms.PS384 or
+            SigningAlgorithms.ES384 or
+            SigningAlgorithms.HS384 => SHA384.HashData(octets),
 
-            SigningAlgorithms.RS512 or SigningAlgorithms.PS512
-                or SigningAlgorithms.ES512 or SigningAlgorithms.HS512 => SHA512.HashData(octets),
+            SigningAlgorithms.RS512 or
+            SigningAlgorithms.PS512 or
+            SigningAlgorithms.ES512 or
+            SigningAlgorithms.HS512 => SHA512.HashData(octets),
 
             _ => null,
         };
