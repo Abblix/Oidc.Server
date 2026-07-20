@@ -52,4 +52,21 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Adds the reader that takes an authorization response apart.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// Registered on its own rather than folded into the issuer check, because the two answer different
+    /// questions and a host may want its own answer to either: this one decides what the response says,
+    /// that one whether the response came from the right place.
+    /// </remarks>
+    public static IServiceCollection AddAuthorizationResponseParsing(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IAuthorizationResponseParser, AuthorizationResponseParser>();
+
+        return services;
+    }
 }
