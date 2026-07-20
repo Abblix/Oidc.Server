@@ -143,10 +143,22 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The authorized party (azp) the JWT was issued to. OpenID Connect Core mandates this claim
-	/// in an id_token when there is a single audience that differs from the issuer, and whenever
-	/// the token has more than one audience, naming the party the token was minted for.
+	/// The authorized party (azp): the party the token was issued to. OpenID Connect Core 1.0
+	/// section 2 defines it in one sentence - "OPTIONAL. Authorized party - the party to which
+	/// the ID Token was issued. If present, it MUST contain the OAuth 2.0 Client ID of this
+	/// party." So the claim is optional, and the only obligation attaches to its value.
 	/// </summary>
+	/// <remarks>
+	/// This described the claim as mandated, and as keyed to the issuer, until 2026-07-20. Both
+	/// were wrong, and the second inverts what the claim is for: azp names the recipient, not
+	/// the sender. The conditions the old text carried - a single audience differing from
+	/// something, or more than one audience - come from wording that errata set 2 replaced.
+	/// A recipient's duty is correspondingly weak: section 3.1.3.7 step 4 says a client using
+	/// extensions that produce azp "SHOULD validate the azp value as specified by those
+	/// extensions", and step 5 that this "MAY include that when an azp Claim is present, the
+	/// Client SHOULD verify that its client_id is the Claim Value". Nothing here is a MUST, and
+	/// a validator that rejects on a missing azp will refuse conformant issuers.
+	/// </remarks>
 	public string? AuthorizedParty
 	{
 		get => Json.GetProperty<string>(IanaClaimTypes.Azp);

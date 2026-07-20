@@ -128,11 +128,16 @@ internal partial class JsonWebTokenSigner(
                 "No signing keys configured for issuer (RFC 7515 §6: cannot verify signature without keys)");
         }
 
-        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL but binding when present:
-        // a key declaring its alg MUST NOT be used with any other algorithm. Filter such keys out
-        // before reaching crypto so a key registered for (say) RS256 cannot be misused to verify
-        // PS256 or RS384 tokens, closing within-family algorithm-confusion alongside the
-        // cross-family protection already provided by the generic keyed-DI dispatch.
+        // The binding a key declares over its algorithm comes from RFC 8725 Section 3.1, not from
+        // the JWK spec: "each key MUST be used with exactly one algorithm, and this MUST be
+        // checked when the cryptographic operation is performed". RFC 7517 Section 4.4 only
+        // introduces the parameter - it says 'alg' "identifies the algorithm intended for use
+        // with the key" and that "Use of this member is OPTIONAL", with no MUST NOT anywhere in
+        // it, so citing it for the prohibition (as this comment did until 2026-07-20) overstates
+        // it. Filtering here keeps a key registered for, say, RS256 from verifying a PS256 or
+        // RS384 token, closing within-family algorithm confusion alongside the cross-family
+        // protection the keyed-DI dispatch already gives. A key that declares no 'alg' stays a
+        // candidate, which is what makes the parameter's optionality workable.
         // Per RFC 7515 Section 4.1.4, 'kid' parameter helps select the key.
         var candidates = allKeys
             .Where(key =>
