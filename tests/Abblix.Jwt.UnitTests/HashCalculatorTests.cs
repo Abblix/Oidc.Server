@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -27,7 +27,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// <see cref="BindingHash"/> against the worked examples printed in the specifications themselves.
+/// <see cref="HashCalculator"/> against the worked examples printed in the specifications themselves.
 /// </summary>
 /// <remarks>
 /// These vectors are the point of the class. The issuing side and the verifying side compute this
@@ -36,7 +36,7 @@ namespace Abblix.Jwt.UnitTests;
 /// So the expected values here are copied from OpenID Connect Core 1.0, not produced by running the
 /// code and recording what it said.
 /// </remarks>
-public class BindingHashTests
+public class HashCalculatorTests
 {
     /// <summary>
     /// OpenID Connect Core 1.0 section 3.3.2.11 works this one through: an authorization code of
@@ -48,7 +48,7 @@ public class BindingHashTests
     {
         const string code = "Qcb0Orv1zh30vL1MPRsbm-diHiMwcLyZvn1arpZv-Jxf_11jnpEX3Tgfvk";
 
-        Assert.Equal("LDktKdoQak3Pk0cnXxCltA", BindingHash.Compute(SigningAlgorithms.RS256, code));
+        Assert.Equal("LDktKdoQak3Pk0cnXxCltA", HashCalculator.Compute(SigningAlgorithms.RS256, code));
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public class BindingHashTests
     {
         const string accessToken = "jHkWEdUXMU1BwAsC4vtUsZwnNvTIxEl0z9K3vx5KF0Y";
 
-        Assert.Equal("77QmUPtjPfzWtF2AnpK9RQ", BindingHash.Compute(SigningAlgorithms.RS256, accessToken));
+        Assert.Equal("77QmUPtjPfzWtF2AnpK9RQ", HashCalculator.Compute(SigningAlgorithms.RS256, accessToken));
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public class BindingHashTests
     {
         const string value = "jHkWEdUXMU1BwAsC4vtUsZwnNvTIxEl0z9K3vx5KF0Y";
 
-        Assert.Equal(BindingHash.Compute(first, value), BindingHash.Compute(second, value));
+        Assert.Equal(HashCalculator.Compute(first, value), HashCalculator.Compute(second, value));
     }
 
     /// <summary>
@@ -88,9 +88,9 @@ public class BindingHashTests
     {
         const string value = "jHkWEdUXMU1BwAsC4vtUsZwnNvTIxEl0z9K3vx5KF0Y";
 
-        var sha256 = BindingHash.Compute(SigningAlgorithms.RS256, value);
-        var sha384 = BindingHash.Compute(SigningAlgorithms.RS384, value);
-        var sha512 = BindingHash.Compute(SigningAlgorithms.RS512, value);
+        var sha256 = HashCalculator.Compute(SigningAlgorithms.RS256, value);
+        var sha384 = HashCalculator.Compute(SigningAlgorithms.RS384, value);
+        var sha512 = HashCalculator.Compute(SigningAlgorithms.RS512, value);
 
         Assert.Equal(3, new HashSet<string?> { sha256, sha384, sha512 }.Count);
     }
@@ -105,7 +105,7 @@ public class BindingHashTests
     [InlineData(SigningAlgorithms.RS512, 32)]
     public void ResultIsTheLeftMostHalfOfTheDigest(string algorithm, int expectedBytes)
     {
-        var encoded = BindingHash.Compute(algorithm, "any-value")!;
+        var encoded = HashCalculator.Compute(algorithm, "any-value")!;
 
         Assert.Equal(expectedBytes, System.Buffers.Text.Base64Url.DecodeFromChars(encoded).Length);
     }
@@ -121,7 +121,7 @@ public class BindingHashTests
 
         var expected = System.Buffers.Text.Base64Url.EncodeToString(digest.AsSpan(0, digest.Length / 2));
 
-        Assert.Equal(expected, BindingHash.Compute(SigningAlgorithms.RS256, value));
+        Assert.Equal(expected, HashCalculator.Compute(SigningAlgorithms.RS256, value));
     }
 
     /// <summary>
@@ -134,6 +134,6 @@ public class BindingHashTests
     [InlineData("")]
     public void AlgorithmWithNoPairedDigest_YieldsNull(string algorithm)
     {
-        Assert.Null(BindingHash.Compute(algorithm, "any-value"));
+        Assert.Null(HashCalculator.Compute(algorithm, "any-value"));
     }
 }

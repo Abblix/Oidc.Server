@@ -177,7 +177,7 @@ internal class IdentityTokenService(
 		// A null hash means the signing algorithm has none defined - 'none', or one this library does
 		// not know. An issuer's answer to that is to omit the claim: a recipient is required to check
 		// the binding only when the claim is present, and inventing a value would be worse than absence.
-		var hash = BindingHash.Compute(identityToken.Header.Algorithm!, sourceValue);
+		var hash = HashCalculator.Compute(identityToken.Header.Algorithm!, sourceValue);
 		if (hash is not null)
 			identityToken.Payload[claimType] = hash;
 	}

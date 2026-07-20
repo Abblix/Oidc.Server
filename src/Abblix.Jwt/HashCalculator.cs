@@ -40,7 +40,7 @@ namespace Abblix.Jwt;
 /// hash of the original. Which is why the issuing and the verifying side must compute it identically -
 /// they live in different packages, and this is the single place both take it from.
 /// </remarks>
-public static class BindingHash
+public static class HashCalculator
 {
     /// <summary>
     /// Returns the base64url-encoded left-most half of <paramref name="value"/>'s digest, or
