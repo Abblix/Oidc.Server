@@ -1,11 +1,12 @@
 name: Lint workflows
 
 on:
+  # Both jobs below are required status checks on the protected branches, so they must run on every
+  # pull request targeting one. A path filter here made them required-but-absent for any PR outside
+  # .github/, and a missing check can never be satisfied - the only way to merge was an admin bypass,
+  # on every such PR. A required check has to be one CI can actually produce.
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/scripts/lint-no-inline-secrets.py'
-      - '.github/codeql/**'
+    branches: [master, develop]
   push:
     branches: [master, develop]
   workflow_dispatch:
