@@ -36,6 +36,12 @@ public sealed record AuthorizationState
     /// The opaque value sent as <c>state</c> and echoed by the provider. It identifies which request the
     /// response belongs to, and a response carrying a value that was never issued is a forged callback.
     /// </summary>
+    /// <remarks>
+    /// Note the limit of what it establishes, because the converse does not follow: a value that WAS
+    /// issued tells the client which login the response belongs to, not whose browser it arrived in.
+    /// Binding it to a browser is a separate job and is the store's, not this value's - see the remarks
+    /// on <see cref="InMemoryAuthorizationStateStore"/> for what the default one does and does not do.
+    /// </remarks>
     public required string State { get; init; }
 
     /// <summary>

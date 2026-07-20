@@ -25,6 +25,18 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 /// <summary>
 /// Holds the state of an authorization request between sending the user to the provider and their return.
 /// </summary>
+/// <remarks>
+/// An implementation carries a security obligation the contract cannot express in its signatures: the
+/// entry it hands back must be reachable only by the user agent the login was started in. RFC 9700
+/// section 2.1.1 states it without an exit - "In any case, the PKCE challenge or OpenID Connect nonce
+/// MUST be transaction-specific and securely bound to the client and the user agent in which the
+/// transaction was started" - and section 2.1 asks the same of a state-based CSRF token. A store that
+/// finds an entry by the state value alone satisfies neither, and lets a login started in one browser be
+/// completed in another, which is login CSRF.
+/// <see cref="InMemoryAuthorizationStateStore"/> is such a store, deliberately and with its limits
+/// written down; a host that needs the binding supplies one keyed on something only the right browser
+/// can present, which is what the ASP.NET adapter's cookie-backed store does.
+/// </remarks>
 public interface IAuthorizationStateStore
 {
     /// <summary>

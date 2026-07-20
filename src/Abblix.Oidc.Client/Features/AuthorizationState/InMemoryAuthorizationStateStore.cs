@@ -33,6 +33,23 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 /// replica, so an application running several will see sign-ins fail whenever the callback reaches a replica
 /// other than the one that started the request. The ASP.NET adapter's cookie-backed store is the answer
 /// there, because it travels with the user rather than living on one node.
+///
+/// It is also worth being plain about what this store does NOT establish, because the same cookie-backed
+/// store is what closes it. Entries live in a dictionary keyed by the state value alone, so a login is
+/// bound to this PROCESS and not to the browser that started it. Anyone holding a genuine, unconsumed
+/// state can therefore have any browser present it: the entry is found, the nonce matches, the code
+/// verifier is the right one, and the client signs that browser into the account the login was started
+/// for. That is login CSRF, and RFC 9700 section 2.1 states the duty it breaches - "Clients MUST prevent
+/// Cross-Site Request Forgery (CSRF)".
+///
+/// Neither of the two ways that section offers is available here. Its fallback wants "one-time use CSRF
+/// tokens carried in the state parameter that are securely bound to the user agent", and section 2.1.1
+/// closes the other route just as firmly: "In any case, the PKCE challenge or OpenID Connect nonce MUST
+/// be transaction-specific and securely bound to the client and the user agent in which the transaction
+/// was started." PKCE does not exempt a client from the binding - the binding is what PKCE's CSRF
+/// property rests on. This package cannot supply it, having no notion of a user agent at all; a store
+/// that keys on something only the right browser can present is what does, which is why the adapter's is
+/// not merely the multi-replica answer but the one that makes the flow correct.
 /// </remarks>
 public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
 {
