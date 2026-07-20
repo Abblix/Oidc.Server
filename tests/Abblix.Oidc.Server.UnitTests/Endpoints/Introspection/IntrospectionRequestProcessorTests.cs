@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -54,8 +54,8 @@ public class IntrospectionRequestProcessorTests
     {
         var token = new JsonWebToken();
         token.Payload.Json["sub"] = "user_123";
-        token.Payload.Json["client_id"] = "client_456";
-        token.Payload.Json["scope"] = "openid profile";
+        token.Payload.Json[IanaClaimTypes.ClientId] = "client_456";
+        token.Payload.Json[IanaClaimTypes.Scope] = "openid profile";
         return token;
     }
 
@@ -105,7 +105,7 @@ public class IntrospectionRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var success));
         Assert.NotNull(success.Claims);
         Assert.Equal("user_123", success.Claims["sub"]?.GetValue<string>());
-        Assert.Equal("client_456", success.Claims["client_id"]?.GetValue<string>());
+        Assert.Equal("client_456", success.Claims[IanaClaimTypes.ClientId]?.GetValue<string>());
     }
 
     /// <summary>
@@ -197,8 +197,8 @@ public class IntrospectionRequestProcessorTests
         var request = CreateIntrospectionRequest();
         var token = new JsonWebToken();
         token.Payload.Json["sub"] = "user_123";
-        token.Payload.Json["client_id"] = "client_456";
-        token.Payload.Json["scope"] = "openid profile email";
+        token.Payload.Json[IanaClaimTypes.ClientId] = "client_456";
+        token.Payload.Json[IanaClaimTypes.Scope] = "openid profile email";
         token.Payload.Json["custom_claim"] = "custom_value";
         token.Payload.Json["aud"] = new JsonArray { "audience1", "audience2" };
         var validRequest = CreateValidIntrospectionRequest(request, token);
@@ -211,8 +211,8 @@ public class IntrospectionRequestProcessorTests
         Assert.NotNull(success.Claims);
         Assert.Equal(5, success.Claims.Count);
         Assert.Equal("user_123", success.Claims["sub"]?.GetValue<string>());
-        Assert.Equal("client_456", success.Claims["client_id"]?.GetValue<string>());
-        Assert.Equal("openid profile email", success.Claims["scope"]?.GetValue<string>());
+        Assert.Equal("client_456", success.Claims[IanaClaimTypes.ClientId]?.GetValue<string>());
+        Assert.Equal("openid profile email", success.Claims[IanaClaimTypes.Scope]?.GetValue<string>());
         Assert.Equal("custom_value", success.Claims["custom_claim"]?.GetValue<string>());
         Assert.Equal(2, success.Claims["aud"]?.AsArray().Count);
     }

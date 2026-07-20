@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Text.Json.Nodes;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using RequestParameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Implementation;
 
@@ -70,8 +71,8 @@ public class JsonSerializationBinderRarTests
         var baseRequest = new AuthorizationRequest { ClientId = "client-123" };
         var jwtPayload = new JsonObject
         {
-            ["client_id"] = "client-123",
-            ["state"] = "abc",
+            [RequestParameters.ClientId] = "client-123",
+            [RequestParameters.State] = "abc",
         };
 
         var merged = await binder.BindModelAsync(jwtPayload, baseRequest);
