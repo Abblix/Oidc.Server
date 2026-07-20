@@ -196,15 +196,7 @@ public class LicenseCheckerTests
 
     #endregion
 
-    #region CheckIssuer Tests
-
-    // NOTE: Most CheckIssuer tests have been moved to LicenseEnforcementTests
-    // because static state pollution from licenses added in other tests makes
-    // them unreliable. See LicenseEnforcementTests for isolated versions:
-    // - ValidIssuersEnforcement_NullOrEmptyWhitelist_AllowsAllIssuers
-    // - ValidIssuersEnforcement_IssuerNotInWhitelist_ShouldBlock
-    // - IssuerLimitEnforcement_UnlimitedLicense_AllowsAllIssuers
-    // - IssuerLimitEnforcement_ExceedingLimit_ShouldThrow
-
-    #endregion
+    // CheckIssuer is exercised in LicenseEnforcementTests, which runs alone and starts from a known point -
+    // the only way to reach an issuer limit deliberately, since the checker keeps what it has seen in
+    // process-wide statics that every other test in the assembly also writes to.
 }
