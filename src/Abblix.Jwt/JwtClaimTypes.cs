@@ -56,6 +56,13 @@ public static class JwtClaimTypes
     public const string EncryptionAlgorithm = "enc";
 
     /// <summary>
+    /// "zip" header parameter (RFC 7516 Section 4.1.3): the compression algorithm applied to the
+    /// plaintext before encryption. Registered as a JWE header parameter, so a producer must not
+    /// list it in "crit" - it is not an extension.
+    /// </summary>
+    public const string CompressionAlgorithm = "zip";
+
+    /// <summary>
     /// "crit" header parameter (RFC 7515 Section 4.1.11): a JSON array of JOSE header parameter
     /// names that the recipient MUST understand and process. The parameter itself MUST be
     /// understood by JWS implementations, even when no extensions are in use.

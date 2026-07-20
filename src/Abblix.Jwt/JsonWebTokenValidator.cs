@@ -55,27 +55,6 @@ internal class JsonWebTokenValidator(
     IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
     /// <summary>
-    /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
-    /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
-    /// strict input parsing for security-critical formats is the right default.
-    /// </summary>
-    private static readonly IReadOnlySet<string> ReservedCriticalHeaderNames = new HashSet<string>(StringComparer.Ordinal)
-    {
-        JwtClaimTypes.Algorithm,
-        JwtClaimTypes.KeyId,
-        JwtClaimTypes.Type,
-        JwtClaimTypes.ContentType,
-        JwtClaimTypes.EncryptionAlgorithm,
-        JwtClaimTypes.Critical,
-        JwtClaimTypes.JwkSetUrl,
-        JwtClaimTypes.JsonWebKeyHeader,
-        JwtClaimTypes.X509Url,
-        JwtClaimTypes.X509CertificateChain,
-        JwtClaimTypes.X509Sha1Thumbprint,
-        JwtClaimTypes.X509Sha256Thumbprint,
-    };
-
-    /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
     /// Dynamically determined from registered signers in the dependency injection container.
     /// </summary>
@@ -356,68 +335,17 @@ internal class JsonWebTokenValidator(
         JsonWebToken token,
         ValidationParameters parameters)
     {
-        var header = token.Header;
+        var structuralError = CriticalHeaderValidation.ValidateStructure(
+            token.Header, CriticalHeaderValidation.JwsReservedNames, out var crit);
 
-        IReadOnlyList<string>? crit;
-        try
-        {
-            crit = header.Critical;
-        }
-        catch (JsonException)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidToken,
-                "Invalid 'crit' header: must be a JSON array of strings");
-        }
+        if (structuralError is not null)
+            return structuralError;
 
+        // No 'crit' at all is the ordinary case and needs no handler pass.
         if (crit is null)
             return token;
 
-        if (ValidateCritStructure(crit, header) is { } structuralError)
-            return structuralError;
-
         return await DispatchCritHandlersAsync(token, parameters, crit);
-    }
-
-    /// <summary>
-    /// Runs the structural guards from RFC 7515 §4.1.11 (empty array, duplicates, reserved
-    /// standard names, dangling references), all independent of the handler registry. Returns
-    /// <see langword="null"/> when every name in <paramref name="crit"/> is well-formed;
-    /// otherwise the first rejection in declaration order so the diagnostic pinpoints the
-    /// specific violating name. Routability (whether a handler is registered for a surviving
-    /// name) is decided in <see cref="DispatchCritHandlersAsync"/>.
-    /// </summary>
-    private static JwtValidationError? ValidateCritStructure(IReadOnlyList<string> crit, JsonWebTokenHeader header)
-    {
-        if (crit.Count == 0)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidToken,
-                "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
-        }
-
-        var distinctNames = new HashSet<string>(crit, StringComparer.Ordinal);
-        if (distinctNames.Count != crit.Count)
-            return new JwtValidationError(JwtError.InvalidToken, "'crit' header contains duplicate names");
-
-        foreach (var name in crit)
-        {
-            if (ReservedCriticalHeaderNames.Contains(name))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"'crit' header must not list standard JOSE header name: {name}");
-            }
-
-            if (!header.Json.ContainsKey(name))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"'crit' lists header name '{name}' that is not present in the JOSE header");
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
