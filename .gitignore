@@ -48,6 +48,11 @@ Generated\ Files/
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# Where this repository actually writes them: beside the projects that produced them, rather than in a
+# directory of its own at the root. The pattern above comes from the Visual Studio template and matches
+# TestResults/ but not this, since the name does not start with "TestResult".
+tests/results/
+
 # NUnit
 *.VisualState.xml
 TestResult.xml
