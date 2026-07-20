@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -33,6 +33,12 @@ public class RefreshingCacheTests
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
+    // Every Fetch below names its cancellation token '_', because the cache deliberately never passes a
+    // caller's token into the fetch: the attempt is shared, so honouring one caller's cancellation would
+    // abort the read the other nineteen are waiting on. That is the property
+    // OneCallerCancellingDoesNotCancelTheOthers exists to pin, and the discard says the parameter is
+    // ignored on purpose rather than by oversight.
+
     /// <summary>
     /// Callers that arrive while a read is in flight share it rather than each starting their own. This is
     /// the property the whole class exists for: without it, a burst of requests on a cold instance becomes a
@@ -46,7 +52,7 @@ public class RefreshingCacheTests
 
         var cache = new RefreshingCache<string>(new FakeTimeProvider());
 
-        async Task<string> Fetch(CancellationToken cancellationToken)
+        async Task<string> Fetch(CancellationToken _)
         {
             Interlocked.Increment(ref fetchCount);
             await release.Task;
@@ -78,7 +84,7 @@ public class RefreshingCacheTests
 
         var cache = new RefreshingCache<string>(new FakeTimeProvider());
 
-        async Task<string> Fetch(CancellationToken cancellationToken)
+        async Task<string> Fetch(CancellationToken _)
         {
             Interlocked.Increment(ref fetchCount);
             await release.Task;
@@ -108,7 +114,7 @@ public class RefreshingCacheTests
         var attempt = 0;
         var cache = new RefreshingCache<string>(new FakeTimeProvider());
 
-        Task<string> Fetch(CancellationToken cancellationToken) => ++attempt == 1
+        Task<string> Fetch(CancellationToken _) => ++attempt == 1
             ? Task.FromException<string>(new InvalidOperationException("transient"))
             : Task.FromResult("value");
 
@@ -128,7 +134,7 @@ public class RefreshingCacheTests
         var release = new TaskCompletionSource();
         var cache = new RefreshingCache<string>(new FakeTimeProvider());
 
-        async Task<string> Fetch(CancellationToken cancellationToken)
+        async Task<string> Fetch(CancellationToken _)
         {
             await release.Task;
             return "value";
@@ -155,7 +161,7 @@ public class RefreshingCacheTests
         var timeProvider = new FakeTimeProvider();
         var cache = new RefreshingCache<string>(timeProvider);
 
-        Task<string> Fetch(CancellationToken cancellationToken)
+        Task<string> Fetch(CancellationToken _)
         {
             Interlocked.Increment(ref fetchCount);
             return Task.FromResult("value");
