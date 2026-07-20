@@ -40,13 +40,8 @@ internal sealed class RefreshingCache<T>
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    /// Serializes fetches so concurrent callers share one round trip.
-    /// </summary>
-    private readonly SemaphoreSlim _fetchGate = new(1, 1);
-
-    /// <summary>
-    /// The value together with its expiry, held as a single reference so a reader outside the gate observes
-    /// both from the same fetch rather than a mix of two.
+    /// The in-flight or completed fetch together with its expiry, held as a single reference so a reader
+    /// observes both from the same attempt rather than a mix of two.
     /// </summary>
     private Entry? _entry;
 
@@ -91,33 +86,36 @@ internal sealed class RefreshingCache<T>
         bool forceRefresh,
         CancellationToken cancellationToken)
     {
-        T value;
-        if (!forceRefresh && TryReadValid(out value))
-            return value;
+        var observed = Volatile.Read(ref _entry);
+        if (!forceRefresh && IsValid(observed))
+            return await observed!.Fetch.WaitAsync(cancellationToken);
 
-        // Captured before waiting, so that after the gate this caller can tell whether the entry it found
-        // wanting is still the one held. A timestamp cannot answer that: a clock too coarse to separate two
-        // adjacent operations would make a forced refresh accept the very entry it was asked to replace.
-        var rejectedEntry = _entry;
+        // The observed entry is missing, aged out, or explicitly rejected, so a fetch is owed. Publishing the
+        // replacement before the fetch runs is what makes callers share it: a caller arriving mid-flight
+        // finds this entry and awaits the same attempt instead of starting its own.
+        //
+        // The fetch itself is started without any one caller's cancellation token. It is shared, so letting
+        // the first caller's cancellation abort it would cancel everyone else's read as a side effect. Each
+        // caller instead abandons its own wait below.
+        var replacement = new Entry(() => fetch(CancellationToken.None), _timeProvider.GetUtcNow() + Jitter(lifetime));
 
-        await _fetchGate.WaitAsync(cancellationToken);
+        // Whoever wins the exchange owns the fetch; whoever loses joins the winner's rather than duplicating
+        // it. Comparing against the entry this caller actually observed is what makes a forced refresh accept
+        // a replacement someone else has already published.
+        var current = Interlocked.CompareExchange(ref _entry, replacement, observed);
+        var winner = ReferenceEquals(current, observed) ? replacement : current!;
+
         try
         {
-            // Another caller may have fetched while this one waited on the gate, in which case its result
-            // stands and this caller does not repeat the round trip.
-            if (!ReferenceEquals(_entry, rejectedEntry) && TryReadValid(out value))
-                return value;
-
-            var fetched = await fetch(cancellationToken);
-
-            // Assigned only on success, so a transient failure does not silence the provider for the rest of
-            // the lifetime.
-            _entry = new Entry(fetched, _timeProvider.GetUtcNow() + Jitter(lifetime));
-            return fetched;
+            return await winner.Fetch.WaitAsync(cancellationToken);
         }
-        finally
+        catch when (!cancellationToken.IsCancellationRequested)
         {
-            _fetchGate.Release();
+            // A failed attempt must not be left in place, or one unlucky moment silences the provider for the
+            // rest of the lifetime. Removed only if it is still the entry held, so a retry that has already
+            // succeeded is not thrown away.
+            Interlocked.CompareExchange(ref _entry, null, winner);
+            throw;
         }
     }
 
@@ -127,18 +125,30 @@ internal sealed class RefreshingCache<T>
     private static TimeSpan Jitter(TimeSpan lifetime)
         => lifetime - lifetime * (Random.Shared.NextDouble() * MaximumJitterShare);
 
-    private bool TryReadValid(out T value)
+    private bool IsValid(Entry? entry) => entry is not null && _timeProvider.GetUtcNow() < entry.ExpiresAt;
+
+    /// <summary>
+    /// One attempt to read the value, shared by every caller that arrives while it is in flight.
+    /// </summary>
+    /// <remarks>
+    /// The fetch is started lazily and exactly once, so an entry that loses the exchange never runs the
+    /// request it was created for.
+    ///
+    /// The lifetime is measured from when the attempt started rather than from when it finished, which errs
+    /// towards reading again sooner.
+    /// </remarks>
+    private sealed class Entry
     {
-        var entry = _entry;
-        if (entry is not null && _timeProvider.GetUtcNow() < entry.ExpiresAt)
+        private readonly Lazy<Task<T>> _fetch;
+
+        public Entry(Func<Task<T>> fetch, DateTimeOffset expiresAt)
         {
-            value = entry.Value;
-            return true;
+            _fetch = new Lazy<Task<T>>(fetch, LazyThreadSafetyMode.ExecutionAndPublication);
+            ExpiresAt = expiresAt;
         }
 
-        value = null!;
-        return false;
-    }
+        public Task<T> Fetch => _fetch.Value;
 
-    private sealed record Entry(T Value, DateTimeOffset ExpiresAt);
+        public DateTimeOffset ExpiresAt { get; }
+    }
 }

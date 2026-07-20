@@ -50,6 +50,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
   </ItemGroup>
 
   <ItemGroup>

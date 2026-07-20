@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -46,6 +47,27 @@ public static class ServiceCollectionExtensions
         // so a host running many replicas can supply an implementation whose cache and refresh floor are
         // shared across them - see the remarks on SigningKeysOptions.MinimumRefreshInterval.
         services.TryAddSingleton<IIssuerSigningKeysProvider, IssuerSigningKeysProvider>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Uses a fixed set of verification keys held by the host, instead of reading the provider's key set.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="keys">The provider's verification keys, as published by that provider.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// For a provider that publishes no key set, a deployment that cannot reach the one it publishes, or an
+    /// operator who wants the keys pinned. The trade is that a rotation by the provider now needs a
+    /// reconfiguration here, so this is a choice rather than a default.
+    /// </remarks>
+    public static IServiceCollection AddConfiguredSigningKeys(
+        this IServiceCollection services, IReadOnlyCollection<JsonWebKey> keys)
+    {
+        // Replaces the reader registered by AddSigningKeys: this call IS the host making the choice.
+        services.Replace(ServiceDescriptor.Singleton<IIssuerSigningKeysProvider>(
+            _ => new ConfiguredSigningKeysProvider(keys)));
 
         return services;
     }
