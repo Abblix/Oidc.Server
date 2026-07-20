@@ -177,16 +177,54 @@ internal class JsonWebTokenValidator(
 
     private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
     {
-        var json = Encoding.UTF8.GetString(jwtPart);
         try
         {
-            jsonObject = JsonNode.Parse(json) as JsonObject;
+            jsonObject = HasRepeatedMemberName(jwtPart)
+                ? null
+                : JsonNode.Parse(Encoding.UTF8.GetString(jwtPart)) as JsonObject;
         }
         catch (JsonException)
         {
             jsonObject = null;
         }
         return jsonObject is not null;
+    }
+
+    /// <summary>
+    /// Reports whether any JSON object in <paramref name="json"/> names the same member twice, at any depth.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7519 Section 4 and RFC 7515 Section 4 give a recipient two options: reject a token with duplicate
+    /// names, or use a parser that keeps only the lexically last one. <see cref="JsonNode"/> does neither.
+    /// It builds its members lazily, so the repetition is not a parse error at all: the parse reports success
+    /// and the duplicate surfaces later as an <see cref="ArgumentException"/> from whichever property the
+    /// caller reads first, or, for a duplicate nested inside a structured claim that validation never reads,
+    /// not until the token has already been accepted and handed on. The input is attacker-supplied, so the
+    /// scan runs ahead of the parse and takes the first of the two options the specifications allow.
+    /// </remarks>
+    private static bool HasRepeatedMemberName(ReadOnlySpan<byte> json)
+    {
+        var reader = new Utf8JsonReader(json);
+        var namesByDepth = new Stack<HashSet<string>>();
+
+        while (reader.Read())
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.StartObject:
+                    namesByDepth.Push(new HashSet<string>(StringComparer.Ordinal));
+                    break;
+
+                case JsonTokenType.EndObject:
+                    namesByDepth.Pop();
+                    break;
+
+                case JsonTokenType.PropertyName when !namesByDepth.Peek().Add(reader.GetString()!):
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
