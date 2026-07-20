@@ -50,8 +50,19 @@ public class CheckSessionTests(TestFactory factory) : TestBase(factory)
     /// </summary>
     private const string FrameAncestorsDirective = "frame-ancestors";
 
-    private static readonly Regex CspNoncePattern = new("'nonce-(?<value>[^']+)'", RegexOptions.Compiled);
-    private static readonly Regex ScriptNoncePattern = new("<script nonce=\"(?<value>[^\"]+)\"", RegexOptions.Compiled);
+    /// <summary>
+    /// A ceiling on how long either pattern may run. Both are linear and match a header or a short document,
+    /// so a second is unreachable in practice; it is there because a pattern applied to input from outside the
+    /// test has no business running unbounded, and because the analyzer is right that this is where such a
+    /// habit starts.
+    /// </summary>
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(1);
+
+    private static readonly Regex CspNoncePattern =
+        new("'nonce-(?<value>[^']+)'", RegexOptions.Compiled, MatchTimeout);
+
+    private static readonly Regex ScriptNoncePattern =
+        new("<script nonce=\"(?<value>[^\"]+)\"", RegexOptions.Compiled, MatchTimeout);
 
     [Fact]
     public async Task The_check_session_iframe_is_published_in_discovery()
