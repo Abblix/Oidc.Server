@@ -38,7 +38,9 @@ public class AuthorizationRequestBuilderTests
     private const string Issuer = "https://provider.example.com";
     private const string RedirectUri = "https://client.example.com/signin-oidc";
 
-    private static readonly Uri ReturnUri = new("https://client.example.com/orders", UriKind.Absolute);
+    // Relative, because that is all the builder accepts: an absolute one would let a caller send the
+    // user anywhere once the login finishes, and this package has no origin to compare against.
+    private static readonly Uri ReturnUri = new("/orders", UriKind.Relative);
 
     private static ProviderMetadata Metadata(
         string? authorizationEndpoint = $"{Issuer}/authorize",
@@ -239,6 +241,71 @@ public class AuthorizationRequestBuilderTests
     public async Task FailsWhenTheProviderNamesNoAuthorizationEndpoint()
     {
         var builder = CreateBuilder(Metadata(authorizationEndpoint: null), CreateStateStore());
+
+        await Assert.ThrowsAsync<AuthorizationRequestException>(
+            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A return address that leaves this application is refused before it can be stored.
+    /// </summary>
+    /// <remarks>
+    /// The value typically arrives from the request that started the login, so it is user-agent-supplied.
+    /// Held unchecked, it turns the client into an open redirector: the user lands on somebody else's page
+    /// straight after a genuine interaction with their real provider, which is the most convincing moment
+    /// in the flow to be asked to sign in again (RFC 6749 section 10.15, RFC 9700 section 4.11).
+    /// The protocol-relative and backslash forms are here because they read as local paths and are not:
+    /// browsers resolve <c>//evil.example</c> against the current scheme, and normalise a backslash to a
+    /// slash before doing it.
+    /// </remarks>
+    [Theory]
+    [InlineData("https://evil.example/")]
+    [InlineData("//evil.example/")]
+    [InlineData("/\\evil.example/")]
+    [InlineData("\\\\evil.example/")]
+    [InlineData("\\/evil.example/")]
+    public async Task RefusesAReturnAddressThatLeavesTheApplication(string returnUri)
+    {
+        var store = CreateStateStore();
+        var builder = CreateBuilder(Metadata(), store);
+
+        await Assert.ThrowsAsync<AuthorizationRequestException>(
+            () => builder.CreateAsync(
+                new Uri(returnUri, UriKind.RelativeOrAbsolute), TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Ordinary relative addresses still work, so the guard rejects the shape rather than the feature.
+    /// </summary>
+    [Theory]
+    [InlineData("/orders")]
+    [InlineData("orders/42")]
+    [InlineData("/orders?page=2#top")]
+    public async Task AcceptsARelativeReturnAddress(string returnUri)
+    {
+        var builder = CreateBuilder(Metadata(), CreateStateStore());
+
+        var request = await builder.CreateAsync(
+            new Uri(returnUri, UriKind.Relative), TestContext.Current.CancellationToken);
+
+        Assert.Equal(returnUri, request.State.ReturnUri);
+    }
+
+    /// <summary>
+    /// The redirection endpoint runs the other way: the provider resolves it, so it must be absolute.
+    /// RFC 6749 section 3.1.2 - "The redirection endpoint URI MUST be an absolute URI".
+    /// </summary>
+    /// <remarks>
+    /// Paired with the tests above on purpose. The two addresses are easy to confuse, both being places a
+    /// login returns to, and the requirements point in opposite directions.
+    /// </remarks>
+    [Fact]
+    public async Task RefusesARelativeRedirectionEndpoint()
+    {
+        var builder = CreateBuilder(
+            Metadata(),
+            CreateStateStore(),
+            options => options.RedirectUri = new Uri("/signin-oidc", UriKind.Relative));
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
             () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));

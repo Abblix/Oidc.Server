@@ -30,8 +30,22 @@ public interface IAuthorizationRequestBuilder
     /// <summary>
     /// Builds the address to send the user to, and puts aside everything needed to judge their return.
     /// </summary>
-    /// <param name="returnUri">Where the user was heading before sign-in was required.</param>
+    /// <param name="returnUri">
+    /// Where the user was heading before sign-in was required, relative to this application.
+    /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <exception cref="AuthorizationRequestException">The provider offers nowhere to send the user.</exception>
+    /// <exception cref="AuthorizationRequestException">
+    /// The provider offers nowhere to send the user, or <paramref name="returnUri"/> is not relative.
+    /// </exception>
+    /// <remarks>
+    /// The return address must be relative, and an absolute one is refused rather than trusted. In
+    /// practice this value arrives from the request that triggered the login, which makes it
+    /// user-agent-supplied, and a client that redirects to whatever it is handed is an open redirector
+    /// (RFC 6749 section 10.15, RFC 9700 section 4.11). A same-origin absolute address would be
+    /// harmless, but nothing in this package knows the application's origin to compare against, so
+    /// "relative" is the strongest rule that can be enforced here rather than merely recommended.
+    /// Do not confuse it with <see cref="AuthorizationRequestOptions.RedirectUri"/>, which is resolved
+    /// by the provider rather than the application and must therefore be absolute.
+    /// </remarks>
     Task<AuthorizationRequest> CreateAsync(Uri returnUri, CancellationToken cancellationToken = default);
 }

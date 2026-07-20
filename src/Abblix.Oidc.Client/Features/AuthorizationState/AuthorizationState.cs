@@ -50,8 +50,17 @@ public sealed record AuthorizationState
     public required string CodeVerifier { get; init; }
 
     /// <summary>
-    /// The address the user was heading to before sign-in was required.
+    /// The address the user was heading to before sign-in was required, always relative to this
+    /// application.
     /// </summary>
+    /// <remarks>
+    /// This is the one member of this record meant to reach a redirect, and it is the one that came
+    /// from the user agent - typically a "?returnUrl=" on the request that triggered the login. It is
+    /// safe to redirect to only because it was refused unless relative when the state was built, which
+    /// is what keeps this client from working as an open redirector (RFC 6749 section 10.15, RFC 9700
+    /// section 4.11). Anything that populates this record from somewhere other than
+    /// <c>AuthorizationRequestBuilder</c> owes the same check.
+    /// </remarks>
     public required string ReturnUri { get; init; }
 
     /// <summary>
