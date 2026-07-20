@@ -49,6 +49,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Abblix.Oidc.Client.UnitTests" />
   </ItemGroup>
 

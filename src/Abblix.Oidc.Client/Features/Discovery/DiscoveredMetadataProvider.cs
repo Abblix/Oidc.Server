@@ -22,6 +22,7 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using Abblix.Oidc.Client.Internals;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Discovery;
@@ -50,19 +51,8 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
     private const char UriPathSeparator = '/';
 
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly TimeProvider _timeProvider;
     private readonly DiscoveryOptions _options;
-
-    /// <summary>
-    /// Serializes fetches so that concurrent first requests result in one round trip rather than a stampede.
-    /// </summary>
-    private readonly SemaphoreSlim _fetchGate = new(1, 1);
-
-    /// <summary>
-    /// The cached document together with its expiry, held as a single reference so that a reader outside the
-    /// gate observes both fields from the same fetch rather than a mix of two.
-    /// </summary>
-    private CachedMetadata? _cached;
+    private readonly RefreshingCache<ProviderMetadata> _cache;
 
     /// <summary>
     /// Creates the provider.
@@ -73,36 +63,13 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
         IOptions<DiscoveryOptions> options)
     {
         _httpClientFactory = httpClientFactory;
-        _timeProvider = timeProvider;
         _options = options.Value;
+        _cache = new RefreshingCache<ProviderMetadata>(timeProvider);
     }
 
     /// <inheritdoc />
-    public async Task<ProviderMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
-    {
-        var cached = _cached;
-        if (cached is not null && _timeProvider.GetUtcNow() < cached.ExpiresAt)
-            return cached.Metadata;
-
-        await _fetchGate.WaitAsync(cancellationToken);
-        try
-        {
-            // Another caller may have refreshed while this one waited on the gate.
-            cached = _cached;
-            if (cached is not null && _timeProvider.GetUtcNow() < cached.ExpiresAt)
-                return cached.Metadata;
-
-            var metadata = await FetchAsync(cancellationToken);
-
-            // Assigned only on success, so a transient failure does not poison the cache for the whole lifetime.
-            _cached = new CachedMetadata(metadata, _timeProvider.GetUtcNow() + _options.MetadataCacheLifetime);
-            return metadata;
-        }
-        finally
-        {
-            _fetchGate.Release();
-        }
-    }
+    public Task<ProviderMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
+        => _cache.GetAsync(FetchAsync, _options.MetadataCacheLifetime, cancellationToken);
 
     private async Task<ProviderMetadata> FetchAsync(CancellationToken cancellationToken)
     {
@@ -172,6 +139,4 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
                 + $"which does not match the configured authority '{authority}'.");
         }
     }
-
-    private sealed record CachedMetadata(ProviderMetadata Metadata, DateTimeOffset ExpiresAt);
 }

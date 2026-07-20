@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Client.Features.Discovery;
+using Abblix.Oidc.Client.Features.SigningKeys;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client;
@@ -47,6 +48,7 @@ public static class ServiceCollectionExtensions
         services.Configure(configureOptions);
 
         return services
-            .AddMetadataSourcePlaceholder();
+            .AddMetadataSourcePlaceholder()
+            .AddSigningKeys();
     }
 }
