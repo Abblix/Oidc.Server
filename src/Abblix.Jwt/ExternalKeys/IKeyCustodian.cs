@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Jwt;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// Host-implemented custodian for the external private keys the library never holds in process: they live in an

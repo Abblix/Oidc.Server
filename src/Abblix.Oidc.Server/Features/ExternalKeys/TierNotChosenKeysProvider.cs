@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;

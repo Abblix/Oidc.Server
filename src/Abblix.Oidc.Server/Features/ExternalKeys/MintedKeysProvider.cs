@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
@@ -33,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// nothing to the custodian at issue time. Publication is where that matters most, so the private half is stripped
 /// unless a caller explicitly asks for it, exactly as the static-configuration provider does.
 /// </remarks>
-internal sealed class MintedKeysProvider(KeyRing ring) : IAuthServiceKeysProvider
+internal sealed class MintedKeysProvider(IKeyRing ring) : IAuthServiceKeysProvider
 {
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)

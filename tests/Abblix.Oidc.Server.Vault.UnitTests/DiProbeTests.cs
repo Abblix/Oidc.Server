@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

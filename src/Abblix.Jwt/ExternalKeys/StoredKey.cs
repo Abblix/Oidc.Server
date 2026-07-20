@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// One entry of the key ring: a private key the server minted, encrypted to the custodian's key-encryption key,
@@ -50,7 +50,7 @@ public sealed record StoredKey
 
     /// <summary>
     /// When the key was minted, which decides when it starts signing: the active key is the newest one past
-    /// <c>OidcOptions.KeyRolloverPropagation</c>.
+    /// <c>KeyRingOptions.KeyRolloverPropagation</c>.
     /// </summary>
     /// <remarks>
     /// Stored rather than derived from <see cref="Id"/>, though the period in the id implies it. The id is a

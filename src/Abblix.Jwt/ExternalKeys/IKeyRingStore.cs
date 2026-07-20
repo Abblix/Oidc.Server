@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// The shared place the server's minted keys live, so every pod serves one key set rather than its own. Entries

@@ -20,12 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Orders a set of key versions so the one to produce with leads, which is the contract
-/// <see cref="Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider"/> states: the produce role takes the
-/// first key for an algorithm, while every version stays published for consumers.
+/// Orders a set of key versions so the one to produce with leads: whoever signs or encrypts takes the first key
+/// for an algorithm, while every version stays published so consumers can still verify or decrypt.
 /// </summary>
 /// <remarks>
 /// This is the whole of what makes a rollover cause no verification failure, and it is the same arithmetic
@@ -33,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// function of the creation times and the propagation window, so every pod derives the identical answer with no
 /// coordination.
 /// </remarks>
-internal static class ProduceFirstOrdering
+public static class ProduceFirstOrdering
 {
     /// <summary>
     /// Returns the versions with the active one first and the rest trailing newest-first.

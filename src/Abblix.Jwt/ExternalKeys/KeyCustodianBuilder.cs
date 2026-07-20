@@ -22,10 +22,10 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <inheritdoc />
-internal sealed class MintedKeysBuilder(IServiceCollection services) : IMintedKeysBuilder
+public sealed class KeyCustodianBuilder(IServiceCollection services) : IKeyCustodianBuilder
 {
     /// <inheritdoc />
     public IServiceCollection Services { get; } = services;

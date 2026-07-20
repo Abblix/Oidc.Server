@@ -21,10 +21,10 @@
 // info@abblix.com
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
+
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// The server's own key set: it mints keys on the rotation grid, seals them to the custodian's key-encryption
@@ -45,8 +45,9 @@ internal sealed class KeyRing(
     IKeyCustodian custodian,
     KeyEnvelope envelope,
     MintedKeys policy,
-    IOptions<OidcOptions> options,
+    IOptions<KeyRingOptions> options,
     TimeProvider timeProvider)
+    : IKeyRing
 {
     private volatile IReadOnlyList<OpenedKey> _keys = [];
 

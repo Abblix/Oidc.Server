@@ -22,7 +22,7 @@
 
 using Abblix.Jwt;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// Selects which of the custodian's keys the OIDC provider produces with, for a host that chose the tier where

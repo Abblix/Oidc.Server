@@ -24,7 +24,9 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Jwt.Encryption;
+using Abblix.Jwt.Encryption;
+
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// The external-custodian decryption backend (<see cref="IContentKeyDecryptor"/>): owns public-only keys and recovers

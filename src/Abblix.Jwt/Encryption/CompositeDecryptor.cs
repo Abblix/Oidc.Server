@@ -26,7 +26,7 @@ namespace Abblix.Jwt.Encryption;
 /// The key-recovery seam (<see cref="IContentKeyDecryptor"/>) as a composition of decryption backends: it holds every
 /// registered backend and, per call, routes to the first that owns the key. Ownership is decided by the key -
 /// <see cref="LocalKeyDecryptor"/> owns keys that carry their private/secret material, external custodian
-/// backends (<see cref="ExternalKeyDecryptor"/>) own their public-only keys - so in-process unwrap, one or more
+/// backends (<see cref="ExternalKeys.ExternalKeyDecryptor"/>) own their public-only keys - so in-process unwrap, one or more
 /// custodians, and any combination coexist as peers. When no backend owns the key it fails loud: a key with no
 /// decryption path is a misconfiguration, not a ciphertext-dependent decryption failure (which a backend returns
 /// as null per RFC 7516 §11.5). The backends are keyed by this composite's type so it enumerates them without

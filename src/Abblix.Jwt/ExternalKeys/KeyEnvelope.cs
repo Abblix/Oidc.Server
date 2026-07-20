@@ -24,7 +24,7 @@ using System.Text;
 using System.Text.Json;
 using Abblix.Jwt;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// Seals a private key to the custodian's key-encryption key, and opens it again. The envelope is a JWE, so this

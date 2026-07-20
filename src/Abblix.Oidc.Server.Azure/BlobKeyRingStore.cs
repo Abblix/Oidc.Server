@@ -22,7 +22,7 @@
 
 using System.Net;
 using System.Text.Json;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;

@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -194,15 +195,12 @@ public static class ServiceCollectionExtensions
         // matches a minted key, since that key carries its private half and the in-process signer owns it.
         services.ComposeExternalKeyBackends();
 
-        services.TryAddSingleton<KeyEnvelope>();
+        // The ring itself is registered by the JWT layer that owns it. What is left here is the only part that
+        // is about being an OpenID Provider: pointing this server's key provider at the ring.
+        var mintedKeysBuilder = services.AddKeyRing(policy);
 
-        // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
-        // container knows nothing about: everything else the ring needs is resolved normally.
-        services.TryAddSingleton(serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(policy)));
-
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
         services.Replace(ServiceDescriptor.Singleton<IAuthServiceKeysProvider, MintedKeysProvider>());
 
-        return new MintedKeysBuilder(services);
+        return mintedKeysBuilder;
     }
 }

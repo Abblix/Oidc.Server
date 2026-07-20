@@ -22,11 +22,19 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
-/// <inheritdoc />
-internal sealed class KeyCustodianBuilder(IServiceCollection services) : IKeyCustodianBuilder
+/// <summary>
+/// The continuation of <c>UseKeysInProcess</c>: the tier that mints its own keys must say where the ring lives,
+/// and the packages hang their <c>PersistRingTo...</c> calls off this.
+/// </summary>
+/// <remarks>
+/// A ring store belongs to this tier and to no other, so it attaches here rather than to the service collection:
+/// there is nothing to register a store onto unless the tier that needs one was chosen. The tier where the
+/// custodian holds every key has no ring at all.
+/// </remarks>
+public interface IMintedKeysBuilder
 {
-    /// <inheritdoc />
-    public IServiceCollection Services { get; } = services;
+    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
+    IServiceCollection Services { get; }
 }

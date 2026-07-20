@@ -23,7 +23,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Azure;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;

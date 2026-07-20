@@ -20,21 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the tier that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
+/// Configuration of the key ring.
 /// </summary>
-/// <remarks>
-/// A ring store belongs to this tier and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the tier that needs one was chosen. The tier where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+public sealed class KeyRingOptions
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    /// <summary>
+    /// How long a newly minted key is published before the ring starts producing with it.
+    /// </summary>
+    /// <remarks>
+    /// A consumer caches the published key set, so a key that starts signing the moment it appears will sign
+    /// tokens that consumers with a warm cache cannot yet verify. Publishing first and producing later closes
+    /// that window: by the time a key leads its algorithm, every consumer refreshing on the usual schedule has
+    /// already seen it.
+    ///
+    /// The value is therefore a property of how long consumers cache, not of how often keys rotate. An hour
+    /// covers the caching most providers and clients default to.
+    /// </remarks>
+    public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 }

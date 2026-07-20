@@ -26,14 +26,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
+namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Covers the tier where the server mints its own keys and the custodian only protects them: a key is sealed to
@@ -125,7 +124,7 @@ public sealed class KeyRingTests : IDisposable
                 EncryptionAlgorithm = encryptionAlgorithm,
                 KeepRetiredFor = keepRetiredFor,
             },
-            Options.Create(new OidcOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
             time.Object);
 
         return (ring, store);

@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

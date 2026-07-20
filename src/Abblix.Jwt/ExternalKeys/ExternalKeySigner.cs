@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Jwt.Signing;
+using Abblix.Jwt.Signing;
+
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// An external-custodian signing backend (<see cref="IDataSigner"/>) that owns public-only signing keys and

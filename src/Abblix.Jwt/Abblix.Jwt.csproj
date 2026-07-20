@@ -34,7 +34,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Hosting.Abstractions carries only IHostedService and BackgroundService, which the key ring's refresh
+         service needs. Options carries IOptions<>, which the ring reads its rollover window from. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     <PackageReference Update="SonarAnalyzer.CSharp">
       <PrivateAssets>all</PrivateAssets>

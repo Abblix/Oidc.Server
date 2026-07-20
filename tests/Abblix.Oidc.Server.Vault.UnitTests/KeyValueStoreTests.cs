@@ -22,7 +22,7 @@
 
 using System.Net;
 using System.Text.Json;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;

@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;

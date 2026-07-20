@@ -22,7 +22,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// The continuation of a custodian registration: the host has said WHICH custodian holds its keys and must now say

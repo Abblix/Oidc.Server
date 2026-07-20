@@ -20,11 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Configuration;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// Brings the key ring up before the server serves anything, and keeps it current afterwards: it mints the key a
@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// </remarks>
 internal sealed class KeyRingRefreshService(
     KeyRing ring,
-    IOptions<OidcOptions> options,
+    IOptions<KeyRingOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />

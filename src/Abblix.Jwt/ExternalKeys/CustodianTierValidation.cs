@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// Records which tier the host chose for its registered custodian, so the choice can be checked at startup rather
@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// lives here rather than on <c>OidcOptions</c> because validating those would resolve the key provider, which
 /// itself depends on those same options.
 /// </remarks>
-internal sealed class CustodianTierValidation
+public sealed class CustodianTierValidation
 {
     /// <summary>
     /// The tier call that completed the custodian wiring, or null when none did. Recording the name rather than

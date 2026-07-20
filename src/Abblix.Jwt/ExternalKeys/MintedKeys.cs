@@ -22,7 +22,7 @@
 
 using Abblix.Jwt;
 
-namespace Abblix.Oidc.Server.Features.ExternalKeys;
+namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
 /// The policy for the tier where the server mints its own keys and the custodian only protects them
@@ -70,7 +70,7 @@ public sealed record MintedKeys
     /// </summary>
     /// <remarks>
     /// A new key does not sign the moment it appears. It is published and verifiable for
-    /// <c>OidcOptions.KeyRolloverPropagation</c> first, so a client whose JWKS cache is stale never meets a token
+    /// <c>KeyRingOptions.KeyRolloverPropagation</c> first, so a client whose JWKS cache is stale never meets a token
     /// signed by a key it lacks. Keep this comfortably larger than that window.
     /// </remarks>
     public TimeSpan RotateEvery { get; init; } = TimeSpan.FromDays(30);
