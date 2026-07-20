@@ -1,0 +1,60 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+namespace Abblix.Oidc.Client.Features.AuthorizationRequests;
+
+/// <summary>
+/// The names of the authorization request parameters, as they appear on the wire.
+/// </summary>
+/// <remarks>
+/// Named constants rather than literals for the same reason claim names are: a typo in a literal produces a
+/// request the provider rejects for a reason that reads like anything but a typo.
+/// </remarks>
+public static class Parameters
+{
+    /// <summary>What kind of response the client is asking for.</summary>
+    public const string ResponseType = "response_type";
+
+    /// <summary>Identifies the client to the provider.</summary>
+    public const string ClientId = "client_id";
+
+    /// <summary>Where the provider returns the user.</summary>
+    public const string RedirectUri = "redirect_uri";
+
+    /// <summary>What the client is asking to be allowed to do.</summary>
+    public const string Scope = "scope";
+
+    /// <summary>Ties the response back to the request that caused it.</summary>
+    public const string State = "state";
+
+    /// <summary>Ties the issued token back to the request that caused it.</summary>
+    public const string Nonce = "nonce";
+
+    /// <summary>The public half of the PKCE pair.</summary>
+    public const string CodeChallenge = "code_challenge";
+
+    /// <summary>How the challenge was derived from the verifier.</summary>
+    public const string CodeChallengeMethod = "code_challenge_method";
+
+    /// <summary>Which resource the issued access token is meant for (RFC 8707). May repeat.</summary>
+    public const string Resource = "resource";
+}
