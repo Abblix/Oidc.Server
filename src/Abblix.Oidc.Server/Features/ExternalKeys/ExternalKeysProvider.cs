@@ -22,6 +22,7 @@
 
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.Options;

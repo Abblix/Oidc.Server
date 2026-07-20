@@ -32,10 +32,10 @@ jobs:
           - Abblix.Oidc.Server.AspNetCore.UnitTests
           - Abblix.Oidc.Server.E2E.Tests
           - Abblix.Oidc.Server.MinimalApi.E2E.Tests
-          - Abblix.Oidc.Server.Azure.UnitTests
+          - Abblix.Jwt.Azure.UnitTests
           - Abblix.Oidc.Server.Mvc.UnitTests
           - Abblix.Oidc.Server.UnitTests
-          - Abblix.Oidc.Server.Vault.UnitTests
+          - Abblix.Jwt.Vault.UnitTests
           - Abblix.Utils.UnitTests
     env:
       PROJECT: ${{ matrix.project }}
@@ -83,11 +83,12 @@ jobs:
           dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore \
             --report-trx --report-trx-filename test-results.trx \
             --coverage --coverage-output-format cobertura \
-            --results-directory ./TestResults
+            --results-directory ./tests/results
 
       # The new dotnet test experience (Microsoft.Testing.Platform runner, opted in via global.json)
-      # takes MTP options directly, without the VSTest separator. --results-directory ./TestResults
-      # resolves from the working directory (repo root), so files land at ./TestResults/.
+      # takes MTP options directly, without the VSTest separator. --results-directory resolves from the
+      # working directory (repo root), so files land at ./tests/results/ - beside the projects that
+      # produced them rather than in a directory of their own at the root.
         timeout-minutes: 5
       - name: Upload test results
         if: always()
@@ -95,8 +96,8 @@ jobs:
         with:
           name: test-results-${{ matrix.project }}
           path: |
-            **/TestResults/*.trx
-            **/TestResults/**/*.cobertura.xml
+            tests/results/*.trx
+            tests/results/**/*.cobertura.xml
           retention-days: 7
         timeout-minutes: 3
 

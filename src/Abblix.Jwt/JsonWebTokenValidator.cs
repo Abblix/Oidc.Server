@@ -177,10 +177,14 @@ internal class JsonWebTokenValidator(
 
     private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
     {
-        var json = Encoding.UTF8.GetString(jwtPart);
         try
         {
-            jsonObject = JsonNode.Parse(json) as JsonObject;
+            var json = Encoding.UTF8.GetString(jwtPart);
+#if NET10_0_OR_GREATER
+            jsonObject = JsonNode.Parse(json, documentOptions: RejectRepeatedMemberNames) as JsonObject;
+#else
+            jsonObject = HasRepeatedMemberName(jwtPart) ? null : JsonNode.Parse(json) as JsonObject;
+#endif
         }
         catch (JsonException)
         {
@@ -188,6 +192,55 @@ internal class JsonWebTokenValidator(
         }
         return jsonObject is not null;
     }
+
+#if NET10_0_OR_GREATER
+    /// <summary>
+    /// Makes the parser itself reject a repeated member name, which is the first of the two options
+    /// RFC 7519 Section 4 and RFC 7515 Section 4 allow a recipient. It reports the repetition as a
+    /// <see cref="JsonException"/> at parse time, alongside every other malformed-JSON verdict.
+    /// </summary>
+    private static readonly JsonDocumentOptions RejectRepeatedMemberNames = new()
+    {
+        AllowDuplicateProperties = false,
+    };
+#else
+    /// <summary>
+    /// Reports whether any JSON object in <paramref name="json"/> names the same member twice, at any depth.
+    /// </summary>
+    /// <remarks>
+    /// This is the pre-net10 stand-in for <c>JsonDocumentOptions.AllowDuplicateProperties</c>. Left to itself,
+    /// <see cref="JsonNode"/> neither rejects a repeated name nor keeps only the lexically last one, which are
+    /// the two outcomes the specifications allow. It builds its members lazily, so the repetition is not a parse
+    /// error at all: the parse reports success and the duplicate surfaces later as an
+    /// <see cref="ArgumentException"/> from whichever property the caller reads first, or, for a duplicate nested
+    /// inside a structured claim that validation never reads, not until the token has already been accepted and
+    /// handed on. The input is attacker-supplied, so the scan runs ahead of the parse.
+    /// </remarks>
+    private static bool HasRepeatedMemberName(ReadOnlySpan<byte> json)
+    {
+        var reader = new Utf8JsonReader(json);
+        var namesByDepth = new Stack<HashSet<string>>();
+
+        while (reader.Read())
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.StartObject:
+                    namesByDepth.Push(new HashSet<string>(StringComparer.Ordinal));
+                    break;
+
+                case JsonTokenType.EndObject:
+                    namesByDepth.Pop();
+                    break;
+
+                case JsonTokenType.PropertyName when !namesByDepth.Peek().Add(reader.GetString()!):
+                    return true;
+            }
+        }
+
+        return false;
+    }
+#endif
 
     /// <summary>
     /// Validates the JWS signature according to validation parameters. Returns the token

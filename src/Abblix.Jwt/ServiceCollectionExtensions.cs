@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt.Encryption;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
