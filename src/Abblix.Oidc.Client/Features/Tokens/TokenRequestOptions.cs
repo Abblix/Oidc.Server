@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -32,11 +32,12 @@ public sealed class TokenRequestOptions
     /// How the client authenticates itself.
     /// </summary>
     /// <remarks>
-    /// Defaults to <see cref="ClientAuthenticationMethods.None"/>, the public-client case, because that is
-    /// the one where getting it wrong is harmless: a client with no secret cannot leak one. A confidential
-    /// client says so, and supplies <see cref="ClientSecret"/>.
+    /// Required rather than defaulted. OAuth 2.0 for Browser-Based Applications puts a server-side client
+    /// like this one in the Backend-For-Frontend role, where it is a confidential client - so quietly
+    /// defaulting to <see cref="ClientAuthenticationMethods.None"/> would let a deployment end up public by
+    /// omission, which is the one thing a default must never decide. Say which it is.
     /// </remarks>
-    public string ClientAuthenticationMethod { get; set; } = ClientAuthenticationMethods.None;
+    public required string ClientAuthenticationMethod { get; set; }
 
     /// <summary>
     /// The secret shared with the provider. Required by every method other than
