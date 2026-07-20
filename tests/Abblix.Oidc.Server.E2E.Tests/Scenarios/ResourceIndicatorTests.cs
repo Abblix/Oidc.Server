@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Text.Json.Nodes;
@@ -7,6 +7,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -78,7 +79,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected invalid_target rejection, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();
-        Assert.Equal(ErrorCodes.InvalidTarget, error?["error"]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, error?[ResponseParameters.Error]?.GetValue<string>());
     }
 
     // RFC 7519 §4.1.3: aud is serialized as a single string when there is one value, or an array

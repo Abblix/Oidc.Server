@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -180,7 +181,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
         var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidDPoPProof, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -210,7 +211,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
         var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidDPoPProof, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
     /// <summary>

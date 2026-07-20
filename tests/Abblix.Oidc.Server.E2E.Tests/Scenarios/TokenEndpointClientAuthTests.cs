@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Net;
@@ -9,6 +9,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -46,6 +47,6 @@ public class TokenEndpointClientAuthTests(TestFactory factory) : TestBase(factor
 
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidClient, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClient, body[ResponseParameters.Error]!.GetValue<string>());
     }
 }

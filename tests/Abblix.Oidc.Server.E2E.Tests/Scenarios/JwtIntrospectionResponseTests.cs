@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Net.Http.Headers;
@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -90,7 +91,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
 
         var dcrBody = new JsonObject
         {
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { ResponseTypes.Code },
             ["token_endpoint_auth_method"] = "client_secret_post",
