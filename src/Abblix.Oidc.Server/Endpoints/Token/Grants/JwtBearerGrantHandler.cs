@@ -164,7 +164,11 @@ public partial class JwtBearerGrantHandler(
 			assertion,
 			new()
 			{
-				Options = ValidationOptions.Default,
+				// RFC 7523 Section 3 item 4 is explicit that the assertion must bound its own
+				// window: "The JWT MUST contain an 'exp' (expiration time) claim that limits the
+				// time window during which the JWT can be used." Without the flag, an assertion
+				// omitting exp would be treated as having nothing to check rather than as invalid.
+				Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,

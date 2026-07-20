@@ -180,6 +180,32 @@ internal class JsonWebTokenEncryptor(
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidToken, "Missing 'alg' algorithm in JWE header");
 
+        // RFC 7516 Section 4.1.13 gives a JWE the same 'crit' parameter as a JWS, by reference:
+        // "This Header Parameter MUST be understood and processed as defined in Section 4.1.11 of
+        // [JWS]." That section is unambiguous about the consequence of not understanding a listed
+        // name: "If any of the listed extension Header Parameters are not understood and supported
+        // by the recipient, then the JWS is invalid." This library understands no JWE extensions,
+        // so any well-formed 'crit' here is a rejection.
+        // The check sits ahead of key selection deliberately, per the RFC 7516 Section 5.2 order:
+        // a critical extension may change what the following steps are supposed to mean, so nothing
+        // may touch key material while its meaning is still unknown.
+        if (CriticalHeaderValidation.ValidateStructure(
+                header, CriticalHeaderValidation.JweReservedNames, out var crit) is { } criticalError)
+        {
+            return criticalError;
+        }
+
+        if (crit is { Count: > 0 })
+        {
+            // Deliberately NOT routed to the keyed ICriticalHeaderHandler registry that serves JWS.
+            // That keyspace is keyed by bare parameter name, so a host registering a handler for a
+            // JWS extension would silently make the same name acceptable on a JWE envelope, where
+            // it means something else and where the handler was never written to run.
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"Unknown critical header parameter in JWE header: {crit[0]}");
+        }
+
         // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
         // Filter only by kid when present - algorithm compatibility is validated during decryption attempt
         if (header.KeyId.HasValue())

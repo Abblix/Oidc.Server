@@ -55,27 +55,6 @@ internal class JsonWebTokenValidator(
     IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
     /// <summary>
-    /// Header parameter names defined by RFC 7515 §4.1 (and 'crit' itself). Per RFC 7515 §4.1.11
-    /// a producer MUST NOT list any of these in 'crit'; we reject as recipient-MAY because
-    /// strict input parsing for security-critical formats is the right default.
-    /// </summary>
-    private static readonly IReadOnlySet<string> ReservedCriticalHeaderNames = new HashSet<string>(StringComparer.Ordinal)
-    {
-        JwtClaimTypes.Algorithm,
-        JwtClaimTypes.KeyId,
-        JwtClaimTypes.Type,
-        JwtClaimTypes.ContentType,
-        JwtClaimTypes.EncryptionAlgorithm,
-        JwtClaimTypes.Critical,
-        JwtClaimTypes.JwkSetUrl,
-        JwtClaimTypes.JsonWebKeyHeader,
-        JwtClaimTypes.X509Url,
-        JwtClaimTypes.X509CertificateChain,
-        JwtClaimTypes.X509Sha1Thumbprint,
-        JwtClaimTypes.X509Sha256Thumbprint,
-    };
-
-    /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
     /// Dynamically determined from registered signers in the dependency injection container.
     /// </summary>
@@ -409,68 +388,17 @@ internal class JsonWebTokenValidator(
         JsonWebToken token,
         ValidationParameters parameters)
     {
-        var header = token.Header;
+        var structuralError = CriticalHeaderValidation.ValidateStructure(
+            token.Header, CriticalHeaderValidation.JwsReservedNames, out var crit);
 
-        IReadOnlyList<string>? crit;
-        try
-        {
-            crit = header.Critical;
-        }
-        catch (JsonException)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidToken,
-                "Invalid 'crit' header: must be a JSON array of strings");
-        }
+        if (structuralError is not null)
+            return structuralError;
 
+        // No 'crit' at all is the ordinary case and needs no handler pass.
         if (crit is null)
             return token;
 
-        if (ValidateCritStructure(crit, header) is { } structuralError)
-            return structuralError;
-
         return await DispatchCritHandlersAsync(token, parameters, crit);
-    }
-
-    /// <summary>
-    /// Runs the structural guards from RFC 7515 §4.1.11 (empty array, duplicates, reserved
-    /// standard names, dangling references), all independent of the handler registry. Returns
-    /// <see langword="null"/> when every name in <paramref name="crit"/> is well-formed;
-    /// otherwise the first rejection in declaration order so the diagnostic pinpoints the
-    /// specific violating name. Routability (whether a handler is registered for a surviving
-    /// name) is decided in <see cref="DispatchCritHandlersAsync"/>.
-    /// </summary>
-    private static JwtValidationError? ValidateCritStructure(IReadOnlyList<string> crit, JsonWebTokenHeader header)
-    {
-        if (crit.Count == 0)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidToken,
-                "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
-        }
-
-        var distinctNames = new HashSet<string>(crit, StringComparer.Ordinal);
-        if (distinctNames.Count != crit.Count)
-            return new JwtValidationError(JwtError.InvalidToken, "'crit' header contains duplicate names");
-
-        foreach (var name in crit)
-        {
-            if (ReservedCriticalHeaderNames.Contains(name))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"'crit' header must not list standard JOSE header name: {name}");
-            }
-
-            if (!header.Json.ContainsKey(name))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"'crit' lists header name '{name}' that is not present in the JOSE header");
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -544,11 +472,29 @@ internal class JsonWebTokenValidator(
     /// Pins the JWT's <c>typ</c> header (RFC 7515 §4.1.9) to the set the caller expects, per
     /// the RFC 8725 §3.11 token-class-confusion guidance. When
     /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
-    /// skipped (backward-compatible default for callers that have not opted in). Comparison
-    /// is case-sensitive per RFC 7515 §5.3, with the <c>application/</c> prefix stripped
-    /// before lookup per the §4.1.9 convention so <c>typ=at+jwt</c> and
-    /// <c>typ=application/at+jwt</c> both match a registered <c>at+jwt</c> expectation.
+    /// skipped (backward-compatible default for callers that have not opted in).
     /// </summary>
+    /// <remarks>
+    /// Matching is case-insensitive, and the <c>application/</c> prefix is stripped from the
+    /// expectation as well as from the token, so either form may be written on either side.
+    /// A <c>typ</c> is a media type: RFC 7515 §4.1.9 says "Per RFC 2045, all media type values,
+    /// subtype values, and parameter names are case insensitive", and RFC 2045 §5.1 puts it
+    /// flatly - "Matching of media type and subtype is ALWAYS case-insensitive". The same
+    /// §4.1.9 requires a recipient to treat a value without a '/' as if <c>application/</c>
+    /// were prepended, which makes the short and long forms one name rather than two.
+    /// Note that RFC 7515 §5.3 does NOT apply here despite defining the library's general
+    /// string-comparison rules: it ends by exempting exactly this parameter, "Only the 'typ'
+    /// and 'cty' member values defined in this specification do not use these comparison
+    /// rules". This code cited §5.3 for the opposite conclusion until 2026-07-20.
+    /// Folding costs no separation between the classes actually pinned here (<c>dpop+jwt</c>,
+    /// <c>at+jwt</c>, <c>logout+jwt</c>, <c>id_token</c>): they differ in their letters, not
+    /// their casing. The one place RFC 2045 keeps case significant is the value of a
+    /// <c>;parameter=</c> tail, which no <c>typ</c> in these specifications carries; should one
+    /// ever appear, this whole-string fold would be more permissive than the RFC on that tail.
+    /// The comparison deliberately does not use <see cref="IReadOnlySet{T}.Contains"/>: the set
+    /// arrives from the caller with a comparer of their choosing, which would quietly hand a
+    /// security decision to host configuration this validator can neither see nor vouch for.
+    /// </remarks>
     private static Result<JsonWebToken, JwtValidationError> ValidateTokenType(
         JsonWebToken token, ValidationParameters parameters)
     {
@@ -564,7 +510,10 @@ internal class JsonWebTokenValidator(
         }
 
         var normalized = StripApplicationPrefix(typ);
-        if (!expected.Contains(normalized))
+        var matched = expected.Any(expectedTyp => string.Equals(
+            StripApplicationPrefix(expectedTyp), normalized, StringComparison.OrdinalIgnoreCase));
+
+        if (!matched)
         {
             return new JwtValidationError(
                 JwtError.InvalidTokenType,
@@ -575,14 +524,21 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Implements RFC 7515 §4.1.9's prefix-stripping convention: when <c>typ</c> contains no
-    /// '/' the recipient SHOULD treat it as if <c>application/</c> were prepended; symmetric
-    /// stripping of the literal prefix lets either form match.
+    /// Implements RFC 7515 §4.1.9's prefix convention: "A recipient using the media type value
+    /// MUST treat it as if 'application/' were prepended to any 'typ' value not containing a
+    /// '/'." Stripping the literal prefix instead of prepending it reaches the same equivalence
+    /// from either form, and is applied to both sides of the comparison so a caller may write
+    /// whichever they prefer.
     /// </summary>
+    /// <remarks>
+    /// The prefix match ignores case because it is the media type portion, which RFC 2045 §5.1
+    /// declares case-insensitive; matching it ordinally would leave <c>Application/at+jwt</c>
+    /// unstripped and therefore unmatchable.
+    /// </remarks>
     private static string StripApplicationPrefix(string typ)
     {
         const string prefix = "application/";
-        return typ.StartsWith(prefix, StringComparison.Ordinal) ? typ[prefix.Length..] : typ;
+        return typ.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? typ[prefix.Length..] : typ;
     }
 
     /// <summary>
@@ -637,14 +593,36 @@ internal class JsonWebTokenValidator(
     /// <summary>
     /// Validates the lifetime claims (nbf and exp) according to validation parameters.
     /// </summary>
+    /// <remarks>
+    /// Presence and value are two separate questions here, gated by two separate flags, the same
+    /// way <see cref="ValidationOptions.RequireIssuer"/> and <see cref="ValidationOptions.ValidateIssuer"/>
+    /// split them. The distinction is not academic: a token carrying neither <c>nbf</c> nor
+    /// <c>exp</c> has no instant at which it is expired, so a pure lifetime comparison finds
+    /// nothing wrong with it and lets it through forever. Whether that is correct depends
+    /// entirely on the token class, which only the caller knows -
+    /// <see cref="ValidationOptions.RequireExpirationTime"/> is how it says so.
+    /// </remarks>
     private Result<JsonWebToken, JwtValidationError> ValidateLifetime(
         JsonWebToken token, ValidationParameters parameters)
     {
-        if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
+        var requireExpiration = parameters.Options.HasFlag(ValidationOptions.RequireExpirationTime);
+        var validateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime);
+
+        // Neither flag set means the claims are not this caller's business, and reading them is
+        // not free of consequence: the accessors throw on a timestamp outside DateTimeOffset's
+        // range, which a caller who opted out of time handling should never have to meet.
+        if (!requireExpiration && !validateLifetime)
             return token;
 
         var notBefore = token.Payload.NotBefore;
         var expiresAt = token.Payload.ExpiresAt;
+
+        if (requireExpiration && !expiresAt.HasValue)
+            return new JwtValidationError(JwtError.InvalidToken, "Missing expiration time in JWT payload");
+
+        if (!validateLifetime)
+            return token;
+
         if (!notBefore.HasValue && !expiresAt.HasValue)
             return token;
 

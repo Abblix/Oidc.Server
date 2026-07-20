@@ -75,7 +75,12 @@ public class UserInfoRequestValidator(
 
 		var jwtAccessToken = tokenResult.GetSuccess();
 
-		var result = await jwtValidator.ValidateAsync(jwtAccessToken, ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
+		// RFC 9068 Section 2.2 lists exp among the REQUIRED claims of a JWT access token, and
+		// Section 4 makes the consequence explicit: "The current time MUST be before the time
+		// represented by the exp claim." An access token without one would otherwise never expire.
+		var result = await jwtValidator.ValidateAsync(
+			jwtAccessToken,
+			(ValidationOptions.Default & ~ValidationOptions.RequireValidAudience) | ValidationOptions.RequireExpirationTime);
 
 		if (result.TryGetFailure(out var error))
 			return new OidcError(ErrorCodes.InvalidToken, error.ToString());

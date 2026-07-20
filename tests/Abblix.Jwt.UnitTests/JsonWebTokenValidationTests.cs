@@ -969,6 +969,97 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// The same token, with <see cref="ValidationOptions.RequireExpirationTime"/> set, is rejected.
+    /// That flag is the caller saying its token class makes <c>exp</c> REQUIRED - an ID Token
+    /// (OpenID Connect Core 1.0 section 2), a JWT access token (RFC 9068 section 2.2), a client
+    /// assertion (RFC 7523 section 3).
+    /// </summary>
+    [Fact]
+    public async Task TokenWithoutExp_WithRequireExpirationTime_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = null;
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// An <c>nbf</c> is not a substitute: it bounds when the token starts being usable, not when
+    /// it stops, so a token carrying only <c>nbf</c> still never expires.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithNbfOnly_WithRequireExpirationTime_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.ExpiresAt = null;
+        token.Payload.NotBefore = TimeProvider.System.GetUtcNow().AddMinutes(-5);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// With the flag set and an <c>exp</c> present, nothing changes.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithExp_WithRequireExpirationTime_Validates()
+    {
+        var token = CreateValidToken();
+        token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(
+            SigningKey, options: ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Presence is asked separately from validity, so the flag works on its own. This is the shape
+    /// <see cref="ValidationOptions.RequireIssuer"/> already has next to
+    /// <see cref="ValidationOptions.ValidateIssuer"/>.
+    /// </summary>
+    [Fact]
+    public async Task TokenWithoutExp_WithRequireExpirationTimeButNoLifetimeValidation_Rejected()
+    {
+        var token = CreateValidToken();
+        token.Payload.NotBefore = null;
+        token.Payload.ExpiresAt = null;
+
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var options = (ValidationOptions.Default & ~ValidationOptions.ValidateLifetime)
+                      | ValidationOptions.RequireExpirationTime;
+        var parameters = CreateValidationParameters(SigningKey, options: options);
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
     /// Verifies that JWTs with only exp claim (no nbf) validate successfully.
     /// Tests that nbf is optional even when ValidateLifetime is enabled.
     /// Only validates exp when present.
@@ -1341,12 +1432,19 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
-    /// RFC 7515 §5.3: the <c>typ</c> header is case-sensitive. <c>At+JWT</c> does NOT match
-    /// the canonical <c>at+jwt</c>; the validator rejects the mismatched casing instead of
-    /// silently coercing to the spec value.
+    /// A <c>typ</c> is a media type, and RFC 2045 section 5.1 makes the type and subtype
+    /// case-insensitive ("Matching of media type and subtype is ALWAYS case-insensitive"),
+    /// which RFC 7515 section 4.1.9 adopts by reference. So <c>At+JWT</c> names the same token
+    /// class as <c>at+jwt</c> and must be accepted.
     /// </summary>
+    /// <remarks>
+    /// This test asserted the opposite until 2026-07-20, citing RFC 7515 section 5.3 - which is
+    /// the section that ends "Only the 'typ' and 'cty' member values defined in this
+    /// specification do not use these comparison rules", exempting <c>typ</c> rather than
+    /// governing it. The assertion was holding the wrong behaviour in place.
+    /// </remarks>
     [Fact]
-    public async Task ExpectedTokenTypes_TypIsCaseSensitive()
+    public async Task ExpectedTokenTypes_TypMatchesCaseInsensitively()
     {
         var token = CreateValidToken();
         token.Header.Type = "At+JWT";
@@ -1360,7 +1458,64 @@ public class JsonWebTokenValidationTests
 
         var result = await validator.ValidateAsync(jwt, parameters);
 
-        Assert.True(result.TryGetFailure(out _));
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The <c>application/</c> prefix is stripped from the expectation as well as from the token,
+    /// so a caller may register either form. RFC 7515 section 4.1.9 recommends producers omit the
+    /// prefix but requires recipients to treat a prefix-less value as if it were prepended, which
+    /// makes the two forms the same name and leaves the caller free to write either.
+    /// </summary>
+    /// <remarks>
+    /// Stripping used to be applied to the token's own <c>typ</c> only, which made the long form
+    /// unusable as an expectation in both directions: it matched neither <c>at+jwt</c> nor
+    /// <c>application/at+jwt</c>, since both reach the lookup already stripped.
+    /// </remarks>
+    [Theory]
+    [InlineData("at+jwt", "application/at+jwt")]
+    [InlineData("application/at+jwt", "at+jwt")]
+    [InlineData("application/at+jwt", "application/at+jwt")]
+    [InlineData("Application/AT+JWT", "at+jwt")]
+    public async Task ExpectedTokenTypes_ApplicationPrefixStrippedOnBothSides(string typ, string expected)
+    {
+        var token = CreateValidToken();
+        token.Header.Type = typ;
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { expected },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Case folding must not blur the classes apart from each other: a logout token still fails
+    /// an id_token expectation. The names this library pins differ in more than casing, so the
+    /// RFC 2045 rule costs nothing in separation.
+    /// </summary>
+    [Fact]
+    public async Task ExpectedTokenTypes_DifferentClassStillRejected()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = "Logout+JWT";
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal) { "at+jwt" },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidTokenType, error.Error);
     }
 
     /// <summary>

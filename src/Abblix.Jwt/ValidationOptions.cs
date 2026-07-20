@@ -87,6 +87,30 @@ public enum ValidationOptions
 	UseEmbeddedVerificationKey = 1 << 7,
 
 	/// <summary>
+	/// Requires the token to carry an expiration time. Pairs with <see cref="ValidateLifetime"/>
+	/// the way <see cref="RequireIssuer"/> pairs with <see cref="ValidateIssuer"/>: the Validate
+	/// flag checks a claim that is there, the Require flag says it has to be there.
+	/// </summary>
+	/// <remarks>
+	/// Without this, <see cref="ValidateLifetime"/> alone accepts a token carrying neither
+	/// <c>nbf</c> nor <c>exp</c> - there is no instant at which such a token is expired, so
+	/// checking its lifetime finds nothing wrong. That is right for the token classes whose
+	/// specifications leave expiry out, and wrong for the ones that make it REQUIRED, which is
+	/// why the two are separate flags rather than one stricter check.
+	/// Set it wherever the governing specification demands <c>exp</c>: an ID Token (OpenID
+	/// Connect Core 1.0 section 2, "REQUIRED"), a JWT access token (RFC 9068 section 2.2,
+	/// "exp REQUIRED"), a client assertion or JWT bearer grant (RFC 7523 section 3, "The JWT
+	/// MUST contain an 'exp' claim"). Leave it clear where the specification is silent, and
+	/// note that silence is not an oversight in at least one case: RFC 7592 section 5 says a
+	/// registration access token "SHOULD NOT expire while a client is still actively
+	/// registered", and this library issues those without an expiry accordingly.
+	/// Deliberately absent from <see cref="Default"/>, because several call sites derive their
+	/// options from Default by subtraction and would inherit a requirement their tokens do not
+	/// meet - including tokens this library itself mints.
+	/// </remarks>
+	RequireExpirationTime = 1 << 8,
+
+	/// <summary>
 	/// Requires and validates the issuer claim (iss).
 	/// Combines RequireIssuer and ValidateIssuer flags.
 	/// </summary>
