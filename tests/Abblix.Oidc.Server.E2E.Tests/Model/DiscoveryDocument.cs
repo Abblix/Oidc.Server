@@ -33,6 +33,9 @@ public sealed record DiscoveryDocument
     [JsonPropertyName("introspection_endpoint")]
     public Uri? IntrospectionEndpoint { get; init; }
 
+    [JsonPropertyName("revocation_endpoint")]
+    public Uri? RevocationEndpoint { get; init; }
+
     [JsonPropertyName("userinfo_endpoint")]
     public Uri? UserInfoEndpoint { get; init; }
 
