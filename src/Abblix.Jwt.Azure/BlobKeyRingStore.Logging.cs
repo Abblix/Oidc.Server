@@ -20,21 +20,21 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Abblix.Jwt.ExternalKeys;
+namespace Abblix.Jwt.Azure;
 
-/// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the placement that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
-/// </summary>
-/// <remarks>
-/// A ring store belongs to this placement and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the placement that needs one was chosen. The placement where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+partial class BlobKeyRingStore
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    [LoggerMessage(
+        EventId = LogEvents.BlobKeyRingStore.PeriodMinted,
+        Level = LogLevel.Information,
+        Message = "Wrote key '{KeyId}' into the ring: this pod won the period.")]
+    private partial void LogPeriodMinted(string keyId);
+
+    [LoggerMessage(
+        EventId = LogEvents.BlobKeyRingStore.MintRaceLost,
+        Level = LogLevel.Debug,
+        Message = "Lost the mint race for '{KeyId}': another pod won the period, so the key generated here was dropped.")]
+    private partial void LogMintRaceLost(string keyId);
 }

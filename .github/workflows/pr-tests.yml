@@ -32,10 +32,10 @@ jobs:
           - Abblix.Oidc.Server.AspNetCore.UnitTests
           - Abblix.Oidc.Server.E2E.Tests
           - Abblix.Oidc.Server.MinimalApi.E2E.Tests
-          - Abblix.Oidc.Server.Azure.UnitTests
+          - Abblix.Jwt.Azure.UnitTests
           - Abblix.Oidc.Server.Mvc.UnitTests
           - Abblix.Oidc.Server.UnitTests
-          - Abblix.Oidc.Server.Vault.UnitTests
+          - Abblix.Jwt.Vault.UnitTests
           - Abblix.Utils.UnitTests
     env:
       PROJECT: ${{ matrix.project }}

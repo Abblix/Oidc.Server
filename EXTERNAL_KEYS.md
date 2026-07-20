@@ -4,8 +4,8 @@ How the Abblix OIDC Server uses signing and encryption keys that live outside th
 
 | Package | Custodian |
 |---------|-----------|
-| **[Abblix.OIDC.Server.Vault](https://www.nuget.org/packages/Abblix.OIDC.Server.Vault)** | HashiCorp Vault / OpenBao Transit |
-| **[Abblix.OIDC.Server.Azure](https://www.nuget.org/packages/Abblix.OIDC.Server.Azure)** | Azure Key Vault |
+| **[Abblix.Jwt.Vault](https://www.nuget.org/packages/Abblix.Jwt.Vault)** | HashiCorp Vault / OpenBao Transit |
+| **[Abblix.Jwt.Azure](https://www.nuget.org/packages/Abblix.Jwt.Azure)** | Azure Key Vault |
 
 Each package's README covers what is specific to its backend: how to provision the keys, how to authenticate, which algorithms it maps, and what the published `kid` looks like. Everything below is the same whichever one you pick.
 

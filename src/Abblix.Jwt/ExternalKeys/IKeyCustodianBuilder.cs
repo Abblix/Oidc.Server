@@ -32,11 +32,11 @@ namespace Abblix.Jwt.ExternalKeys;
 /// unwrap is a round-trip to the custodian.
 /// </summary>
 /// <remarks>
-/// A host that drops this builder without naming a tier fails at startup, rather than falling back, silently, to
+/// A host that drops this builder without naming a placement fails at startup, rather than falling back, silently, to
 /// the static keys in <c>OidcOptions</c> - which would leave a configured custodian, a clean log, and local keys.
 /// </remarks>
 public interface IKeyCustodianBuilder
 {
-    /// <summary>The collection the tier call registers its key provider into.</summary>
+    /// <summary>The collection the placement call registers its key provider into.</summary>
     IServiceCollection Services { get; }
 }

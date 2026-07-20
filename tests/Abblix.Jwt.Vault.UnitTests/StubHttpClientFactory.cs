@@ -20,21 +20,13 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
-
-namespace Abblix.Jwt.ExternalKeys;
+namespace Abblix.Jwt.Vault.UnitTests;
 
 /// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the placement that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
+/// Hands every caller the same client, the one wired over a stub transport. It stands in for the real factory,
+/// whose only job the engines rely on is to resolve the named client.
 /// </summary>
-/// <remarks>
-/// A ring store belongs to this placement and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the placement that needs one was chosen. The placement where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+internal sealed class StubHttpClientFactory(HttpClient httpClient) : IHttpClientFactory
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    public HttpClient CreateClient(string name) => httpClient;
 }

@@ -31,8 +31,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// key, shares them through <see cref="IKeyRingStore"/>, and keeps the opened keys in memory for signing.
 /// </summary>
 /// <remarks>
-/// Holding the opened keys is not an optimisation here, it is the tier: if the ring opened an envelope per token
-/// the custodian would be on the hot path and this tier would be slower than the one where the key never leaves
+/// Holding the opened keys is not an optimisation here, it is the placement: if the ring opened an envelope per token
+/// the custodian would be on the hot path and this placement would be slower than the one where the key never leaves
 /// the custodian at all. The custodian is touched once per key, at refresh.
 /// <para>
 /// Nothing about a key's state is stored. Given the entries and their creation times every pod computes the same

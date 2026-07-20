@@ -35,7 +35,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Covers the tier where the server mints its own keys and the custodian only protects them: a key is sealed to
+/// Covers the placement where the server mints its own keys and the custodian only protects them: a key is sealed to
 /// the KEK and opened back through the real JWE seam, a period is minted exactly once across pods, and the set is
 /// served produce-first with the private half gated.
 /// </summary>
@@ -172,7 +172,7 @@ public sealed class KeyRingTests : IDisposable
         var entry = Assert.Single(store.Entries);
         Assert.Equal(5, entry.Jwe.Split('.').Length);
 
-        // What comes back out is a usable signing key, which is the whole tier: the in-process signer owns it.
+        // What comes back out is a usable signing key, which is the whole placement: the in-process signer owns it.
         var key = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: true));
         Assert.True(key.HasPrivateKey);
         Assert.Equal(SigningAlgorithms.RS256, key.Algorithm);

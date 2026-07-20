@@ -27,20 +27,28 @@ using Abblix.Oidc.Server.Common.Interfaces;
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
 /// <summary>
-/// Serves the keys the server minted for itself, opened from the ring and held in memory.
+/// Stands in for the key provider between a custodian registration and the placement choice that completes it, and
+/// fails loud if the choice never came. The failure has to exist because the alternative is silent and worse: the
+/// default provider is registered with TryAdd, so a custodian left without a placement would quietly serve the static
+/// keys from <c>OidcOptions</c> - a configured custodian, a clean log, and local keys. C# cannot force the
+/// continuation (the builder is a discardable return value), so the guard is a registration, not a signature.
 /// </summary>
 /// <remarks>
-/// The keys carry their private half, which is what makes the in-process signer own them: this placement routes
-/// nothing to the custodian at issue time. Publication is where that matters most, so the private half is stripped
-/// unless a caller explicitly asks for it, exactly as the static-configuration provider does.
+/// This is the second line: the startup validation registered alongside it (see
+/// <see cref="KeyPlacementChoice"/>) turns the same condition into a startup failure, so a host with a host
+/// lifetime never reaches a key operation to trip this one. It stays for the host that resolves keys without one.
 /// </remarks>
-internal sealed class MintedKeysProvider(IKeyRing ring) : IAuthServiceKeysProvider
+internal sealed class PlacementNotChosenKeysProvider : IAuthServiceKeysProvider
 {
+    internal const string Message =
+        "A key custodian is registered, but where its private keys live was never chosen. " +
+        "Follow the key storage registration with HoldKeysIn...() to choose where the private key stays.";
+
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => ring.Get(PublicKeyUsages.Signature, includePrivateKeys).ToAsyncEnumerable();
+        => throw new InvalidOperationException(Message);
 
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
-        => ring.Get(PublicKeyUsages.Encryption, includePrivateKeys).ToAsyncEnumerable();
+        => throw new InvalidOperationException(Message);
 }

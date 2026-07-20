@@ -20,21 +20,20 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
+using Azure.Core;
 
-namespace Abblix.Jwt.ExternalKeys;
+namespace Abblix.Jwt.Azure.UnitTests;
 
 /// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the placement that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
+/// Credential that returns a fixed token without any network call, so the Azure SDK's authentication pipeline
+/// never reaches Entra ID during a test.
 /// </summary>
-/// <remarks>
-/// A ring store belongs to this placement and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the placement that needs one was chosen. The placement where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+internal sealed class StaticTokenCredential : TokenCredential
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        => new("stub-token", DateTimeOffset.MaxValue);
+
+    public override ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext requestContext, CancellationToken cancellationToken)
+        => ValueTask.FromResult(GetToken(requestContext, cancellationToken));
 }

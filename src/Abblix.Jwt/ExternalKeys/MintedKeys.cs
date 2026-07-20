@@ -25,7 +25,7 @@ using Abblix.Jwt;
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// The policy for the tier where the server mints its own keys and the custodian only protects them
+/// The policy for the placement where the server mints its own keys and the custodian only protects them
 /// (<c>UseKeysInProcess</c>): it generates them, encrypts them to the custodian's key-encryption key, keeps the
 /// ciphertext in a shared ring, and rotates on schedule. No key names here - the server names what it creates.
 /// </summary>
@@ -40,7 +40,7 @@ public sealed record MintedKeys
 {
     /// <summary>
     /// The custodian's name for the key-encryption key. Its versions seal and open the ring's entries, and it is
-    /// the only key the custodian holds for this tier.
+    /// the only key the custodian holds for this placement.
     /// </summary>
     /// <remarks>
     /// It must be an ASYMMETRIC key. Sealing uses its public half in process, which is what keeps the wrap local

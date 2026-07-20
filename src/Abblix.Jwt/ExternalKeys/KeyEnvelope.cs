@@ -31,9 +31,9 @@ namespace Abblix.Jwt.ExternalKeys;
 /// carries no cryptography of its own: it hands the work to the JWT seam the library already ships.
 /// </summary>
 /// <remarks>
-/// A JWE is precisely the envelope this tier needs. It encrypts content under a Content Encryption Key and wraps
+/// A JWE is precisely the envelope this placement needs. It encrypts content under a Content Encryption Key and wraps
 /// that CEK under the recipient's key, which read as a key envelope is: the private JWK under a data-encryption
-/// key, and that key under the KEK. The asymmetry that makes it work is the same one that keeps tier (a)'s
+/// key, and that key under the KEK. The asymmetry that makes it work is the same one that keeps the custodian-held placement's
 /// encryption side local - sealing needs only the KEK's public half, so it runs in process, while opening needs
 /// the private half and therefore routes to the custodian through <c>ExternalKeyDecryptor</c>, which is triggered
 /// by the KEK being published public-only.

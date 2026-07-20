@@ -20,21 +20,20 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Abblix.Jwt.ExternalKeys;
+namespace Abblix.Jwt.Azure;
 
-/// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the placement that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
-/// </summary>
-/// <remarks>
-/// A ring store belongs to this placement and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the placement that needs one was chosen. The placement where the
-/// custodian holds every key has no ring at all.
-/// </remarks>
-public interface IMintedKeysBuilder
+partial class KeyVaultClient
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    // Static with an explicit logger parameter, unlike the instance log methods elsewhere: this type has two
+    // constructors and so holds the logger in a field rather than a primary-constructor parameter, and passing
+    // that field here is the one place the field is read in source, which an instance method would leave only to
+    // generated code.
+    [LoggerMessage(
+        EventId = LogEvents.KeyVaultClient.UnwrapRejected,
+        Level = LogLevel.Warning,
+        Message = "Key Vault rejected an unwrap for key '{KeyId}': the ciphertext is a wrong or tampered key, or " +
+                  "the version that wrapped it is disabled. No key material is logged.")]
+    private static partial void LogUnwrapRejected(ILogger logger, string keyId);
 }

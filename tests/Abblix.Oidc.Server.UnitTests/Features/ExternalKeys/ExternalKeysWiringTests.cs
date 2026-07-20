@@ -36,11 +36,11 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
 /// Pins the wiring contract every custodian shares, against a stub one, since none of it depends on which
-/// custodian is registered: the tier choice is enforced at startup, the key provider guards a resolve until the
-/// choice arrives, and the tier call must follow the OIDC registration.
+/// custodian is registered: the placement choice is enforced at startup, the key provider guards a resolve until the
+/// choice arrives, and the placement call must follow the OIDC registration.
 /// </summary>
 /// <remarks>
-/// The ordering is the subtle one. The tier call composes the external crypto backends with their in-process
+/// The ordering is the subtle one. The placement call composes the external crypto backends with their in-process
 /// peers, so those peers must already be registered: run first, it finds a one-member family, composes nothing,
 /// and the external backend then loses the singular resolve to the local one that arrives after it. Nothing
 /// detects that at runtime - the signing seam simply reports it cannot sign a key it should have routed to the
@@ -81,7 +81,7 @@ public class ExternalKeysWiringTests
     {
         var services = WithCustodian(new ServiceCollection());
 
-        // The mistake: the tier call has no in-process peer to compose with yet.
+        // The mistake: the placement call has no in-process peer to compose with yet.
         var error = Assert.Throws<InvalidOperationException>(
             () => services.AddCustodian().UseKeysInCustodian(Keys));
 
@@ -103,7 +103,12 @@ public class ExternalKeysWiringTests
         var error = Assert.Throws<OptionsValidationException>(
             provider.GetRequiredService<IStartupValidator>().Validate);
 
-        Assert.Contains("HoldKeysIn", Assert.Single(error.Failures));
+        // The message names the calls that exist. It used to name "HoldKeysIn...", which never did, and this
+        // assertion is what pinned the mistake in place: a message nobody can act on reads as a correct
+        // message to a test that only checks a substring.
+        Assert.Contains(
+            nameof(Server.Features.ExternalKeys.ServiceCollectionExtensions.UseKeysInCustodian),
+            Assert.Single(error.Failures));
     }
 
     [Fact]

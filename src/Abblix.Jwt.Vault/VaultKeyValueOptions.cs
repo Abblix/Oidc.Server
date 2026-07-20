@@ -20,21 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.DependencyInjection;
-
-namespace Abblix.Jwt.ExternalKeys;
+namespace Abblix.Jwt.Vault;
 
 /// <summary>
-/// The continuation of <c>UseKeysInProcess</c>: the placement that mints its own keys must say where the ring lives,
-/// and the packages hang their <c>PersistRingTo...</c> calls off this.
+/// Points the key ring at a Vault / OpenBao KV version 2 secrets engine, on the same server the custodian uses:
+/// its address and token come from <see cref="VaultTransitOptions"/>, since one Vault holds both the key that
+/// protects the ring and the ring itself.
 /// </summary>
 /// <remarks>
-/// A ring store belongs to this placement and to no other, so it attaches here rather than to the service collection:
-/// there is nothing to register a store onto unless the placement that needs one was chosen. The placement where the
-/// custodian holds every key has no ring at all.
+/// The engine must be KV VERSION 2. Only v2 offers the check-and-set write this ring is built on, and it is what
+/// makes exactly one pod win a period: v1 overwrites blindly, which would let two pods each believe they minted
+/// the period's key.
 /// </remarks>
-public interface IMintedKeysBuilder
+public sealed class VaultKeyValueOptions
 {
-    /// <summary>The collection a <c>PersistRingTo...</c> call registers the store into.</summary>
-    IServiceCollection Services { get; }
+    /// <summary>Mount path of the KV v2 engine (the conventional mount is <c>secret</c>).</summary>
+    public string Mount { get; set; } = "secret";
+
+    /// <summary>
+    /// The path under the mount that holds the ring; each key becomes one secret beneath it.
+    /// </summary>
+    public string Path { get; set; } = "oidc-keyring";
 }
