@@ -292,12 +292,15 @@ public class AuthorizationRequestBuilderTests
     }
 
     /// <summary>
-    /// The redirection endpoint runs the other way: the provider resolves it, so it must be absolute.
-    /// RFC 6749 section 3.1.2 - "The redirection endpoint URI MUST be an absolute URI".
+    /// The redirection endpoint runs the other way: the provider resolves it against its own address
+    /// when it sends the user back, so a relative one leads into the provider's site and the user never
+    /// arrives here at all. RFC 6749 section 3.1.2 - "The redirection endpoint URI MUST be an absolute
+    /// URI".
     /// </summary>
     /// <remarks>
     /// Paired with the tests above on purpose. The two addresses are easy to confuse, both being places a
-    /// login returns to, and the requirements point in opposite directions.
+    /// login returns to, and the requirements point in opposite directions because they are resolved in
+    /// opposite places.
     /// </remarks>
     [Fact]
     public async Task RefusesARelativeRedirectionEndpoint()

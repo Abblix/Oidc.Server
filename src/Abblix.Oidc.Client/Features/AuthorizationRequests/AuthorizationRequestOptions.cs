@@ -28,9 +28,17 @@ namespace Abblix.Oidc.Client.Features.AuthorizationRequests;
 public sealed class AuthorizationRequestOptions
 {
     /// <summary>
-    /// The address the provider returns the user to. Must be one the provider has registered for this client,
-    /// and is repeated verbatim when the authorization code is exchanged.
+    /// The absolute address the provider returns the user to. Must be one the provider has registered for
+    /// this client, and is repeated verbatim when the authorization code is exchanged.
     /// </summary>
+    /// <remarks>
+    /// Absolute, and a relative value is refused when a request is built. The provider is what resolves
+    /// this address - it redirects the browser here once authentication succeeds - so a relative one
+    /// resolves against the provider's own address and the user lands on the provider's site, signed in,
+    /// having never reached this application. RFC 6749 section 3.1.2: "The redirection endpoint URI MUST
+    /// be an absolute URI as defined by [RFC3986] Section 4.3."
+    /// <see cref="Uri"/> holds a relative address just as happily, so the type cannot say this.
+    /// </remarks>
     public required Uri RedirectUri { get; set; }
 
     /// <summary>

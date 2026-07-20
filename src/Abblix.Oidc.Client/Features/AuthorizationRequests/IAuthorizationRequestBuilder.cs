@@ -44,8 +44,9 @@ public interface IAuthorizationRequestBuilder
     /// (RFC 6749 section 10.15, RFC 9700 section 4.11). A same-origin absolute address would be
     /// harmless, but nothing in this package knows the application's origin to compare against, so
     /// "relative" is the strongest rule that can be enforced here rather than merely recommended.
-    /// Do not confuse it with <see cref="AuthorizationRequestOptions.RedirectUri"/>, which is resolved
-    /// by the provider rather than the application and must therefore be absolute.
+    /// Do not confuse it with <see cref="AuthorizationRequestOptions.RedirectUri"/>, which must be
+    /// absolute for the mirror-image reason: the provider resolves that one against its own address
+    /// when it sends the user back, so a relative value would lead into the provider's site.
     /// </remarks>
     Task<AuthorizationRequest> CreateAsync(Uri returnUri, CancellationToken cancellationToken = default);
 }

@@ -142,13 +142,16 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
     /// Refuses a redirection endpoint that is not absolute.
     /// </summary>
     /// <remarks>
-    /// The opposite requirement to the return address, and for the opposite reason: this one is sent to
-    /// the provider and is where the provider sends the user back, so it has to name a host. RFC 6749
-    /// section 3.1.2 is explicit - "The redirection endpoint URI MUST be an absolute URI as defined by
-    /// [RFC3986] Section 4.3." The two are easy to confuse because both are addresses a login returns
-    /// to; the difference is who resolves them. A relative one configured here would go out as a
-    /// malformed parameter and come back as whatever error that provider happens to raise, which is a
-    /// long way from the configuration mistake that caused it.
+    /// The opposite requirement to the return address, and for a reason worth stating as a
+    /// consequence rather than as a rule. This address is resolved by the OpenID Provider, because
+    /// that is where it is used: the provider redirects the browser to it once authentication
+    /// succeeds. A relative one therefore resolves against the PROVIDER's own address, and the user
+    /// lands somewhere on the provider's site having successfully signed in - never reaching this
+    /// application at all. RFC 6749 section 3.1.2 says it plainly: "The redirection endpoint URI MUST
+    /// be an absolute URI as defined by [RFC3986] Section 4.3."
+    /// The two addresses are easy to confuse, both being places a login returns to, and the confusion
+    /// is exactly why each is checked: one is resolved here and must not name a host, the other is
+    /// resolved there and must.
     /// The type cannot carry this: <see cref="Uri"/> holds relative addresses just as happily.
     /// </remarks>
     private static string RequireAbsolute(Uri redirectUri)
@@ -157,7 +160,8 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         {
             throw new AuthorizationRequestException(
                 $"The configured redirect address '{redirectUri.OriginalString}' is relative. The provider "
-                + "resolves this address, not the application, so it must be absolute.");
+                + "resolves it against its own address when it sends the user back, so a relative one "
+                + "leads into the provider's site instead of this application. It must be absolute.");
         }
 
         return redirectUri.ToString();
