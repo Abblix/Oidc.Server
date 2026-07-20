@@ -491,11 +491,29 @@ internal class JsonWebTokenValidator(
     /// Pins the JWT's <c>typ</c> header (RFC 7515 §4.1.9) to the set the caller expects, per
     /// the RFC 8725 §3.11 token-class-confusion guidance. When
     /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
-    /// skipped (backward-compatible default for callers that have not opted in). Comparison
-    /// is case-sensitive per RFC 7515 §5.3, with the <c>application/</c> prefix stripped
-    /// before lookup per the §4.1.9 convention so <c>typ=at+jwt</c> and
-    /// <c>typ=application/at+jwt</c> both match a registered <c>at+jwt</c> expectation.
+    /// skipped (backward-compatible default for callers that have not opted in).
     /// </summary>
+    /// <remarks>
+    /// Matching is case-insensitive, and the <c>application/</c> prefix is stripped from the
+    /// expectation as well as from the token, so either form may be written on either side.
+    /// A <c>typ</c> is a media type: RFC 7515 §4.1.9 says "Per RFC 2045, all media type values,
+    /// subtype values, and parameter names are case insensitive", and RFC 2045 §5.1 puts it
+    /// flatly - "Matching of media type and subtype is ALWAYS case-insensitive". The same
+    /// §4.1.9 requires a recipient to treat a value without a '/' as if <c>application/</c>
+    /// were prepended, which makes the short and long forms one name rather than two.
+    /// Note that RFC 7515 §5.3 does NOT apply here despite defining the library's general
+    /// string-comparison rules: it ends by exempting exactly this parameter, "Only the 'typ'
+    /// and 'cty' member values defined in this specification do not use these comparison
+    /// rules". This code cited §5.3 for the opposite conclusion until 2026-07-20.
+    /// Folding costs no separation between the classes actually pinned here (<c>dpop+jwt</c>,
+    /// <c>at+jwt</c>, <c>logout+jwt</c>, <c>id_token</c>): they differ in their letters, not
+    /// their casing. The one place RFC 2045 keeps case significant is the value of a
+    /// <c>;parameter=</c> tail, which no <c>typ</c> in these specifications carries; should one
+    /// ever appear, this whole-string fold would be more permissive than the RFC on that tail.
+    /// The comparison deliberately does not use <see cref="IReadOnlySet{T}.Contains"/>: the set
+    /// arrives from the caller with a comparer of their choosing, which would quietly hand a
+    /// security decision to host configuration this validator can neither see nor vouch for.
+    /// </remarks>
     private static Result<JsonWebToken, JwtValidationError> ValidateTokenType(
         JsonWebToken token, ValidationParameters parameters)
     {
@@ -511,7 +529,10 @@ internal class JsonWebTokenValidator(
         }
 
         var normalized = StripApplicationPrefix(typ);
-        if (!expected.Contains(normalized))
+        var matched = expected.Any(expectedTyp => string.Equals(
+            StripApplicationPrefix(expectedTyp), normalized, StringComparison.OrdinalIgnoreCase));
+
+        if (!matched)
         {
             return new JwtValidationError(
                 JwtError.InvalidTokenType,
@@ -522,14 +543,21 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Implements RFC 7515 §4.1.9's prefix-stripping convention: when <c>typ</c> contains no
-    /// '/' the recipient SHOULD treat it as if <c>application/</c> were prepended; symmetric
-    /// stripping of the literal prefix lets either form match.
+    /// Implements RFC 7515 §4.1.9's prefix convention: "A recipient using the media type value
+    /// MUST treat it as if 'application/' were prepended to any 'typ' value not containing a
+    /// '/'." Stripping the literal prefix instead of prepending it reaches the same equivalence
+    /// from either form, and is applied to both sides of the comparison so a caller may write
+    /// whichever they prefer.
     /// </summary>
+    /// <remarks>
+    /// The prefix match ignores case because it is the media type portion, which RFC 2045 §5.1
+    /// declares case-insensitive; matching it ordinally would leave <c>Application/at+jwt</c>
+    /// unstripped and therefore unmatchable.
+    /// </remarks>
     private static string StripApplicationPrefix(string typ)
     {
         const string prefix = "application/";
-        return typ.StartsWith(prefix, StringComparison.Ordinal) ? typ[prefix.Length..] : typ;
+        return typ.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? typ[prefix.Length..] : typ;
     }
 
     /// <summary>

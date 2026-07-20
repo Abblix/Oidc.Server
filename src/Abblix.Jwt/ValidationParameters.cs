@@ -65,9 +65,15 @@ public record ValidationParameters
 	/// as another by relying parties that trust the same issuer for several classes.
 	/// </summary>
 	/// <remarks>
-	/// Comparison follows the spec rules: case-sensitive (RFC 7515 §5.3), with the
-	/// <c>application/</c>-prefix-stripping convention from §4.1.9 applied before lookup
-	/// — <c>typ=at+jwt</c> and <c>typ=application/at+jwt</c> are accepted equivalently.
+	/// Matching is case-insensitive and accepts either spelling of the <c>application/</c>
+	/// prefix on either side, so <c>at+jwt</c> and <c>application/AT+JWT</c> name the same
+	/// class. A <c>typ</c> is a media type, and RFC 7515 §4.1.9 adopts RFC 2045 §5.1 for it:
+	/// "Matching of media type and subtype is ALWAYS case-insensitive". The general
+	/// string-comparison rules of RFC 7515 §5.3 do not govern this parameter; that section
+	/// ends by exempting it by name.
+	/// The comparer carried by the set is NOT what produces this behaviour and is not consulted
+	/// for matching - the validator compares explicitly, so that its rules cannot be widened or
+	/// narrowed by how a host happened to construct the collection. Supply any comparer, or none.
 	/// When this property is null or empty the validator skips the check, preserving
 	/// historical behaviour for callers that have not opted in.
 	/// </remarks>
