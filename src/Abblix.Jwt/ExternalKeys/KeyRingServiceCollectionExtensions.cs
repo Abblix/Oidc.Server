@@ -59,4 +59,40 @@ public static class KeyRingServiceCollectionExtensions
 
         return new MintedKeysBuilder(services);
     }
+
+    /// <summary>
+    /// Registers a key ring that mints its keys in this process and keeps them there: no custodian, no shared
+    /// store, nothing to provision.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// The answer for a host with no HSM or KMS, which is most of them. It rotates, and it keeps retired keys
+    /// long enough that what they produced stays readable - the two things a ring is for.
+    ///
+    /// What it does NOT do is share those keys with another process. Every replica mints its own, so anything
+    /// one replica produced is unreadable by the others, and everything is gone when the process restarts.
+    /// For a single instance that is exactly right and costs nothing. For more than one it is wrong, and
+    /// wrong in the quiet way: nothing fails at startup, sign-ins simply break for whoever lands on the wrong
+    /// replica.
+    ///
+    /// So a host that has registered an <see cref="IKeyRingStore"/> - which is how keys are shared - is
+    /// refused here rather than served: having registered one, it plainly expects sharing, and a ring that
+    /// silently ignored it would be the worst of both. Use <see cref="AddKeyRing"/> with a custodian instead.
+    /// </remarks>
+    public static IServiceCollection AddInMemoryKeyRing(this IServiceCollection services, LocalKeys policy)
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(IKeyRingStore)))
+            throw new InvalidOperationException(
+                $"{nameof(AddInMemoryKeyRing)} keeps its keys in this process only, but an "
+                + $"{nameof(IKeyRingStore)} is registered, which is how keys are shared between processes. "
+                + $"The store would be ignored. Use {nameof(AddKeyRing)} with a custodian to share keys, or "
+                + "drop the store if a single instance is intended.");
+
+        services.TryAddSingleton<IKeyRing>(
+            serviceProvider => serviceProvider.CreateService<InMemoryKeyRing>(Dependency.Override(policy)));
+
+        return services;
+    }
 }
