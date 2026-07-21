@@ -29,6 +29,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
+using Abblix.Oidc.Client.Features.ClientAuthentication;
+using Abblix.Oidc.Client.Features.Revocation;
 using Abblix.Oidc.Client.Features.UserInfo;
 namespace Abblix.Oidc.Client.UnitTests;
 
@@ -46,7 +48,10 @@ public class ClientRegistrationTests
         .AddOidcClientCore(options => options.ClientId = "test-client")
         .AddDiscovery(options => options.Authority = new Uri("https://provider.example.com"))
         .AddAuthorizationRequests(options => options.RedirectUri = new Uri("https://client.example.com/cb"))
-        .AddTokenRequests(options => options.ClientAuthenticationMethod = ClientAuthenticationMethods.None)
+        .AddClientAuthentication(options => options.Method = ClientAuthenticationMethods.None)
+        .AddTokenRequests()
+        .AddTokenRevocation()
+        .AddUserInfo()
         .BuildServiceProvider(new ServiceProviderOptions
         {
             // What a host running in development gets, and what catches a dependency the registration forgot.
@@ -68,6 +73,10 @@ public class ClientRegistrationTests
         Assert.IsType<TokenRequestService>(provider.GetRequiredService<ITokenRequestService>());
         Assert.IsType<AuthorizationRequestBuilder>(
             provider.GetRequiredService<IAuthorizationRequestBuilder>());
+        Assert.IsType<UserInfoService>(provider.GetRequiredService<IUserInfoService>());
+        Assert.IsType<TokenRevocationService>(provider.GetRequiredService<ITokenRevocationService>());
+        Assert.IsType<ClientCredentialsPresenter>(
+            provider.GetRequiredService<IClientCredentialsPresenter>());
         Assert.IsType<InMemoryAuthorizationStateStore>(
             provider.GetRequiredService<IAuthorizationStateStore>());
     }
