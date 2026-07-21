@@ -21,8 +21,16 @@
 // info@abblix.com
 
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Client.AspNetCore;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -59,8 +67,26 @@ public sealed class ClientHostFixture : IAsyncLifetime
     /// </summary>
     public const string BackChannelLogoutPath = "/backchannel-logout";
 
+    /// <summary>
+    /// Where a test can read the ID Token this application is holding for the signed-in user.
+    /// </summary>
+    public const string IdentityTokenPath = "/id-token";
+
+    /// <summary>
+    /// The identifier of the client this application signs in as, registered with the provider carrying a
+    /// back-channel logout address that points back here.
+    /// </summary>
+    public const string ClientId = "e2e-backchannel-client";
+
     private readonly ClientAgainstServerFixture _provider = new();
     private IHost? _host;
+
+    /// <summary>
+    /// The provider reaches this application through the handler of its in-memory server, which does not
+    /// exist until that server is built - after the provider itself. Resolved at call time rather than
+    /// captured, so the two hosts can each be told about the other despite being built in order.
+    /// </summary>
+    private HttpMessageHandler ClientHostHandler => Server.CreateHandler();
 
     /// <summary>
     /// The subjects this application was told to log out, in the order the provider asked.
@@ -124,6 +150,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
+        _provider.ConfigureProviderServices = ConfigureProvider;
         await _provider.InitializeAsync();
 
         _host = await new HostBuilder()
@@ -141,6 +168,42 @@ public sealed class ClientHostFixture : IAsyncLifetime
 
         _host?.Dispose();
         await _provider.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Tells the provider about this application: a client with a back-channel logout address here, and a
+    /// route for reaching it.
+    /// </summary>
+    private void ConfigureProvider(IServiceCollection services)
+    {
+        services.PostConfigure<OidcOptions>(options =>
+            options.Clients =
+            [
+                ..options.Clients,
+                new ClientInfo(ClientId)
+                {
+                    ClientSecrets =
+                    [
+                        new ClientSecret
+                        {
+                            Sha512Hash = SHA512.HashData(
+                                Encoding.UTF8.GetBytes(ClientAgainstServerFixture.ClientSecret)),
+                        },
+                    ],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+                    RedirectUris = [new Uri(ClientAgainstServerFixture.RedirectUri)],
+                    BackChannelLogout = new BackChannelLogoutOptions(
+                        new Uri($"https://client.example.com{BackChannelLogoutPath}")),
+                    OfflineAccessAllowed = true,
+                },
+            ]);
+
+        // The provider posts the Logout Token over its own HTTP client, whose primary handler normally
+        // refuses addresses that do not resolve to something reachable. Here it has to reach an in-memory
+        // server instead, so the handler is replaced - the last registration wins, and this one runs after
+        // the library's.
+        services.AddHttpClient(nameof(ILogoutTokenSender))
+            .ConfigurePrimaryHttpMessageHandler(() => ClientHostHandler);
     }
 
     private void ConfigureServices(IServiceCollection services)
@@ -174,7 +237,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
                 };
             });
 
-        _provider.AddClientServices(services);
+        _provider.AddClientServices(services, ClientId);
     }
 
     private void Configure(IApplicationBuilder app)
@@ -186,6 +249,14 @@ public sealed class ClientHostFixture : IAsyncLifetime
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapGet(ProtectedPath, (HttpContext context) => context.User.Identity?.Name)
+                .RequireAuthorization();
+
+            // The ID Token the login produced, which a test needs in order to ask the provider to end the
+            // session it belongs to. A real application would not publish this; it is here because the test
+            // stands where the application's own logout button would.
+            endpoints.MapGet(
+                    IdentityTokenPath,
+                    (Delegate)((HttpContext context) => context.GetTokenAsync("id_token")))
                 .RequireAuthorization();
 
             endpoints.MapPost(

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -22,6 +22,7 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client.E2E.Tests;
 
@@ -130,6 +131,10 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
     {
         using var browser = fixture.CreateBrowser();
 
+        // Counted rather than required to be empty: the fixture is shared with the test that logs out for
+        // real, and nothing fixes the order they run in.
+        var loggedOutBefore = fixture.LoggedOutSubjects.Count;
+
         using var content = new FormUrlEncodedContent(
             [new KeyValuePair<string, string>("logout_token", "not.a.token")]);
 
@@ -139,6 +144,67 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(
             new CacheControlHeaderValue { NoStore = true }, response.Headers.CacheControl);
-        Assert.Empty(fixture.LoggedOutSubjects);
+        Assert.Equal(loggedOutBefore, fixture.LoggedOutSubjects.Count);
+    }
+
+    /// <summary>
+    /// Signs a browser in through the application, the way the round-trip test does, and returns it holding
+    /// the session cookie.
+    /// </summary>
+    private async Task<HttpClient> SignInAsync(CancellationToken cancellationToken)
+    {
+        var browser = fixture.CreateBrowser();
+
+        using var challenge = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
+
+        using var providerBrowser = fixture.Provider.CreateBrowser();
+        using var authorized = await providerBrowser.GetAsync(
+            challenge.Headers.Location!, cancellationToken);
+
+        using var signedIn = await browser.GetAsync(authorized.Headers.Location!, cancellationToken);
+
+        return browser;
+    }
+
+    /// <summary>
+    /// The provider ends the session and tells this application to do the same, over the back channel.
+    /// </summary>
+    /// <remarks>
+    /// The case the unit tests cannot reach. There the Logout Token is one this repository signed for
+    /// itself; here it is minted by the provider, posted by the provider over its own transport, and read
+    /// by an application that was only ever told the provider's address. Every step between the two is a
+    /// place the two halves could have disagreed.
+    /// </remarks>
+    [Fact]
+    public async Task TheProviderLogsTheApplicationOutOverTheBackChannel()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        using var browser = await SignInAsync(cancellationToken);
+
+        var identityToken = await browser.GetStringAsync(
+            ClientHostFixture.IdentityTokenPath, cancellationToken);
+
+        Assert.False(string.IsNullOrEmpty(identityToken));
+
+        var loggedOutBefore = fixture.LoggedOutSubjects.Count;
+
+        // The user signs out at the provider, which is what sets the notification going.
+        // Built as the client the hint was issued to. Section 2 makes the provider verify that the
+        // client_id beside a hint is the one the ID Token was issued for, so any other client's logout
+        // request is refused - which is how this test first failed.
+        await using var logoutClient = fixture.Provider.CreateOidcClient(
+            clientId: ClientHostFixture.ClientId);
+
+        var logoutUri = await logoutClient
+            .GetRequiredService<IOidcClient>()
+            .CreateEndSessionRequestAsync(identityToken, cancellationToken: cancellationToken);
+
+        using var providerBrowser = fixture.Provider.CreateBrowser();
+        using var loggedOut = await providerBrowser.GetAsync(logoutUri, cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.BadRequest, loggedOut.StatusCode);
+        Assert.Equal(loggedOutBefore + 1, fixture.LoggedOutSubjects.Count);
+        Assert.Equal(Subject, fixture.LoggedOutSubjects[^1]);
     }
 }

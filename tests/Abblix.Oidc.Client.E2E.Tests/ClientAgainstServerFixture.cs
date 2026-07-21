@@ -32,7 +32,9 @@ using Abblix.Oidc.Client.Features.Revocation;
 using Abblix.Oidc.Client.Features.SigningKeys;
 using Abblix.Oidc.Client.Features.Tokens;
 using Abblix.Oidc.Client.Features.UserInfo;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client.E2E.Tests;
@@ -64,6 +66,23 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     public const string Issuer = "https://auth.example.com";
 
     /// <summary>
+    /// Extra registrations for the provider host, applied before it is built.
+    /// </summary>
+    /// <remarks>
+    /// Set by a test that needs the provider configured differently - a client registered with a
+    /// back-channel logout address, say - and only before the first access to the host, since that is when
+    /// it is built.
+    /// </remarks>
+    public Action<IServiceCollection>? ConfigureProviderServices { get; set; }
+
+    /// <inheritdoc />
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        if (ConfigureProviderServices is { } configure)
+            builder.ConfigureTestServices(configure);
+    }
+
+    /// <summary>
     /// Builds the host once, before any test touches it, for the reason the server suite documents: the
     /// lazy build is not thread-safe and a second build mints a fresh signing key.
     /// </summary>
@@ -83,11 +102,12 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     /// <summary>
     /// Builds a container holding the client, with every outgoing call routed into the in-memory server.
     /// </summary>
-    public ServiceProvider CreateOidcClient(Action<IServiceCollection>? configure = null)
+    public ServiceProvider CreateOidcClient(
+        Action<IServiceCollection>? configure = null, string? clientId = null)
     {
         var services = new ServiceCollection();
 
-        AddClientServices(services);
+        AddClientServices(services, clientId);
         configure?.Invoke(services);
 
         return services.BuildServiceProvider();
@@ -96,10 +116,10 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     /// <summary>
     /// Registers the client into someone else's container - an application host, for the tests that run one.
     /// </summary>
-    public void AddClientServices(IServiceCollection services)
+    public void AddClientServices(IServiceCollection services, string? clientId = null)
     {
         services
-            .AddOidcClientCore(options => options.ClientId = ClientId)
+            .AddOidcClientCore(options => options.ClientId = clientId ?? ClientId)
             .AddDiscovery(options => options.Authority = new Uri(Issuer))
             .AddAuthorizationRequests(options =>
             {
