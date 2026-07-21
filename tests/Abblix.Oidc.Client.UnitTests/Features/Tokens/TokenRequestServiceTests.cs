@@ -25,6 +25,7 @@ using System.Text;
 using System.Text.Json;
 using System.Web;
 using Abblix.Oidc.Client.Features.Discovery;
+using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.Tokens;
 using Abblix.Oidc.Client.UnitTests.Features.Discovery;
 using Microsoft.Extensions.Options;
@@ -53,21 +54,23 @@ public class TokenRequestServiceTests
 
     private static TokenRequestService CreateService(
         HttpMessageHandler handler,
-        string authenticationMethod = ClientAuthenticationMethods.None,
-        string? clientSecret = null,
         string? tokenEndpoint = TokenEndpoint)
     {
         var metadata = new ProviderMetadata { Issuer = Issuer, TokenEndpoint = tokenEndpoint };
 
+        // The real presenter rather than a stub, so that what it writes is shown to reach the wire. How each
+        // method is presented is its own test class - here only the join between the two is at stake.
+        var credentialsPresenter = new ClientCredentialsPresenter(
+            Options.Create(new OidcClientOptions { ClientId = "test-client" }),
+            Options.Create(new ClientAuthenticationOptions
+            {
+                Method = ClientAuthenticationMethods.None,
+            }));
+
         return new TokenRequestService(
             new ConfiguredMetadataProvider(metadata),
             new StubHttpClientFactory(handler),
-            Options.Create(new OidcClientOptions { ClientId = "test-client" }),
-            Options.Create(new TokenRequestOptions
-            {
-                ClientAuthenticationMethod = authenticationMethod,
-                ClientSecret = clientSecret,
-            }));
+            credentialsPresenter);
     }
 
     private static Dictionary<string, string> FormOf(string body)
@@ -116,10 +119,11 @@ public class TokenRequestServiceTests
     }
 
     /// <summary>
-    /// A public client names itself and presents no secret, because it has none to keep.
+    /// What the credentials presenter writes reaches the provider: the parameters it adds are encoded into
+    /// the body, and the header it sets is sent.
     /// </summary>
     [Fact]
-    public async Task APublicClientNamesItselfWithoutASecret()
+    public async Task PresentedCredentialsReachTheWire()
     {
         var handler = new RecordingHttpMessageHandler(SuccessBody);
 
@@ -129,58 +133,6 @@ public class TokenRequestServiceTests
         Assert.Equal("test-client", form["client_id"]);
         Assert.False(form.ContainsKey("client_secret"));
         Assert.Null(handler.LastAuthorizationHeader);
-    }
-
-    /// <summary>
-    /// The secret travels in the body when the host configured that method.
-    /// </summary>
-    [Fact]
-    public async Task ClientSecretPostSendsTheSecretInTheBody()
-    {
-        var handler = new RecordingHttpMessageHandler(SuccessBody);
-        var service = CreateService(handler, ClientAuthenticationMethods.ClientSecretPost, "the-secret");
-
-        await service.RefreshAsync("token", TestContext.Current.CancellationToken);
-
-        var form = FormOf(handler.LastRequestBody!);
-        Assert.Equal("test-client", form["client_id"]);
-        Assert.Equal("the-secret", form["client_secret"]);
-    }
-
-    /// <summary>
-    /// The secret travels in the Authorization header when the host configured that method.
-    /// </summary>
-    [Fact]
-    public async Task ClientSecretBasicSendsTheSecretInTheHeader()
-    {
-        var handler = new RecordingHttpMessageHandler(SuccessBody);
-        var service = CreateService(handler, ClientAuthenticationMethods.ClientSecretBasic, "the-secret");
-
-        await service.RefreshAsync("token", TestContext.Current.CancellationToken);
-
-        Assert.Equal("Basic", handler.LastAuthorizationHeader?.Scheme);
-        var decoded = Encoding.UTF8.GetString(
-            Convert.FromBase64String(handler.LastAuthorizationHeader!.Parameter!));
-        Assert.Equal("test-client:the-secret", decoded);
-
-        Assert.False(FormOf(handler.LastRequestBody!).ContainsKey("client_secret"));
-    }
-
-    /// <summary>
-    /// Both halves of the Basic credentials are form-encoded before being joined, as RFC 6749 section 2.3.1
-    /// requires. Without it a secret containing a colon reads to the provider as a different secret entirely.
-    /// </summary>
-    [Fact]
-    public async Task BasicCredentialsAreFormEncodedBeforeBeingJoined()
-    {
-        var handler = new RecordingHttpMessageHandler(SuccessBody);
-        var service = CreateService(handler, ClientAuthenticationMethods.ClientSecretBasic, "se:cr et");
-
-        await service.RefreshAsync("token", TestContext.Current.CancellationToken);
-
-        var decoded = Encoding.UTF8.GetString(
-            Convert.FromBase64String(handler.LastAuthorizationHeader!.Parameter!));
-        Assert.Equal("test-client:se%3Acr%20et", decoded);
     }
 
     /// <summary>
@@ -230,22 +182,6 @@ public class TokenRequestServiceTests
 
         Assert.NotNull(response.AdditionalData);
         Assert.True(response.AdditionalData.ContainsKey("a_member_this_client_does_not_model"));
-    }
-
-    /// <summary>
-    /// A method needing a secret that was not configured fails with a message naming what is missing, rather
-    /// than sending a request the provider will reject for a reason that reads like anything else.
-    /// </summary>
-    [Fact]
-    public async Task AMissingSecretIsNamedPlainly()
-    {
-        var handler = new RecordingHttpMessageHandler(SuccessBody);
-        var service = CreateService(handler, ClientAuthenticationMethods.ClientSecretPost);
-
-        var exception = await Assert.ThrowsAsync<TokenRequestException>(
-            () => service.RefreshAsync("token", TestContext.Current.CancellationToken));
-
-        Assert.Contains(nameof(TokenRequestOptions.ClientSecret), exception.Message);
     }
 
     /// <summary>
@@ -304,19 +240,4 @@ public class TokenRequestServiceTests
             () => CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken));
     }
 
-    /// <summary>
-    /// A method this client cannot present is named rather than attempted.
-    /// </summary>
-    [Fact]
-    public async Task AnUnsupportedAuthenticationMethodIsNamed()
-    {
-        var handler = new RecordingHttpMessageHandler(SuccessBody);
-        var service = CreateService(handler, "private_key_jwt", "the-secret");
-
-        var exception = await Assert.ThrowsAsync<TokenRequestException>(
-            () => service.RefreshAsync("token", TestContext.Current.CancellationToken));
-
-        Assert.Contains("private_key_jwt", exception.Message);
-        Assert.Equal(0, handler.RequestCount);
-    }
 }

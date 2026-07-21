@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,7 +21,7 @@
 // info@abblix.com
 
 
-namespace Abblix.Oidc.Client.Features.Tokens;
+namespace Abblix.Oidc.Client.Features.ClientAuthentication;
 
 /// <summary>
 /// The ways this client can authenticate itself at the token endpoint, named as on the wire.

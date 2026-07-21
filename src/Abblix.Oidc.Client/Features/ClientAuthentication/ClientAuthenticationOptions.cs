@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,12 +21,19 @@
 // info@abblix.com
 
 
-namespace Abblix.Oidc.Client.Features.Tokens;
+namespace Abblix.Oidc.Client.Features.ClientAuthentication;
 
 /// <summary>
-/// Configuration of how this client presents itself at the token endpoint.
+/// Configuration of how this client presents itself at the provider's authenticated endpoints.
 /// </summary>
-public sealed class TokenRequestOptions
+/// <remarks>
+/// One configuration for every such endpoint, not one per endpoint. A client has a single identity and a
+/// single set of credentials: RFC 7009 section 2.1 says a revocation request authenticates "as described in
+/// Section 2.3 of [RFC6749]", the same section the token endpoint points at. Splitting the settings per
+/// endpoint would invite a deployment where the token endpoint is authenticated and the revocation endpoint,
+/// by omission, is not.
+/// </remarks>
+public sealed class ClientAuthenticationOptions
 {
     /// <summary>
     /// How the client authenticates itself.
@@ -37,7 +44,7 @@ public sealed class TokenRequestOptions
     /// defaulting to <see cref="ClientAuthenticationMethods.None"/> would let a deployment end up public by
     /// omission, which is the one thing a default must never decide. Say which it is.
     /// </remarks>
-    public required string ClientAuthenticationMethod { get; set; }
+    public required string Method { get; set; }
 
     /// <summary>
     /// The secret shared with the provider. Required by every method other than

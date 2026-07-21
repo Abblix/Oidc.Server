@@ -58,6 +58,11 @@ public sealed class RecordingHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public AuthenticationHeaderValue? LastAuthorizationHeader { get; private set; }
 
+    /// <summary>
+    /// Headers added to every response, for a test that asserts on what the client reads off one.
+    /// </summary>
+    public Dictionary<string, string> ResponseHeaders { get; } = [];
+
     /// <inheritdoc />
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
@@ -72,6 +77,9 @@ public sealed class RecordingHttpMessageHandler : HttpMessageHandler
         {
             Content = new StringContent(_body, System.Text.Encoding.UTF8, "application/json"),
         };
+
+        foreach (var (name, value) in ResponseHeaders)
+            response.Headers.Add(name, value);
 
         return response;
     }

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,12 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
+using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.Discovery;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Tokens;
 
@@ -46,8 +44,7 @@ public sealed class TokenRequestService : ITokenRequestService
 
     private readonly IProviderMetadataProvider _metadataProvider;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly OidcClientOptions _clientOptions;
-    private readonly TokenRequestOptions _options;
+    private readonly IClientCredentialsPresenter _credentialsPresenter;
 
     /// <summary>
     /// Creates the service.
@@ -55,13 +52,11 @@ public sealed class TokenRequestService : ITokenRequestService
     public TokenRequestService(
         IProviderMetadataProvider metadataProvider,
         IHttpClientFactory httpClientFactory,
-        IOptions<OidcClientOptions> clientOptions,
-        IOptions<TokenRequestOptions> options)
+        IClientCredentialsPresenter credentialsPresenter)
     {
         _metadataProvider = metadataProvider;
         _httpClientFactory = httpClientFactory;
-        _clientOptions = clientOptions.Value;
-        _options = options.Value;
+        _credentialsPresenter = credentialsPresenter;
     }
 
     /// <inheritdoc />
@@ -103,7 +98,7 @@ public sealed class TokenRequestService : ITokenRequestService
                 + "redeemed.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        Authenticate(request, parameters);
+        _credentialsPresenter.Present(request, parameters);
         request.Content = new FormUrlEncodedContent(parameters);
 
         HttpResponseMessage response;
@@ -128,61 +123,6 @@ public sealed class TokenRequestService : ITokenRequestService
             return await ReadSuccessAsync(response, metadata, tokenEndpoint, cancellationToken);
         }
     }
-
-    /// <summary>
-    /// Presents the client's credentials the way the host configured.
-    /// </summary>
-    /// <remarks>
-    /// The method is configured rather than picked from what the provider advertises. Choosing the strongest
-    /// method a provider claims to support sounds helpful, but it lets the provider's own document decide how
-    /// this client authenticates, and a downgrade there is silent.
-    /// </remarks>
-    private void Authenticate(HttpRequestMessage request, Dictionary<string, string> parameters)
-    {
-        switch (_options.ClientAuthenticationMethod)
-        {
-            case ClientAuthenticationMethods.ClientSecretBasic:
-                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", BasicCredentials());
-                break;
-
-            case ClientAuthenticationMethods.ClientSecretPost:
-                parameters["client_id"] = _clientOptions.ClientId;
-                parameters["client_secret"] = RequireSecret();
-                break;
-
-            case ClientAuthenticationMethods.None:
-                // A public client has no secret to present, but still has to say who it is.
-                parameters["client_id"] = _clientOptions.ClientId;
-                break;
-
-            default:
-                throw new TokenRequestException(
-                    $"Client authentication method '{_options.ClientAuthenticationMethod}' is not one this "
-                    + "client can present.");
-        }
-    }
-
-    /// <summary>
-    /// Builds the HTTP Basic credentials of RFC 6749 section 2.3.1.
-    /// </summary>
-    /// <remarks>
-    /// Both halves are form-encoded before being joined, which the specification requires and which matters
-    /// for a secret containing a colon or a non-ASCII character. Skipping it produces credentials the
-    /// provider reads as a different secret entirely.
-    /// </remarks>
-    private string BasicCredentials()
-    {
-        var userName = Uri.EscapeDataString(_clientOptions.ClientId);
-        var password = Uri.EscapeDataString(RequireSecret());
-
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}"));
-    }
-
-    private string RequireSecret()
-        => _options.ClientSecret
-           ?? throw new TokenRequestException(
-               $"Client authentication method '{_options.ClientAuthenticationMethod}' needs a client secret, "
-               + $"but {nameof(TokenRequestOptions)}.{nameof(TokenRequestOptions.ClientSecret)} is not set.");
 
     private static async Task ThrowRefusalAsync(
         HttpResponseMessage response, ProviderMetadata metadata, CancellationToken cancellationToken)

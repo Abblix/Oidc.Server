@@ -24,27 +24,24 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Abblix.Oidc.Client.Features.Tokens;
+namespace Abblix.Oidc.Client.Features.ClientAuthentication;
 
 /// <summary>
-/// Registers the talker to the token endpoint.
+/// Registers how this client authenticates itself at the provider.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the service that redeems grants at the provider's token endpoint.
+    /// Adds the credentials this client presents at every endpoint that authenticates it.
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
+    /// <param name="configureOptions">A delegate that configures <see cref="ClientAuthenticationOptions"/>.</param>
     /// <returns>The same collection, so calls chain.</returns>
-    /// <remarks>
-    /// How this client authenticates at that endpoint is configured separately, by
-    /// <c>AddClientAuthentication</c>: the same credentials serve every endpoint that authenticates the
-    /// client, so they are not a property of the token endpoint.
-    /// </remarks>
-    public static IServiceCollection AddTokenRequests(this IServiceCollection services)
+    public static IServiceCollection AddClientAuthentication(
+        this IServiceCollection services, Action<ClientAuthenticationOptions> configureOptions)
     {
-        services.AddHttpClient(TokenRequestService.HttpClientName);
-        services.TryAddSingleton<ITokenRequestService, TokenRequestService>();
+        services.Configure(configureOptions);
+        services.TryAddSingleton<IClientCredentialsPresenter, ClientCredentialsPresenter>();
 
         return services;
     }
