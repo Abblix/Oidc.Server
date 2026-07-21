@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Client.Features.AuthorizationResponses;
 using Abblix.Oidc.Client.Features.Discovery;
 using Microsoft.Extensions.DependencyInjection;
 
+using Abblix.Oidc.Client.Features.Authorization.Responses;
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationResponses;
 
 /// <summary>

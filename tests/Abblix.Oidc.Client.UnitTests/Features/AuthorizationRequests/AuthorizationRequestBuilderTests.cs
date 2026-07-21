@@ -21,14 +21,13 @@
 // info@abblix.com
 
 using System.Web;
-using Abblix.Oidc.Client.Features.AuthorizationRequests;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Pkce;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
-
+using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.Authorization.Requests;
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationRequests;
 
 /// <summary>

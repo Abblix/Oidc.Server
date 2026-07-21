@@ -21,15 +21,14 @@
 // info@abblix.com
 
 using Abblix.Jwt;
-using Abblix.Oidc.Client.Features.AuthorizationRequests;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Pkce;
 using Abblix.Oidc.Client.Features.SigningKeys;
 using Abblix.Oidc.Client.Features.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
-
+using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.Authorization.Requests;
 namespace Abblix.Oidc.Client.UnitTests;
 
 /// <summary>

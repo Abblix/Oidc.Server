@@ -20,12 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Client.Features.AuthorizationResponses;
 using Abblix.Oidc.Client.Features.Discovery;
 using Microsoft.Extensions.DependencyInjection;
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
-
+using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.Authorization.Responses;
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationResponses;
 
 /// <summary>

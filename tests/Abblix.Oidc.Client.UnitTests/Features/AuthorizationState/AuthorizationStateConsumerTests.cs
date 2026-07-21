@@ -23,8 +23,7 @@
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
-
+using Abblix.Oidc.Client.Features.Authorization.Context;
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 
 /// <summary>

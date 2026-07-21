@@ -20,10 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Features.Authorization.Context;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
-
-using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 
@@ -32,7 +31,7 @@ namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 /// </summary>
 public class InMemoryAuthorizationStateStoreTests
 {
-    private static Client.Features.AuthorizationState.AuthorizationContext StateFor(string state) => new()
+    private static AuthorizationContext ContextFor(string state) => new()
     {
         State = state,
         Nonce = "nonce",
@@ -59,7 +58,7 @@ public class InMemoryAuthorizationStateStoreTests
     public async Task FindReturnsWhatWasStored_AndDoesNotRemoveIt()
     {
         var store = CreateStore(new FakeTimeProvider());
-        await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("first"), TestContext.Current.CancellationToken);
 
         var found = await store.FindAsync("first", TestContext.Current.CancellationToken);
         Assert.Equal("verifier", found?.CodeVerifier);
@@ -77,7 +76,7 @@ public class InMemoryAuthorizationStateStoreTests
     public async Task AStateIsRemovedExactlyOnce()
     {
         var store = CreateStore(new FakeTimeProvider());
-        await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("first"), TestContext.Current.CancellationToken);
 
         Assert.True(await store.RemoveAsync("first", TestContext.Current.CancellationToken));
         Assert.False(await store.RemoveAsync("first", TestContext.Current.CancellationToken));
@@ -108,7 +107,7 @@ public class InMemoryAuthorizationStateStoreTests
         var timeProvider = new FakeTimeProvider();
         var store = CreateStore(timeProvider, TimeSpan.FromMinutes(15));
 
-        await store.StoreAsync(StateFor("first"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("first"), TestContext.Current.CancellationToken);
         timeProvider.Advance(TimeSpan.FromMinutes(16));
 
         Assert.Null(await store.FindAsync("first", TestContext.Current.CancellationToken));
@@ -126,11 +125,11 @@ public class InMemoryAuthorizationStateStoreTests
         var timeProvider = new FakeTimeProvider();
         var store = CreateStore(timeProvider, TimeSpan.FromMinutes(15));
 
-        await store.StoreAsync(StateFor("abandoned"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("abandoned"), TestContext.Current.CancellationToken);
         timeProvider.Advance(TimeSpan.FromMinutes(16));
 
         // Storing anything sweeps what has aged out, so the abandoned entry is gone before this one is added.
-        await store.StoreAsync(StateFor("current"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("current"), TestContext.Current.CancellationToken);
 
         Assert.Null(await store.FindAsync("abandoned", TestContext.Current.CancellationToken));
         Assert.NotNull(await store.FindAsync("current", TestContext.Current.CancellationToken));
