@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Client.AspNetCore;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
+using Abblix.Oidc.Client.Features.FrontChannelLogout;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -73,6 +74,11 @@ public sealed class ClientHostFixture : IAsyncLifetime
     public const string IdentityTokenPath = "/id-token";
 
     /// <summary>
+    /// Where the provider would render this application's front-channel logout frame.
+    /// </summary>
+    public const string FrontChannelLogoutPath = "/frontchannel-logout";
+
+    /// <summary>
     /// The identifier of the client this application signs in as, registered with the provider carrying a
     /// back-channel logout address that points back here.
     /// </summary>
@@ -92,6 +98,11 @@ public sealed class ClientHostFixture : IAsyncLifetime
     /// The subjects this application was told to log out, in the order the provider asked.
     /// </summary>
     public List<string> LoggedOutSubjects { get; } = [];
+
+    /// <summary>
+    /// The front-channel logout requests this application acted on.
+    /// </summary>
+    public List<FrontChannelLogoutNotification> FrontChannelLogouts { get; } = [];
 
     /// <summary>
     /// The provider this application trusts, for a test that needs to reach it directly.
@@ -238,6 +249,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
             });
 
         _provider.AddClientServices(services, ClientId);
+        services.AddFrontChannelLogout();
     }
 
     private void Configure(IApplicationBuilder app)
@@ -258,6 +270,18 @@ public sealed class ClientHostFixture : IAsyncLifetime
                     IdentityTokenPath,
                     (Delegate)((HttpContext context) => context.GetTokenAsync("id_token")))
                 .RequireAuthorization();
+
+            endpoints.MapGet(
+                FrontChannelLogoutPath,
+                (HttpRequest request, CancellationToken cancellationToken) =>
+                    FrontChannelLogoutEndpoint.HandleAsync(
+                        request,
+                        (notification, _) =>
+                        {
+                            FrontChannelLogouts.Add(notification);
+                            return Task.CompletedTask;
+                        },
+                        cancellationToken));
 
             endpoints.MapPost(
                 BackChannelLogoutPath,

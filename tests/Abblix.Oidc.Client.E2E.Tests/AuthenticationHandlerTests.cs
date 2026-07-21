@@ -207,4 +207,52 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
         Assert.Equal(loggedOutBefore + 1, fixture.LoggedOutSubjects.Count);
         Assert.Equal(Subject, fixture.LoggedOutSubjects[^1]);
     }
+
+    /// <summary>
+    /// A front-channel logout request reaches the application and is answered without a body, marked
+    /// no-store.
+    /// </summary>
+    /// <remarks>
+    /// The answer is empty because it is rendered inside a frame on the provider's logout page, where
+    /// nobody reads it and anything drawn would appear in someone else's document.
+    /// </remarks>
+    [Fact]
+    public async Task AFrontChannelLogoutRequestIsActedOn()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var browser = fixture.CreateBrowser();
+
+        var before = fixture.FrontChannelLogouts.Count;
+
+        using var response = await browser.GetAsync(
+            $"{ClientHostFixture.FrontChannelLogoutPath}" +
+            $"?iss={Uri.EscapeDataString(ClientAgainstServerFixture.Issuer)}&sid=e2e-session",
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(
+            new CacheControlHeaderValue { NoStore = true }, response.Headers.CacheControl);
+
+        Assert.Equal(before + 1, fixture.FrontChannelLogouts.Count);
+        Assert.Equal("e2e-session", fixture.FrontChannelLogouts[^1].SessionId);
+    }
+
+    /// <summary>
+    /// A request naming one of the two parameters is refused. Section 2: "The OP MAY add these query
+    /// parameters when rendering the logout URI, and if either is included, both MUST be."
+    /// </summary>
+    [Fact]
+    public async Task AHalfNamedFrontChannelLogoutRequestIsRefused()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var browser = fixture.CreateBrowser();
+
+        var before = fixture.FrontChannelLogouts.Count;
+
+        using var response = await browser.GetAsync(
+            $"{ClientHostFixture.FrontChannelLogoutPath}?sid=e2e-session", cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(before, fixture.FrontChannelLogouts.Count);
+    }
 }
