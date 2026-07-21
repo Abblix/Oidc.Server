@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -60,6 +61,37 @@ public static class ServiceCollectionExtensions
         // default a state-feature call left behind. TryAddEnumerable is not what is wanted here.
         services.RemoveAll<IAuthorizationStateStore>();
         services.AddSingleton<IAuthorizationStateStore, CookieAuthorizationStateStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Replaces the in-memory authorization state store with one that keeps each login in the host's
+    /// distributed cache, with a secret key to it bound to the browser by a cookie.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// The choice between this and <see cref="AddCookieAuthorizationStateStore"/> is the host's, made by
+    /// which one it calls: the cookie store carries the whole context in the cookie and needs nothing
+    /// server-side, this one keeps the context in a cache and is the fit for a host already storing its
+    /// post-login ticket the same way.
+    /// It does NOT register a cache. The host must register an <see cref="IDistributedCache"/> - a memory
+    /// one for a single node, a Redis one for several - and if it forgets, resolving the store fails at
+    /// startup, which is the right signal. A default in-process cache here would instead let a
+    /// multi-replica host run on a store that silently loses logins landing on another node.
+    /// The other dependencies are requested for the host: <c>AddHttpContextAccessor</c> for the request
+    /// in flight, both no-ops when already present.
+    /// </remarks>
+    public static IServiceCollection AddDistributedCacheAuthorizationStateStore(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.AddOptions<AuthorizationStateOptions>();
+
+        // The last registration wins the singular resolve, overriding any in-memory default. The cache
+        // itself is deliberately not registered - see the remarks: it is the host's to choose.
+        services.RemoveAll<IAuthorizationStateStore>();
+        services.AddSingleton<IAuthorizationStateStore, DistributedCacheAuthorizationStateStore>();
 
         return services;
     }
