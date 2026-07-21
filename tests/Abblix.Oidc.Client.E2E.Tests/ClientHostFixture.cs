@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Client.AspNetCore;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.FrontChannelLogout;
+using Abblix.Oidc.Client.Features.SessionManagement;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -77,6 +78,11 @@ public sealed class ClientHostFixture : IAsyncLifetime
     /// Where the provider would render this application's front-channel logout frame.
     /// </summary>
     public const string FrontChannelLogoutPath = "/frontchannel-logout";
+
+    /// <summary>
+    /// Where this application serves its session-watching frame.
+    /// </summary>
+    public const string SessionCheckPath = "/session-check";
 
     /// <summary>
     /// The identifier of the client this application signs in as, registered with the provider carrying a
@@ -250,6 +256,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
 
         _provider.AddClientServices(services, ClientId);
         services.AddFrontChannelLogout();
+        services.AddSessionCheck();
     }
 
     private void Configure(IApplicationBuilder app)
@@ -266,6 +273,22 @@ public sealed class ClientHostFixture : IAsyncLifetime
             // The ID Token the login produced, which a test needs in order to ask the provider to end the
             // session it belongs to. A real application would not publish this; it is here because the test
             // stands where the application's own logout button would.
+            // Rendered for the signed-in session, reading the login state the handler kept with it. This is
+            // the shape a real application uses: the page that hosts the frame points at this address.
+            endpoints.MapGet(
+                    SessionCheckPath,
+                    (HttpRequest request, HttpContext context, CancellationToken cancellationToken) =>
+                        SessionCheckEndpoint.HandleAsync(
+                            request,
+                            context.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult
+                                ?.Properties?.Items
+                                .TryGetValue(
+                                    AbblixOidcClientHandler.SessionStateItemKey, out var state) is true
+                                ? state
+                                : null,
+                            cancellationToken))
+                .RequireAuthorization();
+
             endpoints.MapGet(
                     IdentityTokenPath,
                     (Delegate)((HttpContext context) => context.GetTokenAsync("id_token")))

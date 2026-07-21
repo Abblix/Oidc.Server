@@ -52,6 +52,15 @@ public sealed class AbblixOidcClientHandler(
     IOidcClient oidcClient) : RemoteAuthenticationHandler<AbblixOidcClientOptions>(options, logger, encoder)
 {
     /// <summary>
+    /// Where the login state is kept among the session's own properties.
+    /// </summary>
+    /// <remarks>
+    /// A host reads it from the authenticated session to render the watching frame. Named rather than
+    /// left to a string literal, because the reader is in the host and the writer is here.
+    /// </remarks>
+    public const string SessionStateItemKey = "abblix.oidc.session_state";
+
+    /// <summary>
     /// Sends the user to the provider to sign in.
     /// </summary>
     /// <remarks>
@@ -101,6 +110,12 @@ public sealed class AbblixOidcClientHandler(
             RedirectUri = signIn.ReturnUri,
             ExpiresUtc = signIn.ExpiresIn is { } lifetime ? TimeProvider.GetUtcNow() + lifetime : null,
         };
+
+        // Kept whether or not tokens are saved, because it is not a credential: OpenID Connect Session
+        // Management 1.0 section 2 calls it opaque to the client, and a page watching the session needs it
+        // on every later request, not only at the moment of signing in.
+        if (signIn.SessionState is { } sessionState)
+            properties.Items[SessionStateItemKey] = sessionState;
 
         if (Options.SaveTokens)
             StoreTokens(properties, signIn);
