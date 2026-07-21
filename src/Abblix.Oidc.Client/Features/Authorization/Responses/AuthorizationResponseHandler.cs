@@ -73,7 +73,7 @@ internal sealed class AuthorizationResponseHandler(
         // outcome acted on.
         return response.Kind switch
         {
-            AuthorizationResponseKind.AuthorizationCode => new AuthorizationCodeResult(response.Code!, context),
+            AuthorizationResponseKind.Success => new AuthorizationCodeResult(response.Code!, context),
 
             AuthorizationResponseKind.Error => throw new AuthorizationResponseException(
                 $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
@@ -100,19 +100,21 @@ internal sealed class AuthorizationResponseHandler(
     {
         switch (response.Kind)
         {
-            case AuthorizationResponseKind.AuthorizationCode:
+            case AuthorizationResponseKind.Success:
             case AuthorizationResponseKind.Error:
                 return;
 
             case AuthorizationResponseKind.Contradictory:
                 throw new AuthorizationResponseException(
-                    "The authorization response carries both a code and an error, which no specification "
-                    + "defines. Reading it as either would act on half of a response the provider did not send.");
+                    "The authorization response carries both success parameters and an error, which no "
+                    + "specification defines. Reading it as either would act on half of a response the provider "
+                    + "did not send.");
 
             case AuthorizationResponseKind.Unrecognized:
                 throw new AuthorizationResponseException(
                     "The request reaching the callback address is not an authorization response: it carries "
-                    + "neither a code nor an error.");
+                    + "neither a code, a token, nor an error. A token-returning response delivered by "
+                    + "fragment looks like this too, since a fragment never reaches the server.");
 
             default:
                 throw new AuthorizationResponseException(

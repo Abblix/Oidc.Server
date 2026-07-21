@@ -43,6 +43,34 @@ public static class Parameters
     public const string State = "state";
 
     /// <summary>
+    /// An ID Token returned from the authorization endpoint, in the implicit and hybrid flows
+    /// (OIDC Core 1.0 sections 3.2.2.5 and 3.3.2.5).
+    /// </summary>
+    public const string IdToken = "id_token";
+
+    /// <summary>
+    /// An access token returned from the authorization endpoint (RFC 6749 section 4.2.2).
+    /// </summary>
+    public const string AccessToken = "access_token";
+
+    /// <summary>
+    /// The type of the access token, which RFC 6749 section 4.2.2 makes REQUIRED whenever one is
+    /// returned here.
+    /// </summary>
+    public const string TokenType = "token_type";
+
+    /// <summary>
+    /// How long the access token remains valid, in seconds (RFC 6749 section 4.2.2).
+    /// </summary>
+    public const string ExpiresIn = "expires_in";
+
+    /// <summary>
+    /// The scope actually granted, present when it differs from the one requested
+    /// (RFC 6749 section 4.2.2).
+    /// </summary>
+    public const string Scope = "scope";
+
+    /// <summary>
     /// The error code on a failed response (RFC 6749 section 4.1.2.1).
     /// </summary>
     public const string Error = "error";

@@ -49,10 +49,87 @@ public class AuthorizationResponseParserTests
     {
         var response = Parse((Parameters.Code, "the-code"), (Parameters.State, "the-state"));
 
-        Assert.Equal(AuthorizationResponseKind.AuthorizationCode, response.Kind);
+        Assert.Equal(AuthorizationResponseKind.Success, response.Kind);
         Assert.Equal("the-code", response.Code);
         Assert.Equal("the-state", response.State);
         Assert.Null(response.Error);
+    }
+
+    /// <summary>
+    /// The implicit shape of OIDC Core 1.0 section 3.2.2.5: an ID Token and an access token straight from
+    /// the authorization endpoint, with the token type RFC 6749 section 4.2.2 requires beside it.
+    /// </summary>
+    [Fact]
+    public void IdTokenAndAccessToken_ReadAsASuccess()
+    {
+        var response = Parse(
+            (Parameters.IdToken, "the-id-token"),
+            (Parameters.AccessToken, "the-access-token"),
+            (Parameters.TokenType, "Bearer"),
+            (Parameters.ExpiresIn, "3600"),
+            (Parameters.State, "the-state"));
+
+        Assert.Equal(AuthorizationResponseKind.Success, response.Kind);
+        Assert.Equal("the-id-token", response.IdToken);
+        Assert.Equal("the-access-token", response.AccessToken);
+        Assert.Equal("Bearer", response.TokenType);
+        Assert.Equal("3600", response.ExpiresIn);
+        Assert.Null(response.Code);
+    }
+
+    /// <summary>
+    /// The hybrid shape of section 3.3.2.5: a code alongside an ID Token, so the ID Token's c_hash can
+    /// bind the code that will be redeemed over the back channel.
+    /// </summary>
+    [Fact]
+    public void CodeAndIdToken_ReadAsASuccess()
+    {
+        var response = Parse(
+            (Parameters.Code, "the-code"),
+            (Parameters.IdToken, "the-id-token"),
+            (Parameters.State, "the-state"));
+
+        Assert.Equal(AuthorizationResponseKind.Success, response.Kind);
+        Assert.Equal("the-code", response.Code);
+        Assert.Equal("the-id-token", response.IdToken);
+    }
+
+    /// <summary>
+    /// A granted scope that differs from the one asked for is reported as the provider stated it.
+    /// </summary>
+    [Fact]
+    public void GrantedScope_IsRead()
+    {
+        var response = Parse(
+            (Parameters.AccessToken, "the-access-token"),
+            (Parameters.Scope, "openid profile"));
+
+        Assert.Equal("openid profile", response.Scope);
+    }
+
+    /// <summary>
+    /// A token arriving with an error is as contradictory as a code with one: no specification defines a
+    /// response that both succeeded and failed.
+    /// </summary>
+    [Fact]
+    public void IdTokenWithAnError_IsContradictory()
+        => Assert.Equal(
+            AuthorizationResponseKind.Contradictory,
+            Parse((Parameters.IdToken, "the-id-token"), (Parameters.Error, ErrorCodes.AccessDenied)).Kind);
+
+    /// <summary>
+    /// An expires_in that is not a number is carried through rather than failing the read: what arrived is
+    /// a fact about the response for a later check to judge, and failing here would lose the rest of it.
+    /// </summary>
+    [Fact]
+    public void AnUnparsableExpiresIn_DoesNotFailTheRead()
+    {
+        var response = Parse(
+            (Parameters.AccessToken, "the-access-token"),
+            (Parameters.ExpiresIn, "not-a-number"));
+
+        Assert.Equal("not-a-number", response.ExpiresIn);
+        Assert.Equal(AuthorizationResponseKind.Success, response.Kind);
     }
 
     /// <summary>
@@ -157,7 +234,7 @@ public class AuthorizationResponseParserTests
             ("some_extension_parameter", "whatever"),
             ("session_state", "abc"));
 
-        Assert.Equal(AuthorizationResponseKind.AuthorizationCode, response.Kind);
+        Assert.Equal(AuthorizationResponseKind.Success, response.Kind);
         Assert.Equal("the-code", response.Code);
     }
 
