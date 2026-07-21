@@ -87,6 +87,17 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     {
         var services = new ServiceCollection();
 
+        AddClientServices(services);
+        configure?.Invoke(services);
+
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Registers the client into someone else's container - an application host, for the tests that run one.
+    /// </summary>
+    public void AddClientServices(IServiceCollection services)
+    {
         services
             .AddOidcClientCore(options => options.ClientId = ClientId)
             .AddDiscovery(options => options.Authority = new Uri(Issuer))
@@ -114,10 +125,6 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
             .AddOidcClientFacade();
 
         RouteIntoTheServer(services);
-
-        configure?.Invoke(services);
-
-        return services.BuildServiceProvider();
     }
 
     /// <summary>

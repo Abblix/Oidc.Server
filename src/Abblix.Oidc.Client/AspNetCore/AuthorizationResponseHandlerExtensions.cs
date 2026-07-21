@@ -53,10 +53,23 @@ public static class AuthorizationResponseHandlerExtensions
         this IAuthorizationResponseHandler handler,
         HttpRequest request,
         CancellationToken cancellationToken = default)
+        => handler.HandleAsync(ReadCallback(request), cancellationToken);
+
+    /// <summary>
+    /// Reads the callback parameters out of <paramref name="request"/>, refusing a response that arrived by
+    /// a transport this client did not ask for.
+    /// </summary>
+    /// <param name="request">The callback request the provider redirected the browser to.</param>
+    /// <returns>The parameters, ready for the framework-independent handler.</returns>
+    /// <remarks>
+    /// Public because the authentication handler needs the same reading and the same refusal, and a second
+    /// copy of either is a second thing to keep in step.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> ReadCallback(HttpRequest request)
     {
         RequireTheExpectedTransport(request);
 
-        return handler.HandleAsync(ReadParameters(request), cancellationToken);
+        return ReadParameters(request);
     }
 
     /// <summary>
