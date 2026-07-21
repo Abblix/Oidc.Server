@@ -32,7 +32,7 @@ public interface IAuthorizationResponseHandler
 {
     /// <summary>
     /// Parses, verifies, and consumes the response named by <paramref name="parameters"/>, returning
-    /// the authorization code and its login, or throwing when the response must not be acted on.
+    /// what it carried, or throwing when the response must not be acted on.
     /// </summary>
     /// <param name="parameters">
     /// The parameters as delivered to the callback address, each name mapped to every value that
@@ -54,7 +54,7 @@ public interface IAuthorizationResponseHandler
     /// about the provider's answer - not even whether it was a success or a failure worth logging - is
     /// acted on until the response is known to have come from the provider this login was started with.
     /// </remarks>
-    Task<AuthorizationCodeResult> HandleAsync(
+    Task<AuthorizationResult> HandleAsync(
         IReadOnlyDictionary<string, IReadOnlyList<string>> parameters,
         CancellationToken cancellationToken = default);
 }

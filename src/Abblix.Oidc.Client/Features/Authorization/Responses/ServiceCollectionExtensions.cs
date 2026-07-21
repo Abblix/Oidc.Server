@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.IdentityTokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -91,6 +92,16 @@ public static class ServiceCollectionExtensions
         services.AddAuthorizationResponseParsing();
         services.AddResponseIssuerValidation(configure);
         services.AddAuthorizationStateConsumption();
+
+        // An ID Token can arrive at this endpoint in the implicit and hybrid flows, and validating it is
+        // part of handling the response rather than something a caller does afterwards - the nonce and the
+        // hashes that bind it are only checkable while the response is still whole.
+        services.AddIdentityTokenValidation();
+
+        // The flow the request asked for, which the response must match. Registered here so the handler
+        // resolves even in a host that only receives callbacks; a host that also sends requests configures
+        // the same options through AddAuthorizationRequests.
+        services.AddOptions<Requests.AuthorizationRequestOptions>();
 
         services.TryAddSingleton<IAuthorizationResponseHandler, AuthorizationResponseHandler>();
 

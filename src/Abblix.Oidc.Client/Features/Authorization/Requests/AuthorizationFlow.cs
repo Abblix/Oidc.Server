@@ -128,4 +128,33 @@ public static class AuthorizationFlows
         AuthorizationFlow.IdTokenToken => false,
         _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
     };
+
+    /// <summary>
+    /// Whether the flow returns an ID Token from the authorization endpoint, to be validated there rather
+    /// than after a token exchange.
+    /// </summary>
+    public static bool IncludesIdentityToken(this AuthorizationFlow flow) => flow switch
+    {
+        AuthorizationFlow.IdToken => true,
+        AuthorizationFlow.IdTokenToken => true,
+        AuthorizationFlow.CodeIdToken => true,
+        AuthorizationFlow.CodeIdTokenToken => true,
+        AuthorizationFlow.Code => false,
+        AuthorizationFlow.CodeToken => false,
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+    };
+
+    /// <summary>
+    /// Whether the flow returns an access token from the authorization endpoint.
+    /// </summary>
+    public static bool IncludesAccessToken(this AuthorizationFlow flow) => flow switch
+    {
+        AuthorizationFlow.IdTokenToken => true,
+        AuthorizationFlow.CodeToken => true,
+        AuthorizationFlow.CodeIdTokenToken => true,
+        AuthorizationFlow.Code => false,
+        AuthorizationFlow.IdToken => false,
+        AuthorizationFlow.CodeIdToken => false,
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+    };
 }

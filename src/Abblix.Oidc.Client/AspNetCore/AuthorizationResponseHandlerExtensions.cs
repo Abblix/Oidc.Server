@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -39,13 +39,13 @@ public static class AuthorizationResponseHandlerExtensions
     /// <param name="handler">The handler that parses, verifies and consumes the response.</param>
     /// <param name="request">The callback request the provider redirected the browser to.</param>
     /// <param name="cancellationToken">Cancels the store and metadata reads the handler makes.</param>
-    /// <returns>The authorization code and its login, ready for the token exchange.</returns>
+    /// <returns>The artifacts the flow returned, validated, together with the login they belong to.</returns>
     /// <remarks>
     /// This is the only ASP.NET the callback handling needs: everything after the parameters are read is
     /// the framework-independent handler's, so the whole trust pipeline - parse, consume state, check
     /// issuer, act - is shared with any other host that can produce the same parameter map.
     /// </remarks>
-    public static Task<AuthorizationCodeResult> HandleAsync(
+    public static Task<AuthorizationResult> HandleAsync(
         this IAuthorizationResponseHandler handler,
         HttpRequest request,
         CancellationToken cancellationToken = default)

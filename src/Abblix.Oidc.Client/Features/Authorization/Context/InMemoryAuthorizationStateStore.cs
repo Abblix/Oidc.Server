@@ -61,7 +61,8 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
     /// Creates the store.
     /// </summary>
     public InMemoryAuthorizationStateStore(
-        TimeProvider timeProvider, IOptions<AuthorizationStateOptions> options)
+        TimeProvider timeProvider,
+        IOptions<AuthorizationStateOptions> options)
     {
         _timeProvider = timeProvider;
         _options = options.Value;
@@ -83,13 +84,16 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
 
     /// <inheritdoc />
     public Task<AuthorizationContext?> FindAsync(string state, CancellationToken cancellationToken = default)
+        => Task.FromResult(Find(state));
+
+    private AuthorizationContext? Find(string state)
     {
         // A read, never a removal: an entry looked up here may still be refused by a later check, and
         // removing it now would spend a login the response has not yet earned.
-        if (!_states.TryGetValue(state, out var stored) || _timeProvider.GetUtcNow() >= stored.ExpiresAt)
-            return Task.FromResult<AuthorizationContext?>(null);
+        if (!_states.TryGetValue(state, out var stored) || stored.ExpiresAt <= _timeProvider.GetUtcNow())
+            return null;
 
-        return Task.FromResult<AuthorizationContext?>(stored.Context);
+        return stored.Context;
     }
 
     /// <inheritdoc />
@@ -112,7 +116,7 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
 
         foreach (var (key, stored) in _states)
         {
-            if (now >= stored.ExpiresAt)
+            if (stored.ExpiresAt <= now)
                 _states.TryRemove(key, out _);
         }
     }

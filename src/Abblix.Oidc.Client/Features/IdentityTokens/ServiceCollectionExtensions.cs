@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Oidc.Client.Features.SigningKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -45,8 +46,20 @@ public static class ServiceCollectionExtensions
         // registered it for its own use keeps its registration.
         services.AddJsonWebTokens();
 
+        // That layer logs, so the logging services have to exist for it to be constructible. Adding them
+        // is idempotent and a no-op in any host that configured logging itself, which every real one does.
+        // Requesting them here is what lets a bare container resolve the validator at all.
+        services.AddLogging();
+
+        // The keys that verify the provider's signature. Registered as the reader that fetches them from
+        // the provider's published key set, which is the answer for a provider that publishes one; a host
+        // holding the keys itself calls AddConfiguredSigningKeys and replaces it.
+        services.AddSigningKeys();
+
         // A soft default, so a test or a host can substitute a clock before this call.
         services.TryAddSingleton(TimeProvider.System);
+
+        services.AddOptions<IdentityTokenValidationOptions>();
 
         if (configure is not null)
             services.Configure(configure);

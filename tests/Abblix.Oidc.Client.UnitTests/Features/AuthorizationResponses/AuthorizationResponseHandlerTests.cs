@@ -25,6 +25,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
+using AuthorizationFlow = Abblix.Oidc.Client.Features.Authorization.Requests.AuthorizationFlow;
+using AuthorizationRequestOptions = Abblix.Oidc.Client.Features.Authorization.Requests.AuthorizationRequestOptions;
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationResponses;
 
 /// <summary>
@@ -47,11 +49,13 @@ public class AuthorizationResponseHandlerTests
             });
     }
 
-    private static (IAuthorizationResponseHandler Handler, IAuthorizationStateStore Store) Create()
+    private static (IAuthorizationResponseHandler Handler, IAuthorizationStateStore Store) Create(
+        AuthorizationFlow flow = AuthorizationFlow.Code)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IProviderMetadataProvider>(new StubMetadataProvider());
         services.AddAuthorizationResponseHandling();
+        services.Configure<AuthorizationRequestOptions>(options => options.Flow = flow);
 
         var provider = services.BuildServiceProvider();
         return (
@@ -299,5 +303,87 @@ public class AuthorizationResponseHandlerTests
 
         await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(callback, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A response carrying an artifact the configured flow never asked for is refused whole, not used in
+    /// part. A client that asked only for a code and is handed a code plus an ID Token has been given
+    /// something it never requested by a party it has not finished authenticating - taking the useful
+    /// piece is how a client ends up trusting an artifact no check of its own called for.
+    /// </summary>
+    [Fact]
+    public async Task AnArtifactTheFlowDidNotAskFor_IsRefused()
+    {
+        var (handler, store) = Create();
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(
+                Response(
+                    (Parameters.Code, "the-code"),
+                    (Parameters.IdToken, "an-unrequested-id-token"),
+                    (Parameters.State, State),
+                    (Parameters.Issuer, Provider)),
+                TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// An access token slipped into a code-only callback is refused for the same reason.
+    /// </summary>
+    [Fact]
+    public async Task AnAccessTokenInACodeOnlyCallback_IsRefused()
+    {
+        var (handler, store) = Create();
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(
+                Response(
+                    (Parameters.Code, "the-code"),
+                    (Parameters.AccessToken, "an-unrequested-access-token"),
+                    (Parameters.State, State),
+                    (Parameters.Issuer, Provider)),
+                TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// And the other direction: a flow that returns an ID Token is not satisfied by a response without
+    /// one, because the flow cannot be completed with what arrived.
+    /// </summary>
+    [Fact]
+    public async Task AMissingArtifactTheFlowRequires_IsRefused()
+    {
+        var (handler, store) = Create(AuthorizationFlow.CodeIdToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(
+                Response(
+                    (Parameters.Code, "the-code"),
+                    (Parameters.State, State),
+                    (Parameters.Issuer, Provider)),
+                TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The stated lifetime is read when it is a number of seconds, and reported as unknown when it is not
+    /// - RFC 6749 section 4.2.2 makes expires_in RECOMMENDED, so a client that cannot read it is in the
+    /// same position as one never told.
+    /// </summary>
+    [Fact]
+    public async Task AnUnreadableExpiresIn_LeavesTheLifetimeUnknown()
+    {
+        var (handler, store) = Create();
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        var result = await handler.HandleAsync(
+            Response(
+                (Parameters.Code, "the-code"),
+                (Parameters.ExpiresIn, "not-a-number"),
+                (Parameters.State, State),
+                (Parameters.Issuer, Provider)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(result.ExpiresIn);
     }
 }

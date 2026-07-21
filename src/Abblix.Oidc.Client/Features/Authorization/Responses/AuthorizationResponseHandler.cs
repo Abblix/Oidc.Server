@@ -20,7 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.Authorization.Requests;
+using Abblix.Oidc.Client.Features.IdentityTokens;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Authorization.Responses;
 
@@ -31,12 +35,16 @@ namespace Abblix.Oidc.Client.Features.Authorization.Responses;
 /// <param name="parser">Takes the response apart without judging it.</param>
 /// <param name="stateConsumer">Matches the response to a held login and consumes it, once.</param>
 /// <param name="issuerValidator">Confirms the response came from the provider the login was started with.</param>
+/// <param name="identityTokenValidator">Validates an ID Token that arrived from the authorization endpoint.</param>
+/// <param name="requestOptions">Names the flow this client asked for, which the response must match.</param>
 internal sealed class AuthorizationResponseHandler(
     IAuthorizationResponseParser parser,
     IAuthorizationStateConsumer stateConsumer,
-    IResponseIssuerValidator issuerValidator) : IAuthorizationResponseHandler
+    IResponseIssuerValidator issuerValidator,
+    IIdentityTokenValidator identityTokenValidator,
+    IOptions<AuthorizationRequestOptions> requestOptions) : IAuthorizationResponseHandler
 {
-    public async Task<AuthorizationCodeResult> HandleAsync(
+    public async Task<AuthorizationResult> HandleAsync(
         IReadOnlyDictionary<string, IReadOnlyList<string>> parameters,
         CancellationToken cancellationToken = default)
     {
@@ -57,8 +65,6 @@ internal sealed class AuthorizationResponseHandler(
         // reading the error code. RFC 9207 section 2.4: "For error responses, clients MUST NOT assume
         // that the error originates from the intended authorization server." An error code logged or
         // shown before this check is an attacker's claim recorded as the provider's.
-        // No id_token arrives at the authorization endpoint in the code flow, so the only issuer the
-        // response offers is the iss parameter; the ID Token claim is left null.
         await issuerValidator.ValidateAsync(
             new ResponseIssuers { Expected = context.Issuer, Parameter = response.Issuer },
             cancellationToken);
@@ -71,21 +77,98 @@ internal sealed class AuthorizationResponseHandler(
 
         // Only now, with the response known to come from the right provider and its login spent, is its
         // outcome acted on.
-        return response.Kind switch
+        if (response.Kind == AuthorizationResponseKind.Error)
         {
-            AuthorizationResponseKind.Success => new AuthorizationCodeResult(response.Code!, context),
-
-            AuthorizationResponseKind.Error => throw new AuthorizationResponseException(
+            throw new AuthorizationResponseException(
                 $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
                 response.Error!,
-                response.ErrorDescription),
+                response.ErrorDescription);
+        }
 
-            // RefuseMalformed already rejected the other two kinds, so reaching them here would mean the
-            // response changed underfoot. Fail loudly rather than pick a branch by accident.
-            _ => throw new AuthorizationResponseException(
-                $"The authorization response is of an unexpected kind '{response.Kind}' after validation."),
+        return await BuildResultAsync(response, context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Turns a verified successful response into its result, validating an ID Token that came with it.
+    /// </summary>
+    private async Task<AuthorizationResult> BuildResultAsync(
+        AuthorizationResponse response,
+        AuthorizationContext context,
+        CancellationToken cancellationToken)
+    {
+        var flow = requestOptions.Value.Flow;
+
+        RequireArtifactsMatchTheFlow(response, flow);
+
+        var identityToken = response.IdToken is { } identityTokenValue
+            ? await identityTokenValidator.ValidateAsync(
+                identityTokenValue,
+                new IdentityTokenValidationContext
+                {
+                    // The nonce ties the token to this login, and the two hashes tie it to whatever came
+                    // beside it in the same response. Both neighbours are in hand only here: after a token
+                    // exchange there would be nothing left to check c_hash against.
+                    Nonce = context.Nonce,
+                    AuthorizationCode = response.Code,
+                    AccessToken = response.AccessToken,
+                },
+                cancellationToken)
+            : null;
+
+        return new AuthorizationResult(context)
+        {
+            Code = response.Code,
+            IdToken = identityToken,
+            AccessToken = response.AccessToken,
+            TokenType = response.TokenType,
+            ExpiresIn = ParseExpiresIn(response.ExpiresIn),
+            Scope = response.Scope,
         };
     }
+
+    /// <summary>
+    /// Refuses a response whose artifacts are not the ones the configured flow asks for.
+    /// </summary>
+    /// <remarks>
+    /// Both directions matter, and the surprising one is the extra artifact. A client that asked for a
+    /// code and receives a code plus an ID Token has been handed something it never requested, by a party
+    /// it has not finished authenticating; accepting the useful parts of such a response is how a client
+    /// ends up trusting an artifact no check of its own asked for. Missing artifacts are refused for the
+    /// plainer reason that the flow cannot be completed without them.
+    /// This is what makes the opt-in real on the receiving side: opting out of a flow means responses for
+    /// it are refused, not merely never requested.
+    /// </remarks>
+    private static void RequireArtifactsMatchTheFlow(AuthorizationResponse response, AuthorizationFlow flow)
+    {
+        RequireArtifact(response.Code is not null, flow.IncludesAuthorizationCode(), "an authorization code", flow);
+        RequireArtifact(response.IdToken is not null, flow.IncludesIdentityToken(), "an ID Token", flow);
+        RequireArtifact(response.AccessToken is not null, flow.IncludesAccessToken(), "an access token", flow);
+    }
+
+    private static void RequireArtifact(bool present, bool expected, string artifact, AuthorizationFlow flow)
+    {
+        if (present == expected)
+            return;
+
+        var problem = present ? "carries" : "is missing";
+        throw new AuthorizationResponseException(
+            $"The authorization response {problem} {artifact}, which the '{flow.ToResponseType()}' flow "
+            + (present ? "did not ask for." : "requires."));
+    }
+
+    /// <summary>
+    /// Reads the stated lifetime, or returns null when the provider gave none or gave one that does not
+    /// read as a number of seconds.
+    /// </summary>
+    /// <remarks>
+    /// A lifetime that cannot be read is reported as unknown rather than failing the response: RFC 6749
+    /// section 4.2.2 makes expires_in RECOMMENDED, not required, so a client that cannot use it is in the
+    /// same position as one that was never told.
+    /// </remarks>
+    private static TimeSpan? ParseExpiresIn(string? expiresIn)
+        => long.TryParse(expiresIn, out var seconds) && seconds >= 0
+            ? TimeSpan.FromSeconds(seconds)
+            : null;
 
     /// <summary>
     /// Rejects the two shapes no specification defines, before any state is consumed or trusted.
