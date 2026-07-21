@@ -34,6 +34,12 @@ public static class Parameters
     /// <summary>What kind of response the client is asking for.</summary>
     public const string ResponseType = "response_type";
 
+    /// <summary>
+    /// How the client is asking the provider to return the response (query, fragment, or form_post).
+    /// Omitted for the code flow, where the provider's default of query is already correct.
+    /// </summary>
+    public const string ResponseMode = "response_mode";
+
     /// <summary>Identifies the client to the provider.</summary>
     public const string ClientId = "client_id";
 

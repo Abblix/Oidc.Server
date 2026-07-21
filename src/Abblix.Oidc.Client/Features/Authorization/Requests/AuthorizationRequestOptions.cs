@@ -42,6 +42,51 @@ public sealed class AuthorizationRequestOptions
     public required Uri RedirectUri { get; set; }
 
     /// <summary>
+    /// Which flow this client runs, defaulting to the authorization code flow.
+    /// </summary>
+    /// <remarks>
+    /// Every other flow returns a token through the browser and additionally requires
+    /// <see cref="FrontChannelTokensAccepted"/> to be set - the flow says WHICH, the acceptance says the
+    /// host has taken the risk on purpose. Two settings rather than one so that neither a mis-bound
+    /// configuration value nor an over-eager default can enable a front-channel-token flow by itself.
+    /// </remarks>
+    public AuthorizationFlow Flow { get; set; } = AuthorizationFlow.Code;
+
+    /// <summary>
+    /// Acknowledges that this client accepts tokens returned through the browser, which
+    /// <see cref="Flow"/> values other than <see cref="AuthorizationFlow.Code"/> do.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and a token-returning flow selected without it is refused when the request is
+    /// built rather than at some later point where the cause would be harder to see. A token in the front
+    /// channel is exposed to the browser's history, to the referrer of anything the page loads, and to
+    /// any script on it; OAuth 2.0 Security BCP (RFC 9700 section 2.1.2) is direct about the consequence -
+    /// "clients SHOULD NOT use the implicit grant (response type "token") or any other response type
+    /// issuing access tokens in the authorization response, such as "token id_token" and "code token
+    /// id_token"".
+    /// The name says what it is rather than what it enables, so that reading the configuration tells a
+    /// reviewer what was accepted.
+    /// </remarks>
+    public bool FrontChannelTokensAccepted { get; set; }
+
+    /// <summary>
+    /// How the provider should return the response, sent as <c>response_mode</c>. Left null the parameter
+    /// is omitted for the code flow, and required for any flow that returns tokens.
+    /// </summary>
+    /// <remarks>
+    /// The code flow needs nothing here: Multiple Response Type Encoding Practices section 5 makes query
+    /// its default, which is what a server-side callback reads anyway.
+    /// A token-returning flow does need it, and this is the setting that decides whether the client can
+    /// receive the response at all. That same section makes the fragment the default for those flows and
+    /// says "the query encoding MUST NOT be used" - and a fragment, per RFC 3986 section 3.5, "is
+    /// dereferenced solely by the user agent", so it never reaches a server. A server-side client must
+    /// therefore ask for <see cref="ResponseModes.FormPost"/>; a browser-based client that reads the
+    /// fragment itself uses <see cref="ResponseModes.Fragment"/>. The builder refuses to guess between
+    /// them, because guessing wrong means a callback that arrives empty.
+    /// </remarks>
+    public string? ResponseMode { get; set; }
+
+    /// <summary>
     /// The scopes requested. <c>openid</c> is what makes the request an OpenID Connect one rather than plain
     /// OAuth, so it is included by default.
     /// </summary>

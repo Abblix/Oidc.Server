@@ -78,6 +78,8 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
                 $"The OpenID Provider '{metadata.Issuer}' names no authorization endpoint, so there is "
                 + "nowhere to send the user.");
 
+        RequireFlowIsPermitted(_options.Flow);
+
         var pkce = await _pkceProvider.CreateAsync(cancellationToken);
 
         var state = new AuthorizationContext
@@ -95,6 +97,49 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         await _stateStore.StoreAsync(state, cancellationToken);
 
         return new AuthorizationRequest(BuildRequestUri(authorizationEndpoint, state, pkce), state);
+    }
+
+    /// <summary>
+    /// Refuses a flow that returns tokens through the browser unless the host has said it accepts them,
+    /// and refuses one whose response mode was left for this builder to guess.
+    /// </summary>
+    /// <remarks>
+    /// Two separate refusals, because they answer different questions and a host can get either wrong on
+    /// its own.
+    /// The first is the opt-in: a front-channel token is exposed to the browser's history, to the referrer
+    /// of anything the page loads, and to any script running on it, and RFC 9700 section 2.1.2 says
+    /// "clients SHOULD NOT use the implicit grant (response type "token") or any other response type
+    /// issuing access tokens in the authorization response". Choosing such a flow is legal and this client
+    /// supports it, but not by accident.
+    /// The second is the response mode, and it is refused rather than defaulted because both plausible
+    /// defaults are wrong for somebody. Multiple Response Type Encoding Practices section 5 makes the
+    /// fragment the default for these flows and says "the query encoding MUST NOT be used", while RFC 3986
+    /// section 3.5 says a fragment "is dereferenced solely by the user agent" - so a server-side client
+    /// that inherits the default receives an empty callback, and a browser-based one that is handed
+    /// form_post cannot use it. Only the host knows which it is, so it must say.
+    /// </remarks>
+    private void RequireFlowIsPermitted(AuthorizationFlow flow)
+    {
+        if (!flow.ReturnsFrontChannelTokens())
+            return;
+
+        if (!_options.FrontChannelTokensAccepted)
+        {
+            throw new AuthorizationRequestException(
+                $"The '{flow.ToResponseType()}' flow returns tokens through the browser, which this client "
+                + $"does not do unless {nameof(AuthorizationRequestOptions)}."
+                + $"{nameof(AuthorizationRequestOptions.FrontChannelTokensAccepted)} says so.");
+        }
+
+        if (string.IsNullOrEmpty(_options.ResponseMode))
+        {
+            throw new AuthorizationRequestException(
+                $"The '{flow.ToResponseType()}' flow needs a response mode: its default is the fragment, "
+                + "which never reaches a server. Set "
+                + $"{nameof(AuthorizationRequestOptions)}.{nameof(AuthorizationRequestOptions.ResponseMode)}"
+                + $" to '{ResponseModes.FormPost}' for a server-side client, or '{ResponseModes.Fragment}' "
+                + "for a browser-based one that reads the fragment itself.");
+        }
     }
 
     /// <summary>
@@ -174,14 +219,31 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         var endpoint = new Utils.UriBuilder(authorizationEndpoint);
         var parameters = endpoint.Query;
 
-        parameters[Parameters.ResponseType] = ResponseTypes.Code;
+        var flow = _options.Flow;
+
+        parameters[Parameters.ResponseType] = flow.ToResponseType();
         parameters[Parameters.ClientId] = _clientOptions.ClientId;
         parameters[Parameters.RedirectUri] = context.RedirectUri;
         parameters[Parameters.Scope] = string.Join(' ', _options.Scopes);
         parameters[Parameters.State] = context.State;
+
+        // Always sent. It binds an ID Token to this request, and for the flows that return one from the
+        // authorization endpoint OIDC Core 1.0 section 3.2.2.11 makes that binding mandatory.
         parameters[Parameters.Nonce] = context.Nonce;
-        parameters[Parameters.CodeChallenge] = pkce.CodeChallenge;
-        parameters[Parameters.CodeChallengeMethod] = pkce.CodeChallengeMethod;
+
+        // Omitted for the code flow, whose default mode is already the query a server-side callback reads
+        // (Multiple Response Type Encoding Practices section 5); required and validated for the rest.
+        if (!string.IsNullOrEmpty(_options.ResponseMode))
+            parameters[Parameters.ResponseMode] = _options.ResponseMode;
+
+        // PKCE protects the redemption of an authorization code, so it goes only where there is a code to
+        // redeem. A pure implicit flow returns its tokens from the authorization endpoint and never visits
+        // the token endpoint, leaving the challenge nothing to be checked against.
+        if (flow.IncludesAuthorizationCode())
+        {
+            parameters[Parameters.CodeChallenge] = pkce.CodeChallenge;
+            parameters[Parameters.CodeChallengeMethod] = pkce.CodeChallengeMethod;
+        }
 
         // Naming the resources narrows the issued token to them, so one that leaks from a resource cannot be
         // spent at another (RFC 8707). Omitted when the host names none, leaving the audience to the provider.

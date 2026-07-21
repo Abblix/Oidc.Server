@@ -313,4 +313,173 @@ public class AuthorizationRequestBuilderTests
         await Assert.ThrowsAsync<AuthorizationRequestException>(
             () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// Every flow the specifications define renders its <c>response_type</c> with the atoms in the
+    /// canonical order Multiple Response Type Encoding Practices registers - code, then id_token, then
+    /// token.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationFlow.Code, "code")]
+    [InlineData(AuthorizationFlow.IdToken, "id_token")]
+    [InlineData(AuthorizationFlow.IdTokenToken, "id_token token")]
+    [InlineData(AuthorizationFlow.CodeIdToken, "code id_token")]
+    [InlineData(AuthorizationFlow.CodeToken, "code token")]
+    [InlineData(AuthorizationFlow.CodeIdTokenToken, "code id_token token")]
+    public async Task SendsTheResponseTypeOfTheChosenFlow(AuthorizationFlow flow, string expected)
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore(), options =>
+            {
+                options.Flow = flow;
+                options.FrontChannelTokensAccepted = true;
+                options.ResponseMode = ResponseModes.FormPost;
+            })
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, QueryOf(request.RequestUri)[Parameters.ResponseType]);
+    }
+
+    /// <summary>
+    /// A flow that returns tokens through the browser is refused until the host says it accepts them. The
+    /// flow being legal is not the same as this deployment having chosen it.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationFlow.IdToken)]
+    [InlineData(AuthorizationFlow.IdTokenToken)]
+    [InlineData(AuthorizationFlow.CodeIdToken)]
+    [InlineData(AuthorizationFlow.CodeToken)]
+    [InlineData(AuthorizationFlow.CodeIdTokenToken)]
+    public async Task RefusesAFrontChannelTokenFlowThatWasNotAccepted(AuthorizationFlow flow)
+    {
+        var builder = CreateBuilder(Metadata(), CreateStateStore(), options =>
+        {
+            options.Flow = flow;
+            options.ResponseMode = ResponseModes.FormPost;
+            // FrontChannelTokensAccepted deliberately left false.
+        });
+
+        await Assert.ThrowsAsync<AuthorizationRequestException>(
+            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// And accepted but with no response mode is refused too: the default for these flows is the fragment,
+    /// which never reaches a server, so guessing would produce an empty callback rather than an error.
+    /// </summary>
+    [Fact]
+    public async Task RefusesAFrontChannelTokenFlowWithNoResponseMode()
+    {
+        var builder = CreateBuilder(Metadata(), CreateStateStore(), options =>
+        {
+            options.Flow = AuthorizationFlow.CodeIdToken;
+            options.FrontChannelTokensAccepted = true;
+            // ResponseMode deliberately left null.
+        });
+
+        await Assert.ThrowsAsync<AuthorizationRequestException>(
+            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The code flow needs neither gate: it returns no token through the browser, and its default response
+    /// mode is already the query a server-side callback reads, so the parameter is omitted.
+    /// </summary>
+    [Fact]
+    public async Task TheCodeFlowNeedsNoAcceptanceAndSendsNoResponseMode()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore())
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        var query = QueryOf(request.RequestUri);
+
+        Assert.Equal(ResponseTypes.Code, query[Parameters.ResponseType]);
+        Assert.False(query.ContainsKey(Parameters.ResponseMode));
+    }
+
+    /// <summary>
+    /// A named response mode is sent as asked - form_post is what lets a server-side client receive a
+    /// token-returning response at all.
+    /// </summary>
+    [Fact]
+    public async Task SendsTheResponseModeItWasGiven()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore(), options =>
+            {
+                options.Flow = AuthorizationFlow.CodeIdToken;
+                options.FrontChannelTokensAccepted = true;
+                options.ResponseMode = ResponseModes.FormPost;
+            })
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ResponseModes.FormPost, QueryOf(request.RequestUri)[Parameters.ResponseMode]);
+    }
+
+    /// <summary>
+    /// PKCE goes only where there is a code to redeem. A pure implicit flow never visits the token
+    /// endpoint, so a challenge would have nothing to be checked against.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationFlow.IdToken)]
+    [InlineData(AuthorizationFlow.IdTokenToken)]
+    public async Task OmitsPkceWhenTheFlowReturnsNoCode(AuthorizationFlow flow)
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore(), options =>
+            {
+                options.Flow = flow;
+                options.FrontChannelTokensAccepted = true;
+                options.ResponseMode = ResponseModes.FormPost;
+            })
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        var query = QueryOf(request.RequestUri);
+
+        Assert.False(query.ContainsKey(Parameters.CodeChallenge));
+        Assert.False(query.ContainsKey(Parameters.CodeChallengeMethod));
+    }
+
+    /// <summary>
+    /// And it is sent for every flow that does return one, hybrid included: the code still goes to the
+    /// token endpoint there.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationFlow.CodeIdToken)]
+    [InlineData(AuthorizationFlow.CodeToken)]
+    [InlineData(AuthorizationFlow.CodeIdTokenToken)]
+    public async Task SendsPkceWhenTheFlowReturnsACode(AuthorizationFlow flow)
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore(), options =>
+            {
+                options.Flow = flow;
+                options.FrontChannelTokensAccepted = true;
+                options.ResponseMode = ResponseModes.FormPost;
+            })
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        var query = QueryOf(request.RequestUri);
+
+        Assert.NotEmpty(query[Parameters.CodeChallenge]);
+        Assert.Equal(CodeChallengeMethods.S256, query[Parameters.CodeChallengeMethod]);
+    }
+
+    /// <summary>
+    /// The nonce is sent whatever the flow: it is what binds an ID Token to this request, and OIDC Core
+    /// 1.0 section 3.2.2.11 makes that binding mandatory for the flows that return one from the
+    /// authorization endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationFlow.Code)]
+    [InlineData(AuthorizationFlow.IdToken)]
+    [InlineData(AuthorizationFlow.CodeIdTokenToken)]
+    public async Task AlwaysSendsANonce(AuthorizationFlow flow)
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore(), options =>
+            {
+                options.Flow = flow;
+                options.FrontChannelTokensAccepted = true;
+                options.ResponseMode = ResponseModes.FormPost;
+            })
+            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+
+        Assert.NotEmpty(QueryOf(request.RequestUri)[Parameters.Nonce]);
+    }
 }

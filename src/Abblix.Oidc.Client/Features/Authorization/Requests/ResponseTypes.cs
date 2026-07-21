@@ -24,13 +24,31 @@
 namespace Abblix.Oidc.Client.Features.Authorization.Requests;
 
 /// <summary>
-/// The response types this client asks for, as they appear on the wire.
+/// The response type ATOMS a request combines, as they appear on the wire. A response_type value is one
+/// or more of these joined by spaces (RFC 6749 section 3.1.1, and the multi-valued combinations OAuth 2.0
+/// Multiple Response Type Encoding Practices registers).
 /// </summary>
+/// <remarks>
+/// Named to match <c>Abblix.Oidc.Server.Common.Constants.ResponseTypes</c>, so the same wire value reads
+/// as the same concept on both sides of the family.
+/// </remarks>
 public static class ResponseTypes
 {
     /// <summary>
-    /// The authorization code flow. The only response type this client uses: everything else either puts
-    /// tokens in the browser's address bar or needs the client to accept them without a back channel.
+    /// The authorization code. The safe default: it comes back through the browser but is redeemed over a
+    /// back channel with PKCE, so nothing usable rides in the browser's address bar.
     /// </summary>
     public const string Code = "code";
+
+    /// <summary>
+    /// An access token returned from the authorization endpoint. A front-channel token, discouraged, and
+    /// only sent when the host opts into a token-returning flow.
+    /// </summary>
+    public const string Token = "token";
+
+    /// <summary>
+    /// An ID Token returned from the authorization endpoint. Bound to the request by its nonce, and to any
+    /// code or access token beside it by <c>c_hash</c> / <c>at_hash</c> (OIDC Core 1.0 section 3.3.2.11).
+    /// </summary>
+    public const string IdToken = "id_token";
 }
