@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,6 +21,7 @@
 // info@abblix.com
 
 
+using Abblix.Oidc.Client.Features.AuthorizationState;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -52,8 +53,8 @@ public static class ServiceCollectionExtensions
         // Correct for one instance only. A host running several replicas replaces this with a store the
         // callback can reach whichever replica it lands on - the ASP.NET adapter's cookie-backed one.
         services.TryAddSingleton<
-            AuthorizationState.IAuthorizationStateStore,
-            AuthorizationState.InMemoryAuthorizationStateStore>();
+            IAuthorizationStateStore,
+            InMemoryAuthorizationStateStore>();
 
         return services;
     }

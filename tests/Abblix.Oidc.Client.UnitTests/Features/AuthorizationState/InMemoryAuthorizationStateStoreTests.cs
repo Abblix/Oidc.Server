@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,9 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 
@@ -31,7 +32,7 @@ namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 /// </summary>
 public class InMemoryAuthorizationStateStoreTests
 {
-    private static Client.Features.AuthorizationState.AuthorizationState StateFor(string state) => new()
+    private static Client.Features.AuthorizationState.AuthorizationContext StateFor(string state) => new()
     {
         State = state,
         Nonce = "nonce",

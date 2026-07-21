@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -19,6 +19,8 @@
 //
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.Features.AuthorizationResponses;
 
@@ -43,7 +45,7 @@ public interface IAuthorizationResponseHandler
     /// The provider refused (the exception carries the error code), or the response was one this client
     /// refused - a wrong issuer, a shape no specification defines, a parameter that arrived twice.
     /// </exception>
-    /// <exception cref="AuthorizationState.AuthorizationStateException">
+    /// <exception cref="AuthorizationStateException">
     /// The response matched no login this client is holding.
     /// </exception>
     /// <remarks>

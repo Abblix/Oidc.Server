@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Client.Features.AuthorizationState;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
-using State = Abblix.Oidc.Client.Features.AuthorizationState.AuthorizationState;
+
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 
@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationState;
 /// </summary>
 public class AuthorizationStateConsumerTests
 {
-    private static State StateFor(string state) => new()
+    private static AuthorizationContext ContextFor(string state) => new()
     {
         State = state,
         Nonce = "the-nonce",
@@ -57,7 +57,7 @@ public class AuthorizationStateConsumerTests
     public async Task FindsAHeldState_WithoutSpendingIt()
     {
         var (consumer, store) = Create();
-        await store.StoreAsync(StateFor("the-state"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("the-state"), TestContext.Current.CancellationToken);
 
         var found = await consumer.FindAsync("the-state", TestContext.Current.CancellationToken);
 
@@ -76,7 +76,7 @@ public class AuthorizationStateConsumerTests
     public async Task ConsumingTwice_FailsTheSecondTimeAsUnknown()
     {
         var (consumer, store) = Create();
-        await store.StoreAsync(StateFor("the-state"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("the-state"), TestContext.Current.CancellationToken);
 
         await consumer.ConsumeAsync("the-state", TestContext.Current.CancellationToken);
 
@@ -131,7 +131,7 @@ public class AuthorizationStateConsumerTests
             time, Options.Create(new AuthorizationStateOptions { Lifetime = TimeSpan.FromMinutes(15) }));
         var consumer = new AuthorizationStateConsumer(store);
 
-        await store.StoreAsync(StateFor("the-state"), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor("the-state"), TestContext.Current.CancellationToken);
         time.Advance(TimeSpan.FromMinutes(16));
 
         var error = await Assert.ThrowsAsync<AuthorizationStateException>(

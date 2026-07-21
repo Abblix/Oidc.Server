@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -81,7 +81,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
         var pkce = await _pkceProvider.CreateAsync(cancellationToken);
 
-        var state = new AuthorizationState.AuthorizationState
+        var state = new AuthorizationContext
         {
             State = NewOpaqueValue(),
             Nonce = NewOpaqueValue(),
@@ -168,7 +168,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         return redirectUri.ToString();
     }
 
-    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationState.AuthorizationState state, PkceParameters pkce)
+    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext state, PkceParameters pkce)
     {
         // The builder carries over whatever the endpoint already has in its query: a provider is free to
         // publish an authorization endpoint with parameters of its own, and dropping them would break it.

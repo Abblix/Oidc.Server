@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 /// <param name="store">Where the state was put aside when the request was built.</param>
 internal sealed class AuthorizationStateConsumer(IAuthorizationStateStore store) : IAuthorizationStateConsumer
 {
-    public async Task<AuthorizationState> FindAsync(
+    public async Task<AuthorizationContext> FindAsync(
         string? state, CancellationToken cancellationToken = default)
     {
         // No state to look up. This client sends one on every request, so its absence is not an

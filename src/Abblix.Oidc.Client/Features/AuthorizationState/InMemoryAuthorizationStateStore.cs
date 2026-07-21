@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -68,7 +68,7 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
     }
 
     /// <inheritdoc />
-    public Task StoreAsync(AuthorizationState state, CancellationToken cancellationToken = default)
+    public Task StoreAsync(AuthorizationContext state, CancellationToken cancellationToken = default)
     {
         // A sign-in that was started and never finished must not be held forever: the entries carry a code
         // verifier, and a process that only ever adds them is a slow leak driven by anyone who can start a
@@ -82,14 +82,14 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
     }
 
     /// <inheritdoc />
-    public Task<AuthorizationState?> FindAsync(string state, CancellationToken cancellationToken = default)
+    public Task<AuthorizationContext?> FindAsync(string state, CancellationToken cancellationToken = default)
     {
         // A read, never a removal: an entry looked up here may still be refused by a later check, and
         // removing it now would spend a login the response has not yet earned.
         if (!_states.TryGetValue(state, out var stored) || _timeProvider.GetUtcNow() >= stored.ExpiresAt)
-            return Task.FromResult<AuthorizationState?>(null);
+            return Task.FromResult<AuthorizationContext?>(null);
 
-        return Task.FromResult<AuthorizationState?>(stored.State);
+        return Task.FromResult<AuthorizationContext?>(stored.State);
     }
 
     /// <inheritdoc />
@@ -114,5 +114,5 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
         }
     }
 
-    private sealed record StoredState(AuthorizationState State, DateTimeOffset ExpiresAt);
+    private sealed record StoredState(AuthorizationContext State, DateTimeOffset ExpiresAt);
 }

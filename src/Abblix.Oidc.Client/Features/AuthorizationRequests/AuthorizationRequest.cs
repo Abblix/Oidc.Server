@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,15 +20,17 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Features.AuthorizationState;
+
 namespace Abblix.Oidc.Client.Features.AuthorizationRequests;
 
 /// <summary>
 /// A built authorization request.
 /// </summary>
 /// <param name="RequestUri">The address to send the user to.</param>
-/// <param name="State">
+/// <param name="Context">
 /// What was put aside for the callback. Already stored by the time this is returned; it is carried here so
 /// that a caller which owns its own storage, such as the ASP.NET adapter with its cookie, can write it there
 /// as well.
 /// </param>
-public sealed record AuthorizationRequest(Uri RequestUri, AuthorizationState.AuthorizationState State);
+public sealed record AuthorizationRequest(Uri RequestUri, AuthorizationContext Context);

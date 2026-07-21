@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,10 +21,10 @@
 // info@abblix.com
 
 using Abblix.Oidc.Client.Features.AuthorizationResponses;
-using Abblix.Oidc.Client.Features.AuthorizationState;
 using Abblix.Oidc.Client.Features.Discovery;
 using Microsoft.Extensions.DependencyInjection;
-using State = Abblix.Oidc.Client.Features.AuthorizationState.AuthorizationState;
+
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationResponses;
 
@@ -60,7 +60,7 @@ public class AuthorizationResponseHandlerTests
             provider.GetRequiredService<IAuthorizationStateStore>());
     }
 
-    private static State StateFor(string state = State) => new()
+    private static AuthorizationContext ContextFor(string state = State) => new()
     {
         State = state,
         Nonce = "the-nonce",
@@ -84,7 +84,7 @@ public class AuthorizationResponseHandlerTests
     public async Task ASuccessfulResponse_YieldsTheCodeAndItsState()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         var result = await handler.HandleAsync(
             Response(
@@ -94,7 +94,7 @@ public class AuthorizationResponseHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal("the-code", result.Code);
-        Assert.Equal("the-verifier", result.State.CodeVerifier);
+        Assert.Equal("the-verifier", result.Context.CodeVerifier);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AProviderError_ThrowsCarryingTheErrorCode()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -130,7 +130,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AnErrorFromTheWrongIssuer_FailsOnTheIssuerNotTheError()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -151,7 +151,7 @@ public class AuthorizationResponseHandlerTests
     public async Task ASuccessFromTheWrongIssuer_IsRefused()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -178,7 +178,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AWrongIssuerResponse_DoesNotSpendTheVictimsLogin()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -228,7 +228,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AContradictoryResponse_IsRefusedWithoutSpendingTheState()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -251,7 +251,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AnUnrecognizedResponse_IsRefusedWithoutSpendingTheState()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
@@ -269,7 +269,7 @@ public class AuthorizationResponseHandlerTests
     public async Task AReplayedResponse_FailsTheSecondTime()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         var callback = Response(
             (Parameters.Code, "the-code"),
@@ -290,7 +290,7 @@ public class AuthorizationResponseHandlerTests
     public async Task ADuplicatedParameter_IsRefused()
     {
         var (handler, store) = Create();
-        await store.StoreAsync(StateFor(), TestContext.Current.CancellationToken);
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
 
         var callback = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {

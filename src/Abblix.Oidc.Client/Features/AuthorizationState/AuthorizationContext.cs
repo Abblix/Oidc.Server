@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 /// provider chose to echo. Everything the client needs in order to judge that response therefore has to be
 /// put aside beforehand, and this is that set.
 /// </remarks>
-public sealed record AuthorizationState
+public sealed record AuthorizationContext
 {
     /// <summary>
     /// The opaque value sent as <c>state</c> and echoed by the provider. It identifies which request the

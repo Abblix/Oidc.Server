@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -49,7 +49,7 @@ public interface IAuthorizationStateConsumer
     /// presenting it is a question this contract cannot ask - it belongs to the store, and the base
     /// package's default one does not answer it. See <see cref="IAuthorizationStateStore"/>.
     /// </remarks>
-    Task<AuthorizationState> FindAsync(string? state, CancellationToken cancellationToken = default);
+    Task<AuthorizationContext> FindAsync(string? state, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Spends the held login named by <paramref name="state"/>, so the same response cannot be acted on

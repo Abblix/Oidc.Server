@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -40,11 +40,11 @@ namespace Abblix.Oidc.Client.Features.AuthorizationState;
 public interface IAuthorizationStateStore
 {
     /// <summary>
-    /// Puts the state aside, keyed by its own <see cref="AuthorizationState.State"/> value.
+    /// Puts the context aside, keyed by its own <see cref="AuthorizationContext.State"/> value.
     /// </summary>
     /// <param name="state">The state to remember.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task StoreAsync(AuthorizationState state, CancellationToken cancellationToken = default);
+    Task StoreAsync(AuthorizationContext state, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Looks up the state matching the value the provider echoed, WITHOUT removing it.
@@ -60,7 +60,7 @@ public interface IAuthorizationStateStore
     /// who merely knows the (non-secret) <c>state</c> value burn a victim's pending sign-in. So this
     /// only reads; <see cref="RemoveAsync"/> spends, and only once the response has earned it.
     /// </remarks>
-    Task<AuthorizationState?> FindAsync(string state, CancellationToken cancellationToken = default);
+    Task<AuthorizationContext?> FindAsync(string state, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Removes the state matching the value, and reports whether this call is the one that removed a

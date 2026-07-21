@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,22 +20,22 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using State = Abblix.Oidc.Client.Features.AuthorizationState.AuthorizationState;
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.Features.AuthorizationResponses;
 
 /// <summary>
 /// A successful authorization response that has passed every check: an authorization code, and the
-/// state of the login it belongs to.
+/// context of the login it belongs to.
 /// </summary>
 /// <remarks>
-/// Handing back the state, not just the code, is deliberate. Redeeming the code needs the code
+/// Handing back the context, not just the code, is deliberate. Redeeming the code needs the code
 /// verifier and the exact redirect address the request used, and validating the resulting ID Token
 /// needs the nonce - all of which were put aside when the request was built and none of which the
 /// response carries. A caller given only the code would have to go looking for them.
-/// That this exists at all means the checks passed: the issuer matched, the state was held and is now
+/// That this exists at all means the checks passed: the issuer matched, the context was held and is now
 /// consumed, the response was a code rather than an error. There is no partially-validated variant.
 /// </remarks>
 /// <param name="Code">The authorization code, to be exchanged at the token endpoint.</param>
-/// <param name="State">The state put aside when the request was built, now consumed.</param>
-public sealed record AuthorizationCodeResult(string Code, State State);
+/// <param name="Context">The context put aside when the request was built, now consumed.</param>
+public sealed record AuthorizationCodeResult(string Code, AuthorizationContext Context);

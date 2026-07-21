@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -51,7 +51,7 @@ internal sealed class AuthorizationResponseHandler(
         // which the next check needs. It deliberately does not remove the login, because the checks
         // still to come can fail, and spending a single-use state on a response that then turns out
         // forged would let anyone who knows the (non-secret) state value burn a victim's sign-in.
-        var state = await stateConsumer.FindAsync(response.State, cancellationToken);
+        var context = await stateConsumer.FindAsync(response.State, cancellationToken);
 
         // Confirm the response came from the provider this login was started with, and do it BEFORE
         // reading the error code. RFC 9207 section 2.4: "For error responses, clients MUST NOT assume
@@ -60,7 +60,7 @@ internal sealed class AuthorizationResponseHandler(
         // No id_token arrives at the authorization endpoint in the code flow, so the only issuer the
         // response offers is the iss parameter; the ID Token claim is left null.
         await issuerValidator.ValidateAsync(
-            new ResponseIssuers { Expected = state.Issuer, Parameter = response.Issuer },
+            new ResponseIssuers { Expected = context.Issuer, Parameter = response.Issuer },
             cancellationToken);
 
         // Now the response has earned it: spend the single-use state. Both a success and a provider
@@ -73,10 +73,10 @@ internal sealed class AuthorizationResponseHandler(
         // outcome acted on.
         return response.Kind switch
         {
-            AuthorizationResponseKind.AuthorizationCode => new AuthorizationCodeResult(response.Code!, state),
+            AuthorizationResponseKind.AuthorizationCode => new AuthorizationCodeResult(response.Code!, context),
 
             AuthorizationResponseKind.Error => throw new AuthorizationResponseException(
-                $"The provider '{state.Issuer}' refused the authorization request: {response.Error}.",
+                $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
                 response.Error!,
                 response.ErrorDescription),
 

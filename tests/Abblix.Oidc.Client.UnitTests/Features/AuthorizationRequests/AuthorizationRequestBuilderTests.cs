@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -22,11 +22,12 @@
 
 using System.Web;
 using Abblix.Oidc.Client.Features.AuthorizationRequests;
-using Abblix.Oidc.Client.Features.AuthorizationState;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Pkce;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+
+using Abblix.Oidc.Client.Features.AuthorizationState;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.AuthorizationRequests;
 
@@ -111,10 +112,10 @@ public class AuthorizationRequestBuilderTests
 
         var query = QueryOf(request.RequestUri);
 
-        Assert.Equal(request.State.State, query[Parameters.State]);
-        Assert.Equal(request.State.Nonce, query[Parameters.Nonce]);
-        Assert.Equal(Issuer, request.State.Issuer);
-        Assert.Equal(ReturnUri.ToString(), request.State.ReturnUri);
+        Assert.Equal(request.Context.State, query[Parameters.State]);
+        Assert.Equal(request.Context.Nonce, query[Parameters.Nonce]);
+        Assert.Equal(Issuer, request.Context.Issuer);
+        Assert.Equal(ReturnUri.ToString(), request.Context.ReturnUri);
     }
 
     /// <summary>
@@ -129,7 +130,7 @@ public class AuthorizationRequestBuilderTests
 
         var expectedChallenge = System.Buffers.Text.Base64Url.EncodeToString(
             System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.ASCII.GetBytes(request.State.CodeVerifier)));
+                System.Text.Encoding.ASCII.GetBytes(request.Context.CodeVerifier)));
 
         Assert.Equal(expectedChallenge, QueryOf(request.RequestUri)[Parameters.CodeChallenge]);
     }
@@ -146,9 +147,9 @@ public class AuthorizationRequestBuilderTests
         var first = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
         var second = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
 
-        Assert.NotEqual(first.State.State, second.State.State);
-        Assert.NotEqual(first.State.Nonce, second.State.Nonce);
-        Assert.NotEqual(first.State.CodeVerifier, second.State.CodeVerifier);
+        Assert.NotEqual(first.Context.State, second.Context.State);
+        Assert.NotEqual(first.Context.Nonce, second.Context.Nonce);
+        Assert.NotEqual(first.Context.CodeVerifier, second.Context.CodeVerifier);
     }
 
     /// <summary>
@@ -163,9 +164,9 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), store)
             .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
 
-        var stored = await store.FindAsync(request.State.State, TestContext.Current.CancellationToken);
+        var stored = await store.FindAsync(request.Context.State, TestContext.Current.CancellationToken);
         Assert.NotNull(stored);
-        Assert.Equal(request.State.CodeVerifier, stored.CodeVerifier);
+        Assert.Equal(request.Context.CodeVerifier, stored.CodeVerifier);
     }
 
     /// <summary>
@@ -288,7 +289,7 @@ public class AuthorizationRequestBuilderTests
         var request = await builder.CreateAsync(
             new Uri(returnUri, UriKind.Relative), TestContext.Current.CancellationToken);
 
-        Assert.Equal(returnUri, request.State.ReturnUri);
+        Assert.Equal(returnUri, request.Context.ReturnUri);
     }
 
     /// <summary>
