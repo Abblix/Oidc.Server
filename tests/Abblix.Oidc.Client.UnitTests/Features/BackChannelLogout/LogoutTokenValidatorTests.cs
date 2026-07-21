@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -275,6 +275,36 @@ public class LogoutTokenValidatorTests
         var token = ValidToken();
         token.Payload.IssuedAt = TimeProvider.System.GetUtcNow().AddHours(-2);
         token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(-1);
+
+        await AssertRejects(token);
+    }
+
+    /// <summary>
+    /// Step 8: the same token acted on twice is a replay the second time. The request carrying it is
+    /// unauthenticated, so anyone who observed it can post it again inside the short window section 4 asks
+    /// providers to use.
+    /// </summary>
+    [Fact]
+    public async Task AReplayedToken_IsRejected()
+    {
+        var validator = CreateValidator();
+        var jwt = await Issue(ValidToken());
+
+        await validator.ValidateAsync(jwt, TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<LogoutTokenValidationException>(
+            () => validator.ValidateAsync(jwt, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A token carrying no identifier cannot be told apart from a replay of itself, so taking step 8 at all
+    /// means refusing it. Section 2.4 lists jti among the REQUIRED claims; the refusal is ours.
+    /// </summary>
+    [Fact]
+    public async Task NoTokenIdentifier_IsRejected()
+    {
+        var token = ValidToken();
+        token.Payload.JwtId = null;
 
         await AssertRejects(token);
     }

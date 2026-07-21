@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -32,7 +32,10 @@ namespace Abblix.Oidc.Client.Features.BackChannelLogout;
 /// <param name="tokenVerifier">
 /// Establishes that the token is the provider's and addressed to this client, which is steps 2 to 4.
 /// </param>
-public sealed class LogoutTokenValidator(IProviderTokenVerifier tokenVerifier) : ILogoutTokenValidator
+/// <param name="replayGuard">Remembers tokens already acted on, which is step 8.</param>
+public sealed class LogoutTokenValidator(
+    IProviderTokenVerifier tokenVerifier,
+    ILogoutTokenReplayGuard replayGuard) : ILogoutTokenValidator
 {
     /// <inheritdoc />
     public async Task<LogoutNotification> ValidateAsync(
@@ -58,12 +61,49 @@ public sealed class LogoutTokenValidator(IProviderTokenVerifier tokenVerifier) :
         RequireLogoutEvent(token);
         RefuseNonce(token);
 
+        await RefuseReplayAsync(token, cancellationToken);
+
         return new LogoutNotification(
             token.Payload.Issuer
             ?? throw new LogoutTokenValidationException("The Logout Token names no issuer."),
             token.Payload.Subject,
             token.Payload.SessionId,
             token.Payload.JwtId);
+    }
+
+    /// <summary>
+    /// Step 8: "Optionally verify that another Logout Token with the same jti value has not been recently
+    /// received."
+    /// </summary>
+    /// <remarks>
+    /// Taken up rather than skipped, because the request carrying this token is unauthenticated and the
+    /// token is a bearer credential: anyone who observes one can post it again, and within the short window
+    /// section 4 asks providers to use, nothing but a record of what has been seen tells a replay from the
+    /// original.
+    /// The token identifier is required here as a consequence. Section 2.4 lists <c>jti</c> among the
+    /// REQUIRED claims of a Logout Token, which is a duty on the issuer; refusing a token without one is
+    /// ours, and it follows from taking step 8 at all - a token that cannot be recorded is one that passes
+    /// the guard by being unidentifiable, which is worse than having no guard.
+    /// </remarks>
+    private async Task RefuseReplayAsync(JsonWebToken token, CancellationToken cancellationToken)
+    {
+        if (token.Payload.JwtId is not { Length: > 0 } tokenId)
+        {
+            throw new LogoutTokenValidationException(
+                "The Logout Token carries no jti, so it cannot be told apart from a replay of itself.");
+        }
+
+        // The expiry the verifier already accepted. Nothing needs remembering past it: an expired token is
+        // refused before this guard is reached.
+        var expiresAt = token.Payload.ExpiresAt
+                        ?? throw new LogoutTokenValidationException(
+                            "The Logout Token carries no expiry, so there is no window to remember it for.");
+
+        if (!await replayGuard.TryRecordAsync(tokenId, expiresAt, cancellationToken))
+        {
+            throw new LogoutTokenValidationException(
+                "This Logout Token has already been acted on, so it is a replay.");
+        }
     }
 
     /// <summary>

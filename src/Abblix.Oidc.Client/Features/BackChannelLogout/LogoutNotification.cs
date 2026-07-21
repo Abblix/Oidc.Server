@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -19,6 +19,8 @@
 //
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+
+using Abblix.Jwt;
 
 namespace Abblix.Oidc.Client.Features.BackChannelLogout;
 
@@ -44,4 +46,41 @@ public sealed record LogoutNotification(
     string Issuer,
     string? Subject,
     string? SessionId,
-    string? TokenId);
+    string? TokenId)
+{
+    /// <summary>
+    /// Reports whether this notification is about the session <paramref name="identityToken"/> belongs to.
+    /// </summary>
+    /// <param name="identityToken">
+    /// The ID Token of a session this client is holding, as validated when that session was established.
+    /// </param>
+    /// <returns><c>true</c> when the notification names that session and nothing contradicts it.</returns>
+    /// <remarks>
+    /// Steps 9, 10 and 11 of OpenID Connect Back-Channel Logout 1.0 section 2.6, which the specification
+    /// introduces with "Optionally verify that the iss Logout Token Claim matches the iss Claim in an ID
+    /// Token issued for the current session or a recent session", and likewise of any <c>sub</c> and any
+    /// <c>sid</c>.
+    /// They are offered here rather than performed during validation because they are questions about a
+    /// session, and only the host knows which sessions it holds - section 2.7 already makes it responsible
+    /// for finding them. What the library can do is make the comparison one call rather than three
+    /// hand-written string comparisons, which is where a case-insensitive or a null-tolerant one creeps in.
+    /// Note what "matches" means for a claim the token did not carry: the notification names a subject or a
+    /// session or both, and a claim it did not name places no restriction. A notification carrying only a
+    /// subject is about every session this client holds for that user, which is exactly what a provider
+    /// means by omitting the session identifier.
+    /// </remarks>
+    public bool Matches(JsonWebToken identityToken)
+    {
+        var payload = identityToken.Payload;
+
+        return Equal(Issuer, payload.Issuer)
+               && (Subject is null || Equal(Subject, payload.Subject))
+               && (SessionId is null || Equal(SessionId, payload.SessionId));
+    }
+
+    /// <summary>
+    /// Compares two identifiers exactly, since nothing in the specification licenses folding them together.
+    /// </summary>
+    private static bool Equal(string? left, string? right)
+        => left is not null && string.Equals(left, right, StringComparison.Ordinal);
+}

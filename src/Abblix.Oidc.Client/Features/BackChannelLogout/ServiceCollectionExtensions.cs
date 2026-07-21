@@ -47,6 +47,14 @@ public static class ServiceCollectionExtensions
         services.AddLogging();
         services.AddSigningKeys();
         services.AddProviderTokenValidation();
+
+        // A soft default, so a test or a host can substitute a clock before this call.
+        services.TryAddSingleton(TimeProvider.System);
+
+        // Step 8 of section 2.6 is optional in the specification and taken up here, because the alternative
+        // is a client that acts on a captured token as often as it is posted. A host running more than one
+        // instance replaces this with a guard its instances share.
+        services.TryAddSingleton<ILogoutTokenReplayGuard, InMemoryLogoutTokenReplayGuard>();
         services.TryAddSingleton<ILogoutTokenValidator, LogoutTokenValidator>();
 
         return services;
