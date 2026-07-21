@@ -167,7 +167,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         return redirectUri.ToString();
     }
 
-    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext state, PkceParameters pkce)
+    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext context, PkceParameters pkce)
     {
         // The builder carries over whatever the endpoint already has in its query: a provider is free to
         // publish an authorization endpoint with parameters of its own, and dropping them would break it.
@@ -176,10 +176,10 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
         parameters[Parameters.ResponseType] = ResponseTypes.Code;
         parameters[Parameters.ClientId] = _clientOptions.ClientId;
-        parameters[Parameters.RedirectUri] = state.RedirectUri;
+        parameters[Parameters.RedirectUri] = context.RedirectUri;
         parameters[Parameters.Scope] = string.Join(' ', _options.Scopes);
-        parameters[Parameters.State] = state.State;
-        parameters[Parameters.Nonce] = state.Nonce;
+        parameters[Parameters.State] = context.State;
+        parameters[Parameters.Nonce] = context.Nonce;
         parameters[Parameters.CodeChallenge] = pkce.CodeChallenge;
         parameters[Parameters.CodeChallengeMethod] = pkce.CodeChallengeMethod;
 

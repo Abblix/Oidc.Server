@@ -89,18 +89,21 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
         if (!_states.TryGetValue(state, out var stored) || _timeProvider.GetUtcNow() >= stored.ExpiresAt)
             return Task.FromResult<AuthorizationContext?>(null);
 
-        return Task.FromResult<AuthorizationContext?>(stored.State);
+        return Task.FromResult<AuthorizationContext?>(stored.Context);
     }
 
     /// <inheritdoc />
     public Task<bool> RemoveAsync(string state, CancellationToken cancellationToken = default)
+        => Task.FromResult(Remove(state));
+
+    private bool Remove(string state)
     {
         if (!_states.TryRemove(state, out var stored))
-            return Task.FromResult(false);
+            return false;
 
         // An entry removed past its lifetime does not count as a live spend: it was already dead, and a
         // race that removed it is not the winner of a genuine callback.
-        return Task.FromResult(_timeProvider.GetUtcNow() < stored.ExpiresAt);
+        return _timeProvider.GetUtcNow() < stored.ExpiresAt;
     }
 
     private void RemoveExpired()
@@ -114,5 +117,5 @@ public sealed class InMemoryAuthorizationStateStore : IAuthorizationStateStore
         }
     }
 
-    private sealed record StoredState(AuthorizationContext State, DateTimeOffset ExpiresAt);
+    private sealed record StoredState(AuthorizationContext Context, DateTimeOffset ExpiresAt);
 }
