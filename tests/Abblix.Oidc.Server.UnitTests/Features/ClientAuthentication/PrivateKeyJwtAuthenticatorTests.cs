@@ -43,13 +43,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// as defined in RFC 7523 and OpenID Connect Core 1.0.
 /// Tests cover JWT validation, replay attack prevention, and various error conditions.
 /// </summary>
-[Collection("License")]
 public class PrivateKeyJwtAuthenticatorTests
 {
     private const string ClientId = "test_client_789";
     private const string JwtAssertion = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
 
-    public PrivateKeyJwtAuthenticatorTests(TestInfrastructure.LicenseFixture fixture)
+    public PrivateKeyJwtAuthenticatorTests()
     {
         // Fixture auto-configures license
     }

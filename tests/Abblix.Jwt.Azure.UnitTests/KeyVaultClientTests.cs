@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -135,6 +135,72 @@ public sealed class KeyVaultClientTests : IDisposable
         Assert.Equal(created1, first.CreatedAt);
         Assert.Equal(created2, second.CreatedAt);
         Assert.Equal(rsa1.ExportParameters(false).Modulus, Assert.IsType<RsaJsonWebKey>(first.PublicKey).Modulus);
+    }
+
+    [Fact]
+    public async Task GetKeyVersionsAsync_SkipsADisabledVersion()
+    {
+        // Disabling a version in Key Vault is how an operator takes a compromised key out of service. If this
+        // client published it anyway, the key would stay in the JWKS and stay eligible to sign - the revocation
+        // would appear to have been carried out while changing nothing.
+        using var rsa = RSA.Create(2048);
+        var handler = new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/versions", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyVersionsList(
+                    VaultUri,
+                    "oidc-sign",
+                    ("live", 1_700_000_000L, true),
+                    ("revoked", 1_710_000_000L, false)))
+                : StubHttpMessageHandler.Json(
+                    HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false))));
+
+        var versions = new List<KeyVersion>();
+        await foreach (var version in ClientOver(handler).GetKeyVersionsAsync("oidc-sign", TestContext.Current.CancellationToken))
+            versions.Add(version);
+
+        Assert.Equal("oidc-sign/live", Assert.Single(versions).PublicKey.KeyId);
+    }
+
+    [Fact]
+    public async Task GetKeyVersionsAsync_FailsWhenAVersionHasNoCreationTime()
+    {
+        // The creation time decides which version signs and when a rotation takes over. A version whose age is
+        // unknown cannot be ordered, so it has to stop the enumeration rather than be dated to year one and sort
+        // as ancient - which would quietly make it ineligible to produce with and impossible to notice.
+        using var rsa = RSA.Create(2048);
+        var handler = new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/versions", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyVersionsList(
+                    VaultUri, "oidc-sign", ("undated", null, true)))
+                : StubHttpMessageHandler.Json(
+                    HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false))));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in ClientOver(handler).GetKeyVersionsAsync(
+                               "oidc-sign", TestContext.Current.CancellationToken))
+            {
+                // Enumerating is the act under test; the failure arrives before any version is produced.
+            }
+        });
+
+        Assert.Contains("oidc-sign/undated", exception.Message);
+    }
+
+    [Fact]
+    public async Task UnwrapKeyAsync_RejectsUnsupportedAlgorithm_WithoutCallingTheVault()
+    {
+        // An algorithm this store cannot unwrap must be refused outright. Mapping it to something the vault does
+        // accept would decrypt under an algorithm the caller never asked for.
+        var handler = new StubHttpMessageHandler(_ =>
+            throw new InvalidOperationException("the vault must not be called for an unsupported algorithm"));
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).UnwrapKeyAsync(
+            "oidc-enc/v1",
+            EncryptionAlgorithms.KeyManagement.EcdhEs,
+            new JsonWebTokenHeader(new JsonObject()),
+            [5, 5],
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

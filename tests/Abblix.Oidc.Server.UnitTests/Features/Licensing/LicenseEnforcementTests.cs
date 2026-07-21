@@ -21,398 +21,203 @@
 // info@abblix.com
 
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
-
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
 /// <summary>
-/// Tests for license enforcement logic using isolated LicenseManager instances.
-/// These tests verify the same enforcement logic as LicenseChecker but without static state pollution.
+/// Exercises the enforcement decisions by calling <see cref="LicenseChecker"/> itself.
 /// </summary>
 /// <remarks>
-/// This test class demonstrates how to test license enforcement in isolation by:
-/// 1. Creating fresh LicenseManager instances for each test
-/// 2. Manually implementing the enforcement logic (30% buffer, limits, etc.)
-/// 3. Verifying behavior without interference from other tests
+/// These replace an earlier set that never called the product. Those built their own dictionary of seen
+/// issuers, re-computed the comparison the checker makes, and asserted the re-computation
+/// (<c>var shouldThrow = license.IssuerLimit &lt; knownIssuers.Count; Assert.True(shouldThrow)</c>). That form
+/// asserts arithmetic: it stays green if the enforcement is deleted outright, while reading as coverage and so
+/// discouraging anyone from looking again.
 ///
-/// This approach tests the underlying license aggregation and enforcement logic
-/// that LicenseChecker relies on, but in a fully isolated manner.
+/// Each test starts from a known point and the class does not run beside others, because the checker keeps what
+/// it has seen in process-wide statics. Without that, a limit is reachable only by whichever test happens to
+/// run first.
 /// </remarks>
-[Collection("License")]
-public class LicenseEnforcementTests
+[Collection(nameof(LicenseEnforcementTests))]
+[CollectionDefinition(nameof(LicenseEnforcementTests), DisableParallelization = true)]
+public sealed class LicenseEnforcementTests : IDisposable
 {
-    #region Client Limit Enforcement
+    private const string UnlicensedIssuer = "https://second-issuer.example.com";
 
-    /// <summary>
-    /// Verifies that client limit enforcement blocks clients exceeding the limit by more than 30%.
-    /// </summary>
+    public LicenseEnforcementTests() => TestLicense.ResetChecker();
+
+    /// <summary>Leaves the assembly's licence in place for everything that runs afterwards.</summary>
+    public void Dispose() => TestLicense.ResetChecker();
+
     [Fact]
-    public void ClientLimitEnforcement_ExceedingBy30Percent_BlocksClient()
+    public void The_issuer_the_licence_names_is_accepted()
     {
-        // Arrange - Create isolated license manager with 2 client limit
-        var licenseManager = new LicenseManager();
-        var license = new License
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+    }
+
+    [Fact]
+    public void An_issuer_the_licence_does_not_name_is_refused()
+    {
+        // The whitelist is what ties a licence to the deployment it was issued for. Without it, a licence file
+        // works wherever it is copied.
+        Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+    }
+
+    [Fact]
+    public void An_issuer_the_licence_does_not_name_is_refused_every_time()
+    {
+        // Refused on every call, not only the first. A rule that stops applying once it has been reported is
+        // not a rule: the caller only has to ask again, and a retry policy does that without anyone deciding
+        // to. Asserted separately from the single-call case because a single call cannot tell the two apart.
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+    }
+
+    [Fact]
+    public void An_issuer_beyond_the_licensed_count_is_refused_every_time()
+    {
+        // A licence that caps the number of issuers without naming them, which is the only arrangement under
+        // which the count is ever consulted: a licence that names its issuers refuses an unknown one on the
+        // name, before anything is counted. Written this way after the first attempt, which reused the
+        // assembly's licence, turned out to exercise the whitelist while claiming to test the count.
+        //
+        // The period is stated as fixed instants rather than read from the clock. The checker reads the clock
+        // itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+
+        // Every call, not only the first. A limit that stops applying once it has been reported is not a
+        // limit: the caller only has to ask again, and a retry policy does that without anyone deciding to.
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+    }
+
+    [Fact]
+    public void A_client_is_accepted_while_the_licence_sets_no_client_limit()
+    {
+        // The assembly licence carries no client_limit, so clients are unbounded. Worth pinning: were a later
+        // licence to introduce one, the whole suite would start tripping it, and the failure would look like
+        // anything except a change of licence terms.
+        var client = new ClientInfo("some-client");
+
+        Assert.Same(client, client.CheckClientLicense());
+    }
+
+    [Fact]
+    public void A_client_far_beyond_the_licensed_count_is_turned_away()
+    {
+        // The client limit is not refused at the limit but at a margin above it, so an operator who has grown
+        // slightly past their terms keeps serving while being told. Past the margin the client is turned away
+        // outright - the checker answers null and the caller treats it as an unknown client.
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
         {
             ClientLimit = 2,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
 
-        var knownClients = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-        const double ClientLimitOverExceedingFactor = 1.3;
-
-        // Act & Assert - Add first 2 clients (within limit)
-        var client1 = "client-1";
-        var client2 = "client-2";
-        var client3 = "client-3";
-
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-        Assert.Equal(2, currentLicense.ClientLimit);
-
-        // First client - should be allowed
-        knownClients.TryAdd(client1, null!);
-        var shouldBlock1 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
-        Assert.False(shouldBlock1);
-
-        // Second client - should be allowed
-        knownClients.TryAdd(client2, null!);
-        var shouldBlock2 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
-        Assert.False(shouldBlock2);
-
-        // Third client - should be blocked (2 * 1.3 = 2.6, current count is 2, so check if adding would exceed)
-        // The check is: would adding this client exceed the buffer?
-        var wouldExceedBuffer = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
-                                !knownClients.ContainsKey(client3);
-        Assert.True(wouldExceedBuffer);
-    }
-
-    /// <summary>
-    /// Verifies that client limit enforcement allows clients within the 30% buffer.
-    /// </summary>
-    [Fact]
-    public void ClientLimitEnforcement_WithinBuffer_AllowsClients()
-    {
-        // Arrange - License with limit of 10 clients (buffer allows up to 13)
-        var licenseManager = new LicenseManager();
-        var license = new License
+        // Within the margin: recorded and served, which is the tolerance the margin exists to give.
+        for (var index = 0; index < 3; index++)
         {
-            ClientLimit = 10,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
-
-        var knownClients = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-        const double ClientLimitOverExceedingFactor = 1.3;
-
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-
-        // Act - Add 13 clients (10 * 1.3 = 13.0)
-        for (var i = 1; i <= 13; i++)
-        {
-            knownClients.TryAdd($"client-{i}", null!);
+            var tolerated = new ClientInfo($"client-{index}");
+            Assert.Same(tolerated, tolerated.CheckClientLicense());
         }
 
-        // Assert - 13 clients should be allowed (exactly at buffer limit: 10 * 1.3 = 13)
-        var shouldBlockAt13 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
-        Assert.False(shouldBlockAt13);
-
-        // Assert - 14th client should be blocked (would exceed 13)
-        var wouldExceedAt14 = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < (knownClients.Count + 1) &&
-                              !knownClients.ContainsKey("client-14");
-        Assert.True(wouldExceedAt14);
-    }
-
-    /// <summary>
-    /// Verifies that unlimited client limit (null) allows any number of clients.
-    /// </summary>
-    [Fact]
-    public void ClientLimitEnforcement_UnlimitedLicense_NeverBlocks()
-    {
-        // Arrange
-        var licenseManager = new LicenseManager();
-        var license = new License
+        // Past it: a client never seen before is refused, every time it asks.
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            ClientLimit = null, // Unlimited
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
-
-        var knownClients = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-        const double ClientLimitOverExceedingFactor = 1.3;
-
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-        Assert.Null(currentLicense.ClientLimit);
-
-        // Act - Add 100 clients
-        for (var i = 1; i <= 100; i++)
-        {
-            knownClients.TryAdd($"client-{i}", null!);
-        }
-
-        // Assert - Should never block with unlimited license
-        if (currentLicense.ClientLimit.HasValue)
-        {
-            var shouldBlock = currentLicense.ClientLimit!.Value * ClientLimitOverExceedingFactor < knownClients.Count;
-            Assert.False(shouldBlock);
-        }
-        else
-        {
-            // Unlimited license - no blocking logic applies
-            Assert.Null(currentLicense.ClientLimit);
+            Assert.Null(new ClientInfo("one-client-too-many").CheckClientLicense());
         }
     }
 
-    /// <summary>
-    /// Verifies that license aggregation takes the maximum client limit from multiple licenses.
-    /// </summary>
     [Fact]
-    public void ClientLimitEnforcement_MultipleLicenses_TakesMaximum()
+    public void A_client_already_known_is_still_served_once_the_margin_is_passed()
     {
-        // Arrange
-        var licenseManager = new LicenseManager();
-
-        var license1 = new License
+        // The refusal applies to clients the deployment has not served before. One already in use keeps
+        // working, so exceeding the terms degrades the ability to add clients rather than breaking the ones
+        // already relying on it.
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
         {
-            ClientLimit = 5,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
+            ClientLimit = 2,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
 
-        var license2 = new License
+        for (var index = 0; index < 3; index++)
         {
-            ClientLimit = 10,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-
-        licenseManager.AddLicense(license1);
-        licenseManager.AddLicense(license2);
-
-        // Act
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-
-        // Assert - Should take maximum (10)
-        Assert.NotNull(currentLicense);
-        Assert.Equal(10, currentLicense.ClientLimit);
-    }
-
-    #endregion
-
-    #region Issuer Limit Enforcement
-
-    /// <summary>
-    /// Verifies that issuer limit enforcement throws when limit is exceeded.
-    /// </summary>
-    [Fact]
-    public void IssuerLimitEnforcement_ExceedingLimit_ShouldThrow()
-    {
-        // Arrange
-        var licenseManager = new LicenseManager();
-        var license = new License
-        {
-            IssuerLimit = 2,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
-
-        var knownIssuers = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-        Assert.Equal(2, currentLicense.IssuerLimit);
-
-        // Act - Add first 2 issuers
-        var issuer1 = "https://issuer1.example.com";
-        var issuer2 = "https://issuer2.example.com";
-        var issuer3 = "https://issuer3.example.com";
-
-        knownIssuers.TryAdd(issuer1, null!);
-        knownIssuers.TryAdd(issuer2, null!);
-
-        // Assert - Third issuer should exceed limit
-        knownIssuers.TryAdd(issuer3, null!);
-        var shouldThrow = currentLicense.IssuerLimit!.Value < knownIssuers.Count;
-        Assert.True(shouldThrow);
-    }
-
-    /// <summary>
-    /// Verifies that unlimited issuer limit (null) allows any number of issuers.
-    /// </summary>
-    [Fact]
-    public void IssuerLimitEnforcement_UnlimitedLicense_AllowsAllIssuers()
-    {
-        // Arrange
-        var licenseManager = new LicenseManager();
-        var license = new License
-        {
-            IssuerLimit = null, // Unlimited
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
-
-        var knownIssuers = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-        Assert.Null(currentLicense.IssuerLimit);
-
-        // Act - Add 10 issuers
-        for (var i = 1; i <= 10; i++)
-        {
-            knownIssuers.TryAdd($"https://issuer{i}.example.com", null!);
+            _ = new ClientInfo($"established-{index}").CheckClientLicense();
         }
 
-        // Assert - Should never throw with unlimited license
-        if (currentLicense.IssuerLimit.HasValue)
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense());
+
+        var established = new ClientInfo("established-0");
+        Assert.Same(established, established.CheckClientLicense());
+    }
+
+    [Fact]
+    public void A_reporting_failure_does_not_change_the_decision()
+    {
+        // Enforcement must not depend on reporting succeeding. The logger written through here is a
+        // process-wide singleton whose underlying logger is rebound by every host that starts and released by
+        // none, so it can be left pointing at a provider that is gone - which throws on write. Were that
+        // allowed to escape, the licence decision would be replaced by an unrelated exception from the logging
+        // stack, and the request would fail for a reason having nothing to do with the licence.
+        LicenseLogger.Instance.Init(new ThrowingLoggerFactory());
+        try
         {
-            var shouldThrow = currentLicense.IssuerLimit!.Value < knownIssuers.Count;
-            Assert.False(shouldThrow);
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
         }
-        else
+        finally
         {
-            // Unlimited license
-            Assert.Null(currentLicense.IssuerLimit);
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
         }
     }
 
-    #endregion
-
-    #region ValidIssuers Whitelist Enforcement
-
-    /// <summary>
-    /// Verifies that ValidIssuers whitelist blocks non-whitelisted issuers.
-    /// </summary>
-    [Fact]
-    public void ValidIssuersEnforcement_IssuerNotInWhitelist_ShouldBlock()
+    /// <summary>A factory whose loggers fail on write, standing in for one whose provider has been disposed.</summary>
+    private sealed class ThrowingLoggerFactory : ILoggerFactory
     {
-        // Arrange
-        var licenseManager = new LicenseManager();
-        var allowedIssuers = new HashSet<string>(StringComparer.Ordinal)
+        public ILogger CreateLogger(string categoryName) => new ThrowingLogger();
+
+        public void AddProvider(ILoggerProvider provider)
         {
-            "https://allowed1.example.com",
-            "https://allowed2.example.com"
-        };
+        }
 
-        var license = new License
+        public void Dispose()
         {
-            ValidIssuers = allowedIssuers,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager.AddLicense(license);
+        }
 
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        Assert.NotNull(currentLicense);
-        Assert.NotNull(currentLicense.ValidIssuers);
+        private sealed class ThrowingLogger : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        // Act & Assert - Whitelisted issuer should be allowed
-        var allowedIssuer = "https://allowed1.example.com";
-        var isAllowed = currentLicense.ValidIssuers.Contains(allowedIssuer);
-        Assert.True(isAllowed);
+            public bool IsEnabled(LogLevel logLevel) => true;
 
-        // Act & Assert - Non-whitelisted issuer should be blocked
-        var blockedIssuer = "https://blocked.example.com";
-        var isBlocked = !currentLicense.ValidIssuers.Contains(blockedIssuer);
-        Assert.True(isBlocked);
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => throw new ObjectDisposedException("the provider this logger came from is gone");
+        }
     }
-
-    /// <summary>
-    /// Verifies that empty or null ValidIssuers list allows all issuers.
-    /// </summary>
-    [Fact]
-    public void ValidIssuersEnforcement_NullOrEmptyWhitelist_AllowsAllIssuers()
-    {
-        // Arrange - License with null ValidIssuers
-        var licenseManager1 = new LicenseManager();
-        var license1 = new License
-        {
-            ValidIssuers = null,
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager1.AddLicense(license1);
-
-        // Arrange - License with empty ValidIssuers
-        var licenseManager2 = new LicenseManager();
-        var license2 = new License
-        {
-            ValidIssuers = new HashSet<string>(StringComparer.Ordinal),
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-        licenseManager2.AddLicense(license2);
-
-        // Act
-        var currentLicense1 = licenseManager1.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        var currentLicense2 = licenseManager2.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-
-        // Assert - Null ValidIssuers means no restriction
-        Assert.NotNull(currentLicense1);
-        var shouldCheckWhitelist1 = currentLicense1.ValidIssuers is { Count: > 0 };
-        Assert.False(shouldCheckWhitelist1);
-
-        // Assert - Empty ValidIssuers means no restriction
-        Assert.NotNull(currentLicense2);
-        var shouldCheckWhitelist2 = currentLicense2.ValidIssuers is { Count: > 0 };
-        Assert.False(shouldCheckWhitelist2);
-    }
-
-    /// <summary>
-    /// Verifies that multiple licenses combine their ValidIssuers lists (union).
-    /// </summary>
-    [Fact]
-    public void ValidIssuersEnforcement_MultipleLicenses_CombinesWhitelists()
-    {
-        // Arrange
-        var licenseManager = new LicenseManager();
-
-        var license1 = new License
-        {
-            ValidIssuers = new HashSet<string>(StringComparer.Ordinal)
-            {
-                "https://issuer1.example.com",
-                "https://issuer2.example.com"
-            },
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-
-        var license2 = new License
-        {
-            ValidIssuers = new HashSet<string>(StringComparer.Ordinal)
-            {
-                "https://issuer2.example.com", // Duplicate
-                "https://issuer3.example.com"
-            },
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
-        };
-
-        licenseManager.AddLicense(license1);
-        licenseManager.AddLicense(license2);
-
-        // Act
-        var currentLicense = licenseManager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-
-        // Assert - Should have union of all issuers (3 unique)
-        Assert.NotNull(currentLicense);
-        Assert.NotNull(currentLicense.ValidIssuers);
-        Assert.Equal(3, currentLicense.ValidIssuers.Count);
-        Assert.Contains("https://issuer1.example.com", currentLicense.ValidIssuers);
-        Assert.Contains("https://issuer2.example.com", currentLicense.ValidIssuers);
-        Assert.Contains("https://issuer3.example.com", currentLicense.ValidIssuers);
-    }
-
-    #endregion
 }

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -54,7 +55,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             await NavigateTokenNonceChallengeAsync(client, discovery, proofKey);
 
         Assert.Equal(HttpStatusCode.BadRequest, challengeResponse.StatusCode);
-        Assert.Equal(ErrorCodes.UseDPoPNonce, challengeBody["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.UseDPoPNonce, challengeBody[ResponseParameters.Error]!.GetValue<string>());
         Assert.False(string.IsNullOrEmpty(nonce));
     }
 

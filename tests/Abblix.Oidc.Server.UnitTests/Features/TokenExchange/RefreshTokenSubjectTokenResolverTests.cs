@@ -43,7 +43,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// Unit tests for <see cref="RefreshTokenSubjectTokenResolver"/> -- the RFC 8693 subject_token
 /// resolver for refresh_token URI (own-issued JWT of typ=rt+jwt, recovers original AuthorizedGrant).
 /// </summary>
-[Collection("License")]
 public class RefreshTokenSubjectTokenResolverTests
 {
     private const string TokenWire = "refresh.jwt.signature";
@@ -55,7 +54,7 @@ public class RefreshTokenSubjectTokenResolverTests
     private readonly FakeTimeProvider _timeProvider = new();
     private readonly RefreshTokenSubjectTokenResolver _resolver;
 
-    public RefreshTokenSubjectTokenResolverTests(LicenseFixture fixture)
+    public RefreshTokenSubjectTokenResolverTests()
     {
         // The refresh token names its original client; the resolver looks that client up (its sector opens a
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.

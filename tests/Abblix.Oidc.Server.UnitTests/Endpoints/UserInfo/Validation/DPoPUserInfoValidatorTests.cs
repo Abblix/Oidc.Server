@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -247,7 +247,7 @@ public class DPoPUserInfoValidatorTests
     {
         var payloadJson = new JsonObject();
         if (nonceClaim is not null)
-            payloadJson["nonce"] = nonceClaim;
+            payloadJson[IanaClaimTypes.Nonce] = nonceClaim;
         var token = new JsonWebToken { Payload = new JsonWebTokenPayload(payloadJson) };
         return new Proof(token, new OctetJsonWebKey(), thumbprint, "jti-1", ProofIssuedAt);
     }

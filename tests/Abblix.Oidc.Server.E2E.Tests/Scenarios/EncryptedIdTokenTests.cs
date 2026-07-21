@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Text.Json;
@@ -9,6 +9,8 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -55,7 +57,7 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
 
         var registered = await RegisterClientAsync(httpClient, discovery, new JsonObject
         {
-            ["redirect_uris"] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
             ["response_types"] = new JsonArray { ResponseTypes.Code },
             ["token_endpoint_auth_method"] = "client_secret_post",
@@ -89,7 +91,7 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        var idToken = tokenResponse["id_token"]!.GetValue<string>();
+        var idToken = tokenResponse[ResponseParameters.IdToken]!.GetValue<string>();
 
         // The ID token arrives as a JWE (five parts) declaring the registered algorithms; in Direct
         // Key Agreement mode the encrypted key is empty and the agreement travels as 'epk'.

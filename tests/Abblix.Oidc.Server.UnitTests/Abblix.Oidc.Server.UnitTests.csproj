@@ -14,6 +14,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- One licence, two test assemblies. Linked rather than copied so the unit and end-to-end suites can
+         never drift onto different terms and disagree about what the product allows. -->
+    <EmbeddedResource Include="../Resources/test-license.jwt" Link="Resources/test-license.jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Moq" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="xunit.v3.mtp-v2" />

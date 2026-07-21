@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -41,6 +41,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Jwt;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -74,8 +76,8 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
         var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
-        var accessSub = DecodeJwtPayload(accessToken)["sub"]!.GetValue<string>();
-        var idSub = DecodeJwtPayload(tokens["id_token"]!.GetValue<string>())["sub"]!.GetValue<string>();
+        var accessSub = DecodeJwtPayload(accessToken)[IanaClaimTypes.Sub]!.GetValue<string>();
+        var idSub = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>())[IanaClaimTypes.Sub]!.GetValue<string>();
 
         // RFC 9068 Section 2.2: the access token's sub matches the id_token's sub. Both carry the pairwise
         // pseudonym now that the access token's subject is sealed too - before #256 they diverged (real sub in the
@@ -121,7 +123,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
 
         var accessToken = refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
         var accessPayload = DecodeJwtPayload(accessToken);
-        var accessSub = accessPayload["sub"]!.GetValue<string>();
+        var accessSub = accessPayload[IanaClaimTypes.Sub]!.GetValue<string>();
 
         // The re-issued access token still carries the same pairwise pseudonym (not the real subject): refresh
         // opened the pseudonym to recover the real subject correctly, then re-sealed it to the same value.
@@ -161,7 +163,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         });
 
         var exchangedToken = exchanged[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
-        var exchangedSub = DecodeJwtPayload(exchangedToken)["sub"]!.GetValue<string>();
+        var exchangedSub = DecodeJwtPayload(exchangedToken)[IanaClaimTypes.Sub]!.GetValue<string>();
 
         // The re-issued token carries the same pairwise pseudonym: the exchange recovered the real subject from the
         // presented pseudonym and re-sealed it for the same client. Had recovery not fired, the pseudonym would have

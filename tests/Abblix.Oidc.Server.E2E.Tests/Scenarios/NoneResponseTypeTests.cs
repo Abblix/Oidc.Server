@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Net;
@@ -6,6 +6,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -49,11 +50,11 @@ public class NoneResponseTypeTests(TestFactory factory) : TestBase(factory)
         var callback = System.Web.HttpUtility.ParseQueryString(location.Query);
 
         // §4: a successful none response carries state (and iss per RFC 9207) but no credentials.
-        Assert.Equal(state, callback["state"]);
+        Assert.Equal(state, callback[ResponseParameters.State]);
         Assert.Equal(TestConstants.Issuer, callback["iss"]);
-        Assert.Null(callback["error"]);
-        Assert.Null(callback["code"]);
-        Assert.Null(callback["access_token"]);
-        Assert.Null(callback["id_token"]);
+        Assert.Null(callback[ResponseParameters.Error]);
+        Assert.Null(callback[ResponseParameters.Code]);
+        Assert.Null(callback[ResponseParameters.AccessToken]);
+        Assert.Null(callback[ResponseParameters.IdToken]);
     }
 }

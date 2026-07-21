@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using System.Net;
@@ -6,6 +6,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -63,8 +64,8 @@ public class ResponseModeRestrictionTests(TestFactory factory) : TestBase(factor
         var carrier = location.Query.Length > 0 ? location.Query : location.Fragment;
         var callback = System.Web.HttpUtility.ParseQueryString(carrier.TrimStart('?', '#'));
 
-        Assert.Equal(ErrorCodes.InvalidRequest, callback["error"]);
-        Assert.Null(callback["code"]);
+        Assert.Equal(ErrorCodes.InvalidRequest, callback[ResponseParameters.Error]);
+        Assert.Null(callback[ResponseParameters.Code]);
     }
 
     /// <summary>

@@ -15,7 +15,7 @@
        Abblix.Oidc.Server.MinimalApi.E2E.TestHost.Resources.test-license.jwt.
        Linked from the MVC test host rather than duplicated. -->
   <ItemGroup>
-    <EmbeddedResource Include="..\Abblix.Oidc.Server.E2E.TestHost\Resources\test-license.jwt" Link="Resources\test-license.jwt" />
+    <EmbeddedResource Include="..\Resources\test-license.jwt" Link="Resources\test-license.jwt" />
   </ItemGroup>
 
   <!-- Framework-neutral test stubs + constants shared with the MVC test host. Linked, not copied:
