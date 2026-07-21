@@ -168,6 +168,7 @@ public sealed class OidcClient(
             identityToken,
             encodedIdentityToken,
             tokens.AccessToken,
+            tokens.TokenType,
             tokens.RefreshToken,
 
             // The token endpoint states the lifetime in seconds (RFC 6749 section 5.1); the authorization
@@ -202,6 +203,7 @@ public sealed class OidcClient(
             identityToken,
             EncodedIdentityToken(response),
             response.AccessToken,
+            response.TokenType,
 
             // A refresh token never travels through the browser: RFC 9700 section 2.2.2 confines it to the
             // token endpoint, and this flow does not visit it.

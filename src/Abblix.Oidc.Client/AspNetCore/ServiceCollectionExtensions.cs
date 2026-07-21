@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
+using Abblix.Oidc.Client.Features.ProtectedResources;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +35,41 @@ namespace Abblix.Oidc.Client.AspNetCore;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Takes the access token for outgoing calls from the signed-in user's session.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="configureOptions">
+    /// Which scheme holds the session, and how much clock margin to leave. Optional.
+    /// </param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// The ready-made answer for a web application. It needs the OIDC scheme to keep tokens with the
+    /// session, which is off by default: set <c>SaveTokens</c>.
+    /// </remarks>
+    public static IServiceCollection AddSessionAccessTokenSource(
+        this IServiceCollection services, Action<SessionAccessTokenOptions>? configureOptions = null)
+    {
+        if (configureOptions is not null)
+            services.Configure(configureOptions);
+
+        services.AddOptions<SessionAccessTokenOptions>();
+
+        // The courtesy the state stores already document: reaching the current request needs the accessor,
+        // and a host that forgot it would meet a resolution failure rather than an explanation.
+        services.AddHttpContextAccessor();
+
+        // A soft default, so a test or a host can substitute a clock before this call.
+        services.TryAddSingleton(TimeProvider.System);
+
+        // Replaces the refusing placeholder that AddProtectedResourceAccess registers: this call IS the host
+        // saying where tokens come from. Replace rather than TryAdd so the answer does not depend on which
+        // of the two ran first.
+        services.Replace(ServiceDescriptor.Singleton<IAccessTokenSource, SessionAccessTokenSource>());
+
+        return services;
+    }
+
     /// <summary>
     /// Replaces the in-memory authorization state store with the cookie-backed one, binding each login
     /// to the browser that started it.

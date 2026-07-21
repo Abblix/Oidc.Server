@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -24,7 +24,9 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Client.Common.Constants;
 using Abblix.Oidc.Client.Features.Discovery;
+using Abblix.Oidc.Client.Features.ProtectedResources;
 
 namespace Abblix.Oidc.Client.Features.UserInfo;
 
@@ -107,10 +109,13 @@ public sealed class UserInfoService(
                 // section 3 puts in the WWW-Authenticate header rather than the body. The body is not read
                 // here: whatever it holds is chosen by whoever answered, and the status plus the challenge
                 // say enough for a caller to act.
+                var challenge = BearerChallenge.Read(response.Headers.WwwAuthenticate);
+
                 throw new UserInfoException(
                     $"The UserInfo endpoint '{endpoint}' refused the access token: "
                     + $"{(int)response.StatusCode} {response.ReasonPhrase}"
-                    + $"{FormatChallenge(response.Headers.WwwAuthenticate)}.");
+                    + (challenge?.Error is { } error ? $", error '{error}'" : string.Empty)
+                    + ".");
             }
 
             return await ParseAsync(response, endpoint, cancellationToken);
@@ -187,6 +192,4 @@ public sealed class UserInfoService(
         }
     }
 
-    private static string FormatChallenge(HttpHeaderValueCollection<AuthenticationHeaderValue> challenges)
-        => challenges.Count == 0 ? string.Empty : $" ({string.Join(", ", challenges)})";
 }

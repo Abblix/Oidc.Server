@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Globalization;
 using System.Text.Encodings.Web;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
@@ -59,6 +60,35 @@ public sealed class AbblixOidcClientHandler(
     /// left to a string literal, because the reader is in the host and the writer is here.
     /// </remarks>
     public const string SessionStateItemKey = "abblix.oidc.session_state";
+
+    /// <summary>
+    /// The names the session's tokens are stored under.
+    /// </summary>
+    /// <remarks>
+    /// Named for the reason the session-state key is: the writer is here and the reader is in the host, or
+    /// in the session-backed token source. They are the names the framework's own OpenID Connect handler
+    /// uses, so a host that swaps one handler for the other reads the same session.
+    /// </remarks>
+    public const string IdentityTokenName = "id_token";
+
+    /// <inheritdoc cref="IdentityTokenName"/>
+    public const string AccessTokenName = "access_token";
+
+    /// <inheritdoc cref="IdentityTokenName"/>
+    public const string RefreshTokenName = "refresh_token";
+
+    /// <inheritdoc cref="IdentityTokenName"/>
+    public const string TokenTypeName = "token_type";
+
+    /// <summary>
+    /// When the access token stops being usable, in round-trip format.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the ticket's own <c>ExpiresUtc</c>. That one governs the session, and a host is free
+    /// to set a sliding expiration or a longer window on it; conflating the two makes a token look alive
+    /// because the session is.
+    /// </remarks>
+    public const string AccessTokenExpiresAtName = "expires_at";
 
     /// <summary>
     /// Sends the user to the provider to sign in.
@@ -132,18 +162,34 @@ public sealed class AbblixOidcClientHandler(
     /// decides who can read them. The ID Token is kept verbatim: logging out sends it as <c>id_token_hint</c>
     /// and a re-serialized one would not verify.
     /// </remarks>
-    private static void StoreTokens(AuthenticationProperties properties, CompletedSignIn signIn)
+    private void StoreTokens(AuthenticationProperties properties, CompletedSignIn signIn)
     {
         var tokens = new List<AuthenticationToken>
         {
-            new() { Name = "id_token", Value = signIn.EncodedIdentityToken },
+            new() { Name = IdentityTokenName, Value = signIn.EncodedIdentityToken },
         };
 
         if (signIn.AccessToken is { } accessToken)
-            tokens.Add(new AuthenticationToken { Name = "access_token", Value = accessToken });
+            tokens.Add(new AuthenticationToken { Name = AccessTokenName, Value = accessToken });
 
         if (signIn.RefreshToken is { } refreshToken)
-            tokens.Add(new AuthenticationToken { Name = "refresh_token", Value = refreshToken });
+            tokens.Add(new AuthenticationToken { Name = RefreshTokenName, Value = refreshToken });
+
+        // The type says how the token is presented (RFC 6749 section 5.1), so it travels with it. Kept
+        // alongside rather than assumed, because assuming it here would decide for every future scheme.
+        if (signIn.TokenType is { } tokenType)
+            tokens.Add(new AuthenticationToken { Name = TokenTypeName, Value = tokenType });
+
+        // An absolute instant rather than a duration, because a duration is only meaningful next to the
+        // moment it was measured from, and that moment is gone by the time anything reads this.
+        if (signIn.ExpiresIn is { } lifetime)
+        {
+            tokens.Add(new AuthenticationToken
+            {
+                Name = AccessTokenExpiresAtName,
+                Value = (TimeProvider.GetUtcNow() + lifetime).ToString("o", CultureInfo.InvariantCulture),
+            });
+        }
 
         properties.StoreTokens(tokens);
     }

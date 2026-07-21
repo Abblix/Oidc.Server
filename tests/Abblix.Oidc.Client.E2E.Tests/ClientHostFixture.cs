@@ -21,7 +21,9 @@
 // info@abblix.com
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -31,6 +33,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Client.AspNetCore;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.FrontChannelLogout;
+using Abblix.Oidc.Client.Features.ProtectedResources;
 using Abblix.Oidc.Client.Features.SessionManagement;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -90,8 +93,24 @@ public sealed class ClientHostFixture : IAsyncLifetime
     /// </summary>
     public const string ClientId = "e2e-backchannel-client";
 
+    /// <summary>
+    /// The protected API this application calls, and the address its token is scoped to.
+    /// </summary>
+    public const string ApiResource = "https://api.example.com/orders";
+
+    /// <summary>
+    /// The name of the HTTP client the application calls that API with.
+    /// </summary>
+    public const string ApiClientName = "orders";
+
+    /// <summary>
+    /// Where the application calls its API on the signed-in user's behalf.
+    /// </summary>
+    public const string CallApiPath = "/call-api";
+
     private readonly ClientAgainstServerFixture _provider = new();
     private IHost? _host;
+    private IHost? _api;
 
     /// <summary>
     /// The provider reaches this application through the handler of its in-memory server, which does not
@@ -156,6 +175,12 @@ public sealed class ClientHostFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// The application's own container, for a test that needs to reach a service directly.
+    /// </summary>
+    public IServiceProvider Services => _host?.Services
+                                        ?? throw new InvalidOperationException("The host has not been built.");
+
     private TestServer Server => _host?.GetTestServer()
                                  ?? throw new InvalidOperationException("The host has not been built.");
 
@@ -170,6 +195,8 @@ public sealed class ClientHostFixture : IAsyncLifetime
         _provider.ConfigureProviderServices = ConfigureProvider;
         await _provider.InitializeAsync();
 
+        _api = await BuildApiAsync();
+
         _host = await new HostBuilder()
             .ConfigureWebHost(builder => builder
                 .UseTestServer()
@@ -180,6 +207,11 @@ public sealed class ClientHostFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
+        if (_api is not null)
+            await _api.StopAsync();
+
+        _api?.Dispose();
+
         if (_host is not null)
             await _host.StopAsync();
 
@@ -257,6 +289,8 @@ public sealed class ClientHostFixture : IAsyncLifetime
         _provider.AddClientServices(services, ClientId);
         services.AddFrontChannelLogout();
         services.AddSessionCheck();
+        services.AddSessionAccessTokenSource();
+        RouteApiClient(services);
     }
 
     private void Configure(IApplicationBuilder app)
@@ -275,6 +309,16 @@ public sealed class ClientHostFixture : IAsyncLifetime
             // stands where the application's own logout button would.
             // Rendered for the signed-in session, reading the login state the handler kept with it. This is
             // the shape a real application uses: the page that hosts the frame points at this address.
+            // Calls the protected API the way a page would, and hands back what it said.
+            endpoints.MapGet(
+                    CallApiPath,
+                    async (IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+                    {
+                        var client = httpClientFactory.CreateClient(ApiClientName);
+                        return await client.GetStringAsync("42", cancellationToken);
+                    })
+                .RequireAuthorization();
+
             endpoints.MapGet(
                     SessionCheckPath,
                     (HttpRequest request, HttpContext context, CancellationToken cancellationToken) =>
@@ -320,4 +364,82 @@ public sealed class ClientHostFixture : IAsyncLifetime
 
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// A protected API: it accepts a bearer token, asks the provider whom it belongs to, and answers with
+    /// that subject.
+    /// </summary>
+    /// <remarks>
+    /// It validates rather than echoing, which is what makes the test worth writing. An API that simply
+    /// returned whatever token it was handed would pass just as well against a client that presented
+    /// somebody else's, or a stale one - the assertion has to be about the consequence, and the consequence
+    /// is that the provider recognises this user from the token the client attached.
+    /// </remarks>
+    private async Task<IHost> BuildApiAsync()
+        => await new HostBuilder()
+            .ConfigureWebHost(builder => builder
+                .UseTestServer()
+                .ConfigureServices(services => services.AddRouting())
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseEndpoints(endpoints => endpoints.MapGet(
+                        "/orders/{id}",
+                        (HttpContext context, CancellationToken cancellationToken) =>
+                            AnswerAsync(context, cancellationToken)));
+                }))
+            .StartAsync();
+
+    /// <summary>
+    /// Answers one API call: no token, or a token the provider does not recognise, is refused with the
+    /// Bearer challenge RFC 6750 section 3 defines.
+    /// </summary>
+    private async Task<IResult> AnswerAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        var authorization = context.Request.Headers.Authorization.ToString();
+
+        if (!authorization.StartsWith("Bearer ", StringComparison.Ordinal))
+        {
+            context.Response.Headers.WWWAuthenticate = "Bearer realm=\"orders\"";
+            return Results.Unauthorized();
+        }
+
+        var token = authorization["Bearer ".Length..];
+
+        using var toProvider = new HttpClient(_provider.Server.CreateHandler());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"{ClientAgainstServerFixture.Issuer}/connect/userinfo");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await toProvider.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            context.Response.Headers.WWWAuthenticate =
+                "Bearer realm=\"orders\", error=\"invalid_token\", error_description=\"the provider refused it\"";
+            return Results.Unauthorized();
+        }
+
+        var claims = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+
+        return Results.Text(claims?["sub"]?.GetValue<string>() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Sends the application's calls to the API into the in-memory API host rather than the network.
+    /// </summary>
+    /// <remarks>
+    /// The hazard worth naming: this client is named by the host, not by the library, so the routing that
+    /// covers the library's own clients does not touch it. Left unrouted it would send test traffic to the
+    /// real network, and the suite would go green having tested nothing - the same shape as a test project
+    /// missing from the CI matrix.
+    /// </remarks>
+    private void RouteApiClient(IServiceCollection services)
+        => services.AddHttpClient(ApiClientName, client => client.BaseAddress = new Uri($"{ApiResource}/"))
+            .AddAccessToken(options =>
+            {
+                options.Resource = new Uri(ApiResource);
+                options.Scopes = ["openid"];
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => _api!.GetTestServer().CreateHandler());
 }

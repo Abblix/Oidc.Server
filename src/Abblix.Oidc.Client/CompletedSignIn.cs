@@ -40,6 +40,10 @@ namespace Abblix.Oidc.Client;
 /// as <c>id_token_hint</c>, and a token re-serialized from its parts is not the one the provider signed.
 /// </param>
 /// <param name="AccessToken">The access token, for calling the provider's UserInfo endpoint and APIs.</param>
+/// <param name="TokenType">
+/// How the access token is presented, from the token response (RFC 6749 section 5.1 makes it REQUIRED).
+/// Carried rather than assumed, because it says whether a bearer header is enough or a proof is needed.
+/// </param>
 /// <param name="RefreshToken">
 /// The refresh token, when the provider issued one. Present only if the login asked for <c>offline_access</c>
 /// and the provider allowed it.
@@ -57,6 +61,7 @@ public sealed record CompletedSignIn(
     JsonWebToken IdentityToken,
     string EncodedIdentityToken,
     string? AccessToken,
+    string? TokenType,
     string? RefreshToken,
     TimeSpan? ExpiresIn,
     string ReturnUri,

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,15 +20,18 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Client.Features.UserInfo;
+namespace Abblix.Oidc.Client.Common.Constants;
 
 /// <summary>
 /// The authentication schemes a token is presented under, as they appear on the wire.
 /// </summary>
 /// <remarks>
-/// Named to match <c>Abblix.Oidc.Server.Common.Constants.TokenTypes</c>. The client cannot reference the
-/// server package, so the constants are kept in step by hand - the same arrangement the wire constants for
-/// requests and responses already use.
+/// Named and placed to match <c>Abblix.Oidc.Server.Common.Constants.TokenTypes</c>. The client cannot
+/// reference the server package, so the constants are kept in step by hand - the same arrangement the wire
+/// constants for requests and responses already use.
+/// It sits in <c>Common</c> rather than under a feature because it now has more than one consumer: the
+/// UserInfo endpoint and every protected resource the host calls. A feature importing another feature to
+/// name a scheme reads as a mistake even when it compiles.
 /// </remarks>
 public static class TokenTypes
 {
