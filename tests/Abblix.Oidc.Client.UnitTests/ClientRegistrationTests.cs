@@ -30,6 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
+using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.Revocation;
 using Abblix.Oidc.Client.Features.UserInfo;
 namespace Abblix.Oidc.Client.UnitTests;
@@ -51,6 +52,8 @@ public class ClientRegistrationTests
         .AddClientAuthentication(options => options.Method = ClientAuthenticationMethods.None)
         .AddTokenRequests()
         .AddTokenRevocation()
+        .AddEndSessionRequests(options =>
+            options.PostLogoutRedirectUri = new Uri("https://client.example.com/signed-out"))
         .AddUserInfo()
         .BuildServiceProvider(new ServiceProviderOptions
         {
@@ -75,6 +78,8 @@ public class ClientRegistrationTests
             provider.GetRequiredService<IAuthorizationRequestBuilder>());
         Assert.IsType<UserInfoService>(provider.GetRequiredService<IUserInfoService>());
         Assert.IsType<TokenRevocationService>(provider.GetRequiredService<ITokenRevocationService>());
+        Assert.IsType<EndSessionRequestBuilder>(
+            provider.GetRequiredService<IEndSessionRequestBuilder>());
         Assert.IsType<ClientCredentialsPresenter>(
             provider.GetRequiredService<IClientCredentialsPresenter>());
         Assert.IsType<InMemoryAuthorizationStateStore>(
