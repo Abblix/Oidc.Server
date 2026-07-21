@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
+using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -92,6 +93,41 @@ public static class ServiceCollectionExtensions
         // itself is deliberately not registered - see the remarks: it is the host's to choose.
         services.RemoveAll<IAuthorizationStateStore>();
         services.AddSingleton<IAuthorizationStateStore, DistributedCacheAuthorizationStateStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Answers the response-mode question on behalf of a server-side host: a flow that returns tokens
+    /// gets <c>form_post</c> unless the host named a mode itself.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// The base package refuses to guess this, because both plausible answers are wrong for somebody: the
+    /// specification's default is the fragment, which by RFC 3986 section 3.5 "is dereferenced solely by
+    /// the user agent" and so never reaches a server, while <c>form_post</c> is useless to a browser-based
+    /// client that reads the fragment itself. Being ASP.NET, this host IS the server-side case, so here
+    /// the answer is known and the refusal would be pedantry.
+    /// It runs as a post-configure so it sees whatever the host set and leaves an explicit choice alone -
+    /// filling a gap, never overriding an answer. <c>form_post</c> makes the provider return an HTML page
+    /// that POSTs the parameters to the redirect address, which the callback reader already handles by
+    /// reading the form when the request carries one.
+    /// One thing this cannot do for the host: that POST arrives cross-site, from the provider's page, so
+    /// it carries no ASP.NET antiforgery token. A callback endpoint with antiforgery validation on will
+    /// reject it. The endpoint must opt out - <c>DisableAntiforgery()</c> on a minimal API route, or
+    /// <c>[IgnoreAntiforgeryToken]</c> on an action - which is safe because this endpoint's CSRF defence
+    /// is the <c>state</c> parameter (RFC 6749 section 10.12), checked by finding and then spending the
+    /// stored login. An antiforgery token here would be a second, incompatible mechanism rather than an
+    /// additional protection.
+    /// </remarks>
+    public static IServiceCollection AddServerSideResponseMode(this IServiceCollection services)
+    {
+        services.PostConfigure<AuthorizationRequestOptions>(options =>
+        {
+            if (options.Flow.ReturnsFrontChannelTokens() && string.IsNullOrEmpty(options.ResponseMode))
+                options.ResponseMode = ResponseModes.FormPost;
+        });
 
         return services;
     }

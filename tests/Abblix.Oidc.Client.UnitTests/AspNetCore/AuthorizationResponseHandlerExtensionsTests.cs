@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -23,6 +23,9 @@
 using Abblix.Oidc.Client.AspNetCore;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
+using AuthorizationFlow = Abblix.Oidc.Client.Features.Authorization.Requests.AuthorizationFlow;
+using AuthorizationRequestOptions = Abblix.Oidc.Client.Features.Authorization.Requests.AuthorizationRequestOptions;
+using ResponseModes = Abblix.Oidc.Client.Features.Authorization.Requests.ResponseModes;
 using Abblix.Oidc.Client.Features.Discovery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,16 +52,20 @@ public class AuthorizationResponseHandlerExtensionsTests
             });
     }
 
-    private static (IAuthorizationResponseHandler Handler, IAuthorizationStateStore Store) Create()
+    private static (IAuthorizationResponseHandler Handler, IAuthorizationStateStore Store, IServiceProvider Services)
+        Create(Action<AuthorizationRequestOptions>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IProviderMetadataProvider>(new StubMetadataProvider());
         services.AddAuthorizationResponseHandling();
+        if (configure is not null)
+            services.Configure(configure);
 
         var provider = services.BuildServiceProvider();
         return (
             provider.GetRequiredService<IAuthorizationResponseHandler>(),
-            provider.GetRequiredService<IAuthorizationStateStore>());
+            provider.GetRequiredService<IAuthorizationStateStore>(),
+            provider);
     }
 
     private static async Task StoreLogin(IAuthorizationStateStore store)
@@ -89,7 +96,7 @@ public class AuthorizationResponseHandlerExtensionsTests
     [Fact]
     public async Task ReadsACodeResponseFromTheQuery()
     {
-        var (handler, store) = Create();
+        var (handler, store, _) = Create();
         await StoreLogin(store);
 
         var request = GetWithQuery(
@@ -107,7 +114,7 @@ public class AuthorizationResponseHandlerExtensionsTests
     [Fact]
     public async Task ReadsACodeResponseFromAPostedForm()
     {
-        var (handler, store) = Create();
+        var (handler, store, _) = Create();
         await StoreLogin(store);
 
         var context = new DefaultHttpContext();
@@ -132,7 +139,7 @@ public class AuthorizationResponseHandlerExtensionsTests
     [Fact]
     public async Task ARepeatedQueryParameter_ReachesTheHandlerAndIsRefused()
     {
-        var (handler, store) = Create();
+        var (handler, store, _) = Create();
         await StoreLogin(store);
 
         var context = new DefaultHttpContext();
@@ -153,7 +160,7 @@ public class AuthorizationResponseHandlerExtensionsTests
     [Fact]
     public async Task ReadsAnErrorResponseFromTheQuery()
     {
-        var (handler, store) = Create();
+        var (handler, store, _) = Create();
         await StoreLogin(store);
 
         var request = GetWithQuery(
@@ -163,5 +170,70 @@ public class AuthorizationResponseHandlerExtensionsTests
             () => handler.HandleAsync(request, TestContext.Current.CancellationToken));
 
         Assert.Equal("access_denied", error.Error);
+    }
+
+    /// <summary>
+    /// A token-returning flow that asked for a form post and receives a query GET instead is refused.
+    /// Multiple Response Type Encoding Practices section 5 forbids the query encoding for such a response,
+    /// so this is a transport the provider was not allowed to use - a downgrade, not an alternative.
+    /// </summary>
+    [Fact]
+    public async Task ATokenResponseArrivingInTheQuery_IsRefused()
+    {
+        var (handler, store, services) = Create(options =>
+        {
+            options.Flow = AuthorizationFlow.CodeIdToken;
+            options.FrontChannelTokensAccepted = true;
+            options.ResponseMode = ResponseModes.FormPost;
+        });
+        await StoreLogin(store);
+
+        var context = GetWithQuery(
+            ("code", "the-code"), ("id_token", "the-id-token"), ("state", State), ("iss", Provider));
+        context.RequestServices = services;
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(context.Request, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// And an empty GET, which is what a fragment-delivered response looks like once the browser has
+    /// stripped the fragment, is refused by the same check rather than read as a provider that said
+    /// nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyCallbackForATokenFlow_IsRefused()
+    {
+        var (handler, store, services) = Create(options =>
+        {
+            options.Flow = AuthorizationFlow.IdToken;
+            options.FrontChannelTokensAccepted = true;
+            options.ResponseMode = ResponseModes.FormPost;
+        });
+        await StoreLogin(store);
+
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Request.Method = HttpMethods.Get;
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(context.Request, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The code flow is untouched by the transport check: its response belongs in the query, and nothing
+    /// about it was asked to arrive as a form.
+    /// </summary>
+    [Fact]
+    public async Task ACodeResponseInTheQuery_IsStillRead()
+    {
+        var (handler, store, services) = Create();
+        await StoreLogin(store);
+
+        var context = GetWithQuery(("code", "the-code"), ("state", State), ("iss", Provider));
+        context.RequestServices = services;
+
+        var result = await handler.HandleAsync(context.Request, TestContext.Current.CancellationToken);
+
+        Assert.Equal("the-code", result.Code);
     }
 }

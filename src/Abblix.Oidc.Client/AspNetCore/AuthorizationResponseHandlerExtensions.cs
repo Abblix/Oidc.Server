@@ -20,8 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Client.AspNetCore;
@@ -50,7 +53,48 @@ public static class AuthorizationResponseHandlerExtensions
         HttpRequest request,
         CancellationToken cancellationToken = default)
     {
+        RequireTheExpectedTransport(request);
+
         return handler.HandleAsync(ReadParameters(request), cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses a token-returning response that arrived in the query rather than as a posted form.
+    /// </summary>
+    /// <remarks>
+    /// Multiple Response Type Encoding Practices section 5 says of every token-returning response type
+    /// that "the query encoding MUST NOT be used", so a response carrying tokens in the query is one the
+    /// provider was forbidden to send that way - a downgrade of the transport this client asked for.
+    /// The check lives here rather than in the handler because only this layer can see the transport at
+    /// all: <c>response_mode</c> is a request parameter and is not echoed back, so the mode a response
+    /// arrived by is observable in the request itself and nowhere in the parameters.
+    /// Its practical value is a legible failure. A host that misconfigured the mode would otherwise meet
+    /// this as an empty callback (the fragment stripped before the request) or as a token silently taken
+    /// from a place the specification forbids - both of which read as "the provider did not answer"
+    /// rather than as what they are.
+    /// </remarks>
+    private static void RequireTheExpectedTransport(HttpRequest request)
+    {
+        // Nothing to compare against means no comparison, rather than a failure: this check exists to make
+        // a misconfiguration legible, and it must not itself become one. The base handler still verifies
+        // the artifacts against the flow, so a response is never accepted merely for having arrived.
+        var options = request.HttpContext.RequestServices
+            ?.GetService<IOptions<AuthorizationRequestOptions>>()?.Value;
+
+        if (options is null || !options.Flow.ReturnsFrontChannelTokens())
+            return;
+
+        if (!string.Equals(options.ResponseMode, ResponseModes.FormPost, StringComparison.Ordinal))
+            return;
+
+        if (!request.HasFormContentType)
+        {
+            throw new AuthorizationResponseException(
+                $"The '{options.Flow.ToResponseType()}' flow asked the provider to return its response as "
+                + "a form post, and this callback did not arrive as one. Multiple Response Type Encoding "
+                + "Practices section 5 forbids the query encoding for a response carrying tokens, so this "
+                + "is not a response to read from the query instead.");
+        }
     }
 
     /// <summary>
