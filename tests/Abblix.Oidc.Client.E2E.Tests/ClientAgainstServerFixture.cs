@@ -110,7 +110,8 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
             // No post-logout address: RP-Initiated Logout 1.0 section 2 requires one to have been
             // registered with the provider beforehand, and this host registers none for this client. Asking
             // to be sent to an unregistered address is what a conformant provider refuses.
-            .AddEndSessionRequests(_ => { });
+            .AddEndSessionRequests(_ => { })
+            .AddOidcClientFacade();
 
         RouteIntoTheServer(services);
 

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -22,7 +22,9 @@
 
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.SigningKeys;
+using Abblix.Oidc.Client.Features.Principal;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Client;
 
@@ -50,5 +52,33 @@ public static class ServiceCollectionExtensions
         return services
             .AddMetadataSourcePlaceholder()
             .AddSigningKeys();
+    }
+
+    /// <summary>
+    /// Adds the facade that composes the client's features into whole operations, and the pieces it needs.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="configureOptions">
+    /// A delegate that configures how a validated ID Token becomes a principal. Optional.
+    /// </param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// A host that talks to the individual services does not need this. What it adds is the compositions -
+    /// finishing a login above all - whose step order is the security and which would otherwise be assembled
+    /// by hand in every host, differently each time.
+    /// The features themselves stay the host's choice: this call registers what the facade needs to be
+    /// constructible, and a host still says which flows and endpoints it uses.
+    /// </remarks>
+    public static IServiceCollection AddOidcClientFacade(
+        this IServiceCollection services, Action<ClaimsPrincipalOptions>? configureOptions = null)
+    {
+        if (configureOptions is not null)
+            services.Configure(configureOptions);
+
+        services.AddOptions<ClaimsPrincipalOptions>();
+        services.TryAddSingleton<IClaimsPrincipalFactory, ClaimsPrincipalFactory>();
+        services.TryAddSingleton<IOidcClient, OidcClient>();
+
+        return services;
     }
 }

@@ -29,6 +29,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
+using Abblix.Oidc.Client.Features.Authorization.Responses;
+using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.Revocation;
@@ -55,6 +57,9 @@ public class ClientRegistrationTests
         .AddEndSessionRequests(options =>
             options.PostLogoutRedirectUri = new Uri("https://client.example.com/signed-out"))
         .AddUserInfo()
+        .AddAuthorizationResponseHandling()
+        .AddBackChannelLogout()
+        .AddOidcClientFacade()
         .BuildServiceProvider(new ServiceProviderOptions
         {
             // What a host running in development gets, and what catches a dependency the registration forgot.
@@ -80,6 +85,7 @@ public class ClientRegistrationTests
         Assert.IsType<TokenRevocationService>(provider.GetRequiredService<ITokenRevocationService>());
         Assert.IsType<EndSessionRequestBuilder>(
             provider.GetRequiredService<IEndSessionRequestBuilder>());
+        Assert.IsType<OidcClient>(provider.GetRequiredService<IOidcClient>());
         Assert.IsType<ClientCredentialsPresenter>(
             provider.GetRequiredService<IClientCredentialsPresenter>());
         Assert.IsType<InMemoryAuthorizationStateStore>(

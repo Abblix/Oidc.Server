@@ -96,6 +96,7 @@ internal sealed class AuthorizationResponseHandler(
             {
                 Code = response.Code,
                 IdToken = identityToken,
+                EncodedIdToken = response.IdToken,
                 AccessToken = response.AccessToken,
                 TokenType = response.TokenType,
                 ExpiresIn = ParseExpiresIn(response.ExpiresIn),

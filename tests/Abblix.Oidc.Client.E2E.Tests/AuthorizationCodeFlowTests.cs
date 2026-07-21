@@ -155,10 +155,14 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var client = fixture.CreateOidcClient();
 
-        var tokens = await SignInAsync(client, cancellationToken);
+        var signIn = await SignInAsync(client, cancellationToken);
 
-        var claims = await client.GetRequiredService<IUserInfoService>()
-            .GetAsync(tokens.AccessToken!, Subject, cancellationToken);
+        // The principal the host would sign in with, built from the ID Token this login produced.
+        Assert.Equal(Subject, signIn.Principal.Identity?.Name);
+        Assert.True(signIn.Principal.Identity?.IsAuthenticated);
+
+        var claims = await client.GetRequiredService<IOidcClient>()
+            .GetUserInfoAsync(signIn.AccessToken!, Subject, cancellationToken);
 
         Assert.Equal(Subject, claims["sub"]?.GetValue<string>());
     }
@@ -172,18 +176,18 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var client = fixture.CreateOidcClient();
 
-        var tokens = await SignInAsync(client, cancellationToken);
-        Assert.NotNull(tokens.RefreshToken);
+        var signIn = await SignInAsync(client, cancellationToken);
+        Assert.NotNull(signIn.RefreshToken);
 
-        await client.GetRequiredService<ITokenRevocationService>().RevokeAsync(
-            tokens.RefreshToken, TokenTypeHints.RefreshToken, cancellationToken);
+        await client.GetRequiredService<IOidcClient>().RevokeAsync(
+            signIn.RefreshToken, TokenTypeHints.RefreshToken, cancellationToken);
 
         // The provider answered that the token is gone, so redeeming it must now fail. This is the assertion
         // the unit suite cannot make: a stub returns 200 because it was told to, while here the 200 has to
         // have been earned by the server actually forgetting the grant.
         await Assert.ThrowsAsync<TokenRequestException>(
-            () => client.GetRequiredService<ITokenRequestService>()
-                .RefreshAsync(tokens.RefreshToken, cancellationToken));
+            () => client.GetRequiredService<IOidcClient>()
+                .RefreshAsync(signIn.RefreshToken, cancellationToken));
     }
 
     /// <summary>
@@ -200,10 +204,11 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var client = fixture.CreateOidcClient();
 
-        var tokens = await SignInAsync(client, cancellationToken);
+        var signIn = await SignInAsync(client, cancellationToken);
 
-        var logoutUri = await client.GetRequiredService<IEndSessionRequestBuilder>()
-            .CreateAsync(tokens.IdToken!, cancellationToken: cancellationToken);
+        var logoutUri = await client.GetRequiredService<IOidcClient>()
+            .CreateEndSessionRequestAsync(
+                signIn.EncodedIdentityToken, cancellationToken: cancellationToken);
 
         using var browser = fixture.CreateBrowser();
         using var response = await browser.GetAsync(logoutUri, cancellationToken);
@@ -212,20 +217,21 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
     }
 
     /// <summary>
-    /// Runs the flow far enough to hold tokens, for the tests whose subject is what happens next.
+    /// Signs in through the facade, for the tests whose subject is what happens next.
     /// </summary>
-    private async Task<TokenResponse> SignInAsync(
+    /// <remarks>
+    /// Through <see cref="IOidcClient"/> rather than the parts, so that the composition a host actually
+    /// calls is the one every test below runs on. The parts have their own case above.
+    /// </remarks>
+    private async Task<CompletedSignIn> SignInAsync(
         IServiceProvider client, CancellationToken cancellationToken)
     {
-        var request = await client.GetRequiredService<IAuthorizationRequestBuilder>()
-            .CreateAsync(new Uri("/home", UriKind.Relative), cancellationToken);
+        var request = await client.GetRequiredService<IOidcClient>()
+            .CreateAuthorizationRequestAsync(new Uri("/home", UriKind.Relative), cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
-        var result = await client.GetRequiredService<IAuthorizationResponseHandler>()
-            .HandleAsync(callback, cancellationToken);
-
-        return await client.GetRequiredService<ITokenRequestService>().ExchangeCodeAsync(
-            result.Code!, result.Context.CodeVerifier, result.Context.RedirectUri, cancellationToken);
+        return await client.GetRequiredService<IOidcClient>()
+            .HandleCallbackAsync(callback, cancellationToken);
     }
 }

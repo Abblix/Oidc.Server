@@ -62,6 +62,16 @@ public sealed record AuthorizationResult(AuthorizationContext Context)
     public JsonWebToken? IdToken { get; init; }
 
     /// <summary>
+    /// The same ID Token as it arrived, before it was parsed.
+    /// </summary>
+    /// <remarks>
+    /// Kept because logging out needs the token verbatim: RP-Initiated Logout 1.0 section 2 sends it as
+    /// <c>id_token_hint</c>, and a token re-serialized from its parsed parts is a different string with a
+    /// signature that no longer verifies.
+    /// </remarks>
+    public string? EncodedIdToken { get; init; }
+
+    /// <summary>
     /// The access token returned from the authorization endpoint, when the flow returns one.
     /// </summary>
     /// <remarks>
