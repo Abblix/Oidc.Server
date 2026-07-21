@@ -23,6 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.SigningKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Client.Features.TokenValidation;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Client.Features.IdentityTokens;
@@ -59,7 +60,12 @@ public static class ServiceCollectionExtensions
         // A soft default, so a test or a host can substitute a clock before this call.
         services.TryAddSingleton(TimeProvider.System);
 
+        // Establishing that a token is the provider's and addressed to this client is shared with every
+        // other token it signs, so it is one registration rather than a copy per feature.
+        services.AddProviderTokenValidation();
+
         services.AddOptions<IdentityTokenValidationOptions>();
+        services.AddOptions<ProviderTokenValidationOptions>();
 
         if (configure is not null)
             services.Configure(configure);

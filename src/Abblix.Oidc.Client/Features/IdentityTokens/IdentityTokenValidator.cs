@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,8 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
-using Abblix.Oidc.Client.Features.Discovery;
-using Abblix.Oidc.Client.Features.SigningKeys;
+using Abblix.Oidc.Client.Features.TokenValidation;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.IdentityTokens;
@@ -39,18 +38,16 @@ namespace Abblix.Oidc.Client.Features.IdentityTokens;
 /// The order matters too: nothing is compared until the signature has been verified. Until then the
 /// claims are attacker-supplied text, and a check run against them proves nothing about anybody.
 /// </remarks>
-/// <param name="tokenValidator">Verifies the signature and the JWT-level claims.</param>
-/// <param name="metadataProvider">Supplies the issuer this client is talking to.</param>
-/// <param name="signingKeysProvider">Supplies the provider's keys, refreshing on an unknown one.</param>
-/// <param name="clientOptions">Carries the client identifier that <c>aud</c> and <c>azp</c> are matched against.</param>
+/// <param name="tokenVerifier">Establishes that the token is the provider's and addressed to this client.</param>
+/// <param name="clientOptions">Carries the client identifier that <c>azp</c> is matched against.</param>
 /// <param name="options">Where the specification leaves a policy choice.</param>
+/// <param name="providerTokenOptions">Carries the clock skew the age comparisons allow.</param>
 /// <param name="timeProvider">Reads the current time for the age comparisons.</param>
 internal sealed class IdentityTokenValidator(
-    IJsonWebTokenValidator tokenValidator,
-    IProviderMetadataProvider metadataProvider,
-    IIssuerSigningKeysProvider signingKeysProvider,
+    IProviderTokenVerifier tokenVerifier,
     IOptions<OidcClientOptions> clientOptions,
     IOptions<IdentityTokenValidationOptions> options,
+    IOptions<ProviderTokenValidationOptions> providerTokenOptions,
     TimeProvider timeProvider) : IIdentityTokenValidator
 {
     public async Task<JsonWebToken> ValidateAsync(
@@ -58,11 +55,19 @@ internal sealed class IdentityTokenValidator(
         IdentityTokenValidationContext context,
         CancellationToken cancellationToken = default)
     {
-        var metadata = await metadataProvider.GetMetadataAsync(cancellationToken);
         var clientId = clientOptions.Value.ClientId;
         var policy = options.Value;
 
-        var token = await VerifyAsync(identityToken, metadata.Issuer, clientId, policy, cancellationToken);
+        JsonWebToken token;
+        try
+        {
+            token = await tokenVerifier.VerifyAsync(identityToken, cancellationToken);
+        }
+        catch (ProviderTokenValidationException exception)
+        {
+            throw new IdentityTokenValidationException(
+                $"The ID Token was rejected: {exception.Message}");
+        }
 
         // From here the token is signed by the issuer and addressed to this client, so its claims are
         // the issuer's statements rather than the sender's, and comparing them means something.
@@ -73,88 +78,10 @@ internal sealed class IdentityTokenValidator(
         CheckNonce(token, context);
         CheckBinding(token, JwtClaimTypes.CodeHash, token.Payload.CodeHash, context.AuthorizationCode);
         CheckBinding(token, JwtClaimTypes.AccessTokenHash, token.Payload.AccessTokenHash, context.AccessToken);
-        CheckAuthenticationAge(token, context, policy);
+        CheckAuthenticationAge(token, context);
         CheckAuthenticationContextClass(token, context);
 
         return token;
-    }
-
-    /// <summary>
-    /// Runs the JWT-level checks: the signature against the issuer's published keys, the algorithm
-    /// against what this client registered for, the issuer against the one it is talking to, the
-    /// audience against its own identifier, and the expiry against the clock.
-    /// </summary>
-    private async Task<JsonWebToken> VerifyAsync(
-        string identityToken,
-        string issuer,
-        string clientId,
-        IdentityTokenValidationOptions policy,
-        CancellationToken cancellationToken)
-    {
-        var parameters = new ValidationParameters
-        {
-            Options = ValidationOptions.Default,
-
-            // Section 3.1.3.7 step 2: "The Issuer Identifier for the OpenID Provider ... MUST exactly
-            // match the value of the iss (issuer) Claim." Exactly, so an ordinal comparison and no
-            // normalisation - a trailing slash makes a different issuer, not a forgiving one.
-            ValidateIssuer = tokenIssuer => Task.FromResult(
-                string.Equals(tokenIssuer, issuer, StringComparison.Ordinal)),
-
-            // Step 3: the aud Claim MUST contain this client as an audience, and the token MUST be
-            // rejected "if the ID Token does not list the Client as a valid audience, or if it
-            // contains additional audiences not trusted by the Client". This client trusts none but
-            // itself, so a second audience is a rejection rather than something to look past: a token
-            // minted for two parties is one the other party can replay here.
-            ValidateAudience = audiences => Task.FromResult(IsSoleAudience(audiences, clientId)),
-
-            // Step 6 permits skipping signature validation when the token came straight from the token
-            // endpoint over TLS. This client declines that permission: the transport authenticates the
-            // channel, not the token, and the same code path also carries tokens that arrived through
-            // a browser. One rule, applied everywhere, is the one that cannot be applied to the wrong
-            // delivery by mistake.
-            ResolveIssuerSigningKeys = _ => ResolveKeys(cancellationToken),
-
-            AllowedSigningAlgorithms = policy.AllowedSigningAlgorithms.ToHashSet(StringComparer.Ordinal),
-            ClockSkew = policy.ClockSkew,
-        };
-
-        var result = await tokenValidator.ValidateAsync(identityToken, parameters);
-        if (result.TryGetFailure(out var error))
-            throw new IdentityTokenValidationException($"The ID Token was rejected: {error.ErrorDescription}");
-
-        return result.GetSuccess();
-    }
-
-    /// <summary>
-    /// Reports whether <paramref name="clientId"/> is the one and only audience.
-    /// </summary>
-    /// <remarks>
-    /// Two conditions from section 3.1.3.7 step 3 collapse into one predicate: this client must be
-    /// listed, and no audience it does not trust may be. It trusts only itself, so anything beyond a
-    /// single matching entry fails - including a repeated one, since a token naming this client twice
-    /// is malformed rather than doubly addressed.
-    /// </remarks>
-    private static bool IsSoleAudience(IEnumerable<string> audiences, string clientId)
-    {
-        using var enumerator = audiences.GetEnumerator();
-
-        return enumerator.MoveNext()
-               && string.Equals(enumerator.Current, clientId, StringComparison.Ordinal)
-               && !enumerator.MoveNext();
-    }
-
-    /// <summary>
-    /// Reads the provider's keys. The token's own <c>kid</c> is not consulted here because the
-    /// validator has not parsed it yet at this point; the provider returns every held key and the
-    /// signature check tries them.
-    /// </summary>
-    private async IAsyncEnumerable<JsonWebKey> ResolveKeys(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var keys = await signingKeysProvider.GetSigningKeysAsync(keyId: null, cancellationToken);
-        foreach (var key in keys)
-            yield return key;
     }
 
     /// <summary>
@@ -201,7 +128,7 @@ internal sealed class IdentityTokenValidator(
         if (!issuedAt.HasValue)
             throw new IdentityTokenValidationException("The ID Token carries no issuance time to judge its age by.");
 
-        if (timeProvider.GetUtcNow() - issuedAt.Value > maximumAge + policy.ClockSkew)
+        if (timeProvider.GetUtcNow() - issuedAt.Value > maximumAge + providerTokenOptions.Value.ClockSkew)
             throw new IdentityTokenValidationException("The ID Token was issued too long ago.");
     }
 
@@ -295,10 +222,7 @@ internal sealed class IdentityTokenValidator(
     /// the caller re-authenticates, because a client library cannot start a login on its own and
     /// returning "valid" for a session older than was asked for would be the wrong default.
     /// </remarks>
-    private void CheckAuthenticationAge(
-        JsonWebToken token,
-        IdentityTokenValidationContext context,
-        IdentityTokenValidationOptions policy)
+    private void CheckAuthenticationAge(JsonWebToken token, IdentityTokenValidationContext context)
     {
         if (context.MaxAge is not { } maxAge)
             return;
@@ -310,7 +234,7 @@ internal sealed class IdentityTokenValidator(
                 "The ID Token carries no authentication time, though max_age was requested.");
         }
 
-        if (timeProvider.GetUtcNow() - authenticationTime.Value > maxAge + policy.ClockSkew)
+        if (timeProvider.GetUtcNow() - authenticationTime.Value > maxAge + providerTokenOptions.Value.ClockSkew)
             throw new IdentityTokenValidationException("The end user was authenticated longer ago than max_age allows.");
     }
 

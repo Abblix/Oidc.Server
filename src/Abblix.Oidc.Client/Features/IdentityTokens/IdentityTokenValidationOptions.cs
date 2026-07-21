@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -29,26 +29,6 @@ namespace Abblix.Oidc.Client.Features.IdentityTokens;
 /// </summary>
 public sealed class IdentityTokenValidationOptions
 {
-    /// <summary>
-    /// The signature algorithms this client accepts, defaulting to RS256 alone.
-    /// </summary>
-    /// <remarks>
-    /// This is the client's own registered <c>id_token_signed_response_alg</c>, which OpenID Connect
-    /// Core 1.0 section 3.1.3.7 step 7 names as what the <c>alg</c> should be, defaulting to RS256.
-    /// It must NOT be taken from the provider's advertised
-    /// <c>id_token_signing_alg_values_supported</c>: that list says what the provider is willing to
-    /// sign with, so deriving acceptance from it lets a provider pick any algorithm on it - which is
-    /// the whole shape of an algorithm-substitution attack. What this client registered for is what
-    /// this client accepts, and a token signed with anything else is refused however capable the
-    /// provider claims to be.
-    /// </remarks>
-    public IReadOnlyCollection<string> AllowedSigningAlgorithms { get; set; } = [SigningAlgorithms.RS256];
-
-    /// <summary>
-    /// Tolerance applied to the time comparisons, for clocks that disagree.
-    /// </summary>
-    public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(2);
-
     /// <summary>
     /// The oldest <c>iat</c> this client will accept, or <see langword="null"/> to not judge issuance age.
     /// </summary>

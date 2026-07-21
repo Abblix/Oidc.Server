@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.SigningKeys;
+using Abblix.Oidc.Client.Features.TokenValidation;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.IdentityTokens;
@@ -93,7 +94,8 @@ public class IdentityTokenValidatorTests
 
     private static IIdentityTokenValidator CreateValidator(
         Action<IdentityTokenValidationOptions>? configure = null,
-        string issuer = Issuer)
+        string issuer = Issuer,
+        Action<ProviderTokenValidationOptions>? configureProvider = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
@@ -103,6 +105,9 @@ public class IdentityTokenValidatorTests
         services.Configure<OidcClientOptions>(o => o.ClientId = ClientId);
         services.AddIdentityTokenValidation(configure);
 
+        if (configureProvider is not null)
+            services.Configure(configureProvider);
+
         return services.BuildServiceProvider().GetRequiredService<IIdentityTokenValidator>();
     }
 
@@ -110,12 +115,13 @@ public class IdentityTokenValidatorTests
         JsonWebToken token,
         IdentityTokenValidationContext? context = null,
         JsonWebKey? signingKey = null,
-        Action<IdentityTokenValidationOptions>? configure = null)
+        Action<IdentityTokenValidationOptions>? configure = null,
+        Action<ProviderTokenValidationOptions>? configureProvider = null)
     {
         var jwt = await Issue(token, signingKey);
 
         return await Assert.ThrowsAsync<IdentityTokenValidationException>(
-            () => CreateValidator(configure).ValidateAsync(
+            () => CreateValidator(configure, configureProvider: configureProvider).ValidateAsync(
                 jwt, context ?? new IdentityTokenValidationContext(), TestContext.Current.CancellationToken));
     }
 
@@ -361,7 +367,8 @@ public class IdentityTokenValidatorTests
         var token = ValidToken();
         token.Header.Algorithm = SigningAlgorithms.RS512;
 
-        await AssertRejects(token, configure: o => o.AllowedSigningAlgorithms = [SigningAlgorithms.RS256]);
+        await AssertRejects(
+            token, configureProvider: o => o.AllowedSigningAlgorithms = [SigningAlgorithms.RS256]);
     }
 
     /// <summary>
