@@ -29,6 +29,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
+using Abblix.Oidc.Client.Features.UserInfo;
 namespace Abblix.Oidc.Client.UnitTests;
 
 /// <summary>

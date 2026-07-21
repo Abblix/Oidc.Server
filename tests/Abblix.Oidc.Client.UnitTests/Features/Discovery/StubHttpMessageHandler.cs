@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -49,6 +49,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     public List<Uri> RequestedAddresses { get; } = [];
 
     /// <summary>
+    /// The Authorization header of every request, in the same order, so a test can assert how a credential
+    /// was presented and not merely that a call was made.
+    /// </summary>
+    public List<AuthenticationHeaderValue?> RequestedAuthorizations { get; } = [];
+
+    /// <summary>
     /// Changes the response returned from the next request onwards.
     /// </summary>
     public void RespondWith(string body, HttpStatusCode statusCode)
@@ -62,6 +68,7 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         RequestedAddresses.Add(request.RequestUri!);
+        RequestedAuthorizations.Add(request.Headers.Authorization);
 
         var response = new HttpResponseMessage(_statusCode)
         {
