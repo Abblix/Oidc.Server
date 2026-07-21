@@ -80,13 +80,18 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
         RequireFlowIsPermitted(_options.Flow);
 
-        var pkce = await _pkceProvider.CreateAsync(cancellationToken);
+        // Only where there is a code to protect. Creating the pair also refuses a provider advertising no
+        // SHA-256 challenge method, and that refusal has no business stopping a flow which issues no code
+        // and never visits the token endpoint - there would be nothing for PKCE to guard.
+        var pkce = _options.Flow.IncludesAuthorizationCode()
+            ? await _pkceProvider.CreateAsync(cancellationToken)
+            : null;
 
         var state = new AuthorizationContext
         {
             State = NewOpaqueValue(),
             Nonce = NewOpaqueValue(),
-            CodeVerifier = pkce.CodeVerifier,
+            CodeVerifier = pkce?.CodeVerifier ?? string.Empty,
             ReturnUri = RequireLocal(returnUri),
             Issuer = metadata.Issuer,
             RedirectUri = RequireAbsolute(_options.RedirectUri),
@@ -212,7 +217,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         return redirectUri.ToString();
     }
 
-    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext context, PkceParameters pkce)
+    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext context, PkceParameters? pkce)
     {
         // The builder carries over whatever the endpoint already has in its query: a provider is free to
         // publish an authorization endpoint with parameters of its own, and dropping them would break it.
@@ -238,8 +243,9 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
         // PKCE protects the redemption of an authorization code, so it goes only where there is a code to
         // redeem. A pure implicit flow returns its tokens from the authorization endpoint and never visits
-        // the token endpoint, leaving the challenge nothing to be checked against.
-        if (flow.IncludesAuthorizationCode())
+        // the token endpoint, leaving the challenge nothing to be checked against - and so no pair was
+        // built for it in the first place.
+        if (pkce is not null)
         {
             parameters[Parameters.CodeChallenge] = pkce.CodeChallenge;
             parameters[Parameters.CodeChallengeMethod] = pkce.CodeChallengeMethod;

@@ -132,4 +132,92 @@ public class AuthorizationRequestBuilderExtensionsTests
             () => BuilderFor(httpContext).ChallengeAsync(
                 new Uri("https://evil.example/"), TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// A token-returning challenge works end to end without the host naming a response mode, because
+    /// registering an ASP.NET store is itself the statement that this host is server-side.
+    /// </summary>
+    /// <remarks>
+    /// The gap this covers is the one that sank an earlier design: a response_type that returns tokens
+    /// defaults to the fragment, which never reaches a server, so a request built without a response mode
+    /// produces a callback that arrives empty. Asserting form_post on the wire is what proves the
+    /// adapter's post-configure ran and that the request the provider receives can be answered.
+    /// </remarks>
+    [Fact]
+    public async Task ATokenReturningChallenge_AsksForFormPostWithoutTheHostSayingSo()
+    {
+        var services = new ServiceCollection();
+        // Executing an IResult resolves a logger from the request services, which every real ASP.NET host
+        // has; a bare container needs it added.
+        services.AddLogging();
+        services.AddSingleton<IProviderMetadataProvider>(new ConfiguredMetadataProvider(new ProviderMetadata
+        {
+            Issuer = Issuer,
+            AuthorizationEndpoint = AuthorizationEndpoint,
+        }));
+        services.AddAuthorizationRequests(options =>
+        {
+            options.RedirectUri = new Uri("https://client.example.com/signin-oidc");
+            options.Flow = AuthorizationFlow.CodeIdToken;
+            options.FrontChannelTokensAccepted = true;
+            // ResponseMode deliberately not set: the adapter answers it.
+        });
+        services.AddCookieAuthorizationStateStore();
+        services.Configure<OidcClientOptions>(options => options.ClientId = "test-client");
+
+        var provider = services.BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = provider };
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
+
+        var result = await provider.GetRequiredService<IAuthorizationRequestBuilder>()
+            .ChallengeAsync("/orders", TestContext.Current.CancellationToken);
+        await result.ExecuteAsync(httpContext);
+
+        var query = System.Web.HttpUtility.ParseQueryString(
+            new Uri(httpContext.Response.Headers.Location.ToString()).Query);
+
+        Assert.Equal("code id_token", query["response_type"]);
+        Assert.Equal("form_post", query["response_mode"]);
+    }
+
+    /// <summary>
+    /// A pure implicit flow is not blocked by a provider that advertises no SHA-256 challenge method:
+    /// there is no code in that flow, so PKCE has nothing to guard and its absence is not a reason to
+    /// refuse the login.
+    /// </summary>
+    [Fact]
+    public async Task AnImplicitChallenge_IsNotRefusedByAProviderWithoutPkce()
+    {
+        var metadataProvider = new ConfiguredMetadataProvider(new ProviderMetadata
+        {
+            Issuer = Issuer,
+            AuthorizationEndpoint = AuthorizationEndpoint,
+            CodeChallengeMethodsSupported = ["plain"],
+        });
+
+        var httpContext = HttpContext();
+        var store = new CookieAuthorizationStateStore(
+            new HttpContextAccessor { HttpContext = httpContext },
+            _dataProtection,
+            Options.Create(new AuthorizationStateOptions()));
+
+        var builder = new AuthorizationRequestBuilder(
+            metadataProvider,
+            new PkceProvider(metadataProvider),
+            store,
+            Options.Create(new OidcClientOptions { ClientId = "test-client" }),
+            Options.Create(new AuthorizationRequestOptions
+            {
+                RedirectUri = new Uri("https://client.example.com/signin-oidc"),
+                Flow = AuthorizationFlow.IdToken,
+                FrontChannelTokensAccepted = true,
+                ResponseMode = ResponseModes.FormPost,
+            }));
+
+        var request = await builder.CreateAsync(
+            new Uri("/orders", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        Assert.Contains("response_type=id_token", request.RequestUri.Query);
+        Assert.DoesNotContain("code_challenge", request.RequestUri.Query);
+    }
 }

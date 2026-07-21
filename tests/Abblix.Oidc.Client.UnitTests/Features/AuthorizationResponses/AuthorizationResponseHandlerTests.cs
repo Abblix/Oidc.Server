@@ -386,4 +386,39 @@ public class AuthorizationResponseHandlerTests
 
         Assert.Null(result.ExpiresIn);
     }
+
+    /// <summary>
+    /// A response refused for carrying an artifact the flow never asked for must leave the login intact,
+    /// so the victim's genuine callback can still complete.
+    /// </summary>
+    /// <remarks>
+    /// The state value is not a secret - it travels in the request URL to the provider - so anyone who
+    /// sees it can send a callback naming it. If a refused response spends the login on its way to being
+    /// refused, that is a repeatable denial of the victim's sign-in.
+    /// </remarks>
+    [Fact]
+    public async Task AResponseRefusedForItsArtifacts_DoesNotSpendTheLogin()
+    {
+        var (handler, store) = Create();
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(
+                Response(
+                    (Parameters.Code, "the-code"),
+                    (Parameters.IdToken, "an-unrequested-id-token"),
+                    (Parameters.State, State),
+                    (Parameters.Issuer, Provider)),
+                TestContext.Current.CancellationToken));
+
+        // The victim's genuine callback arrives next and still works.
+        var result = await handler.HandleAsync(
+            Response(
+                (Parameters.Code, "the-real-code"),
+                (Parameters.State, State),
+                (Parameters.Issuer, Provider)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("the-real-code", result.Code);
+    }
 }

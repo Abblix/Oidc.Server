@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -35,8 +35,13 @@ namespace Abblix.Oidc.Client.Features.Authorization.Responses;
 /// The context comes back alongside, because the work that follows needs what the request put aside and
 /// the response does not carry: the code verifier and the exact redirect address to redeem a code with,
 /// and the address to return the user to.
+/// It holds a secret in doing so - the PKCE code verifier - which is why this record renders itself
+/// without it. A caller should reach for the members it wants rather than serialize the whole thing.
 /// </remarks>
-/// <param name="Context">The context put aside when the request was built, now spent.</param>
+/// <param name="Context">
+/// What the request put aside, carried through for the work that follows: redeeming a code needs the
+/// verifier and the exact redirect address, and returning the user needs the address they were heading to.
+/// </param>
 public sealed record AuthorizationResult(AuthorizationContext Context)
 {
     /// <summary>
@@ -46,14 +51,13 @@ public sealed record AuthorizationResult(AuthorizationContext Context)
     public string? Code { get; init; }
 
     /// <summary>
-    /// The ID Token returned from the authorization endpoint, already validated, when the flow returns
-    /// one.
+    /// The ID Token returned from the authorization endpoint, already validated, when the flow returns one.
     /// </summary>
     /// <remarks>
     /// Validated here rather than left to the caller, because the checks that bind it to this response -
-    /// its nonce, and the <c>c_hash</c> and <c>at_hash</c> that tie it to the code and access token
-    /// beside it - can only be made while those neighbours are in hand. A caller handed the raw token
-    /// afterwards would have nothing left to check them against.
+    /// its nonce, and the <c>c_hash</c> and <c>at_hash</c> that tie it to the code and access token beside
+    /// it - can only be made while those neighbours are in hand. A caller handed the raw token afterwards
+    /// would have nothing left to check them against.
     /// </remarks>
     public JsonWebToken? IdToken { get; init; }
 
@@ -61,9 +65,9 @@ public sealed record AuthorizationResult(AuthorizationContext Context)
     /// The access token returned from the authorization endpoint, when the flow returns one.
     /// </summary>
     /// <remarks>
-    /// Bound to the ID Token beside it by <c>at_hash</c> where one was returned. In a flow that returns
-    /// an access token with no ID Token there is nothing to bind it, which is part of why such flows are
-    /// the ones a host has to ask for deliberately.
+    /// Bound to the ID Token beside it by <c>at_hash</c> where one was returned. In a flow that returns an
+    /// access token with no ID Token there is nothing to bind it, which is part of why such flows are the
+    /// ones a host has to ask for deliberately.
     /// </remarks>
     public string? AccessToken { get; init; }
 
@@ -82,4 +86,30 @@ public sealed record AuthorizationResult(AuthorizationContext Context)
     /// The scope the provider granted, when it said so and it differs from what was asked.
     /// </summary>
     public string? Scope { get; init; }
+
+    /// <summary>
+    /// Where to send the user now that the login is finished, relative to this application.
+    /// </summary>
+    /// <remarks>
+    /// Surfaced directly because it is the one member of the context a caller reaches for on every login,
+    /// and it is safe to redirect to only because it was refused unless relative when the request was
+    /// built.
+    /// </remarks>
+    public string ReturnUri => Context.ReturnUri;
+
+    /// <summary>
+    /// Renders the result without its context, so a log line cannot carry the code verifier.
+    /// </summary>
+    /// <remarks>
+    /// The generated record ToString prints every member, and one of the context's is a secret. Naming the
+    /// members here keeps an ordinary log statement from becoming a disclosure.
+    /// </remarks>
+    public override string ToString()
+        => $"{nameof(AuthorizationResult)} {{ "
+           + $"{nameof(Code)} = {(Code is null ? "none" : "present")}, "
+           + $"{nameof(IdToken)} = {(IdToken is null ? "none" : "present")}, "
+           + $"{nameof(AccessToken)} = {(AccessToken is null ? "none" : "present")}, "
+           + $"{nameof(TokenType)} = {TokenType}, "
+           + $"{nameof(ExpiresIn)} = {ExpiresIn}, "
+           + $"{nameof(Scope)} = {Scope} }}";
 }

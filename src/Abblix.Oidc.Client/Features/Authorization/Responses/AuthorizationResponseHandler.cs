@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Globalization;
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
@@ -61,69 +62,91 @@ internal sealed class AuthorizationResponseHandler(
         // forged would let anyone who knows the (non-secret) state value burn a victim's sign-in.
         var context = await stateConsumer.FindAsync(response.State, cancellationToken);
 
+        // An ID Token that came from the authorization endpoint carries its own issuer, and the response
+        // then states its issuer twice. RFC 9207 section 4 makes that a check in its own right - "if a
+        // client receives an authorization response that contains multiple issuer identifiers, the client
+        // MUST reject the response if these issuer identifiers do not match" - which comparing each one
+        // against the expected value separately cannot perform. It also sanctions the parameter's absence
+        // in this case, since the ID Token already names the issuer.
+        // Validating the token here, before the issuer check, is what makes its claim available. The token
+        // is verified against the provider's published keys, so its issuer is an assertion the provider
+        // signed rather than a value the response asserted about itself.
+        var identityToken = await ValidateIdentityTokenAsync(response, context, cancellationToken);
+
         // Confirm the response came from the provider this login was started with, and do it BEFORE
         // reading the error code. RFC 9207 section 2.4: "For error responses, clients MUST NOT assume
         // that the error originates from the intended authorization server." An error code logged or
         // shown before this check is an attacker's claim recorded as the provider's.
         await issuerValidator.ValidateAsync(
-            new ResponseIssuers { Expected = context.Issuer, Parameter = response.Issuer },
+            new ResponseIssuers
+            {
+                Expected = context.Issuer,
+                Parameter = response.Issuer,
+                IdentityTokenClaim = identityToken?.Payload.Issuer,
+            },
             cancellationToken);
 
-        // Now the response has earned it: spend the single-use state. Both a success and a provider
-        // error are spent, since neither may be replayed; a login already spent between the look-up and
-        // here is a replay and is refused. response.State is non-null here - FindAsync would have thrown
-        // Missing for a null one.
+        // Everything that can still refuse this response runs BEFORE the login is spent. Spending is
+        // irreversible, and the state value is not a secret - it travels in the request URL - so a check
+        // that rejects after the spend lets anyone who saw that value burn the victim's pending sign-in
+        // with a response their own provider would never have sent.
+        var result = response.Kind == AuthorizationResponseKind.Error
+            ? null
+            : new AuthorizationResult(context)
+            {
+                Code = response.Code,
+                IdToken = identityToken,
+                AccessToken = response.AccessToken,
+                TokenType = response.TokenType,
+                ExpiresIn = ParseExpiresIn(response.ExpiresIn),
+                Scope = response.Scope,
+            };
+
+        // Now the response has earned it. Both a success and a provider error are spent, since neither may
+        // be replayed; a login already spent between the look-up and here is a replay and is refused.
+        // Removal is atomic, so of two callbacks racing on one state exactly one gets this far.
+        // response.State is non-null here - FindAsync would have thrown Missing for a null one.
         await stateConsumer.ConsumeAsync(response.State!, cancellationToken);
 
-        // Only now, with the response known to come from the right provider and its login spent, is its
-        // outcome acted on.
-        if (response.Kind == AuthorizationResponseKind.Error)
-        {
-            throw new AuthorizationResponseException(
-                $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
-                response.Error!,
-                response.ErrorDescription);
-        }
-
-        return await BuildResultAsync(response, context, cancellationToken);
+        return result ?? throw new AuthorizationResponseException(
+            $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
+            response.Error!,
+            response.ErrorDescription);
     }
 
     /// <summary>
-    /// Turns a verified successful response into its result, validating an ID Token that came with it.
+    /// Validates an ID Token the response carried, with the artifacts beside it as its binding inputs.
     /// </summary>
-    private async Task<AuthorizationResult> BuildResultAsync(
+    /// <remarks>
+    /// The nonce ties the token to this login, and c_hash/at_hash tie it to whatever came beside it in
+    /// the same response. Both neighbours are in hand only here: after a token exchange the code is spent
+    /// and there would be nothing left to check c_hash against.
+    /// The artifacts are checked against the configured flow first, so a token the client never asked for
+    /// is refused rather than validated - validating it would be doing work on behalf of an artifact that
+    /// has no business being in the response at all.
+    /// </remarks>
+    private async Task<JsonWebToken?> ValidateIdentityTokenAsync(
         AuthorizationResponse response,
         AuthorizationContext context,
         CancellationToken cancellationToken)
     {
-        var flow = requestOptions.Value.Flow;
+        if (response.Kind == AuthorizationResponseKind.Error)
+            return null;
 
-        RequireArtifactsMatchTheFlow(response, flow);
+        RequireArtifactsMatchTheFlow(response, requestOptions.Value.Flow);
 
-        var identityToken = response.IdToken is { } identityTokenValue
-            ? await identityTokenValidator.ValidateAsync(
-                identityTokenValue,
-                new IdentityTokenValidationContext
-                {
-                    // The nonce ties the token to this login, and the two hashes tie it to whatever came
-                    // beside it in the same response. Both neighbours are in hand only here: after a token
-                    // exchange there would be nothing left to check c_hash against.
-                    Nonce = context.Nonce,
-                    AuthorizationCode = response.Code,
-                    AccessToken = response.AccessToken,
-                },
-                cancellationToken)
-            : null;
+        if (response.IdToken is not { } identityToken)
+            return null;
 
-        return new AuthorizationResult(context)
-        {
-            Code = response.Code,
-            IdToken = identityToken,
-            AccessToken = response.AccessToken,
-            TokenType = response.TokenType,
-            ExpiresIn = ParseExpiresIn(response.ExpiresIn),
-            Scope = response.Scope,
-        };
+        return await identityTokenValidator.ValidateAsync(
+            identityToken,
+            new IdentityTokenValidationContext
+            {
+                Nonce = context.Nonce,
+                AuthorizationCode = response.Code,
+                AccessToken = response.AccessToken,
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -166,7 +189,7 @@ internal sealed class AuthorizationResponseHandler(
     /// same position as one that was never told.
     /// </remarks>
     private static TimeSpan? ParseExpiresIn(string? expiresIn)
-        => long.TryParse(expiresIn, out var seconds) && seconds >= 0
+        => long.TryParse(expiresIn, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
             ? TimeSpan.FromSeconds(seconds)
             : null;
 

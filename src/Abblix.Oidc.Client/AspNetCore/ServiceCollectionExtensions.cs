@@ -58,6 +58,11 @@ public static class ServiceCollectionExtensions
         // bounds the cookie; TryAdd-style AddOptions is safe whether or not the state feature ran.
         services.AddOptions<AuthorizationStateOptions>();
 
+        // Registering an ASP.NET store IS the host saying it is server-side, so the response mode it
+        // implies comes with it rather than waiting for a separate call the host has no reason to know
+        // about. See AddServerSideResponseMode.
+        services.AddServerSideResponseMode();
+
         // The last registration wins the singular resolve, so this deliberately overrides any in-memory
         // default a state-feature call left behind. TryAddEnumerable is not what is wanted here.
         services.RemoveAll<IAuthorizationStateStore>();
@@ -88,6 +93,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddOptions<AuthorizationStateOptions>();
+        services.AddServerSideResponseMode();
 
         // The last registration wins the singular resolve, overriding any in-memory default. The cache
         // itself is deliberately not registered - see the remarks: it is the host's to choose.

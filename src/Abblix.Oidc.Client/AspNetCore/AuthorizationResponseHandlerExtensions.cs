@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
+using ResponseParameters = Abblix.Oidc.Client.Features.Authorization.Responses.Parameters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -87,14 +88,21 @@ public static class AuthorizationResponseHandlerExtensions
         if (!string.Equals(options.ResponseMode, ResponseModes.FormPost, StringComparison.Ordinal))
             return;
 
-        if (!request.HasFormContentType)
-        {
-            throw new AuthorizationResponseException(
-                $"The '{options.Flow.ToResponseType()}' flow asked the provider to return its response as "
-                + "a form post, and this callback did not arrive as one. Multiple Response Type Encoding "
-                + "Practices section 5 forbids the query encoding for a response carrying tokens, so this "
-                + "is not a response to read from the query instead.");
-        }
+        if (request.HasFormContentType)
+            return;
+
+        // An error response carries no token, so the prohibition this check enforces does not reach it -
+        // Multiple Response Type Encoding Practices section 5 forbids the query encoding for a response
+        // carrying tokens, and a refusal carries none. Providers do return errors by redirect, and a user
+        // who pressed Cancel deserves to hear that rather than a complaint about the transport.
+        if (request.Query.ContainsKey(ResponseParameters.Error))
+            return;
+
+        throw new AuthorizationResponseException(
+            $"The '{options.Flow.ToResponseType()}' flow asked the provider to return its response as a "
+            + "form post, and this callback did not arrive as one. Multiple Response Type Encoding "
+            + "Practices section 5 forbids the query encoding for a response carrying tokens, so this is "
+            + "not a response to read from the query instead.");
     }
 
     /// <summary>
