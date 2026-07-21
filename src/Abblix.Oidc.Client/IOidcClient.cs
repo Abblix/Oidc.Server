@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -24,6 +24,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.Revocation;
+using Abblix.Oidc.Client.Features.SessionManagement;
 using Abblix.Oidc.Client.Features.Tokens;
 
 namespace Abblix.Oidc.Client;
@@ -46,9 +47,14 @@ public interface IOidcClient
     /// <param name="returnUri">
     /// Where the user was heading, relative to this application, so the login can put them back there.
     /// </param>
+    /// <param name="silent">
+    /// Whether the provider must answer without showing anything to the end-user, sent as <c>prompt=none</c>.
+    /// This is how OpenID Connect Session Management 1.0 section 2 has a client re-check a session it was
+    /// told had changed: the request goes in an invisible frame, so a login screen must not appear in it.
+    /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     Task<AuthorizationRequest> CreateAuthorizationRequestAsync(
-        Uri returnUri, CancellationToken cancellationToken = default);
+        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Finishes the login the given callback belongs to.
@@ -115,4 +121,23 @@ public interface IOidcClient
     /// </summary>
     Task<LogoutNotification> ValidateBackChannelLogoutAsync(
         string logoutToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gathers what a page needs in order to watch whether the end-user is still logged in at the provider.
+    /// </summary>
+    /// <param name="sessionState">
+    /// The login state from the most recent authorization response, which
+    /// <see cref="CompletedSignIn.SessionState"/> carries.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the metadata read.</param>
+    /// <returns>
+    /// The values the page needs, or <c>null</c> when the provider publishes no session-management frame -
+    /// which is an answer, not a failure.
+    /// </returns>
+    /// <remarks>
+    /// The watching happens in the browser between two frames and cannot happen here; this only spells the
+    /// values so they are not assembled by hand.
+    /// </remarks>
+    Task<SessionCheck?> CreateSessionCheckAsync(
+        string sessionState, CancellationToken cancellationToken = default);
 }

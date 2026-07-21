@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,6 +31,11 @@ namespace Abblix.Oidc.Client.Features.Authorization.Requests;
 /// </remarks>
 public static class Parameters
 {
+    /// <summary>
+    /// Whether the provider may interact with the end-user while answering.
+    /// </summary>
+    public const string Prompt = "prompt";
+
     /// <summary>What kind of response the client is asking for.</summary>
     public const string ResponseType = "response_type";
 

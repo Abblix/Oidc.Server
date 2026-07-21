@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -82,6 +82,20 @@ public sealed record ProviderMetadata
     /// </summary>
     [JsonPropertyName("revocation_endpoint")]
     public string? RevocationEndpoint { get; init; }
+
+    /// <summary>
+    /// The provider's session-management frame.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Session Management 1.0 section 3.3 describes it as the "URL of an OP iframe that
+    /// supports cross-origin communications for session state information with the RP Client".
+    /// Nothing in this library loads it: the polling it exists for happens in the browser, between two
+    /// frames, and a server-side client has no part in that conversation. It is published here so that a
+    /// host rendering its own frame takes the address from the provider's document rather than writing it
+    /// into a template.
+    /// </remarks>
+    [JsonPropertyName("check_session_iframe")]
+    public string? CheckSessionIframe { get; init; }
 
     /// <summary>
     /// The PKCE code challenge methods the provider supports. Absence is meaningful: a provider that does not

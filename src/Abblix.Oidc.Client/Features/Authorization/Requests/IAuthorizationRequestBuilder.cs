@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -48,5 +48,9 @@ public interface IAuthorizationRequestBuilder
     /// absolute for the mirror-image reason: the browser resolves that one while it is still on the
     /// provider's page, so a relative value would point back into the provider's site.
     /// </remarks>
-    Task<AuthorizationRequest> CreateAsync(Uri returnUri, CancellationToken cancellationToken = default);
+    /// <param name="silent">
+    /// Whether the provider must answer without interacting with the end-user, sent as <c>prompt=none</c>.
+    /// </param>
+    Task<AuthorizationRequest> CreateAsync(
+        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default);
 }

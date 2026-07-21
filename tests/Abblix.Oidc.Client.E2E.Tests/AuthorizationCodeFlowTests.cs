@@ -116,7 +116,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         await using var client = fixture.CreateOidcClient();
 
         var request = await client.GetRequiredService<IAuthorizationRequestBuilder>()
-            .CreateAsync(new Uri("/home", UriKind.Relative), cancellationToken);
+            .CreateAsync(new Uri("/home", UriKind.Relative), silent: false, cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
@@ -227,11 +227,74 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         IServiceProvider client, CancellationToken cancellationToken)
     {
         var request = await client.GetRequiredService<IOidcClient>()
-            .CreateAuthorizationRequestAsync(new Uri("/home", UriKind.Relative), cancellationToken);
+            .CreateAuthorizationRequestAsync(
+                new Uri("/home", UriKind.Relative), silent: false, cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
         return await client.GetRequiredService<IOidcClient>()
             .HandleCallbackAsync(callback, cancellationToken);
     }
+
+    /// <summary>
+    /// The provider states the login state, and the client carries it to the host together with the frame
+    /// to poll.
+    /// </summary>
+    /// <remarks>
+    /// A unit test can only show that a value put in comes out. Here the value is one this provider
+    /// calculated, under the parameter name it chose, and the frame address is the one it published.
+    /// </remarks>
+    [Fact]
+    public async Task TheLoginStateAndTheFrameToPollReachTheHost()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var client = fixture.CreateOidcClient();
+
+        var signIn = await SignInAsync(client, cancellationToken);
+
+        Assert.False(string.IsNullOrEmpty(signIn.SessionState));
+
+        var check = await client.GetRequiredService<IOidcClient>()
+            .CreateSessionCheckAsync(signIn.SessionState, cancellationToken);
+
+        Assert.NotNull(check);
+        Assert.StartsWith(
+            ClientAgainstServerFixture.Issuer, check.CheckSessionIframe, StringComparison.Ordinal);
+        Assert.Equal($"{ClientAgainstServerFixture.ClientId} {signIn.SessionState}", check.Message);
+    }
+
+    /// <summary>
+    /// The provider answers a silent re-check from the session it already has, without asking the user
+    /// anything.
+    /// </summary>
+    /// <remarks>
+    /// This is the request OpenID Connect Session Management 1.0 section 2 has a client send when its
+    /// watching frame reports a change. A unit test can show the parameter is on the wire; only a real
+    /// provider can say whether it is answered rather than refused.
+    /// </remarks>
+    [Fact]
+    public async Task ASilentRequestIsAnsweredFromTheExistingSession()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var client = fixture.CreateOidcClient();
+
+        var request = await client.GetRequiredService<IOidcClient>()
+            .CreateAuthorizationRequestAsync(
+                new Uri("/home", UriKind.Relative), silent: true, cancellationToken);
+
+        Assert.Contains("prompt=none", request.RequestUri.Query, StringComparison.Ordinal);
+
+        var callback = await FollowAsync(request.RequestUri, cancellationToken);
+
+        // Answered, not refused: no login_required, and a code to redeem.
+        Assert.False(callback.ContainsKey("error"), $"the provider refused: {Describe(callback)}");
+
+        var signIn = await client.GetRequiredService<IOidcClient>()
+            .HandleCallbackAsync(callback, cancellationToken);
+
+        Assert.Equal(Subject, signIn.Principal.Identity?.Name);
+    }
+
+    private static string Describe(IReadOnlyDictionary<string, IReadOnlyList<string>> parameters)
+        => string.Join(", ", parameters.Select(entry => $"{entry.Key}={string.Join('|', entry.Value)}"));
 }

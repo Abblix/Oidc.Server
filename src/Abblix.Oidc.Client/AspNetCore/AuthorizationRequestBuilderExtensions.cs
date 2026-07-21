@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -52,7 +52,7 @@ public static class AuthorizationRequestBuilderExtensions
         Uri returnUri,
         CancellationToken cancellationToken = default)
     {
-        var request = await builder.CreateAsync(returnUri, cancellationToken);
+        var request = await builder.CreateAsync(returnUri, silent: false, cancellationToken);
 
         return Results.Redirect(request.RequestUri.ToString());
     }

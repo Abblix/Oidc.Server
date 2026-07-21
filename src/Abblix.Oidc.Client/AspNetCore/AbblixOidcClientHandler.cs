@@ -64,7 +64,7 @@ public sealed class AbblixOidcClientHandler(
     protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         var request = await oidcClient.CreateAuthorizationRequestAsync(
-            ReturnUri(properties), Context.RequestAborted);
+            ReturnUri(properties), silent: false, Context.RequestAborted);
 
         Response.Redirect(request.RequestUri.OriginalString);
     }

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -134,6 +134,17 @@ public sealed record AuthorizationResponse
     /// </summary>
     [JsonPropertyName(Parameters.Issuer)]
     public string? Issuer { get; init; }
+
+    /// <summary>
+    /// The <c>session_state</c> parameter of OpenID Connect Session Management 1.0, when the provider sent
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// Section 2 calls it "a JSON string that represents the End-User's login state at the OP" and adds that
+    /// the "value is opaque to the RP", so it is carried and never read into.
+    /// </remarks>
+    [JsonPropertyName(Parameters.SessionState)]
+    public string? SessionState { get; init; }
 
     /// <summary>
     /// Which of the shapes this response has, decided from the parameters that actually arrived.

@@ -29,7 +29,10 @@ using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.Principal;
+using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Revocation;
+using Abblix.Oidc.Client.Features.SessionManagement;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Client.Features.Tokens;
 using Abblix.Oidc.Client.Features.UserInfo;
 
@@ -38,6 +41,8 @@ namespace Abblix.Oidc.Client;
 /// <summary>
 /// Composes the client's features into the operations a host actually performs.
 /// </summary>
+/// <param name="metadataProvider">Supplies what the provider published about itself.</param>
+/// <param name="clientOptions">Carries this client's identifier.</param>
 /// <param name="requestBuilder">Builds authorization requests.</param>
 /// <param name="responseHandler">Accepts what comes back to the redirection endpoint.</param>
 /// <param name="tokenRequestService">Talks to the token endpoint.</param>
@@ -48,6 +53,8 @@ namespace Abblix.Oidc.Client;
 /// <param name="endSessionRequestBuilder">Builds logout addresses.</param>
 /// <param name="logoutTokenValidator">Validates Logout Tokens the provider posts.</param>
 public sealed class OidcClient(
+    IProviderMetadataProvider metadataProvider,
+    IOptions<OidcClientOptions> clientOptions,
     IAuthorizationRequestBuilder requestBuilder,
     IAuthorizationResponseHandler responseHandler,
     ITokenRequestService tokenRequestService,
@@ -60,8 +67,8 @@ public sealed class OidcClient(
 {
     /// <inheritdoc />
     public Task<AuthorizationRequest> CreateAuthorizationRequestAsync(
-        Uri returnUri, CancellationToken cancellationToken = default)
-        => requestBuilder.CreateAsync(returnUri, cancellationToken);
+        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
+        => requestBuilder.CreateAsync(returnUri, silent, cancellationToken);
 
     /// <inheritdoc />
     public async Task<CompletedSignIn> HandleCallbackAsync(
@@ -105,6 +112,19 @@ public sealed class OidcClient(
     public Task<LogoutNotification> ValidateBackChannelLogoutAsync(
         string logoutToken, CancellationToken cancellationToken = default)
         => logoutTokenValidator.ValidateAsync(logoutToken, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<SessionCheck?> CreateSessionCheckAsync(
+        string sessionState, CancellationToken cancellationToken = default)
+    {
+        var metadata = await metadataProvider.GetMetadataAsync(cancellationToken);
+
+        // A provider that publishes no frame does not support the mechanism, which is an answer rather than
+        // a failure: a host asks whether it can watch the session, and here it cannot.
+        return metadata.CheckSessionIframe is { } checkSessionIframe
+            ? new SessionCheck(checkSessionIframe, clientOptions.Value.ClientId, sessionState)
+            : null;
+    }
 
     /// <summary>
     /// Redeems the code and validates the ID Token the token endpoint returns.
@@ -154,7 +174,11 @@ public sealed class OidcClient(
             // endpoint's answer was already turned into a span while the response was parsed, so both
             // arrive here in the same shape.
             tokens.ExpiresIn is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
-            context.ReturnUri);
+            context.ReturnUri,
+
+            // From the authorization response, not the token endpoint: the login state is stated where the
+            // login happened.
+            response.SessionState);
     }
 
     /// <summary>
@@ -183,7 +207,8 @@ public sealed class OidcClient(
             // token endpoint, and this flow does not visit it.
             RefreshToken: null,
             response.ExpiresIn,
-            response.Context.ReturnUri);
+            response.Context.ReturnUri,
+            response.SessionState);
     }
 
     /// <summary>

@@ -72,6 +72,17 @@ public sealed record AuthorizationResult(AuthorizationContext Context)
     public string? EncodedIdToken { get; init; }
 
     /// <summary>
+    /// The end-user's login state at the provider, when it sent one.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Session Management 1.0 section 2: "a JSON string that represents the End-User's login
+    /// state at the OP", whose "value is opaque to the RP". Kept because a host watching for the session
+    /// ending elsewhere needs it, and because it changes with every login - the value from the last one is
+    /// the only one worth holding.
+    /// </remarks>
+    public string? SessionState { get; init; }
+
+    /// <summary>
     /// The access token returned from the authorization endpoint, when the flow returns one.
     /// </summary>
     /// <remarks>

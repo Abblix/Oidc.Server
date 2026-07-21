@@ -26,6 +26,8 @@ using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
+using Abblix.Oidc.Client.Features.Discovery;
+using Abblix.Oidc.Client.UnitTests.Features.Discovery;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.Principal;
@@ -114,6 +116,12 @@ public class OidcClientTests
         TokenResponse tokens,
         JsonWebToken tokenEndpointIdentityToken)
         => new OidcClient(
+            new ConfiguredMetadataProvider(new ProviderMetadata
+            {
+                Issuer = "https://provider.example.com",
+                CheckSessionIframe = "https://provider.example.com/check-session",
+            }),
+            Options.Create(new OidcClientOptions { ClientId = "test-client" }),
             new UnusedRequestBuilder(),
             new StubResponseHandler(response),
             new StubTokenRequestService(tokens),
@@ -253,7 +261,7 @@ public class OidcClientTests
     private sealed class UnusedRequestBuilder : IAuthorizationRequestBuilder
     {
         public Task<AuthorizationRequest> CreateAsync(
-            Uri returnUri, CancellationToken cancellationToken = default)
+            Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 
@@ -286,5 +294,47 @@ public class OidcClientTests
         public Task<LogoutNotification> ValidateAsync(
             string logoutToken, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// The session check carries the three values a watching page needs, and the message with the single
+    /// space section 3.1 defines.
+    /// </summary>
+    [Fact]
+    public async Task TheSessionCheckSpellsTheMessage()
+    {
+        var client = Create(
+            new AuthorizationResult(Context()) { Code = "the-code" },
+            Tokens("the.id.token"),
+            TokenFor(Subject));
+
+        var check = await client.CreateSessionCheckAsync(
+            "the-session-state", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(check);
+        Assert.Equal("https://provider.example.com/check-session", check.CheckSessionIframe);
+        Assert.Equal("test-client the-session-state", check.Message);
+    }
+
+    /// <summary>
+    /// The login state from the authorization response reaches the host, since it is what a watching page
+    /// polls with.
+    /// </summary>
+    [Fact]
+    public async Task TheSessionStateReachesTheHost()
+    {
+        var client = Create(
+            new AuthorizationResult(Context())
+            {
+                Code = "the-code",
+                SessionState = "the-session-state",
+            },
+            Tokens("the.id.token"),
+            TokenFor(Subject));
+
+        var signIn = await client.HandleCallbackAsync(
+            new Dictionary<string, IReadOnlyList<string>>(), TestContext.Current.CancellationToken);
+
+        Assert.Equal("the-session-state", signIn.SessionState);
     }
 }

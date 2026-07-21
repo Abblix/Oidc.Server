@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -48,6 +48,10 @@ namespace Abblix.Oidc.Client;
 /// <param name="ReturnUri">
 /// Where the user was heading when the login started, relative to this application.
 /// </param>
+/// <param name="SessionState">
+/// The end-user's login state at the provider, when it sent one. Opaque, and what a page watching for the
+/// session ending elsewhere polls with.
+/// </param>
 public sealed record CompletedSignIn(
     ClaimsPrincipal Principal,
     JsonWebToken IdentityToken,
@@ -55,4 +59,5 @@ public sealed record CompletedSignIn(
     string? AccessToken,
     string? RefreshToken,
     TimeSpan? ExpiresIn,
-    string ReturnUri);
+    string ReturnUri,
+    string? SessionState = null);

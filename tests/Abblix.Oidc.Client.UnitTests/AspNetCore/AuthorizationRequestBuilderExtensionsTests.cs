@@ -215,7 +215,7 @@ public class AuthorizationRequestBuilderExtensionsTests
             }));
 
         var request = await builder.CreateAsync(
-            new Uri("/orders", UriKind.Relative), TestContext.Current.CancellationToken);
+            new Uri("/orders", UriKind.Relative), silent: false, TestContext.Current.CancellationToken);
 
         Assert.Contains("response_type=id_token", request.RequestUri.Query);
         Assert.DoesNotContain("code_challenge", request.RequestUri.Query);

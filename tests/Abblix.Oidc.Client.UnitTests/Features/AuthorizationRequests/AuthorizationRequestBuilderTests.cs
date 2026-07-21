@@ -88,7 +88,7 @@ public class AuthorizationRequestBuilderTests
     public async Task CarriesTheParametersOfTheCodeFlow()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -107,7 +107,7 @@ public class AuthorizationRequestBuilderTests
     public async Task SendsTheStateAndNonceItPutAside()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -125,7 +125,7 @@ public class AuthorizationRequestBuilderTests
     public async Task TheChallengeSentMatchesTheVerifierKept()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var expectedChallenge = System.Buffers.Text.Base64Url.EncodeToString(
             System.Security.Cryptography.SHA256.HashData(
@@ -143,8 +143,8 @@ public class AuthorizationRequestBuilderTests
     {
         var builder = CreateBuilder(Metadata(), CreateStateStore());
 
-        var first = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
-        var second = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+        var first = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+        var second = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.NotEqual(first.Context.State, second.Context.State);
         Assert.NotEqual(first.Context.Nonce, second.Context.Nonce);
@@ -161,7 +161,7 @@ public class AuthorizationRequestBuilderTests
         var store = CreateStateStore();
 
         var request = await CreateBuilder(Metadata(), store)
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var stored = await store.FindAsync(request.Context.State, TestContext.Current.CancellationToken);
         Assert.NotNull(stored);
@@ -179,7 +179,7 @@ public class AuthorizationRequestBuilderTests
             Metadata(codeChallengeMethods: [CodeChallengeMethods.Plain]), CreateStateStore());
 
         var exception = await Assert.ThrowsAsync<PkceException>(
-            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
 
         Assert.Contains(CodeChallengeMethods.S256, exception.Message);
     }
@@ -192,7 +192,7 @@ public class AuthorizationRequestBuilderTests
     public async Task ProceedsWhenTheProviderAdvertisesNoMethods()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.Equal(CodeChallengeMethods.S256, QueryOf(request.RequestUri)[Parameters.CodeChallengeMethod]);
     }
@@ -210,7 +210,7 @@ public class AuthorizationRequestBuilderTests
             new Uri("https://api.example.com/billing"),
         ]);
 
-        var request = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+        var request = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var resources = HttpUtility.ParseQueryString(request.RequestUri.Query).GetValues(Parameters.Resource);
         Assert.NotNull(resources);
@@ -229,7 +229,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(
             Metadata(authorizationEndpoint: $"{Issuer}/authorize?tenant=acme"), CreateStateStore());
 
-        var request = await builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+        var request = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.Equal("acme", QueryOf(request.RequestUri)["tenant"]);
     }
@@ -243,7 +243,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(Metadata(authorizationEndpoint: null), CreateStateStore());
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -271,7 +271,7 @@ public class AuthorizationRequestBuilderTests
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
             () => builder.CreateAsync(
-                new Uri(returnUri, UriKind.RelativeOrAbsolute), TestContext.Current.CancellationToken));
+                new Uri(returnUri, UriKind.RelativeOrAbsolute), silent: false, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -286,7 +286,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(Metadata(), CreateStateStore());
 
         var request = await builder.CreateAsync(
-            new Uri(returnUri, UriKind.Relative), TestContext.Current.CancellationToken);
+            new Uri(returnUri, UriKind.Relative), silent: false, TestContext.Current.CancellationToken);
 
         Assert.Equal(returnUri, request.Context.ReturnUri);
     }
@@ -311,7 +311,7 @@ public class AuthorizationRequestBuilderTests
             options => options.RedirectUri = new Uri("/signin-oidc", UriKind.Relative));
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -334,7 +334,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, QueryOf(request.RequestUri)[Parameters.ResponseType]);
     }
@@ -359,7 +359,7 @@ public class AuthorizationRequestBuilderTests
         });
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -377,7 +377,7 @@ public class AuthorizationRequestBuilderTests
         });
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -388,7 +388,7 @@ public class AuthorizationRequestBuilderTests
     public async Task TheCodeFlowNeedsNoAcceptanceAndSendsNoResponseMode()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -409,7 +409,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.Equal(ResponseModes.FormPost, QueryOf(request.RequestUri)[Parameters.ResponseMode]);
     }
@@ -429,7 +429,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -453,7 +453,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -478,8 +478,34 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(QueryOf(request.RequestUri)[Parameters.Nonce]);
+    }
+
+    /// <summary>
+    /// An ordinary request says nothing about prompting, leaving the provider to decide as it always would.
+    /// </summary>
+    [Fact]
+    public async Task AnOrdinaryRequestDoesNotConstrainThePrompt()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore())
+            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+
+        Assert.False(QueryOf(request.RequestUri).ContainsKey("prompt"));
+    }
+
+    /// <summary>
+    /// A silent request forbids interaction. OpenID Connect Session Management 1.0 section 2 has a client
+    /// noticing a session change "first try a prompt=none request within an iframe to obtain a new ID Token
+    /// and session state" - the frame is invisible, so a login screen must not be able to appear in it.
+    /// </summary>
+    [Fact]
+    public async Task ASilentRequestForbidsInteraction()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore())
+            .CreateAsync(ReturnUri, silent: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("none", QueryOf(request.RequestUri)["prompt"]);
     }
 }

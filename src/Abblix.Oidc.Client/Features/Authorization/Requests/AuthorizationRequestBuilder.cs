@@ -69,7 +69,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
     /// <inheritdoc />
     public async Task<AuthorizationRequest> CreateAsync(
-        Uri returnUri, CancellationToken cancellationToken = default)
+        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
     {
         var metadata = await _metadataProvider.GetMetadataAsync(cancellationToken);
 
@@ -101,7 +101,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         // put aside yet.
         await _stateStore.StoreAsync(state, cancellationToken);
 
-        return new AuthorizationRequest(BuildRequestUri(authorizationEndpoint, state, pkce), state);
+        return new AuthorizationRequest(BuildRequestUri(authorizationEndpoint, state, pkce, silent), state);
     }
 
     /// <summary>
@@ -217,7 +217,11 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         return redirectUri.ToString();
     }
 
-    private Uri BuildRequestUri(string authorizationEndpoint, AuthorizationContext context, PkceParameters? pkce)
+    private Uri BuildRequestUri(
+        string authorizationEndpoint,
+        AuthorizationContext context,
+        PkceParameters? pkce,
+        bool silent)
     {
         // The builder carries over whatever the endpoint already has in its query: a provider is free to
         // publish an authorization endpoint with parameters of its own, and dropping them would break it.
@@ -230,6 +234,13 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         parameters[Parameters.ClientId] = _clientOptions.ClientId;
         parameters[Parameters.RedirectUri] = context.RedirectUri;
         parameters[Parameters.Scope] = string.Join(' ', _options.Scopes);
+
+        // OpenID Connect Session Management 1.0 section 2 asks a client noticing a session change to "first
+        // try a prompt=none request within an iframe to obtain a new ID Token and session state" - a
+        // question rather than a login, which the provider answers from the session it already has or
+        // refuses outright. Sending it any other way would put a login screen inside an invisible frame.
+        if (silent)
+            parameters[Parameters.Prompt] = Prompts.None;
         parameters[Parameters.State] = context.State;
 
         // Always sent. It binds an ID Token to this request, and for the flows that return one from the

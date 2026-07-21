@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -89,4 +89,9 @@ public static class Parameters
     /// The issuer identifier of the authorization server that produced the response (RFC 9207 section 2).
     /// </summary>
     public const string Issuer = "iss";
+
+    /// <summary>
+    /// The end-user's login state at the provider, for a client watching the session.
+    /// </summary>
+    public const string SessionState = "session_state";
 }
