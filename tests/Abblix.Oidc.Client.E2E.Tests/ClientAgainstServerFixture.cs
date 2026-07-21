@@ -66,6 +66,14 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     public const string Issuer = "https://auth.example.com";
 
     /// <summary>
+    /// Extra registrations added to the client container, applied after the standard ones.
+    /// </summary>
+    /// <remarks>
+    /// Set by a test that needs the client configured differently - holding decryption keys, say.
+    /// </remarks>
+    public Action<IServiceCollection>? ConfigureClientServices { get; set; }
+
+    /// <summary>
     /// Extra registrations for the provider host, applied before it is built.
     /// </summary>
     /// <remarks>
@@ -108,6 +116,7 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
         var services = new ServiceCollection();
 
         AddClientServices(services, clientId);
+        ConfigureClientServices?.Invoke(services);
         configure?.Invoke(services);
 
         return services.BuildServiceProvider();

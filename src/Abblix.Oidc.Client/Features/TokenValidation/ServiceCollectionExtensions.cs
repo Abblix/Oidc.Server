@@ -22,6 +22,7 @@
 
 
 using Abblix.Jwt;
+using Abblix.Oidc.Client.Features.ClientKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -48,6 +49,7 @@ public static class ServiceCollectionExtensions
             services.Configure(configureOptions);
 
         services.AddJsonWebTokens();
+        services.AddClientKeysPlaceholder();
         services.TryAddSingleton<IProviderTokenVerifier, ProviderTokenVerifier>();
 
         return services;

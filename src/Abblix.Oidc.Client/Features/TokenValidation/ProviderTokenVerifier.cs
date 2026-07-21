@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -22,6 +22,7 @@
 
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
+using Abblix.Oidc.Client.Features.ClientKeys;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.SigningKeys;
 using Microsoft.Extensions.Options;
@@ -34,12 +35,14 @@ namespace Abblix.Oidc.Client.Features.TokenValidation;
 /// <param name="tokenValidator">Verifies the signature and the JWT-level claims.</param>
 /// <param name="metadataProvider">Supplies the issuer this client is talking to.</param>
 /// <param name="signingKeysProvider">Supplies the provider's keys.</param>
+/// <param name="clientKeysProvider">Supplies this client's own keys, for a token encrypted to it.</param>
 /// <param name="clientOptions">Carries the client identifier that <c>aud</c> is matched against.</param>
 /// <param name="options">Where the specification leaves a policy choice.</param>
 public sealed class ProviderTokenVerifier(
     IJsonWebTokenValidator tokenValidator,
     IProviderMetadataProvider metadataProvider,
     IIssuerSigningKeysProvider signingKeysProvider,
+    IClientKeysProvider clientKeysProvider,
     IOptions<OidcClientOptions> clientOptions,
     IOptions<ProviderTokenValidationOptions> options) : IProviderTokenVerifier
 {
@@ -74,6 +77,12 @@ public sealed class ProviderTokenVerifier(
             // browser or, for a Logout Token, from a caller this client never spoke to first. One rule,
             // applied everywhere, is the one that cannot be applied to the wrong delivery by mistake.
             ResolveIssuerSigningKeys = _ => ResolveKeys(cancellationToken),
+
+            // A provider registered with id_token_encrypted_response_alg encrypts to this client, and the
+            // token then arrives as a JWE wrapping the signed one (RFC 7516). Offering the keys here is what
+            // lets it be opened; a client holding none refuses it, which is the right answer for a client
+            // that asked for no encryption.
+            ResolveTokenDecryptionKeys = _ => clientKeysProvider.GetDecryptionKeys(cancellationToken),
 
             AllowedSigningAlgorithms = policy.AllowedSigningAlgorithms.ToHashSet(StringComparer.Ordinal),
             ClockSkew = policy.ClockSkew,

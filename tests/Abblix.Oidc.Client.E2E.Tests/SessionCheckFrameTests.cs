@@ -39,6 +39,23 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 /// decides who may end a session, so it is exercised by handing the script a message from the wrong origin
 /// and requiring silence.
 /// </remarks>
+/// <remarks>
+/// What is still not covered here, and what would cover it. Three things are outside an interpreter's
+/// reach: that the browser, not the sender, decides what <c>event.origin</c> says; that it enforces the
+/// target origin a message was addressed to; and that the Content-Security-Policy actually stops a script
+/// the page did not author. A fourth is bigger - the agreement between this frame and the provider's own,
+/// which in this solution is ours too. That frame uses <c>crypto.subtle</c> and <c>document.cookie</c> to
+/// recompute the session state, so the full circle - sign in, ask, hear "unchanged", end the session
+/// elsewhere, hear "changed" - is proved nowhere.
+/// The way to prove it is Playwright for .NET: one package, the browser out of process, and C# driving it.
+/// It was weighed and deferred rather than overlooked, and what it costs is worth writing down so the next
+/// person does not rediscover it. Both hosts would move from the in-process test server, which opens no
+/// socket a browser can reach, to real Kestrel on ports - no hardship, and two ports are two origins, which
+/// is exactly what postMessage wants. The provider requires HTTPS, so a development certificate and a
+/// browser told to accept it. And the runner image would need a browser: our job pods are rootless, so
+/// "playwright install --with-deps" cannot run there, which makes this a change to the runner image in
+/// another repository rather than a package reference here.
+/// </remarks>
 public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<ClientHostFixture>
 {
     /// <summary>
