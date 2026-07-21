@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.OIDC.Client</PackageId>
     <Title>Abblix OIDC Client</Title>
-    <Description>A self-contained OpenID Connect and OAuth 2.0 client for .NET: authorization code flow with PKCE, token handling, provider discovery and id_token validation on the Abblix.Jwt engine. The client side of Abblix OIDC Server, independent of the built-in ASP.NET Core handler.</Description>
+    <Description>An OpenID Connect and OAuth 2.0 client for .NET: authorization code flow with PKCE, token handling, provider discovery and id_token validation on the Abblix.Jwt engine. The client side of Abblix OIDC Server, with an ASP.NET Core integration for cookie-bound state and the redirect handshake.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -32,7 +32,12 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
+  <!-- The redirect handshake needs a web host: reading the callback request, setting the state cookie,
+       and issuing the challenge redirect all live in the AspNetCore folder. The framework reference is
+       shared, not a package download, so a web host already carries it; a non-web consumer (a daemon
+       acquiring tokens by client credentials, say) references the assembly but never touches these types. -->
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
@@ -55,6 +60,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Abblix.Oidc.Client.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Features\Authorization\" />
   </ItemGroup>
 
 </Project>
