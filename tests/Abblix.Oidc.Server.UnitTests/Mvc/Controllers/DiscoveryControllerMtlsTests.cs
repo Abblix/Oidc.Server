@@ -65,14 +65,12 @@ public class DiscoveryControllerMtlsTests
 
         SetupEndpointResolver();
 
-        // SignedMetadata defaults off in these fixtures, so the signing collaborators are
-        // never exercised — supplied only to satisfy the constructor.
+        // SignedMetadata defaults off in these fixtures, so the signing collaborator is
+        // never exercised - supplied only to satisfy the constructor.
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            Mock.Of<IJsonWebTokenCreator>(),
-            Mock.Of<IAuthServiceKeysProvider>(),
-            new FakeTimeProvider());
+            Mock.Of<ISignedMetadataProvider>());
     }
 
     /// <summary>

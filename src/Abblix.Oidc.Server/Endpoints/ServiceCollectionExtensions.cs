@@ -101,6 +101,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
         services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
         services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
+        // Scoped to match the adapters' response formatters, which are the only consumers and are themselves
+        // scoped: the signature is produced per request over that request's resolved endpoint URLs.
+        services.TryAddScoped<ISignedMetadataProvider, SignedMetadataProvider>();
         return services;
     }
 
