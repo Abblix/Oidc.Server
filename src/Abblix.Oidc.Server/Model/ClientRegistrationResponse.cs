@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 // 
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -41,7 +41,7 @@ public record ClientRegistrationResponse
     /// </summary>
     [Required]
     [JsonPropertyName(Parameters.ClientId)]
-    public string ClientId { get; init; } = null!;
+    public required string ClientId { get; init; }
 
     /// <summary>
     /// The client secret. This value must not be assigned to multiple clients and is used for authenticating the client with the server.
@@ -119,7 +119,7 @@ public record ClientRegistrationResponse
 
     /// <summary>
     /// The type of application for which the client is registered (<c>web</c>, <c>native</c>).
-    /// Optional — server may assign a default. Per RFC 7591 §2.
+    /// Optional - server may assign a default. Per RFC 7591 §2.
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
     public string? ApplicationType { get; init; }
