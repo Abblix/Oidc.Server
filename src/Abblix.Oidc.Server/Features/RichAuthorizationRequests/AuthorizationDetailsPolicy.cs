@@ -58,9 +58,14 @@ internal sealed class AuthorizationDetailsPolicy(
         if (raw is not { Count: > 0 })
             return (JsonArray?)null;
 
-        var authorizationDetails = raw.ToTypedArray();
-        if (authorizationDetails is not { Length: > 0 })
-            return (JsonArray?)null;
+        // An entry that is not a JSON object is dropped by the conversion, so a count that shrank means the
+        // client sent authorization_details this server cannot read - ["payment"] or [1,2] rather than the
+        // objects RFC 9396 section 2 defines. Refused rather than quietly reduced: the null the conversion
+        // would otherwise produce is indistinguishable from the client having sent none, so the request
+        // would be authorized with its authorization_details silently discarded, which is the one outcome
+        // neither the client nor the resource server can detect.
+        if (raw.ToTypedArray() is not { } authorizationDetails || authorizationDetails.Length != raw.Count)
+            return Reject("Every authorization_details entry must be a JSON object.");
 
         var allowlist = client.AuthorizationDetailsTypes;
         if (allowlist is not null)
