@@ -64,8 +64,11 @@ public sealed class ClaimsPrincipalFactory(IOptions<ClaimsPrincipalOptions> opti
             // ClaimsPrincipal represents multi-valued claims and what its role checks expect.
             if (value is JsonArray array)
             {
-                foreach (var element in array.Where(element => element is not null))
-                    yield return ToClaim(name, element!);
+                // A JSON null element is a legal value from the issuer, not a broken token: it states
+                // nothing, so it becomes no claim rather than an empty one. Dropped by OfType, which both
+                // filters and narrows, so the value reaching ToClaim is known non-null rather than asserted.
+                foreach (var element in array.OfType<JsonNode>())
+                    yield return ToClaim(name, element);
 
                 continue;
             }

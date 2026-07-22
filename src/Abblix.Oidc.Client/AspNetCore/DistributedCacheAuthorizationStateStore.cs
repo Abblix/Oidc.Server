@@ -111,17 +111,22 @@ internal sealed class DistributedCacheAuthorizationStateStore(
     {
         var httpContext = RequireHttpContext();
 
-        var present = httpContext.Request.Cookies.TryGetValue(CookieName(state), out var sessionKey)
-                      && !string.IsNullOrEmpty(sessionKey);
-
-        if (present)
-            await cache.RemoveAsync(CacheKey(sessionKey!), cancellationToken);
+        // The key is tested where it is used rather than collapsed into a presence flag first. A flag
+        // carries the answer without carrying what proved it, so the use below would need an assertion by
+        // hand; kept together, the compiler proves it, and a later edit that moves the test cannot leave a
+        // stale one behind. An empty cookie counts as absent, the same reading FindAsync gives it.
+        if (httpContext.Request.Cookies.TryGetValue(CookieName(state), out var sessionKey)
+            && !string.IsNullOrEmpty(sessionKey))
+        {
+            await cache.RemoveAsync(CacheKey(sessionKey), cancellationToken);
+        }
 
         // The deletion cookie makes the browser drop the session key, so a replayed callback arrives
         // without it and finds nothing - the single-use spend, carried by the same cookie the binding is.
         httpContext.Response.Cookies.Delete(CookieName(state), CookieOptions());
 
-        return present;
+        // A callback that arrived without the key held no login to spend, which is the false a replay gets.
+        return !string.IsNullOrEmpty(sessionKey);
     }
 
     private static AuthorizationContext? Deserialize(string payload)

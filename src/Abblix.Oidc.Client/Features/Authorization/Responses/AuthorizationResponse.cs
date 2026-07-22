@@ -51,7 +51,12 @@ public sealed record AuthorizationResponse
     /// </summary>
     /// <remarks>
     /// Returned on both a success and an error: RFC 6749 sections 4.1.2 and 4.1.2.1 both require it back
-    /// when the request carried one. This client always sends one, so its absence is already a fault.
+    /// when the request carried one. This client always sends one, so a response without it is refused -
+    /// but it is refused by a check, not by this type. Nullable is what the type honestly knows: whoever
+    /// reaches the redirection address decides which parameters arrive, and a shape that cannot represent
+    /// their absence could only pretend the absent case away. The refusal is
+    /// <see cref="Context.AuthorizationStateFailure.Missing"/>, and it is deliberately told apart from a
+    /// state this client is not holding.
     /// </remarks>
     [JsonPropertyName(Parameters.State)]
     public string? State { get; init; }

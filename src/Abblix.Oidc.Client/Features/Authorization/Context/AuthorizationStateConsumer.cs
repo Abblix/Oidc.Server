@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Client.Features.Authorization.Context;
 
 /// <summary>
@@ -29,7 +31,7 @@ namespace Abblix.Oidc.Client.Features.Authorization.Context;
 internal sealed class AuthorizationStateConsumer(IAuthorizationStateStore store) : IAuthorizationStateConsumer
 {
     public async Task<AuthorizationContext> FindAsync(
-        string? state, CancellationToken cancellationToken = default)
+        [NotNull] string? state, CancellationToken cancellationToken = default)
     {
         // No state to look up. This client sends one on every request, so its absence is not an
         // expired login that can be restarted - it is a response that never belonged to us.

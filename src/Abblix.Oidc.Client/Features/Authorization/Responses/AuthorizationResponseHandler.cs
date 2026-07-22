@@ -25,6 +25,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.IdentityTokens;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Authorization.Responses;
@@ -107,12 +108,20 @@ internal sealed class AuthorizationResponseHandler(
         // Now the response has earned it. Both a success and a provider error are spent, since neither may
         // be replayed; a login already spent between the look-up and here is a replay and is refused.
         // Removal is atomic, so of two callbacks racing on one state exactly one gets this far.
-        // response.State is non-null here - FindAsync would have thrown Missing for a null one.
-        await stateConsumer.ConsumeAsync(response.State!, cancellationToken);
+        // No null-forgiving operator is needed on response.State: FindAsync declares [NotNull] on it, so
+        // returning normally is the compiler-checked statement that it was not null.
+        await stateConsumer.ConsumeAsync(response.State, cancellationToken);
 
+        // The error code is asserted by name rather than waved through. What guarantees it is in another
+        // file: the error arm of AuthorizationResponse.Kind is derived from `Error is not null`, so a null
+        // result above is the statement that an error code arrived. That is an invariant of our own sealed
+        // record, which is what makes a named InvalidOperationException the right answer if the derivation
+        // ever gains an arm or is reshuffled - better than a null quietly becoming the exception's error
+        // code. The guard runs only on the error arm, since the right operand of ?? is not evaluated while
+        // the result is present.
         return result ?? throw new AuthorizationResponseException(
             $"The provider '{context.Issuer}' refused the authorization request: {response.Error}.",
-            response.Error!,
+            response.Error.NotNull(nameof(response.Error)),
             response.ErrorDescription);
     }
 

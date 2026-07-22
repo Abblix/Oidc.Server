@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Client.Features.Authorization.Context;
 
 /// <summary>
@@ -48,8 +50,14 @@ public interface IAuthorizationStateConsumer
     /// Neither half is the whole CSRF defence. Whether the matched login belongs to the browser now
     /// presenting it is a question this contract cannot ask - it belongs to the store, and the base
     /// package's default one does not answer it. See <see cref="IAuthorizationStateStore"/>.
+    /// The <see cref="NotNullAttribute"/> states the postcondition rather than leaving it to a comment:
+    /// returning normally means the argument was not null, so a caller holding a nullable
+    /// <c>state</c> can pass it to <see cref="ConsumeAsync"/> afterwards without a null-forgiving
+    /// operator. Declared this way the compiler enforces it at both ends - it warns an implementation
+    /// that could return while the argument is null, and it narrows the value for the caller.
     /// </remarks>
-    Task<AuthorizationContext> FindAsync(string? state, CancellationToken cancellationToken = default);
+    Task<AuthorizationContext> FindAsync(
+        [NotNull] string? state, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Spends the held login named by <paramref name="state"/>, so the same response cannot be acted on
