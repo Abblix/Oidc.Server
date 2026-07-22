@@ -52,8 +52,8 @@ internal sealed class AuthorizationResponseParser : IAuthorizationResponseParser
     }
 
     /// <summary>
-    /// Returns the one value that arrived under <paramref name="name"/>, and refuses a name that arrived
-    /// more than once.
+    /// Returns the one value that arrived under <paramref name="name"/>, refusing a name that arrived more
+    /// than once and reading one that arrived with no value as absent.
     /// </summary>
     /// <remarks>
     /// RFC 6749 section 3.1 forbids the repetition outright, in a sentence that covers this direction
@@ -61,12 +61,21 @@ internal sealed class AuthorizationResponseParser : IAuthorizationResponseParser
     /// choosing matters because the choice is exactly what an attacker would be making: a callback
     /// carrying two codes lets whichever of them a later reader picks differ from the one these checks
     /// were run against.
+    /// A valueless parameter is read as absent, and that reading is ours rather than the RFC's. The same
+    /// section says "Parameters sent without a value MUST be treated as if they were omitted from the
+    /// request", which binds the request direction only; nothing says it of a response. It is applied here
+    /// because the alternative is worse in both directions a valueless parameter can go. An empty
+    /// <c>error</c> is not a refusal the provider stated: section 4.1.2.1 requires "a single ASCII error
+    /// code from the following", and the empty string is not among them - yet treating the parameter's
+    /// mere presence as a refusal spends the single-use state on it, which hands anyone who can read a
+    /// state value a way to burn a pending sign-in. An empty <c>code</c> is the mirror image, read as a
+    /// successful response and carried into a token exchange that never had a code to exchange.
+    /// Applied to every parameter rather than to those two, because "present but saying nothing" means the
+    /// same thing whichever name it arrives under, and a rule that holds for two of them invites the next
+    /// one to be forgotten.
     /// </remarks>
     private static string? Single(string name, IReadOnlyList<string> values)
     {
-        if (values.Count == 0)
-            return null;
-
         if (values.Count > 1)
         {
             throw new AuthorizationResponseException(
@@ -74,6 +83,6 @@ internal sealed class AuthorizationResponseParser : IAuthorizationResponseParser
                 + "RFC 6749 section 3.1 allows it once. Which of them is meant cannot be guessed at.");
         }
 
-        return values[0];
+        return values.Count == 1 && values[0].Length > 0 ? values[0] : null;
     }
 }

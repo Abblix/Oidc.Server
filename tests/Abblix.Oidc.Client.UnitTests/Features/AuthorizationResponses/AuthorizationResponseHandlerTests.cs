@@ -204,6 +204,46 @@ public class AuthorizationResponseHandlerTests
     }
 
     /// <summary>
+    /// A parameter that arrived with no value does not stand in for the value it is missing, and in
+    /// particular does not spend the victim's held login on its way past.
+    /// </summary>
+    /// <remarks>
+    /// The same login denial of service as the wrong-issuer case, reached by a different door. An empty
+    /// <c>error</c> is not one of the codes RFC 6749 section 4.1.2.1 enumerates - it requires "a single
+    /// ASCII error code from the following" - so a response carrying one states no refusal, yet it used to
+    /// read as a refusal by the provider merely because the parameter was present, and the state was spent
+    /// on it. An empty <c>code</c> is the mirror image and would have been carried into a token exchange.
+    /// Both are supplied by whoever reaches the redirection address, which is what makes this an attack
+    /// rather than a curiosity.
+    /// </remarks>
+    [Theory]
+    [InlineData(Parameters.Error)]
+    [InlineData(Parameters.Code)]
+    public async Task AValuelessParameter_DoesNotSpendTheVictimsLogin(string parameter)
+    {
+        var (handler, store) = Create();
+        await store.StoreAsync(ContextFor(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<AuthorizationResponseException>(
+            () => handler.HandleAsync(
+                Response(
+                    (parameter, ""),
+                    (Parameters.State, State),
+                    (Parameters.Issuer, Provider)),
+                TestContext.Current.CancellationToken));
+
+        // The victim's genuine callback arrives afterwards and still succeeds.
+        var result = await handler.HandleAsync(
+            Response(
+                (Parameters.Code, "the-real-code"),
+                (Parameters.State, State),
+                (Parameters.Issuer, Provider)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("the-real-code", result.Code);
+    }
+
+    /// <summary>
     /// A response naming no held login is refused as a state failure, and the issuer check - which would
     /// need a held login to have an expected issuer at all - never runs.
     /// </summary>
