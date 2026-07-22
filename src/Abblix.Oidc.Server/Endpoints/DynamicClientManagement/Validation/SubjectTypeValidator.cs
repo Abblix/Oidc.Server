@@ -142,6 +142,18 @@ public partial class SubjectTypeValidator(
     {
         var redirectUris = context.Request.RedirectUris;
 
+        // Without a redirect URI there is no host, and the host is what a pairwise identifier is derived
+        // from when no sector identifier URI was registered - so this combination cannot be honoured and
+        // is refused rather than worked around. It is reachable: a client asking only for a grant type
+        // that needs no redirection registers none, which the redirect URI validator correctly permits,
+        // and it arrives here with the list absent or empty.
+        if (redirectUris is not { Length: > 0 })
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                "The client specified pairwise subject type without a sector identifier URI, which needs "
+                + "a redirect URI to take the host from, and none was registered");
+        }
+
         if (redirectUris.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
         {
             return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
