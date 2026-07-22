@@ -40,6 +40,12 @@ public static class GrantTypes
     public const string ClientCredentials = "client_credentials";
 
     /// <summary>
+    /// Handing the end-user's own credentials to the client (RFC 6749 section 4.3). RFC 9700 section 2.4
+    /// says this grant MUST NOT be used; it is here for providers that offer nothing else.
+    /// </summary>
+    public const string Password = "password";
+
+    /// <summary>
     /// Presenting one token to be given another (RFC 8693 section 2.1).
     /// </summary>
     public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";

@@ -42,9 +42,7 @@ public sealed class TokenRequestService : ITokenRequestService
     /// </remarks>
     public const string HttpClientName = "Abblix.Oidc.Client.Tokens";
 
-    private readonly IProviderMetadataProvider _metadataProvider;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IClientCredentialsPresenter _credentialsPresenter;
+    private readonly TokenEndpointClient _endpoint;
 
     /// <summary>
     /// Creates the service.
@@ -53,16 +51,12 @@ public sealed class TokenRequestService : ITokenRequestService
         IProviderMetadataProvider metadataProvider,
         IHttpClientFactory httpClientFactory,
         IClientCredentialsPresenter credentialsPresenter)
-    {
-        _metadataProvider = metadataProvider;
-        _httpClientFactory = httpClientFactory;
-        _credentialsPresenter = credentialsPresenter;
-    }
+        => _endpoint = new TokenEndpointClient(metadataProvider, httpClientFactory, credentialsPresenter);
 
     /// <inheritdoc />
     public Task<TokenResponse> ExchangeCodeAsync(
         string code, string codeVerifier, string redirectUri, CancellationToken cancellationToken = default)
-        => PostAsync(
+        => _endpoint.PostAsync(
             new Dictionary<string, string>
             {
                 [Parameters.GrantType] = GrantTypes.AuthorizationCode,
@@ -80,7 +74,7 @@ public sealed class TokenRequestService : ITokenRequestService
     /// <inheritdoc />
     public Task<TokenResponse> RefreshAsync(
         string refreshToken, CancellationToken cancellationToken = default)
-        => PostAsync(
+        => _endpoint.PostAsync(
             new Dictionary<string, string>
             {
                 [Parameters.GrantType] = GrantTypes.RefreshToken,
@@ -103,7 +97,7 @@ public sealed class TokenRequestService : ITokenRequestService
         if (scopes is { Count: > 0 })
             parameters[Parameters.Scope] = string.Join(' ', scopes);
 
-        return PostAsync(parameters, [], cancellationToken);
+        return _endpoint.PostAsync(parameters, [], cancellationToken);
     }
 
     /// <inheritdoc />
@@ -145,13 +139,13 @@ public sealed class TokenRequestService : ITokenRequestService
             .Concat(exchange.Audiences.Select(audience => new KeyValuePair<string, string>(Parameters.Audience, audience)))
             .ToArray();
 
-        return PostAsync(parameters, repeated, cancellationToken);
+        return _endpoint.PostAsync(parameters, repeated, cancellationToken);
     }
 
     /// <inheritdoc />
     public Task<TokenResponse> RedeemDeviceCodeAsync(
         string deviceCode, CancellationToken cancellationToken = default)
-        => PostAsync(
+        => _endpoint.PostAsync(
             new Dictionary<string, string>
             {
                 [Parameters.GrantType] = GrantTypes.DeviceCode,
@@ -163,7 +157,7 @@ public sealed class TokenRequestService : ITokenRequestService
     /// <inheritdoc />
     public Task<TokenResponse> RedeemAuthenticationRequestAsync(
         string authenticationRequestId, CancellationToken cancellationToken = default)
-        => PostAsync(
+        => _endpoint.PostAsync(
             new Dictionary<string, string>
             {
                 [Parameters.GrantType] = GrantTypes.Ciba,
@@ -172,93 +166,4 @@ public sealed class TokenRequestService : ITokenRequestService
             [],
             cancellationToken);
 
-    /// <param name="parameters">
-    /// The single-valued form parameters. Passed as a dictionary because the credentials presenter adds this
-    /// client's own to it, and adding a credential twice is not something to leave possible.
-    /// </param>
-    /// <param name="repeated">
-    /// Parameters a specification allows more than once, which no dictionary can hold. Appended after the
-    /// credentials so that what is presented cannot be displaced by a caller's value.
-    /// </param>
-    /// <param name="cancellationToken">Cancels the call.</param>
-    private async Task<TokenResponse> PostAsync(
-        Dictionary<string, string> parameters,
-        IReadOnlyCollection<KeyValuePair<string, string>> repeated,
-        CancellationToken cancellationToken)
-    {
-        var metadata = await _metadataProvider.GetMetadataAsync(cancellationToken);
-
-        if (metadata.TokenEndpoint is not { } tokenEndpoint)
-            throw new TokenRequestException(
-                $"The OpenID Provider '{metadata.Issuer}' names no token endpoint, so no grant can be "
-                + "redeemed.");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
-        _credentialsPresenter.Present(request, parameters);
-        request.Content = new FormUrlEncodedContent(parameters.Concat(repeated));
-
-        HttpResponseMessage response;
-        try
-        {
-            var httpClient = _httpClientFactory.CreateClient(HttpClientName);
-            response = await httpClient.SendAsync(request, cancellationToken);
-        }
-        catch (HttpRequestException exception)
-        {
-            throw new TokenRequestException(
-                $"Failed to reach the token endpoint of OpenID Provider '{metadata.Issuer}' at "
-                + $"'{tokenEndpoint}'.",
-                exception);
-        }
-
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-                await ThrowRefusalAsync(response, metadata, cancellationToken);
-
-            return await ReadSuccessAsync(response, metadata, tokenEndpoint, cancellationToken);
-        }
-    }
-
-    private static async Task ThrowRefusalAsync(
-        HttpResponseMessage response, ProviderMetadata metadata, CancellationToken cancellationToken)
-    {
-        TokenErrorResponse? error = null;
-        try
-        {
-            error = await response.Content.ReadFromJsonAsync<TokenErrorResponse>(cancellationToken);
-        }
-        catch (JsonException)
-        {
-            // A provider that answers a refusal with something other than the documented shape still refused.
-            // The status code is the part that matters, so the unreadable body is not allowed to mask it.
-        }
-
-        throw new TokenRequestException(
-            $"The token endpoint of OpenID Provider '{metadata.Issuer}' refused the request with status "
-            + $"{(int)response.StatusCode}"
-            + (error?.Error is { } code ? $" and error '{code}'." : "."),
-            error?.Error,
-            error?.ErrorDescription);
-    }
-
-    private static async Task<TokenResponse> ReadSuccessAsync(
-        HttpResponseMessage response,
-        ProviderMetadata metadata,
-        string tokenEndpoint,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken)
-                   ?? throw new TokenRequestException(
-                       $"The token endpoint of OpenID Provider '{metadata.Issuer}' returned an empty "
-                       + "response.");
-        }
-        catch (JsonException exception)
-        {
-            throw new TokenRequestException(
-                $"Failed to read the response of the token endpoint at '{tokenEndpoint}'.", exception);
-        }
-    }
 }
