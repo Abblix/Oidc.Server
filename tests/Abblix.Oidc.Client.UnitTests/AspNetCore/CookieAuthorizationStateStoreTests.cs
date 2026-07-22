@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -52,6 +52,8 @@ public class CookieAuthorizationStateStoreTests
         ReturnUri = "/orders",
         Issuer = "https://provider.example.com",
         RedirectUri = "https://client.example.com/signin-oidc",
+        MaxAge = TimeSpan.FromMinutes(5),
+        AcrValues = ["urn:mace:incommon:iap:silver"],
     };
 
     private CookieAuthorizationStateStore StoreFor(HttpContext httpContext)
@@ -97,6 +99,12 @@ public class CookieAuthorizationStateStoreTests
         Assert.NotNull(found);
         Assert.Equal("the-verifier", found.CodeVerifier);
         Assert.Equal("https://provider.example.com", found.Issuer);
+
+        // What the login asked for has to survive the cookie as well, or the checks on the way
+        // back compare against nothing. A TimeSpan and a collection are exactly the members a
+        // hand-written serializer forgets, so they are named rather than left to the round trip.
+        Assert.Equal(TimeSpan.FromMinutes(5), found.MaxAge);
+        Assert.Equal(["urn:mace:incommon:iap:silver"], found.AcrValues);
     }
 
     /// <summary>

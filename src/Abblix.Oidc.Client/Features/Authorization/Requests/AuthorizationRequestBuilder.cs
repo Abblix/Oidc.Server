@@ -105,6 +105,12 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
             ReturnUri = RequireLocal(returnUri),
             Issuer = metadata.Issuer,
             RedirectUri = RequireAbsolute(_options.RedirectUri),
+
+            // Kept because the answer to each of these is checked when the user comes back, and the
+            // callback is a different request than this one. The other per-request parameters are not
+            // kept: nothing in the response reports what the provider did with them.
+            MaxAge = parameters.MaxAge,
+            AcrValues = parameters.AcrValues,
         };
 
         // Stored before the address is handed out, so the callback can never arrive for a state that was not

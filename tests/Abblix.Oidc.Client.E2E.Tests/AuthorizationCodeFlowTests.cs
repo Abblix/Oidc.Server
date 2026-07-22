@@ -145,6 +145,67 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
     }
 
     /// <summary>
+    /// Asking how recent the authentication must be reaches the provider, and the answer is checked rather
+    /// than taken on trust.
+    /// </summary>
+    /// <remarks>
+    /// The interop fact is the one a unit suite cannot state. OIDC Core 1.0 section 3.1.2.1 puts an
+    /// obligation on the provider that the client's whole check rests on: "When max_age is used, the ID
+    /// Token returned MUST include an auth_time Claim Value". A stub written by this hand would return
+    /// whatever it was told to; a real provider either honours the parameter or does not, and the client's
+    /// refusal of a token without <c>auth_time</c> only means something if a conformant provider supplies
+    /// one when asked.
+    /// The validation is driven with the stored request rather than a hand-built context, so what is
+    /// exercised is the round trip the client actually performs: the parameter went out with the redirect,
+    /// waited in the store while the user was away, and came back to be compared against the answer.
+    /// What this cannot exercise is the refusal itself. The provider authenticates the visitor on the spot,
+    /// so its <c>auth_time</c> is always fresh and no honest arrangement here produces a stale one; the
+    /// refusal path belongs to the validator's own suite, which owns the clock.
+    /// </remarks>
+    [Fact]
+    public async Task AskingHowRecentTheAuthenticationMustBeIsHonouredAndChecked()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var client = fixture.CreateOidcClient();
+
+        var maxAge = TimeSpan.FromMinutes(5);
+
+        var request = await client.GetRequiredService<IAuthorizationRequestBuilder>().CreateAsync(
+            new Uri("/home", UriKind.Relative),
+            new AuthorizationRequestParameters { MaxAge = maxAge },
+            cancellationToken);
+
+        Assert.Contains("max_age=300", request.RequestUri.Query, StringComparison.Ordinal);
+        Assert.Equal(maxAge, request.Context.MaxAge);
+
+        var callback = await FollowAsync(request.RequestUri, cancellationToken);
+
+        var result = await client.GetRequiredService<IAuthorizationResponseHandler>()
+            .HandleAsync(callback, cancellationToken);
+
+        Assert.NotNull(result.Code);
+
+        var tokens = await client.GetRequiredService<ITokenRequestService>().ExchangeCodeAsync(
+            result.Code, result.Context.CodeVerifier, result.Context.RedirectUri, cancellationToken);
+
+        Assert.NotNull(tokens.IdToken);
+
+        var identityToken = await client.GetRequiredService<IIdentityTokenValidator>().ValidateAsync(
+            tokens.IdToken,
+            new IdentityTokenValidationContext
+            {
+                Nonce = result.Context.Nonce,
+                MaxAge = result.Context.MaxAge,
+                AcceptableAuthenticationContextClassReferences = result.Context.AcrValues,
+            },
+            cancellationToken);
+
+        // The claim the provider owes for having been asked. Without it the validation above would have
+        // thrown, so this states what the provider supplied rather than merely that nothing went wrong.
+        Assert.NotNull(identityToken.Payload.AuthenticationTime);
+    }
+
+    /// <summary>
     /// The claims the UserInfo endpoint returns are about the user this login authenticated, which is the
     /// check OpenID Connect Core 1.0 section 5.3.2 puts on the client and which only a real provider can
     /// exercise.

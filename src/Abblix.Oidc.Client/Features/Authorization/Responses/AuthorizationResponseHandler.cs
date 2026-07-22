@@ -156,6 +156,13 @@ internal sealed class AuthorizationResponseHandler(
                 Nonce = context.Nonce,
                 AuthorizationCode = response.Code,
                 AccessToken = response.AccessToken,
+
+                // What this login asked for, read back from the stored request. Until these were
+                // carried the validator received its defaults and both checks returned without
+                // looking, so a client could ask for a recent authentication or a particular
+                // assurance and accept any answer.
+                MaxAge = context.MaxAge,
+                AcceptableAuthenticationContextClassReferences = context.AcrValues,
             },
             cancellationToken);
     }

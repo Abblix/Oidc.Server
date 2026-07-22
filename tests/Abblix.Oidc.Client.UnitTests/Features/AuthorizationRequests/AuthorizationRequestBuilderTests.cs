@@ -546,6 +546,50 @@ public class AuthorizationRequestBuilderTests
     }
 
     /// <summary>
+    /// The two parameters whose answer gets checked are kept with the login, and the four whose answer
+    /// nobody reports are not.
+    /// </summary>
+    /// <remarks>
+    /// The callback arrives on a different request than the one that set out, so a check comparing the
+    /// response against the request needs the request to still exist - which is why <c>nonce</c> has always
+    /// been kept here. <c>max_age</c> and <c>acr_values</c> join it for the same reason and no other: the
+    /// ID Token reports <c>auth_time</c> and <c>acr</c>, so both can be held to what was asked. Nothing in
+    /// any response says which display the provider chose or whether it used the login hint, so keeping
+    /// those would be storing what can never be compared.
+    /// </remarks>
+    [Fact]
+    public async Task OnlyTheParametersWithAnAnswerToCheckAreRemembered()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore()).CreateAsync(
+            ReturnUri,
+            new AuthorizationRequestParameters
+            {
+                MaxAge = TimeSpan.FromMinutes(5),
+                AcrValues = ["urn:mace:incommon:iap:silver"],
+                LoginHint = "someone@example.com",
+                Display = Displays.Popup,
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(TimeSpan.FromMinutes(5), request.Context.MaxAge);
+        Assert.Equal(["urn:mace:incommon:iap:silver"], request.Context.AcrValues);
+    }
+
+    /// <summary>
+    /// A login that asked for neither remembers neither, so the checks stay switched off rather than
+    /// comparing against something invented.
+    /// </summary>
+    [Fact]
+    public async Task ALoginThatAskedForNeitherRemembersNeither()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore())
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Null(request.Context.MaxAge);
+        Assert.Empty(request.Context.AcrValues);
+    }
+
+    /// <summary>
     /// A caller that names nothing sends nothing: an unset member is a parameter absent from the request,
     /// not a parameter present and empty.
     /// </summary>

@@ -80,4 +80,27 @@ public sealed record AuthorizationContext
     /// exchanged.
     /// </summary>
     public required string RedirectUri { get; init; }
+
+    /// <summary>
+    /// The <c>max_age</c> this request asked for, kept so the answer can be held to it.
+    /// </summary>
+    /// <remarks>
+    /// Here for the same reason <see cref="Nonce"/> is: the callback arrives on a different request than the
+    /// one that set out, and a check that compares the response against the request needs the request to
+    /// still exist. Without this the client can ask for a recent authentication and has nothing left to
+    /// compare the provider's answer against, which is a promise it cannot keep.
+    /// Nullable because OIDC Core 1.0 section 3.1.2.1 marks the parameter OPTIONAL; absent means the client
+    /// asked for nothing and there is nothing to check.
+    /// </remarks>
+    public TimeSpan? MaxAge { get; init; }
+
+    /// <summary>
+    /// The <c>acr_values</c> this request asked for, kept so the asserted class can be held to them.
+    /// </summary>
+    /// <remarks>
+    /// Empty means the request named none, and an unnamed set checks nothing: the specification places the
+    /// meaning of these values outside its own scope, so there is no ordering that would let this client
+    /// judge an unrequested value as sufficient or not.
+    /// </remarks>
+    public IReadOnlyCollection<string> AcrValues { get; init; } = [];
 }

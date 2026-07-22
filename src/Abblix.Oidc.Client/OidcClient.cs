@@ -160,6 +160,12 @@ public sealed class OidcClient(
                 // to it rather than trusted for the courtesy.
                 AccessToken = tokens.AccessToken,
                 AuthorizationCode = code,
+
+                // What this login asked for, read back from the stored request. The ID Token from the token
+                // endpoint is the one a code-flow client actually authenticates on, so leaving these out
+                // here would make the checks reachable in name only.
+                MaxAge = context.MaxAge,
+                AcceptableAuthenticationContextClassReferences = context.AcrValues,
             },
             cancellationToken);
 
