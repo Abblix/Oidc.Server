@@ -141,7 +141,9 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Lists the prompt values supported by the OpenID Provider.
-	/// Optional: the field is defined by the prompt=create extension, not by the core metadata list.
+	/// OPTIONAL per Initiating User Registration via OpenID Connect 1.0 section 4.2, which defines the field
+	/// outside the core metadata list. That section also states the obligation that follows from stating it at
+	/// all: a provider listing this element must list every prompt value it supports, not only <c>create</c>.
 	/// </summary>
 	public IEnumerable<string>? PromptValuesSupported { init; get; }
 
