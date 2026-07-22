@@ -118,18 +118,29 @@ public static class JsonWebTokenExtensions
     /// </remarks>
     private static IEnumerable<string> GetArrayOfStrings(JsonNode? property)
     {
+        // A node that is not a string yields nothing rather than throwing. These members are read off
+        // objects shaped by whoever sent them - a JWT payload and an authorization_details entry are both
+        // schemaless on the wire - so a number or an object can arrive where a string was expected, and
+        // GetValue<string> answers that with an InvalidOperationException from inside a property getter.
+        // Yielding nothing leaves the member unstated, which whatever requires it then refuses in
+        // protocol language, at the layer that owns that decision.
         switch (property)
         {
             case null:
                 break;
 
             case JsonValue value:
-                yield return value.GetValue<string>();
+                if (value.TryGetValue<string>(out var single))
+                    yield return single;
                 break;
 
             case JsonArray array:
-                foreach (var node in array.OfType<JsonNode>())
-                    yield return node.GetValue<string>();
+                foreach (var node in array.OfType<JsonValue>())
+                {
+                    if (node.TryGetValue<string>(out var element))
+                        yield return element;
+                }
+
                 break;
         }
     }

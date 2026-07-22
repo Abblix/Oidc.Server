@@ -209,4 +209,59 @@ public class AuthorizationDetailTests
 
         Assert.Null(payload.AuthorizationDetails);
     }
+
+    /// <summary>
+    /// A member whose JSON type is not the one RFC 9396 section 2.2 gives it reads as unstated, rather
+    /// than throwing out of a property getter.
+    /// </summary>
+    /// <remarks>
+    /// The entry is attacker-shaped: <c>authorization_details</c> is carried as schemaless JSON, so
+    /// every member arrives as whatever the request said it was. A getter that throws on the mismatch
+    /// turns a request the specification answers with <c>invalid_authorization_details</c> into an
+    /// unhandled exception, and it does so inside the per-type validators hosts are asked to write,
+    /// where nothing is placed to catch it.
+    /// Reading it as unstated is not the same as accepting it: the entry then carries no type, and an
+    /// entry with no type is refused. What changes is which layer decides, and in which language.
+    /// </remarks>
+    [Theory]
+    [InlineData("""{ "type": 123 }""")]
+    [InlineData("""{ "type": true }""")]
+    [InlineData("""{ "type": ["payment_initiation"] }""")]
+    [InlineData("""{ "type": { "name": "payment_initiation" } }""")]
+    [InlineData("""{ "type": null }""")]
+    public void AuthorizationDetail_AMemberOfTheWrongJsonType_ReadsAsUnstated(string wire)
+    {
+        var detail = new AuthorizationDetail((JsonObject)JsonNode.Parse(wire)!);
+
+        Assert.Null(detail.Type);
+    }
+
+    /// <summary>
+    /// The same holds for the other common-data members, which the per-type validators read too, and a
+    /// single string still stands for a one-element list.
+    /// </summary>
+    /// <remarks>
+    /// The string-for-a-list reading is deliberate and long-standing across this library's JWT accessors,
+    /// so it is pinned here rather than treated as the same defect: it is a value the member can carry,
+    /// not a type it cannot be read as. What must not happen either way is a throw out of the getter.
+    /// </remarks>
+    [Fact]
+    public void AuthorizationDetail_MembersOfTheWrongJsonType_DoNotThrow()
+    {
+        var wire = """
+                   {
+                     "type": "payment_initiation",
+                     "locations": 7,
+                     "actions": "initiate",
+                     "identifier": 42
+                   }
+                   """;
+
+        var detail = new AuthorizationDetail((JsonObject)JsonNode.Parse(wire)!);
+
+        Assert.Equal(PaymentInitiationType, detail.Type);
+        Assert.Empty(detail.Locations ?? []);
+        Assert.Equal([InitiateAction], detail.Actions);
+        Assert.Null(detail.Identifier);
+    }
 }

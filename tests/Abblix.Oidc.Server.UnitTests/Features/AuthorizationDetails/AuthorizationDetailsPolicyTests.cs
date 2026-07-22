@@ -87,6 +87,60 @@ public class AuthorizationDetailsPolicyTests
         Assert.Contains("type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// An authorization_details array whose entries are not JSON objects is refused, not quietly reduced
+    /// to nothing.
+    /// </summary>
+    /// <remarks>
+    /// The conversion drops what it cannot read, and the emptiness it leaves behind is indistinguishable
+    /// from the client having sent no authorization_details at all - so the request used to be authorized
+    /// with its RAR grant discarded, which neither the client nor the resource server can detect. RFC 9396
+    /// section 2 defines the entries as JSON objects, so this is a malformed request and has a named answer.
+    /// </remarks>
+    [Theory]
+    [InlineData("payment_initiation")]
+    [InlineData(7)]
+    public async Task Entries_that_are_not_objects_yield_failure(object element)
+    {
+        var sp = BuildProvider();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var raw = new JsonArray(JsonValue.Create(element));
+
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+    }
+
+    /// <summary>
+    /// A 'type' member carrying something other than a string is refused in protocol language, not by an
+    /// exception escaping the endpoint.
+    /// </summary>
+    /// <remarks>
+    /// The regression test for an HTTP 500 reachable before authentication: authorization_details is
+    /// carried as schemaless JSON, so this entry survives every earlier shape check, and reading its type
+    /// used to throw straight out of the accessor. RFC 9396 section 5 already names the answer, and the
+    /// entry ends up refused for the same reason a missing type is - it states none.
+    /// The assertion is the refusal rather than the absence of a throw. A test that only required "does
+    /// not throw" would pass just as well against a version that quietly authorized the request with the
+    /// authorization_details dropped, which is the other way this could have been got wrong.
+    /// </remarks>
+    [Theory]
+    [InlineData(123)]
+    [InlineData(true)]
+    public async Task Type_member_of_the_wrong_json_type_yields_failure(object value)
+    {
+        var sp = BuildProvider();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var raw = new JsonArray(new JsonObject { ["type"] = JsonValue.Create(value) });
+
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Single_validator_dispatched_by_type_returns_validated_detail()
     {

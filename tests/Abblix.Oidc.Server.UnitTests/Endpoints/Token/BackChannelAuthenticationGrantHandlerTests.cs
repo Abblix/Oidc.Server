@@ -131,6 +131,36 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// A client registered for this grant but carrying no usable token delivery mode is refused in
+    /// protocol language, the way the backchannel authentication endpoint already refuses it.
+    /// </summary>
+    /// <remarks>
+    /// The mode is optional client metadata and nothing ties it to the grant types a client is allowed, so
+    /// this state is registrable, and a mode naming no registered processor is the same state reached by a
+    /// deployment that does not offer that delivery. Both used to resolve a required keyed service and
+    /// leave the token endpoint with an unhandled exception, while the sibling endpoint answered the
+    /// identical client with invalid_client and a sentence an operator can act on.
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("carrier-pigeon")]
+    public async Task AuthorizeAsync_WithNoUsableDeliveryMode_ReturnsInvalidClient(string? deliveryMode)
+    {
+        // The storage read happens before the client's own configuration is looked at, so the mock has to
+        // answer it even though this request never gets as far as needing what it returns.
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = deliveryMode };
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+    }
+
+    /// <summary>
     /// Verifies that the handler supports the CIBA grant type.
     /// </summary>
     [Fact]
