@@ -23,7 +23,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Abblix.Oidc.Client.Internals;
+using Abblix.Oidc.Client.Common;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Discovery;

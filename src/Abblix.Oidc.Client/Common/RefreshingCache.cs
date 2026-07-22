@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Client.Internals;
+namespace Abblix.Oidc.Client.Common;
 
 /// <summary>
 /// Holds a value fetched from the provider and re-fetches it once it has aged out.

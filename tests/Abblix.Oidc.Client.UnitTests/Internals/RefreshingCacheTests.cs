@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Client.Internals;
+using Abblix.Oidc.Client.Common;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Abblix.Oidc.Client.UnitTests.Internals;

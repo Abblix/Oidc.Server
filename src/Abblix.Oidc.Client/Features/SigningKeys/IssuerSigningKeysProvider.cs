@@ -23,8 +23,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Abblix.Jwt;
+using Abblix.Oidc.Client.Common;
 using Abblix.Oidc.Client.Features.Discovery;
-using Abblix.Oidc.Client.Internals;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.SigningKeys;
