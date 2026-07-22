@@ -43,18 +43,11 @@ namespace Abblix.Oidc.Client.AspNetCore;
 /// different audiences, the fix is a source of the host's own; that is what the seam is for.
 /// </remarks>
 /// <remarks>
-/// One obligation here is the host's and cannot be met from this class, so it is written down rather than
-/// assumed. RFC 6750 section 5.3: "Implementations MUST NOT store bearer tokens within cookies that can be
-/// sent in the clear (which is the default transmission mode for cookies)." Reading the token out of a
-/// cookie-backed session is exactly that arrangement, and what satisfies the rule is the cookie's own
-/// policy - <c>CookieSecurePolicy.Always</c> on the sign-in scheme - plus forwarded headers where TLS is
-/// terminated ahead of the application.
-/// This source does not refuse to answer on a plain-HTTP request, and the reason is worth stating because
-/// the opposite looks tempting. The MUST in the same section is scoped to the client "making requests with
-/// bearer tokens", which is the outgoing side and is enforced where the token is sent. Refusing here would
-/// not undo a cookie that already travelled in the clear, and it would break every deployment behind a
-/// TLS-terminating proxy whose forwarded headers are not yet configured - failing at the wrong end, after
-/// the harm, for a setting that lives elsewhere.
+/// The RFC 6750 section 5.3 obligation this arrangement carries - that a cookie holding a bearer token must
+/// not be sendable in the clear - is stated on <c>AddSessionAccessTokenSource</c> rather than here, and
+/// deliberately: this class is internal, so its documentation reaches nobody outside the package, while the
+/// registration method is the line a host actually writes. An obligation recorded where only its author
+/// reads it is not documentation, it is a note to self.
 /// </remarks>
 /// <param name="httpContextAccessor">Reaches the request being served, when there is one.</param>
 /// <param name="options">Which scheme holds the session, and how much clock margin to leave.</param>

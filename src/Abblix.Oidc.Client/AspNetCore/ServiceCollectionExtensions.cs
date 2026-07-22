@@ -45,6 +45,21 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// The ready-made answer for a web application. It needs the OIDC scheme to keep tokens with the
     /// session, which is off by default: set <c>SaveTokens</c>.
+    ///
+    /// It also carries an obligation this library cannot discharge for you, and which is stated here rather
+    /// than left implied because the setting that satisfies it is not the default either. RFC 6750
+    /// section 5.3: "Implementations MUST NOT store bearer tokens within cookies that can be sent in the
+    /// clear (which is the default transmission mode for cookies)." A cookie-backed session holding an
+    /// access token is exactly that arrangement, so the deployment has to make the cookie unsendable in the
+    /// clear: <c>CookieSecurePolicy.Always</c> on the scheme that signs the user in, and, where TLS is
+    /// terminated ahead of the application, forwarded headers configured so the framework knows the request
+    /// arrived over it. Neither is switched on by installing this package.
+    ///
+    /// This source does not refuse to answer on a plain-HTTP request, and that is deliberate. Refusing then
+    /// would not un-send a cookie that has already travelled in the clear, and it would break every
+    /// deployment behind a proxy whose forwarded headers are not configured yet - failing at the wrong end,
+    /// after the harm, over a setting that lives elsewhere. What the same section does put on the client is
+    /// the outgoing call, and that this library does enforce.
     /// </remarks>
     public static IServiceCollection AddSessionAccessTokenSource(
         this IServiceCollection services, Action<SessionAccessTokenOptions>? configureOptions = null)
