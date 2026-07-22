@@ -64,6 +64,7 @@ public class DiscoveredMetadataProviderTests
 
         return new DiscoveredMetadataProvider(
             new StubHttpClientFactory(handler),
+            new NoSignedMetadataVerifier(),
             timeProvider,
             Options.Create(options));
     }

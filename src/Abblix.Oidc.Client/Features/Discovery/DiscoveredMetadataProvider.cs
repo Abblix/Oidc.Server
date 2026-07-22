@@ -22,14 +22,15 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Client.Internals;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.Features.Discovery;
 
 /// <summary>
-/// Fetches the provider's discovery document over HTTP, verifies its issuer and caches it for the configured
-/// lifetime.
+/// Fetches the provider's discovery document over HTTP, applies whatever the host asked of its
+/// <c>signed_metadata</c>, verifies its issuer and caches it for the configured lifetime.
 /// </summary>
 public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
 {
@@ -51,6 +52,7 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
     private const char UriPathSeparator = '/';
 
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ISignedMetadataVerifier _signedMetadataVerifier;
     private readonly DiscoveryOptions _options;
     private readonly RefreshingCache<ProviderMetadata> _cache;
 
@@ -59,10 +61,12 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
     /// </summary>
     public DiscoveredMetadataProvider(
         IHttpClientFactory httpClientFactory,
+        ISignedMetadataVerifier signedMetadataVerifier,
         TimeProvider timeProvider,
         IOptions<DiscoveryOptions> options)
     {
         _httpClientFactory = httpClientFactory;
+        _signedMetadataVerifier = signedMetadataVerifier;
         _options = options.Value;
         _cache = new RefreshingCache<ProviderMetadata>(timeProvider);
     }
@@ -75,18 +79,38 @@ public sealed class DiscoveredMetadataProvider : IProviderMetadataProvider
     {
         var address = ResolveMetadataAddress();
 
-        ProviderMetadata? metadata;
+        JsonObject? document;
         try
         {
             var httpClient = _httpClientFactory.CreateClient(HttpClientName);
             using var response = await httpClient.GetAsync(address, cancellationToken);
             response.EnsureSuccessStatusCode();
-            metadata = await response.Content.ReadFromJsonAsync<ProviderMetadata>(cancellationToken);
+            document = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken);
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException)
         {
             throw new ProviderMetadataException(
                 $"Failed to read the OpenID Provider metadata from '{address}'.", exception);
+        }
+
+        if (document is null)
+            throw new ProviderMetadataException($"The OpenID Provider metadata at '{address}' was empty.");
+
+        // Ahead of the parse, so that a signed value is what gets parsed, and ahead of the issuer check
+        // below, so that check is made against the identifier the effective document names rather than
+        // against one a signed bundle has already replaced (RFC 8414 section 2.1: signed values take
+        // precedence).
+        document = await _signedMetadataVerifier.ApplyAsync(document, cancellationToken);
+
+        ProviderMetadata? metadata;
+        try
+        {
+            metadata = document.Deserialize<ProviderMetadata>();
+        }
+        catch (JsonException exception)
+        {
+            throw new ProviderMetadataException(
+                $"The OpenID Provider metadata at '{address}' could not be read.", exception);
         }
 
         if (metadata is null)

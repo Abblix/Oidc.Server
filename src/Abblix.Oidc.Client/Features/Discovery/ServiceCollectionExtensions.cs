@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -57,10 +59,51 @@ public static class ServiceCollectionExtensions
         // A soft default, so a test or a host can substitute a clock before this call.
         services.TryAddSingleton(TimeProvider.System);
 
+        // TryAdd, so a host that pinned metadata keys before this call keeps that choice.
+        services.TryAddSingleton<ISignedMetadataVerifier, NoSignedMetadataVerifier>();
+
         // Replaces the not-chosen guard the core registers: this call IS the host making the choice.
         // Singleton because the cache is the point, a scoped provider would re-fetch per request.
         services.Replace(
             ServiceDescriptor.Singleton<IProviderMetadataProvider, DiscoveredMetadataProvider>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Requires the provider's discovery document to carry an RFC 8414 section 2.1 <c>signed_metadata</c>
+    /// value that verifies against <paramref name="verificationKeys"/>, and lets the signed values take
+    /// precedence over the published JSON.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="verificationKeys">
+    /// The provider's metadata-signing keys, as the host obtained them - from the provider's documentation,
+    /// an operator's hand, a configuration store. Not from the discovery document, which is the point.
+    /// </param>
+    /// <returns>The same collection, so calls chain.</returns>
+    /// <remarks>
+    /// Only worth making when the host holds the keys independently of the document. A client that reads the
+    /// document over TLS from its own issuer already has RFC 8414 section 6.2's assurance and gains nothing
+    /// from a signature the same document vouches for. What this call answers is the case where the transport
+    /// is not the provider: metadata through a registry, a mirror, a cache, or an intermediary the host does
+    /// not own.
+    ///
+    /// It has a cost, and it is the same one pinning always has: a provider that rotates its metadata-signing
+    /// key makes this client refuse the document until the host is reconfigured.
+    /// </remarks>
+    public static IServiceCollection AddSignedMetadataVerification(
+        this IServiceCollection services, IReadOnlyCollection<JsonWebKey> verificationKeys)
+    {
+        if (verificationKeys.Count == 0)
+            throw new ArgumentException(
+                "Signed metadata verification was asked for without any key to verify against, which would "
+                + "refuse every document the provider publishes.",
+                nameof(verificationKeys));
+
+        // Replaces the ignoring default: this call IS the host saying it holds keys. Replace rather than
+        // TryAdd so the answer does not depend on whether this ran before or after AddDiscovery.
+        services.Replace(ServiceDescriptor.Singleton<ISignedMetadataVerifier>(
+            provider => provider.CreateService<SignedMetadataVerifier>(Dependency.Override(verificationKeys))));
 
         return services;
     }
