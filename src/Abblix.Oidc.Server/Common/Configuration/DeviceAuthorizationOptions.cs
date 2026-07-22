@@ -91,7 +91,15 @@ public record DeviceAuthorizationOptions
     /// </summary>
     public required Uri VerificationUri
     {
-        get => _verificationUri!;
+        // `required` is a compiler obligation on an object initialiser and nothing more: the configuration
+        // binder does not honour it, and for an absent reference-typed member it never calls the setter at
+        // all. A host binding a partial DeviceAuthorization section therefore reaches here with nothing set,
+        // and handing that null onwards produced an ArgumentNullException from a URI builder on every device
+        // authorization request - pointing at the plumbing rather than at the setting that was missed.
+        get => _verificationUri ?? throw new InvalidOperationException(
+            $"{nameof(VerificationUri)} is not configured. The device authorization endpoint cannot state "
+            + "where the user should enter their code, which RFC 8628 section 3.2 makes a required member "
+            + "of the response.");
         set
         {
             if (!string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
