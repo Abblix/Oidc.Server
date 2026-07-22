@@ -23,6 +23,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Client.Features.BackChannelAuthentication;
+using Abblix.Oidc.Client.Features.Tokens;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -41,15 +42,14 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 /// </summary>
 /// <remarks>
 /// The middle of this flow is a person answering on their own device, and nothing here can be that person.
-/// What the real provider settles instead is everything around them: whether the parameters this client sends
-/// are the ones its backchannel endpoint expects, whether the acknowledgement carries what the polling needs,
-/// and whether the acknowledgement carries what the polling needs.
+/// What the test does instead is play the host: it reports the answer through the seam the provider exposes
+/// for exactly that, <c>IAuthenticationCompletionHandler.CompleteAsync</c>, which is the only production
+/// path that writes the Authenticated status the token endpoint reads. Returning a session from the device
+/// handler does not do it, and an earlier attempt that assumed otherwise polled for five minutes and expired.
 ///
-/// The redemption is NOT covered here, and deliberately so rather than by oversight. Returning an AuthSession
-/// from the handler below does not mark the request answered as far as this provider's token endpoint is
-/// concerned: a client polling afterwards is told the request is still pending until it expires. Whatever does
-/// complete a CIBA request on the provider side is its own piece of work, and a test written before that is
-/// understood would either sit for five minutes or assert something untrue.
+/// With that one line supplied, everything else here is the real thing end to end: the request the provider
+/// accepts, the acknowledgement it returns, and the identifier redeeming into tokens under the grant CIBA
+/// section 10.1 names.
 ///
 /// The rules of the waiting - the interval, what <c>slow_down</c> does to it - are proved in the unit suite on
 /// a clock it controls, which is also the only place a provider can be made to answer <c>slow_down</c> on cue.
@@ -150,5 +150,84 @@ public class BackChannelAuthenticationTests : IAsyncLifetime
         Assert.NotEmpty(acknowledgement.AuthenticationRequestId);
         Assert.True(acknowledgement.Lifetime > TimeSpan.Zero);
         Assert.True(acknowledgement.PollingInterval > TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Once the person has answered, the identifier this client kept redeems into tokens about them.
+    /// </summary>
+    /// <remarks>
+    /// The answering is driven from the test rather than waited for, because it is the one part of CIBA that
+    /// belongs to the host rather than to either library. Nothing on the provider's request path marks a
+    /// request answered: the status lives in <c>IBackChannelRequestStorage</c>, and the only production code
+    /// that writes <c>Authenticated</c> runs from <c>IAuthenticationCompletionHandler.CompleteAsync</c>,
+    /// which a host calls when its own out-of-band flow comes back with a yes. That is why returning a
+    /// session from the device handler is not enough, and why an earlier attempt at this test polled for
+    /// five minutes and expired.
+    ///
+    /// No waiting is needed after the completion either: the grant handler evaluates its Authenticated arm
+    /// before the one that would answer <c>slow_down</c>, so a request that has been answered is redeemable
+    /// at once.
+    /// </remarks>
+    [Fact]
+    public async Task AnAnsweredRequestRedeemsIntoTokensForThatPerson()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var client = _fixture.CreateOidcClient(clientId: ClientId);
+
+        var acknowledgement = await AskAsync(client, cancellationToken);
+        await AnswerAsync(acknowledgement.AuthenticationRequestId);
+
+        var tokens = await client.GetRequiredService<ITokenRequestService>()
+            .RedeemAuthenticationRequestAsync(acknowledgement.AuthenticationRequestId, cancellationToken);
+
+        Assert.NotEmpty(tokens.AccessToken);
+        Assert.NotNull(tokens.IdToken);
+    }
+
+    /// <summary>
+    /// The identifier is single-use: a second redemption of an answered request is refused.
+    /// </summary>
+    /// <remarks>
+    /// Without this the test above would pass against a token endpoint that issued tokens to anyone
+    /// presenting any identifier, which is the failure it exists to rule out.
+    /// </remarks>
+    [Fact]
+    public async Task AnIdentifierAlreadyRedeemedIsRefused()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var client = _fixture.CreateOidcClient(clientId: ClientId);
+
+        var acknowledgement = await AskAsync(client, cancellationToken);
+        await AnswerAsync(acknowledgement.AuthenticationRequestId);
+
+        var tokenRequests = client.GetRequiredService<ITokenRequestService>();
+        await tokenRequests.RedeemAuthenticationRequestAsync(
+            acknowledgement.AuthenticationRequestId, cancellationToken);
+
+        var exception = await Assert.ThrowsAsync<TokenRequestException>(
+            () => tokenRequests.RedeemAuthenticationRequestAsync(
+                acknowledgement.AuthenticationRequestId, cancellationToken));
+
+        Assert.NotNull(exception.Error);
+    }
+
+    /// <summary>
+    /// Plays the part of the host: reports that the person said yes.
+    /// </summary>
+    /// <remarks>
+    /// Reaches into the provider's own container because that is where the seam is. The storage is a
+    /// singleton and the completion handler is scoped, so a scope covers both, and both are the very
+    /// instances the live endpoint uses.
+    /// </remarks>
+    private async Task AnswerAsync(string authenticationRequestId)
+    {
+        using var scope = _fixture.Services.CreateScope();
+
+        var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+        var pending = await storage.TryGetAsync(authenticationRequestId);
+        Assert.NotNull(pending);
+
+        await scope.ServiceProvider.GetRequiredService<IAuthenticationCompletionHandler>()
+            .CompleteAsync(authenticationRequestId, pending, TimeSpan.FromMinutes(5));
     }
 }
