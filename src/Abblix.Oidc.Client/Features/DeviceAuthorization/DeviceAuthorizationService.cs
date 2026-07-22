@@ -50,9 +50,9 @@ public sealed class DeviceAuthorizationService(
     public const string HttpClientName = "Abblix.Oidc.Client.DeviceAuthorization";
 
     /// <summary>
-    /// What RFC 8628 section 3.5 adds to the interval each time the provider answers <c>slow_down</c>.
+    /// The waiting itself, which RFC 8628 section 3.5 describes in the same words CIBA does.
     /// </summary>
-    private static readonly TimeSpan SlowDownIncrement = TimeSpan.FromSeconds(5);
+    private readonly GrantPoller _poller = new(timeProvider);
 
     /// <inheritdoc />
     public async Task<DeviceAuthorizationResponse> RequestAsync(
@@ -111,44 +111,12 @@ public sealed class DeviceAuthorizationService(
     }
 
     /// <inheritdoc />
-    public async Task<TokenResponse> WaitForTokensAsync(
+    public Task<TokenResponse> WaitForTokensAsync(
         DeviceAuthorizationResponse authorization, CancellationToken cancellationToken = default)
-    {
-        var interval = authorization.PollingInterval;
-
-        // The deadline is read once, from the lifetime the provider stated, so a device whose user never
-        // answers stops on its own rather than polling until something else stops it.
-        var deadline = timeProvider.GetUtcNow() + authorization.Lifetime;
-
-        while (true)
-        {
-            // Waiting first, not last: RFC 8628 section 3.5 says to wait "before each new request", and the
-            // user has had no time at all at the moment the code was handed over.
-            await Task.Delay(interval, timeProvider, cancellationToken);
-
-            if (deadline <= timeProvider.GetUtcNow())
-                throw new TokenRequestException(
-                    "The device authorization expired before its user authorized it.",
-                    TokenErrorCodes.ExpiredToken,
-                    null);
-
-            try
-            {
-                return await tokenRequestService.RedeemDeviceCodeAsync(
-                    authorization.DeviceCode, cancellationToken);
-            }
-            catch (TokenRequestException refusal) when (refusal.Error == TokenErrorCodes.SlowDown)
-            {
-                // "the interval MUST be increased by 5 seconds for this and all subsequent requests" - so the
-                // increase is kept rather than applied to the next wait alone.
-                interval += SlowDownIncrement;
-            }
-            catch (TokenRequestException refusal) when (refusal.Error == TokenErrorCodes.AuthorizationPending)
-            {
-                // The user is still deciding. Every other refusal, expiry and denial included, is final and
-                // travels out of here untouched: section 3.5 says a client receiving any other error "MUST
-                // stop polling".
-            }
-        }
-    }
+        => _poller.PollAsync(
+            authorization.PollingInterval,
+            authorization.Lifetime,
+            token => tokenRequestService.RedeemDeviceCodeAsync(authorization.DeviceCode, token),
+            "The device authorization expired before its user authorized it.",
+            cancellationToken);
 }
