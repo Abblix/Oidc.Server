@@ -87,6 +87,35 @@ public class AuthorizationDetailsPolicyTests
         Assert.Contains("type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A 'type' member carrying something other than a string is refused in protocol language, not by an
+    /// exception escaping the endpoint.
+    /// </summary>
+    /// <remarks>
+    /// The regression test for an HTTP 500 reachable before authentication: authorization_details is
+    /// carried as schemaless JSON, so this entry survives every earlier shape check, and reading its type
+    /// used to throw straight out of the accessor. RFC 9396 section 5 already names the answer, and the
+    /// entry ends up refused for the same reason a missing type is - it states none.
+    /// The assertion is the refusal rather than the absence of a throw. A test that only required "does
+    /// not throw" would pass just as well against a version that quietly authorized the request with the
+    /// authorization_details dropped, which is the other way this could have been got wrong.
+    /// </remarks>
+    [Theory]
+    [InlineData(123)]
+    [InlineData(true)]
+    public async Task Type_member_of_the_wrong_json_type_yields_failure(object value)
+    {
+        var sp = BuildProvider();
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var raw = new JsonArray(new JsonObject { ["type"] = JsonValue.Create(value) });
+
+        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains("type", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Single_validator_dispatched_by_type_returns_validated_detail()
     {
