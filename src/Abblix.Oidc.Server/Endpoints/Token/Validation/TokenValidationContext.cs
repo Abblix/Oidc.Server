@@ -34,6 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 public record TokenValidationContext(TokenRequest Request, ClientRequest ClientRequest)
 {
     private ClientInfo? _clientInfo;
+    private AuthorizedGrant? _authorizedGrant;
 
     /// <summary>
     /// Information about the client making the request, derived from the client authentication process.
@@ -48,7 +49,22 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
     /// This object is essential for ensuring that the grant is valid and for extracting any additional information
     /// needed for token generation.
     /// </summary>
-    public AuthorizedGrant AuthorizedGrant { get; set; } = null!;
+    /// <remarks>
+    /// Asserted by name rather than sworn to with a null-forgiving initialiser, the way <see cref="ClientInfo"/>
+    /// beside it already is. The two properties are filled by one pipeline and had been expressing the same fact
+    /// in opposite ways, and the readers did not believe the oath: the sender-constraining checks reached this
+    /// through a null-conditional, so an unset grant did not fail - it read as "no binding was committed" and
+    /// waved the request through. That is the wrong direction for a check whose whole purpose is to refuse a
+    /// token redeemed without the key or certificate it was bound to (RFC 9449 section 10, RFC 8705 section 4).
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when trying to access this property before it is set.
+    /// </exception>
+    public AuthorizedGrant AuthorizedGrant
+    {
+        get => _authorizedGrant.NotNull(nameof(AuthorizedGrant));
+        set => _authorizedGrant = value;
+    }
 
     /// <summary>
     /// Defines the scope of access requested or authorized. This array of scope definitions helps in determining
