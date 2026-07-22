@@ -75,12 +75,6 @@ public static class Parameters
     /// <summary>The code a device keeps while its user authorizes it elsewhere (RFC 8628 section 3.4).</summary>
     public const string DeviceCode = "device_code";
 
-    /// <summary>The end-user's own identifier, in the grant RFC 9700 section 2.4 forbids.</summary>
-    public const string Username = "username";
-
-    /// <summary>The end-user's own password, in that same grant.</summary>
-    public const string Password = "password";
-
     /// <summary>What identifies a backchannel authentication request (CIBA section 10.1).</summary>
     public const string AuthenticationRequestId = "auth_req_id";
 }
