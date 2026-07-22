@@ -103,9 +103,10 @@ public class BackChannelAuthenticationGrantHandler(
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.AuthenticationRequestId);
         }
 
-        // Try to retrieve the corresponding backchannel authentication request from storage
-        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
-
+        // Both of these decide from the client's own registered metadata and need nothing from storage, so they
+        // run before the lookup. Ordering them the other way let a request that is refused on configuration
+        // grounds alone still cost a storage round trip, which hands an authenticated client a cheap way to
+        // make the server work: the refusal is free to produce and the lookup is not.
         if (ResolveProcessor(clientInfo) is not { } processor)
             return NotConfiguredForDelivery();
 
@@ -115,6 +116,9 @@ public class BackChannelAuthenticationGrantHandler(
         {
             return accessError;
         }
+
+        // Try to retrieve the corresponding backchannel authentication request from storage
+        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
 
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch

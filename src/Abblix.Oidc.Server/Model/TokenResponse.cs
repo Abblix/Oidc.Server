@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -45,20 +45,27 @@ public record TokenResponse
         public const string AuthorizationDetails = "authorization_details";
     }
 
-    /// <summary>The access token issued by the authorization server.</summary>
+    /// <summary>
+    /// The access token issued by the authorization server.
+    /// REQUIRED by RFC 6749 section 5.1, so it is required here: a successful token response without it is
+    /// not a response this server is allowed to send, and the compiler can say so where the null could not.
+    /// </summary>
     [JsonPropertyName(Parameters.AccessToken)]
     [JsonPropertyOrder(1)]
-    public string AccessToken { get; init; } = null!;
+    public required string AccessToken { get; init; }
 
     /// <summary>The type of the issued token, typically an absolute URI identifying the token type.</summary>
     [JsonPropertyName(Parameters.IssuedTokenType)]
     [JsonPropertyOrder(2)]
     public Uri? IssuedTokenType { get; set; }
 
-    /// <summary>The type of token that is issued, usually 'Bearer'.</summary>
+    /// <summary>
+    /// The type of token that is issued, usually 'Bearer'.
+    /// REQUIRED by RFC 6749 section 5.1.
+    /// </summary>
     [JsonPropertyName(Parameters.TokenType)]
     [JsonPropertyOrder(3)]
-    public string TokenType { get; init; } = null!;
+    public required string TokenType { get; init; }
 
     /// <summary>The lifetime in seconds of the access token.</summary>
     [JsonPropertyName(Parameters.ExpiresIn)]
