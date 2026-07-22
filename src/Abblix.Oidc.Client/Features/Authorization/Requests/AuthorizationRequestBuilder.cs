@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Buffers.Text;
+using System.Globalization;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Pkce;
@@ -69,8 +70,17 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
 
     /// <inheritdoc />
     public async Task<AuthorizationRequest> CreateAsync(
-        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
+        Uri returnUri,
+        AuthorizationRequestParameters? parameters = null,
+        CancellationToken cancellationToken = default)
     {
+        parameters ??= new AuthorizationRequestParameters();
+
+        // First statement of the method on purpose, ahead of the metadata fetch and well ahead of the store.
+        // The store is this client's record of logins it is waiting for, so an entry written for a request
+        // that was never sent leaves a callback slot only someone who did not receive it could fill.
+        RequirePromptIsCoherent(parameters.Prompt);
+
         var metadata = await _metadataProvider.GetMetadataAsync(cancellationToken);
 
         if (metadata.AuthorizationEndpoint is not { } authorizationEndpoint)
@@ -101,7 +111,27 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         // put aside yet.
         await _stateStore.StoreAsync(state, cancellationToken);
 
-        return new AuthorizationRequest(BuildRequestUri(authorizationEndpoint, state, pkce, silent), state);
+        return new AuthorizationRequest(BuildRequestUri(authorizationEndpoint, state, pkce, parameters), state);
+    }
+
+    /// <summary>
+    /// Refuses the one combination of prompt values the specification declares invalid.
+    /// </summary>
+    /// <remarks>
+    /// OIDC Core 1.0 section 3.1.2.1: if the parameter "contains none with any other value, an error is
+    /// returned". Caught here rather than left to the provider, because the provider can only answer after
+    /// the browser has already made the trip, and its answer arrives as a redirect carrying an error the
+    /// user sees. A request this client can tell is malformed before sending should not cost a round trip
+    /// through the user's browser to be refused.
+    /// </remarks>
+    private static void RequirePromptIsCoherent(IReadOnlyCollection<string> prompt)
+    {
+        if (prompt.Count > 1 && prompt.Contains(Prompts.None, StringComparer.Ordinal))
+        {
+            throw new AuthorizationRequestException(
+                $"The prompt values {string.Join(", ", prompt)} cannot be combined: '{Prompts.None}' asks "
+                + "the provider to show nothing, and every other value asks it to show something.");
+        }
     }
 
     /// <summary>
@@ -221,7 +251,7 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         string authorizationEndpoint,
         AuthorizationContext context,
         PkceParameters? pkce,
-        bool silent)
+        AuthorizationRequestParameters requestParameters)
     {
         // The builder carries over whatever the endpoint already has in its query: a provider is free to
         // publish an authorization endpoint with parameters of its own, and dropping them would break it.
@@ -235,12 +265,14 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         parameters[Parameters.RedirectUri] = context.RedirectUri;
         parameters[Parameters.Scope] = string.Join(' ', _options.Scopes);
 
-        // OpenID Connect Session Management 1.0 section 2 asks a client noticing a session change to "first
-        // try a prompt=none request within an iframe to obtain a new ID Token and session state" - a
-        // question rather than a login, which the provider answers from the session it already has or
-        // refuses outright. Sending it any other way would put a login screen inside an invisible frame.
-        if (silent)
-            parameters[Parameters.Prompt] = Prompts.None;
+        // Space-delimited, and the caller's set is sent as given. The session-management frame reaches this
+        // through Prompts.None: OpenID Connect Session Management 1.0 section 2 asks a client noticing a
+        // session change to "first try a prompt=none request within an iframe to obtain a new ID Token and
+        // session state" - a question rather than a login, which the provider answers from the session it
+        // already has or refuses outright. Sending it any other way would put a login screen inside an
+        // invisible frame.
+        if (requestParameters.Prompt.Count > 0)
+            parameters[Parameters.Prompt] = string.Join(' ', requestParameters.Prompt);
         parameters[Parameters.State] = context.State;
 
         // Always sent. It binds an ID Token to this request, and for the flows that return one from the
@@ -267,6 +299,29 @@ public sealed class AuthorizationRequestBuilder : IAuthorizationRequestBuilder
         foreach (var resource in _options.Resources)
             parameters.Add(Parameters.Resource, resource.ToString());
 
+        // Per-request parameters, each sent only when the caller named it. An omitted OpenID Connect request
+        // parameter means "no preference"; a present one with an empty value is a malformed request, so
+        // there is no such thing here as sending an unset member "just in case".
+        // max_age carries seconds, and the whole seconds at that: OIDC Core 1.0 section 3.1.2.1 defines it
+        // as "the allowable elapsed time in seconds", so a caller's fractional TimeSpan has no
+        // representation on the wire and is truncated rather than rounded up, which keeps the request no
+        // weaker than what was asked for.
+        if (requestParameters.MaxAge is { } maxAge)
+            parameters[Parameters.MaxAge] = ((long)maxAge.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+
+        if (requestParameters.AcrValues.Count > 0)
+            parameters[Parameters.AcrValues] = string.Join(' ', requestParameters.AcrValues);
+
+        if (!string.IsNullOrEmpty(requestParameters.LoginHint))
+            parameters[Parameters.LoginHint] = requestParameters.LoginHint;
+
+        if (!string.IsNullOrEmpty(requestParameters.Display))
+            parameters[Parameters.Display] = requestParameters.Display;
+
+        if (!string.IsNullOrEmpty(requestParameters.Claims))
+            parameters[Parameters.Claims] = requestParameters.Claims;
+
+        // Last, so a host can still override anything above through the configured escape hatch.
         foreach (var (name, value) in _options.AdditionalParameters)
             parameters[name] = value;
 

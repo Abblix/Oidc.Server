@@ -68,4 +68,22 @@ public static class Parameters
 
     /// <summary>Which resource the issued access token is meant for (RFC 8707). May repeat.</summary>
     public const string Resource = "resource";
+
+    /// <summary>
+    /// How old the end-user's authentication may be, in seconds. Sending it obliges the provider to state
+    /// <c>auth_time</c> in the ID Token, which is what makes the answer checkable.
+    /// </summary>
+    public const string MaxAge = "max_age";
+
+    /// <summary>Which authentication context classes the client will accept, space-separated.</summary>
+    public const string AcrValues = "acr_values";
+
+    /// <summary>Which login identifier the end-user is expected to use, if the provider needs to ask.</summary>
+    public const string LoginHint = "login_hint";
+
+    /// <summary>How the provider should present its pages.</summary>
+    public const string Display = "display";
+
+    /// <summary>Which claims this login requests, as the JSON object of OIDC Core 1.0 section 5.5.</summary>
+    public const string Claims = "claims";
 }

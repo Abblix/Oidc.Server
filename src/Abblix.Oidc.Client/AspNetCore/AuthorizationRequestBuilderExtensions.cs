@@ -52,7 +52,7 @@ public static class AuthorizationRequestBuilderExtensions
         Uri returnUri,
         CancellationToken cancellationToken = default)
     {
-        var request = await builder.CreateAsync(returnUri, silent: false, cancellationToken);
+        var request = await builder.CreateAsync(returnUri, cancellationToken: cancellationToken);
 
         return Results.Redirect(request.RequestUri.ToString());
     }

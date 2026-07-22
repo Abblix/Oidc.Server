@@ -261,7 +261,9 @@ public class OidcClientTests
     private sealed class UnusedRequestBuilder : IAuthorizationRequestBuilder
     {
         public Task<AuthorizationRequest> CreateAsync(
-            Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
+            Uri returnUri,
+            AuthorizationRequestParameters? parameters = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

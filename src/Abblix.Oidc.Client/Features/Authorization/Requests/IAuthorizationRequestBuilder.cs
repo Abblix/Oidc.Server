@@ -48,9 +48,16 @@ public interface IAuthorizationRequestBuilder
     /// absolute for the mirror-image reason: the browser resolves that one while it is still on the
     /// provider's page, so a relative value would point back into the provider's site.
     /// </remarks>
-    /// <param name="silent">
-    /// Whether the provider must answer without interacting with the end-user, sent as <c>prompt=none</c>.
+    /// <param name="parameters">
+    /// What this particular login asks of the provider: the assurance it demands, the account it hints at,
+    /// how the provider should present itself. Omitted entirely when the caller asks for nothing special.
+    /// A silent request, the one that must be answered without interacting with the end-user, is expressed
+    /// here as <see cref="Prompts.None"/> in <see cref="AuthorizationRequestParameters.Prompt"/>. It used to
+    /// be a separate flag on this method, and it was folded in so that there are not two ways to set one
+    /// request parameter, which could then disagree.
     /// </param>
     Task<AuthorizationRequest> CreateAsync(
-        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default);
+        Uri returnUri,
+        AuthorizationRequestParameters? parameters = null,
+        CancellationToken cancellationToken = default);
 }

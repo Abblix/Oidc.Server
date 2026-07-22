@@ -116,7 +116,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         await using var client = fixture.CreateOidcClient();
 
         var request = await client.GetRequiredService<IAuthorizationRequestBuilder>()
-            .CreateAsync(new Uri("/home", UriKind.Relative), silent: false, cancellationToken);
+            .CreateAsync(new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
@@ -228,7 +228,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
     {
         var request = await client.GetRequiredService<IOidcClient>()
             .CreateAuthorizationRequestAsync(
-                new Uri("/home", UriKind.Relative), silent: false, cancellationToken);
+                new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
@@ -280,7 +280,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
 
         var request = await client.GetRequiredService<IOidcClient>()
             .CreateAuthorizationRequestAsync(
-                new Uri("/home", UriKind.Relative), silent: true, cancellationToken);
+                new Uri("/home", UriKind.Relative), new AuthorizationRequestParameters { Prompt = [Prompts.None] }, cancellationToken);
 
         Assert.Contains("prompt=none", request.RequestUri.Query, StringComparison.Ordinal);
 

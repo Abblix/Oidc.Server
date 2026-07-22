@@ -118,7 +118,7 @@ public class EncryptedIdentityTokenTests : IAsyncLifetime
         ServiceProvider client, CancellationToken cancellationToken)
     {
         var request = await client.GetRequiredService<IAuthorizationRequestBuilder>()
-            .CreateAsync(new Uri("/home", UriKind.Relative), silent: false, cancellationToken);
+            .CreateAsync(new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
 
         using var browser = _fixture.CreateBrowser();
         using var response = await browser.GetAsync(request.RequestUri, cancellationToken);

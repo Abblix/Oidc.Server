@@ -67,8 +67,10 @@ public sealed class OidcClient(
 {
     /// <inheritdoc />
     public Task<AuthorizationRequest> CreateAuthorizationRequestAsync(
-        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default)
-        => requestBuilder.CreateAsync(returnUri, silent, cancellationToken);
+        Uri returnUri,
+        AuthorizationRequestParameters? parameters = null,
+        CancellationToken cancellationToken = default)
+        => requestBuilder.CreateAsync(returnUri, parameters, cancellationToken);
 
     /// <inheritdoc />
     public async Task<CompletedSignIn> HandleCallbackAsync(

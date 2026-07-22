@@ -36,5 +36,30 @@ public static class Prompts
     /// <summary>
     /// The provider must not display any interface, and answers from the session it already has or refuses.
     /// </summary>
+    /// <remarks>
+    /// The one value that does not combine. OIDC Core 1.0 section 3.1.2.1: if the parameter "contains none
+    /// with any other value, an error is returned" - which stands to reason, since every other value asks
+    /// the provider to show something.
+    /// </remarks>
     public const string None = "none";
+
+    /// <summary>
+    /// The provider must authenticate the end user again, even if a session is already established.
+    /// </summary>
+    /// <remarks>
+    /// Not the same as <see cref="AuthorizationRequestParameters.MaxAge"/>, which asks how recent the
+    /// existing authentication must be and leaves the provider to decide whether it qualifies. This demands
+    /// a fresh one outright.
+    /// </remarks>
+    public const string Login = "login";
+
+    /// <summary>
+    /// The provider must ask the end user to consent again before returning to this client.
+    /// </summary>
+    public const string Consent = "consent";
+
+    /// <summary>
+    /// The provider must let the end user pick an account, rather than continuing with the current one.
+    /// </summary>
+    public const string SelectAccount = "select_account";
 }

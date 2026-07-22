@@ -88,7 +88,7 @@ public class AuthorizationRequestBuilderTests
     public async Task CarriesTheParametersOfTheCodeFlow()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -107,7 +107,7 @@ public class AuthorizationRequestBuilderTests
     public async Task SendsTheStateAndNonceItPutAside()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -125,7 +125,7 @@ public class AuthorizationRequestBuilderTests
     public async Task TheChallengeSentMatchesTheVerifierKept()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var expectedChallenge = System.Buffers.Text.Base64Url.EncodeToString(
             System.Security.Cryptography.SHA256.HashData(
@@ -143,8 +143,8 @@ public class AuthorizationRequestBuilderTests
     {
         var builder = CreateBuilder(Metadata(), CreateStateStore());
 
-        var first = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
-        var second = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+        var first = await builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
+        var second = await builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEqual(first.Context.State, second.Context.State);
         Assert.NotEqual(first.Context.Nonce, second.Context.Nonce);
@@ -161,7 +161,7 @@ public class AuthorizationRequestBuilderTests
         var store = CreateStateStore();
 
         var request = await CreateBuilder(Metadata(), store)
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var stored = await store.FindAsync(request.Context.State, TestContext.Current.CancellationToken);
         Assert.NotNull(stored);
@@ -179,7 +179,7 @@ public class AuthorizationRequestBuilderTests
             Metadata(codeChallengeMethods: [CodeChallengeMethods.Plain]), CreateStateStore());
 
         var exception = await Assert.ThrowsAsync<PkceException>(
-            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Contains(CodeChallengeMethods.S256, exception.Message);
     }
@@ -192,7 +192,7 @@ public class AuthorizationRequestBuilderTests
     public async Task ProceedsWhenTheProviderAdvertisesNoMethods()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(CodeChallengeMethods.S256, QueryOf(request.RequestUri)[Parameters.CodeChallengeMethod]);
     }
@@ -210,7 +210,7 @@ public class AuthorizationRequestBuilderTests
             new Uri("https://api.example.com/billing"),
         ]);
 
-        var request = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+        var request = await builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var resources = HttpUtility.ParseQueryString(request.RequestUri.Query).GetValues(Parameters.Resource);
         Assert.NotNull(resources);
@@ -229,7 +229,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(
             Metadata(authorizationEndpoint: $"{Issuer}/authorize?tenant=acme"), CreateStateStore());
 
-        var request = await builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+        var request = await builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("acme", QueryOf(request.RequestUri)["tenant"]);
     }
@@ -243,7 +243,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(Metadata(authorizationEndpoint: null), CreateStateStore());
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -271,7 +271,7 @@ public class AuthorizationRequestBuilderTests
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
             () => builder.CreateAsync(
-                new Uri(returnUri, UriKind.RelativeOrAbsolute), silent: false, TestContext.Current.CancellationToken));
+                new Uri(returnUri, UriKind.RelativeOrAbsolute), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -286,7 +286,7 @@ public class AuthorizationRequestBuilderTests
         var builder = CreateBuilder(Metadata(), CreateStateStore());
 
         var request = await builder.CreateAsync(
-            new Uri(returnUri, UriKind.Relative), silent: false, TestContext.Current.CancellationToken);
+            new Uri(returnUri, UriKind.Relative), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(returnUri, request.Context.ReturnUri);
     }
@@ -311,7 +311,7 @@ public class AuthorizationRequestBuilderTests
             options => options.RedirectUri = new Uri("/signin-oidc", UriKind.Relative));
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -334,7 +334,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, QueryOf(request.RequestUri)[Parameters.ResponseType]);
     }
@@ -359,7 +359,7 @@ public class AuthorizationRequestBuilderTests
         });
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -377,7 +377,7 @@ public class AuthorizationRequestBuilderTests
         });
 
         await Assert.ThrowsAsync<AuthorizationRequestException>(
-            () => builder.CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken));
+            () => builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -388,7 +388,7 @@ public class AuthorizationRequestBuilderTests
     public async Task TheCodeFlowNeedsNoAcceptanceAndSendsNoResponseMode()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -409,7 +409,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(ResponseModes.FormPost, QueryOf(request.RequestUri)[Parameters.ResponseMode]);
     }
@@ -429,7 +429,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -453,7 +453,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var query = QueryOf(request.RequestUri);
 
@@ -478,7 +478,7 @@ public class AuthorizationRequestBuilderTests
                 options.FrontChannelTokensAccepted = true;
                 options.ResponseMode = ResponseModes.FormPost;
             })
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(QueryOf(request.RequestUri)[Parameters.Nonce]);
     }
@@ -490,7 +490,7 @@ public class AuthorizationRequestBuilderTests
     public async Task AnOrdinaryRequestDoesNotConstrainThePrompt()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: false, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(QueryOf(request.RequestUri).ContainsKey("prompt"));
     }
@@ -504,8 +504,98 @@ public class AuthorizationRequestBuilderTests
     public async Task ASilentRequestForbidsInteraction()
     {
         var request = await CreateBuilder(Metadata(), CreateStateStore())
-            .CreateAsync(ReturnUri, silent: true, TestContext.Current.CancellationToken);
+            .CreateAsync(ReturnUri, new AuthorizationRequestParameters { Prompt = [Prompts.None] }, TestContext.Current.CancellationToken);
 
         Assert.Equal("none", QueryOf(request.RequestUri)["prompt"]);
     }
+
+    /// <summary>
+    /// Everything the caller names for one login reaches the provider, in the encoding the specification
+    /// gives each parameter.
+    /// </summary>
+    /// <remarks>
+    /// The encodings are the point, not the presence: OIDC Core 1.0 section 3.1.2.1 sends <c>max_age</c> as
+    /// "the allowable elapsed time in seconds" and both <c>acr_values</c> and <c>prompt</c> space-separated,
+    /// so a client that shipped a TimeSpan's own formatting or a comma-joined list would be sending
+    /// something the provider cannot read while looking entirely correct from this side.
+    /// </remarks>
+    [Fact]
+    public async Task EveryRequestedParameterReachesTheProvider()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore()).CreateAsync(
+            ReturnUri,
+            new AuthorizationRequestParameters
+            {
+                MaxAge = TimeSpan.FromMinutes(5),
+                AcrValues = ["urn:mace:incommon:iap:silver", "urn:mace:incommon:iap:bronze"],
+                LoginHint = "someone@example.com",
+                Display = Displays.Popup,
+                Prompt = [Prompts.Login, Prompts.Consent],
+                Claims = """{"id_token":{"auth_time":{"essential":true}}}""",
+            },
+            TestContext.Current.CancellationToken);
+
+        var query = QueryOf(request.RequestUri);
+
+        Assert.Equal("300", query[Parameters.MaxAge]);
+        Assert.Equal("urn:mace:incommon:iap:silver urn:mace:incommon:iap:bronze", query[Parameters.AcrValues]);
+        Assert.Equal("someone@example.com", query[Parameters.LoginHint]);
+        Assert.Equal("popup", query[Parameters.Display]);
+        Assert.Equal("login consent", query[Parameters.Prompt]);
+        Assert.Equal("""{"id_token":{"auth_time":{"essential":true}}}""", query[Parameters.Claims]);
+    }
+
+    /// <summary>
+    /// A caller that names nothing sends nothing: an unset member is a parameter absent from the request,
+    /// not a parameter present and empty.
+    /// </summary>
+    /// <remarks>
+    /// The distinction is the provider's to act on. An omitted parameter means "no preference", while a
+    /// present one carrying an empty value is a malformed request, and the two are a single careless
+    /// <c>ToString</c> apart on this side.
+    /// </remarks>
+    [Fact]
+    public async Task ParametersTheCallerDidNotNameAreAbsentEntirely()
+    {
+        var request = await CreateBuilder(Metadata(), CreateStateStore())
+            .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
+
+        var query = QueryOf(request.RequestUri);
+
+        Assert.False(query.ContainsKey(Parameters.MaxAge));
+        Assert.False(query.ContainsKey(Parameters.AcrValues));
+        Assert.False(query.ContainsKey(Parameters.LoginHint));
+        Assert.False(query.ContainsKey(Parameters.Display));
+        Assert.False(query.ContainsKey(Parameters.Claims));
+        Assert.False(query.ContainsKey(Parameters.Prompt));
+    }
+
+    /// <summary>
+    /// Asking the provider to show nothing and to show something is refused here, before the user makes the
+    /// trip.
+    /// </summary>
+    /// <remarks>
+    /// OIDC Core 1.0 section 3.1.2.1: if the parameter "contains none with any other value, an error is
+    /// returned". So the request is invalid either way; the only question is who says so. Letting the
+    /// provider answer costs a redirect through the user's browser and surfaces as an error page, while the
+    /// client can tell from the request alone.
+    /// </remarks>
+    [Theory]
+    [InlineData(Prompts.Login)]
+    [InlineData(Prompts.Consent)]
+    [InlineData(Prompts.SelectAccount)]
+    public async Task CombiningNoneWithAnythingElseIsRefused(string other)
+    {
+        var builder = CreateBuilder(Metadata(), CreateStateStore());
+
+        var error = await Assert.ThrowsAsync<AuthorizationRequestException>(
+            () => builder.CreateAsync(
+                ReturnUri,
+                new AuthorizationRequestParameters { Prompt = [Prompts.None, other] },
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains(Prompts.None, error.Message, StringComparison.Ordinal);
+        Assert.Contains(other, error.Message, StringComparison.Ordinal);
+    }
+
 }

@@ -47,14 +47,20 @@ public interface IOidcClient
     /// <param name="returnUri">
     /// Where the user was heading, relative to this application, so the login can put them back there.
     /// </param>
-    /// <param name="silent">
-    /// Whether the provider must answer without showing anything to the end-user, sent as <c>prompt=none</c>.
-    /// This is how OpenID Connect Session Management 1.0 section 2 has a client re-check a session it was
-    /// told had changed: the request goes in an invisible frame, so a login screen must not appear in it.
+    /// <param name="parameters">
+    /// What this particular login asks of the provider: how recent the authentication must be, which
+    /// assurance it must carry, which account to hint at, how the provider should present itself. Omitted
+    /// entirely when the caller asks for nothing special.
+    /// A silent request goes here too, as <see cref="Prompts.None"/> in
+    /// <see cref="AuthorizationRequestParameters.Prompt"/>. This is how OpenID Connect Session Management
+    /// 1.0 section 2 has a client re-check a session it was told had changed: the request goes in an
+    /// invisible frame, so a login screen must not appear in it.
     /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     Task<AuthorizationRequest> CreateAuthorizationRequestAsync(
-        Uri returnUri, bool silent = false, CancellationToken cancellationToken = default);
+        Uri returnUri,
+        AuthorizationRequestParameters? parameters = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Finishes the login the given callback belongs to.
