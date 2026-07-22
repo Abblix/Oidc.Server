@@ -548,22 +548,37 @@ internal class JsonWebTokenValidator(
         JsonWebToken token, ValidationParameters parameters)
     {
         var issuer = token.Payload.Issuer;
-        if (issuer != null)
-        {
-            if (parameters.Options.HasAnyFlag(ValidationOptions.RequireIssuer | ValidationOptions.ValidateIssuer))
-            {
-                var validateIssuer = parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer));
 
-                if (!await validateIssuer(issuer))
-                    return new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
-            }
-        }
-        else if (parameters.Options.HasFlag(ValidationOptions.RequireIssuer))
+        if (issuer is null)
         {
-            return new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload");
+            return parameters.Options.HasFlag(ValidationOptions.RequireIssuer)
+                ? new JwtValidationError(JwtError.InvalidToken, "Missing issuer in JWT payload")
+                : token;
         }
 
-        return token;
+        // Presence and validity are separate questions gated by separate flags, the same split
+        // ValidateLifetime and RequireExpirationTime already use: RequireIssuer says iss has to be there,
+        // ValidateIssuer says the one that is there must satisfy the caller's delegate. Reading either flag
+        // as "run the delegate" made the documented use of RequireIssuer on its own throw instead of
+        // validating.
+        if (!parameters.Options.HasFlag(ValidationOptions.ValidateIssuer))
+            return token;
+
+        // The same category of mismatch as a missing key resolver, and answered the same way: the caller
+        // asked for the issuer to be checked and wired nothing to check it with, which is a misconfiguration
+        // this token cannot survive - but it is the token that fails, not the process. An
+        // InvalidOperationException here would reach the host as a 500 on a request that deserves a refusal.
+        if (parameters.ValidateIssuer is not { } validateIssuer)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"No issuer validator configured: {nameof(ValidationOptions.ValidateIssuer)} is set but "
+                + $"{nameof(ValidationParameters.ValidateIssuer)} was not supplied.");
+        }
+
+        return await validateIssuer(issuer)
+            ? token
+            : new JwtValidationError(JwtError.InvalidToken, $"Invalid issuer: {issuer}");
     }
 
     /// <summary>
@@ -574,20 +589,29 @@ internal class JsonWebTokenValidator(
     {
         var audiencesList = token.Payload.Audiences.ToList();
 
-        if (parameters.Options.HasFlag(ValidationOptions.RequireAudience) && audiencesList.Count == 0)
-            return new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload");
-
-        if (parameters.Options.HasAnyFlag(ValidationOptions.RequireAudience | ValidationOptions.ValidateAudience) && audiencesList.Count > 0)
+        if (audiencesList.Count == 0)
         {
-            var validateAudience = parameters.ValidateAudience.NotNull(nameof(parameters.ValidateAudience));
-            if (!await validateAudience(audiencesList))
-            {
-                return new JwtValidationError(
-                    JwtError.InvalidToken, $"Invalid audience: {string.Join(", ", audiencesList)}");
-            }
+            return parameters.Options.HasFlag(ValidationOptions.RequireAudience)
+                ? new JwtValidationError(JwtError.InvalidToken, "Missing audience in JWT payload")
+                : token;
         }
 
-        return token;
+        // The same split as the issuer above, and corrected in the same change because it was the same
+        // defect one method down: requiring aud to be present said nothing about who may check it.
+        if (!parameters.Options.HasFlag(ValidationOptions.ValidateAudience))
+            return token;
+
+        if (parameters.ValidateAudience is not { } validateAudience)
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"No audience validator configured: {nameof(ValidationOptions.ValidateAudience)} is set but "
+                + $"{nameof(ValidationParameters.ValidateAudience)} was not supplied.");
+        }
+
+        return await validateAudience(audiencesList)
+            ? token
+            : new JwtValidationError(JwtError.InvalidToken, $"Invalid audience: {string.Join(", ", audiencesList)}");
     }
 
     /// <summary>
