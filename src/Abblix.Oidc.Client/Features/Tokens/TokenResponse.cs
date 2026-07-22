@@ -75,6 +75,18 @@ public sealed record TokenResponse
     public string? Scope { get; init; }
 
     /// <summary>
+    /// What kind of token was issued, named by one of the RFC 8693 section 3 identifiers.
+    /// </summary>
+    /// <remarks>
+    /// REQUIRED of a token exchange response by RFC 8693 section 2.2.1 and absent from every other grant,
+    /// which is why it is nullable here: the marker binds the provider on one response, not this client on
+    /// all of them. Read it rather than assuming, because a provider is free to issue a kind other than the
+    /// one asked for, and <c>token_type</c> then reads <c>N_A</c>.
+    /// </remarks>
+    [JsonPropertyName("issued_token_type")]
+    public string? IssuedTokenType { get; init; }
+
+    /// <summary>
     /// Members of the response this client does not model, kept so a paid layer or a host can read a value
     /// the base client has no opinion about.
     /// </summary>

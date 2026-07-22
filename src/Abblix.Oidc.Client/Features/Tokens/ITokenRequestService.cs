@@ -73,4 +73,24 @@ public interface ITokenRequestService
     /// </remarks>
     Task<TokenResponse> RequestClientCredentialsAsync(
         IReadOnlyCollection<string>? scopes = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Presents one token and asks for another in its place (RFC 8693).
+    /// </summary>
+    /// <param name="exchange">What the exchange asks for.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>
+    /// The provider's answer. What was issued is named by <see cref="TokenResponse.IssuedTokenType"/>, and
+    /// it need not be what was asked for: RFC 8693 section 2.2.1 carries the issued token in
+    /// <c>access_token</c> whatever its kind, with <c>token_type</c> reading <c>N_A</c> when the kind is not
+    /// one that gets presented to a resource.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// An actor token was given without saying what kind it is, or the other way round. RFC 8693 section 2.1
+    /// requires the type alongside the token and forbids it otherwise, so the request is refused here rather
+    /// than after a round trip.
+    /// </exception>
+    /// <exception cref="TokenRequestException">The provider refused, or could not be reached.</exception>
+    Task<TokenResponse> ExchangeTokenAsync(
+        TokenExchangeParameters exchange, CancellationToken cancellationToken = default);
 }

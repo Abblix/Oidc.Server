@@ -38,4 +38,9 @@ public static class GrantTypes
     /// Asking for a token on the client's own behalf, with no user involved (RFC 6749 section 4.4).
     /// </summary>
     public const string ClientCredentials = "client_credentials";
+
+    /// <summary>
+    /// Presenting one token to be given another (RFC 8693 section 2.1).
+    /// </summary>
+    public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";
 }

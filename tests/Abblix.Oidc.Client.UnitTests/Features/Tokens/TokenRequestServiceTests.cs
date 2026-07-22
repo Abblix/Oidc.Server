@@ -276,4 +276,119 @@ public class TokenRequestServiceTests
         Assert.Equal(GrantTypes.ClientCredentials, form["grant_type"]);
         Assert.False(form.ContainsKey("scope"));
     }
+
+    /// <summary>
+    /// A token exchange sends the presented token with the type it was declared to be, and nothing about an
+    /// actor when none was named.
+    /// </summary>
+    [Fact]
+    public async Task ExchangeSendsTheSubjectTokenAndItsType()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await CreateService(handler).ExchangeTokenAsync(
+            new TokenExchangeParameters
+            {
+                SubjectToken = "the-subject-token",
+                SubjectTokenType = TokenExchangeTokenTypes.AccessToken,
+            },
+            TestContext.Current.CancellationToken);
+
+        var form = FormOf(handler.LastRequestBody!);
+        Assert.Equal(GrantTypes.TokenExchange, form["grant_type"]);
+        Assert.Equal("the-subject-token", form["subject_token"]);
+        Assert.Equal(TokenExchangeTokenTypes.AccessToken, form["subject_token_type"]);
+        Assert.False(form.ContainsKey("actor_token"));
+        Assert.False(form.ContainsKey("actor_token_type"));
+    }
+
+    /// <summary>
+    /// Each target service named by address travels as its own <c>resource</c> parameter, and each named
+    /// logically as its own <c>audience</c>.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8693 section 2.1 allows both more than once, so joining them would be the failure that looks
+    /// right from here and names a service nobody has from the provider's side. Asserted against the raw
+    /// body rather than the parsed form, because parsing collapses repeats into one comma-joined value and
+    /// would pass either way.
+    /// </remarks>
+    [Fact]
+    public async Task ExchangeRepeatsEachTargetRatherThanJoiningThem()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await CreateService(handler).ExchangeTokenAsync(
+            new TokenExchangeParameters
+            {
+                SubjectToken = "the-subject-token",
+                SubjectTokenType = TokenExchangeTokenTypes.AccessToken,
+                Resources = [new Uri("https://api.example.com/orders"), new Uri("https://api.example.com/billing")],
+                Audiences = ["orders-service", "billing-service"],
+            },
+            TestContext.Current.CancellationToken);
+
+        var body = handler.LastRequestBody!;
+        Assert.Contains("resource=https%3A%2F%2Fapi.example.com%2Forders", body);
+        Assert.Contains("resource=https%3A%2F%2Fapi.example.com%2Fbilling", body);
+        Assert.Contains("audience=orders-service", body);
+        Assert.Contains("audience=billing-service", body);
+    }
+
+    /// <summary>
+    /// An actor token travels with its type, and the scopes asked for are space-delimited.
+    /// </summary>
+    [Fact]
+    public async Task ExchangeSendsTheActorTokenWithItsType()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await CreateService(handler).ExchangeTokenAsync(
+            new TokenExchangeParameters
+            {
+                SubjectToken = "the-subject-token",
+                SubjectTokenType = TokenExchangeTokenTypes.AccessToken,
+                ActorToken = "the-actor-token",
+                ActorTokenType = TokenExchangeTokenTypes.Jwt,
+                RequestedTokenType = TokenExchangeTokenTypes.AccessToken,
+                Scopes = ["orders.read", "orders.write"],
+            },
+            TestContext.Current.CancellationToken);
+
+        var form = FormOf(handler.LastRequestBody!);
+        Assert.Equal("the-actor-token", form["actor_token"]);
+        Assert.Equal(TokenExchangeTokenTypes.Jwt, form["actor_token_type"]);
+        Assert.Equal(TokenExchangeTokenTypes.AccessToken, form["requested_token_type"]);
+        Assert.Equal("orders.read orders.write", form["scope"]);
+    }
+
+    /// <summary>
+    /// An actor token without its type is refused before anything is sent, and so is a type without a token.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8693 section 2.1 requires the type alongside the token and forbids it otherwise, so both are
+    /// malformed requests the provider would reject. Catching them here costs a round trip less, and the
+    /// second case is the one worth having: a caller that sets only the type believes it is delegating and
+    /// would otherwise be silently impersonating instead.
+    /// </remarks>
+    [Theory]
+    [InlineData("the-actor-token", null)]
+    [InlineData(null, TokenExchangeTokenTypes.Jwt)]
+    public async Task ExchangeRefusesAnActorTokenAndTypeThatDoNotComeTogether(
+        string? actorToken, string? actorTokenType)
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => CreateService(handler).ExchangeTokenAsync(
+                new TokenExchangeParameters
+                {
+                    SubjectToken = "the-subject-token",
+                    SubjectTokenType = TokenExchangeTokenTypes.AccessToken,
+                    ActorToken = actorToken,
+                    ActorTokenType = actorTokenType,
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequestBody);
+    }
 }

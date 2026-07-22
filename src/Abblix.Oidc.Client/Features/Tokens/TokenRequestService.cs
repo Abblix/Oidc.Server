@@ -74,6 +74,7 @@ public sealed class TokenRequestService : ITokenRequestService
                 // client.
                 ["redirect_uri"] = redirectUri,
             },
+            [],
             cancellationToken);
 
     /// <inheritdoc />
@@ -85,6 +86,7 @@ public sealed class TokenRequestService : ITokenRequestService
                 ["grant_type"] = GrantTypes.RefreshToken,
                 ["refresh_token"] = refreshToken,
             },
+            [],
             cancellationToken);
 
     /// <inheritdoc />
@@ -101,11 +103,64 @@ public sealed class TokenRequestService : ITokenRequestService
         if (scopes is { Count: > 0 })
             parameters["scope"] = string.Join(' ', scopes);
 
-        return PostAsync(parameters, cancellationToken);
+        return PostAsync(parameters, [], cancellationToken);
     }
 
+    /// <inheritdoc />
+    public Task<TokenResponse> ExchangeTokenAsync(
+        TokenExchangeParameters exchange, CancellationToken cancellationToken = default)
+    {
+        // RFC 8693 section 2.1 requires actor_token_type when actor_token is present and forbids it when it
+        // is absent. Both halves are checked, because sending a type for a token that is not there is the
+        // same mistake read from the other end: the caller believes it is delegating and is not.
+        if ((exchange.ActorToken is null) != (exchange.ActorTokenType is null))
+            throw new ArgumentException(
+                "An actor token and its type go together: RFC 8693 section 2.1 requires actor_token_type "
+                + "when actor_token is present, and forbids it otherwise.",
+                nameof(exchange));
+
+        var parameters = new Dictionary<string, string>
+        {
+            ["grant_type"] = GrantTypes.TokenExchange,
+            ["subject_token"] = exchange.SubjectToken,
+            ["subject_token_type"] = exchange.SubjectTokenType,
+        };
+
+        if (exchange.ActorToken is { } actorToken)
+        {
+            parameters["actor_token"] = actorToken;
+            parameters["actor_token_type"] = exchange.ActorTokenType!;
+        }
+
+        if (exchange.RequestedTokenType is { } requestedTokenType)
+            parameters["requested_token_type"] = requestedTokenType;
+
+        if (exchange.Scopes is { Count: > 0 })
+            parameters["scope"] = string.Join(' ', exchange.Scopes);
+
+        // resource and audience may each be given more than once, and the specification says so in as many
+        // words. Joining them into one value would name a service nobody has.
+        var repeated = exchange.Resources
+            .Select(resource => new KeyValuePair<string, string>("resource", resource.AbsoluteUri))
+            .Concat(exchange.Audiences.Select(audience => new KeyValuePair<string, string>("audience", audience)))
+            .ToArray();
+
+        return PostAsync(parameters, repeated, cancellationToken);
+    }
+
+    /// <param name="parameters">
+    /// The single-valued form parameters. Passed as a dictionary because the credentials presenter adds this
+    /// client's own to it, and adding a credential twice is not something to leave possible.
+    /// </param>
+    /// <param name="repeated">
+    /// Parameters a specification allows more than once, which no dictionary can hold. Appended after the
+    /// credentials so that what is presented cannot be displaced by a caller's value.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the call.</param>
     private async Task<TokenResponse> PostAsync(
-        Dictionary<string, string> parameters, CancellationToken cancellationToken)
+        Dictionary<string, string> parameters,
+        IReadOnlyCollection<KeyValuePair<string, string>> repeated,
+        CancellationToken cancellationToken)
     {
         var metadata = await _metadataProvider.GetMetadataAsync(cancellationToken);
 
@@ -116,7 +171,7 @@ public sealed class TokenRequestService : ITokenRequestService
 
         using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
         _credentialsPresenter.Present(request, parameters);
-        request.Content = new FormUrlEncodedContent(parameters);
+        request.Content = new FormUrlEncodedContent(parameters.Concat(repeated));
 
         HttpResponseMessage response;
         try

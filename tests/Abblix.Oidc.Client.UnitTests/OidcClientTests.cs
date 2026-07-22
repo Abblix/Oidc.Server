@@ -90,9 +90,14 @@ public class OidcClientTests
             string refreshToken, CancellationToken cancellationToken = default)
             => Task.FromResult(response);
 
-        // The facade composes user-facing operations, and this grant has no user, so nothing here reaches it.
+        // The facade composes the operations of a login, and neither of these belongs to one: the first has
+        // no user at all, the second starts from a token a login already produced. Nothing here reaches them.
         public Task<TokenResponse> RequestClientCredentialsAsync(
             IReadOnlyCollection<string>? scopes = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TokenResponse> ExchangeTokenAsync(
+            TokenExchangeParameters exchange, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 
