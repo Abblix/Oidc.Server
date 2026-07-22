@@ -81,6 +81,19 @@ public class DiscoverySignedMetadataTests
     }
 
     /// <summary>
+    /// The smallest handler output the formatter will accept: the four members OpenID Connect Discovery 1.0
+    /// section 3 marks REQUIRED, and nothing else. These tests are about the signed_metadata field, so every
+    /// other field is left absent on purpose.
+    /// </summary>
+    private static EndpointResponse MinimalResponse() => new()
+    {
+        Issuer = Issuer,
+        ResponseTypesSupported = ["code"],
+        IdTokenSigningAlgValuesSupported = ["RS256"],
+        SubjectTypesSupported = ["public"],
+    };
+
+    /// <summary>
     /// When the opt-in flag is off, the discovery document carries no <c>signed_metadata</c>
     /// and the signing pipeline is never touched (safe-by-default).
     /// </summary>
@@ -89,7 +102,7 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = false;
 
-        var result = await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(result.Value);
         Assert.Null(result.Value.SignedMetadata);
@@ -101,7 +114,7 @@ public class DiscoverySignedMetadataTests
 
     /// <summary>
     /// When enabled, the field carries the JWS produced by the creator, and the token is
-    /// issued as a pure JWS — no encryption key is passed even though a deployment may have
+    /// issued as a pure JWS - no encryption key is passed even though a deployment may have
     /// encryption keys, so the result stays verifiable against <c>jwks_uri</c>.
     /// </summary>
     [Fact]
@@ -118,7 +131,7 @@ public class DiscoverySignedMetadataTests
                 (_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(SignedJws);
 
-        var result = await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.Equal(SignedJws, result.Value!.SignedMetadata);
         Assert.Null(capturedEncryptionKey);
@@ -142,7 +155,7 @@ public class DiscoverySignedMetadataTests
             .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
             .ReturnsAsync(SignedJws);
 
-        await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(capturedToken);
         var payload = capturedToken!.Payload.Json;
@@ -168,6 +181,6 @@ public class DiscoverySignedMetadataTests
         _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer }));
+            () => _formatter.FormatResponseAsync(MinimalResponse()));
     }
 }

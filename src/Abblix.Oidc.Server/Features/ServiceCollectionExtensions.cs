@@ -587,13 +587,13 @@ public static class ServiceCollectionExtensions
         // This service is optional - if not registered, long-polling will be disabled
         services.TryAddSingleton<IBackChannelLongPollingService>(sp =>
         {
-            var options = sp.GetRequiredService<IOptions<OidcOptions>>();
-            if (options.Value.BackChannelAuthentication.UseLongPolling)
-            {
-                var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
-                return new InMemoryLongPollingService(logger);
-            }
-            return null!;
+            // Registered whatever the long-polling setting says. A factory that answers null publishes a
+            // false non-null through the container: a consumer resolving it normally receives the null it
+            // was promised was absent, an enumeration yields a null element, and GetRequiredService reports
+            // the service as unregistered while a descriptor for it plainly exists. Constructing it when it
+            // will not be used costs one object; the alternative costs a diagnosis.
+            var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
+            return new InMemoryLongPollingService(logger);
         });
 
         // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime

@@ -27,12 +27,27 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 /// Contains provider capabilities, supported features, and cryptographic algorithms,
 /// but excludes endpoint URLs which are framework-specific.
 /// </summary>
+/// <remarks>
+/// Each member's C# nullability mirrors what OpenID Connect Discovery 1.0 section 3 says about the corresponding
+/// metadata field, so that the compiler asks of a handler exactly what the specification asks of a provider.
+/// The four fields that section marks REQUIRED are <c>required</c> here; everything else is nullable, because
+/// RECOMMENDED and OPTIONAL fields are legitimately absent and <c>null</c> is how this type says "not stated"
+/// (the wire model omits nulls entirely). Several of the optional ones carry a default that applies precisely
+/// when the field is omitted, so omission is an answer rather than a gap: <c>grant_types_supported</c> defaults
+/// to authorization code and implicit, <c>response_modes_supported</c> to query and fragment, and
+/// <c>token_endpoint_auth_methods_supported</c> to client_secret_basic.
+/// Before this, all eleven were declared non-nullable with a null-forgiving initialiser, which swore they were
+/// always present while nothing enforced it. A custom <see cref="IConfigurationHandler"/> that left one out
+/// produced no error at all: the null travelled into the wire model, whose null-omitting serialisation dropped
+/// the field, so a discovery document could silently ship without a REQUIRED member and answer 200.
+/// </remarks>
 public record ConfigurationResponse
 {
 	/// <summary>
 	/// The issuer identifier, which uniquely identifies the OpenID Provider.
+	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public string Issuer { init; get; } = null!;
+	public required string Issuer { init; get; }
 
 	/// <summary>
 	/// Indicates whether the OpenID Provider supports front channel logout.
@@ -61,33 +76,40 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Lists the scopes supported by the OpenID Provider.
+	/// RECOMMENDED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public IEnumerable<string> ScopesSupported { init; get; } = null!;
+	public IEnumerable<string>? ScopesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the claims supported by the OpenID Provider.
+	/// RECOMMENDED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public IEnumerable<string> ClaimsSupported { init; get; } = null!;
+	public IEnumerable<string>? ClaimsSupported { init; get; }
 
 	/// <summary>
 	/// Lists the grant types supported by the OpenID Provider.
+	/// OPTIONAL per OpenID Connect Discovery 1.0 section 3, which defines the omitted case as
+	/// authorization code and implicit.
 	/// </summary>
-	public IEnumerable<string> GrantTypesSupported { init; get; } = null!;
+	public IEnumerable<string>? GrantTypesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the response types supported by the OpenID Provider.
+	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public IEnumerable<string> ResponseTypesSupported { init; get; } = null!;
+	public required IEnumerable<string> ResponseTypesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the response modes supported by the OpenID Provider.
+	/// OPTIONAL per OpenID Connect Discovery 1.0 section 3, which defines the omitted case as query and fragment.
 	/// </summary>
-	public IEnumerable<string> ResponseModesSupported { init; get; } = null!;
+	public IEnumerable<string>? ResponseModesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the token endpoint authentication methods supported by the OpenID Provider.
+	/// OPTIONAL per OpenID Connect Discovery 1.0 section 3, which defines the omitted case as client_secret_basic.
 	/// </summary>
-	public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = null!;
+	public IEnumerable<string>? TokenEndpointAuthMethodsSupported { init; get; }
 
 	/// <summary>
 	/// Lists the signing algorithms supported for authenticating clients at the token endpoint.
@@ -96,18 +118,21 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Lists the ID token signing algorithm values supported by the OpenID Provider.
+	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; } = null!;
+	public required IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the subject types supported by the OpenID Provider.
+	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public IEnumerable<string> SubjectTypesSupported { init; get; } = null!;
+	public required IEnumerable<string> SubjectTypesSupported { init; get; }
 
 	/// <summary>
 	/// Lists the code challenge methods supported for PKCE.
+	/// OPTIONAL per RFC 8414 section 2.
 	/// </summary>
-	public IEnumerable<string> CodeChallengeMethodsSupported { init; get; } = null!;
+	public IEnumerable<string>? CodeChallengeMethodsSupported { init; get; }
 
 	/// <summary>
 	/// Indicates whether the OpenID Provider supports the use of the request parameter.
@@ -116,8 +141,11 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Lists the prompt values supported by the OpenID Provider.
+	/// OPTIONAL per Initiating User Registration via OpenID Connect 1.0 section 4.2, which defines the field
+	/// outside the core metadata list. That section also states the obligation that follows from stating it at
+	/// all: a provider listing this element must list every prompt value it supports, not only <c>create</c>.
 	/// </summary>
-	public IEnumerable<string> PromptValuesSupported { init; get; } = null!;
+	public IEnumerable<string>? PromptValuesSupported { init; get; }
 
 	/// <summary>
 	/// Specifies the signing algorithms supported for user information endpoints.

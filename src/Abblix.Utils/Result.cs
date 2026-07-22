@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Utils;
 
 /// <summary>
@@ -140,7 +142,7 @@ public abstract record Result<TSuccess, TFailure>
     /// <param name="value">When this method returns, contains the success value if the result is successful;
     /// otherwise, the default value.</param>
     /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-    public abstract bool TryGetSuccess(out TSuccess value);
+    public abstract bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value);
 
     /// <summary>
     /// Gets the success value.
@@ -162,7 +164,7 @@ public abstract record Result<TSuccess, TFailure>
     /// <param name="value">When this method returns, contains the failure value if the result is a failure;
     /// otherwise, the default value.</param>
     /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-    public abstract bool TryGetFailure(out TFailure value);
+    public abstract bool TryGetFailure([MaybeNullWhen(false)] out TFailure value);
 
     /// <summary>
     /// Binds the result to a function that returns a new result, allowing chaining of operations.
@@ -250,7 +252,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the success value if the result is successful;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-        public override bool TryGetSuccess(out TSuccess value)
+        public override bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value)
         {
             value = Value;
             return true;
@@ -262,7 +264,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the failure value if the result is a failure;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-        public override bool TryGetFailure(out TFailure value)
+        public override bool TryGetFailure([MaybeNullWhen(false)] out TFailure value)
         {
             value = default!;
             return false;
@@ -400,7 +402,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the success value if the result is successful;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-        public override bool TryGetSuccess(out TSuccess value)
+        public override bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value)
         {
             value = default!;
             return false;
@@ -412,7 +414,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the failure value if the result is a failure;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-        public override bool TryGetFailure(out TFailure value)
+        public override bool TryGetFailure([MaybeNullWhen(false)] out TFailure value)
         {
             value = Value;
             return true;
