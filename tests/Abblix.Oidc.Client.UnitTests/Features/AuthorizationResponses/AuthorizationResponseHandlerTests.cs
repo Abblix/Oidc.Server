@@ -112,13 +112,13 @@ public class AuthorizationResponseHandlerTests
         var error = await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
                 Response(
-                    (Parameters.Error, ErrorCodes.AccessDenied),
+                    (Parameters.Error, AuthorizationErrorCodes.AccessDenied),
                     (Parameters.ErrorDescription, "The user said no"),
                     (Parameters.State, State),
                     (Parameters.Issuer, Provider)),
                 TestContext.Current.CancellationToken));
 
-        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+        Assert.Equal(AuthorizationErrorCodes.AccessDenied, error.Error);
         Assert.Equal("The user said no", error.ErrorDescription);
     }
 
@@ -138,7 +138,7 @@ public class AuthorizationResponseHandlerTests
         var error = await Assert.ThrowsAsync<AuthorizationResponseException>(
             () => handler.HandleAsync(
                 Response(
-                    (Parameters.Error, ErrorCodes.AccessDenied),
+                    (Parameters.Error, AuthorizationErrorCodes.AccessDenied),
                     (Parameters.State, State),
                     (Parameters.Issuer, Attacker)),
                 TestContext.Current.CancellationToken));
@@ -237,7 +237,7 @@ public class AuthorizationResponseHandlerTests
             () => handler.HandleAsync(
                 Response(
                     (Parameters.Code, "the-code"),
-                    (Parameters.Error, ErrorCodes.AccessDenied),
+                    (Parameters.Error, AuthorizationErrorCodes.AccessDenied),
                     (Parameters.State, State),
                     (Parameters.Issuer, Provider)),
                 TestContext.Current.CancellationToken));

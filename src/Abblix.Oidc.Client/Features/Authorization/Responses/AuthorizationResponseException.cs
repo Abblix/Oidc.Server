@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -66,7 +66,7 @@ public sealed class AuthorizationResponseException : Exception
     /// <remarks>
     /// Carried apart from the message because a caller acts on it: <c>access_denied</c> is a user who
     /// pressed Cancel and deserves a different answer from <c>server_error</c>. One of
-    /// <see cref="ErrorCodes"/>, or a value from an extension this client does not know.
+    /// <see cref="AuthorizationErrorCodes"/>, or a value from an extension this client does not know.
     /// </remarks>
     public string? Error { get; }
 

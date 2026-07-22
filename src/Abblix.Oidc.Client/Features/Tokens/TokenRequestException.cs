@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -51,7 +51,7 @@ public sealed class TokenRequestException : Exception
     /// </summary>
     /// <remarks>
     /// Carried separately from the message because callers act on it. A refresh answered with
-    /// <see cref="ErrorCodes.InvalidGrant"/> means the token presented has been rotated away, which is
+    /// <see cref="TokenErrorCodes.InvalidGrant"/> means the token presented has been rotated away, which is
     /// recoverable by re-reading what is stored; every other code is not.
     /// </remarks>
     public string? Error { get; }

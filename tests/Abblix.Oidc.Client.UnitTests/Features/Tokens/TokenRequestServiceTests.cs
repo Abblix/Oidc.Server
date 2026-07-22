@@ -148,7 +148,7 @@ public class TokenRequestServiceTests
         var exception = await Assert.ThrowsAsync<TokenRequestException>(
             () => CreateService(handler).RefreshAsync("stale", TestContext.Current.CancellationToken));
 
-        Assert.Equal(ErrorCodes.InvalidGrant, exception.Error);
+        Assert.Equal(TokenErrorCodes.InvalidGrant, exception.Error);
         Assert.Equal("token already rotated", exception.ErrorDescription);
     }
 

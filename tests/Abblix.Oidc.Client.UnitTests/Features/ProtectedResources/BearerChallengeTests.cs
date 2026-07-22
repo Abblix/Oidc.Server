@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -68,7 +68,7 @@ public class BearerChallengeTests
 
         Assert.NotNull(challenge);
         Assert.Equal("orders", challenge.Realm);
-        Assert.Equal(ErrorCodes.InsufficientScope, challenge.Error);
+        Assert.Equal(ResourceErrorCodes.InsufficientScope, challenge.Error);
         Assert.Equal("needs more", challenge.ErrorDescription);
         Assert.Equal("https://api.example.com/errors/scope", challenge.ErrorUri?.OriginalString);
         Assert.Equal(["orders.read", "orders.write"], challenge.Scope);
@@ -111,7 +111,7 @@ public class BearerChallengeTests
         var challenge = Read("Bearer error=\"invalid_token\", nonce=\"abc\"");
 
         Assert.NotNull(challenge);
-        Assert.Equal(ErrorCodes.InvalidToken, challenge.Error);
+        Assert.Equal(ResourceErrorCodes.InvalidToken, challenge.Error);
         Assert.False(challenge.IsMalformed);
     }
 
@@ -150,7 +150,7 @@ public class BearerChallengeTests
     {
         var challenge = Read("Basic realm=\"legacy\"", "Bearer error=\"invalid_token\"");
 
-        Assert.Equal(ErrorCodes.InvalidToken, challenge?.Error);
+        Assert.Equal(ResourceErrorCodes.InvalidToken, challenge?.Error);
     }
 
     /// <summary>

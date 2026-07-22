@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -26,17 +26,21 @@ namespace Abblix.Oidc.Client.Features.Authorization.Responses;
 /// The error codes an authorization response can carry.
 /// </summary>
 /// <remarks>
-/// Kept apart from the token endpoint's set in <c>Features.Tokens.ErrorCodes</c>, and not because the
-/// two are disjoint - three values appear in both. It is that each endpoint answers with its own
-/// vocabulary, so a caller reading an authorization response is never offered <c>invalid_grant</c>, and
-/// one reading a token response is never offered <c>login_required</c>. A single merged set would
-/// suggest codes can arrive where they cannot.
+/// Kept apart from <see cref="Tokens.TokenErrorCodes"/> and
+/// <see cref="ProtectedResources.ResourceErrorCodes"/>, and not because the sets are disjoint - the RFCs
+/// define some of the same strings for more than one endpoint. It is that each endpoint answers with its
+/// own vocabulary, so a caller reading an authorization response is never offered <c>invalid_grant</c>, and
+/// one reading a token response is never offered <c>login_required</c>. A single merged set would suggest
+/// codes can arrive where they cannot.
+/// The three carry the responder in their names rather than relying on the namespace, because that is how
+/// they are read: from outside, by a host comparing the code on a caught exception, where three types
+/// called ErrorCodes would offer each other's completions.
 /// The list is open. RFC 9396 adds <c>invalid_authorization_details</c> at this endpoint, extensions
 /// register more, and an unfamiliar code is exactly the one an operator needs to see verbatim - which
 /// is why the wire value stays a string throughout rather than becoming an enum with an
 /// everything-else member.
 /// </remarks>
-public static class ErrorCodes
+public static class AuthorizationErrorCodes
 {
     /// <summary>
     /// The request was malformed: a parameter missing, repeated, or otherwise invalid

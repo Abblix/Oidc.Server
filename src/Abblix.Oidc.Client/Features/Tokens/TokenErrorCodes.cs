@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Client.Features.Tokens;
 /// <summary>
 /// The error codes a token endpoint returns, named as on the wire (RFC 6749 section 5.2).
 /// </summary>
-public static class ErrorCodes
+public static class TokenErrorCodes
 {
     /// <summary>
     /// The grant presented is no longer good: an authorization code already redeemed or expired, or a

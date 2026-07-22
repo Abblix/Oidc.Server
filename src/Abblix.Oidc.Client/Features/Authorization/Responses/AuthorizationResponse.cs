@@ -98,7 +98,7 @@ public sealed record AuthorizationResponse
     public string? Scope { get; init; }
 
     /// <summary>
-    /// The error code, when the provider refused. One of <see cref="ErrorCodes"/>, or a value from an
+    /// The error code, when the provider refused. One of <see cref="AuthorizationErrorCodes"/>, or a value from an
     /// extension this client does not know.
     /// </summary>
     [JsonPropertyName(Parameters.Error)]

@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -48,7 +48,7 @@ public interface ITokenRequestService
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <exception cref="TokenRequestException">
     /// The provider refused, or could not be reached. A refusal carrying
-    /// <see cref="ErrorCodes.InvalidGrant"/> means this token has been rotated away.
+    /// <see cref="TokenErrorCodes.InvalidGrant"/> means this token has been rotated away.
     /// </exception>
     Task<TokenResponse> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
 }

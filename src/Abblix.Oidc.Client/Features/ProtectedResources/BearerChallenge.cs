@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Client.Features.ProtectedResources;
 /// will fail identically forever.
 /// </remarks>
 /// <param name="Realm">The protection space, when the server named one.</param>
-/// <param name="Error">The error code from <see cref="ErrorCodes"/>, when the server sent one.</param>
+/// <param name="Error">The error code from <see cref="ResourceErrorCodes"/>, when the server sent one.</param>
 /// <param name="ErrorDescription">The human-readable explanation, when the server sent one.</param>
 /// <param name="ErrorUri">A page about the error, when the server sent one and it parses as a URI.</param>
 /// <param name="Scope">

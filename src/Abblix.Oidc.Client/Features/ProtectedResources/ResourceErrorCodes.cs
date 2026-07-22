@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Client.Features.ProtectedResources;
 /// answered by a different party about a different question, which is why this client carries three classes
 /// of this name rather than one.
 /// </remarks>
-public static class ErrorCodes
+public static class ResourceErrorCodes
 {
     /// <summary>
     /// The request was malformed. RFC 6750 section 3.1 pairs it with 400.

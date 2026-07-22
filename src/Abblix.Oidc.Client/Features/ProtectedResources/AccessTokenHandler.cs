@@ -1,4 +1,4 @@
-// Abblix OIDC Client Library
+﻿// Abblix OIDC Client Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -183,6 +183,34 @@ internal sealed partial class AccessTokenHandler(
     /// <remarks>
     /// An exhaustive switch with a loud default, so a scheme this client cannot present fails by name rather
     /// than being sent as a Bearer token and refused by the resource server for reasons nobody can read.
+    /// </remarks>
+    /// <remarks>
+    /// RFC 6750 defines three ways to transmit a bearer token, and this client implements the first only.
+    /// The other two are decided against here rather than merely absent, so that the next reader does not
+    /// take the gap for an oversight and close it.
+    ///
+    /// Section 2.2, the form-encoded body: "SHOULD NOT be used except in application contexts where
+    /// participating browsers do not have access to the Authorization request header field". That exception
+    /// is not this client. It runs on a server - in a web application or a background service - and an
+    /// <see cref="HttpClient"/> can always set the header, so the condition the RFC carves the exception out
+    /// for never arises here, and using the method anyway would be going against a SHOULD NOT with no reason
+    /// to offer.
+    /// The method also costs more than it looks. Section 2.2 admits it only when the entity-body is
+    /// form-encoded, single-part and entirely ASCII, and when the HTTP method has body semantics at all.
+    /// A service calling a JSON API meets none of that: adding an access_token field to a JSON body does not
+    /// produce a request with a token in it, it produces a corrupted body. So the method is unavailable
+    /// exactly where a server-side client would want it, which is worth saying plainly for anyone weighing
+    /// it for a microservice.
+    ///
+    /// Section 2.3, the URI query: "Because of the security weaknesses associated with the URI method (see
+    /// Section 5), including the high likelihood that the URL containing the access token will be logged, it
+    /// SHOULD NOT be used unless it is impossible to transport the access token in the 'Authorization'
+    /// request header field or the HTTP request entity-body." RFC 9700 section 4.3.2 goes further and makes
+    /// it a MUST NOT. Note what section 2.3 ranks: the body method above the query one, so even the RFC's
+    /// own ordering treats the query as the last resort - and this client is never in the position of having
+    /// no alternative.
+    /// Neither is offered behind a flag. A setting whose only correct value is off is a setting somebody
+    /// turns on, and the person who turns it on is not the person who later finds the token in a proxy log.
     /// </remarks>
     private static void Present(HttpRequestMessage request, AccessToken token)
     {

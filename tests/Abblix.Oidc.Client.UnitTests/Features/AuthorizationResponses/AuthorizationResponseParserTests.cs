@@ -115,7 +115,7 @@ public class AuthorizationResponseParserTests
     public void IdTokenWithAnError_IsContradictory()
         => Assert.Equal(
             AuthorizationResponseKind.Contradictory,
-            Parse((Parameters.IdToken, "the-id-token"), (Parameters.Error, ErrorCodes.AccessDenied)).Kind);
+            Parse((Parameters.IdToken, "the-id-token"), (Parameters.Error, AuthorizationErrorCodes.AccessDenied)).Kind);
 
     /// <summary>
     /// An expires_in that is not a number is carried through rather than failing the read: what arrived is
@@ -139,12 +139,12 @@ public class AuthorizationResponseParserTests
     public void ErrorAndState_ReadAsAnError()
     {
         var response = Parse(
-            (Parameters.Error, ErrorCodes.AccessDenied),
+            (Parameters.Error, AuthorizationErrorCodes.AccessDenied),
             (Parameters.ErrorDescription, "The user said no"),
             (Parameters.State, "the-state"));
 
         Assert.Equal(AuthorizationResponseKind.Error, response.Kind);
-        Assert.Equal(ErrorCodes.AccessDenied, response.Error);
+        Assert.Equal(AuthorizationErrorCodes.AccessDenied, response.Error);
         Assert.Equal("The user said no", response.ErrorDescription);
         Assert.Equal("the-state", response.State);
     }
@@ -196,7 +196,7 @@ public class AuthorizationResponseParserTests
     public void BothCodeAndError_IsContradictory()
         => Assert.Equal(
             AuthorizationResponseKind.Contradictory,
-            Parse((Parameters.Code, "the-code"), (Parameters.Error, ErrorCodes.AccessDenied)).Kind);
+            Parse((Parameters.Code, "the-code"), (Parameters.Error, AuthorizationErrorCodes.AccessDenied)).Kind);
 
     /// <summary>
     /// RFC 6749 section 3.1: "Request and response parameters MUST NOT be included more than once."
