@@ -37,14 +37,31 @@ namespace Abblix.Oidc.Server.MinimalApi;
 internal static class FormValues
 {
     /// <summary>A single value, or null when absent or empty.</summary>
-    public static string? Value(StringValues values) => values is { Count: > 0 } ? values.ToString() : null;
+    /// <remarks>
+    /// RFC 6749 section 3.1 puts this in the request direction as a requirement rather than a preference:
+    /// "Parameters sent without a value MUST be treated as if they were omitted from the request." A query
+    /// string carries no way to say "present and empty" that differs from saying nothing, so binding
+    /// "state=" as an empty string invented a value the client never sent - and state is returned only if
+    /// it was present in the request, so the client got back one it never issued.
+    /// </remarks>
+    public static string? Value(StringValues values)
+        => values is { Count: > 0 } && values.ToString() is { Length: > 0 } value ? value : null;
 
     /// <summary>A single value read from the form by name.</summary>
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
 
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
+    /// <remarks>
+    /// Valueless entries are dropped for the reason given on <see cref="Value(StringValues)"/>, and a field
+    /// whose every entry was valueless is the field not being there. Repeating the reading here rather than
+    /// leaving it to the callers keeps one answer to "what does present-but-empty mean" for the whole
+    /// binding surface.
+    /// </remarks>
     public static string[]? Strings(StringValues values)
-        => values is { Count: > 0 } ? values.OfType<string>().ToArray() : null;
+        => values is { Count: > 0 }
+           && values.OfType<string>().Where(value => value.Length > 0).ToArray() is { Length: > 0 } strings
+            ? strings
+            : null;
 
     /// <summary>A repeated form field read by name as an array, or null.</summary>
     public static string[]? Strings(IFormCollection form, string name) => Strings(Get(form, name));
