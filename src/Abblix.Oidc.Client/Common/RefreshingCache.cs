@@ -34,11 +34,9 @@ namespace Abblix.Oidc.Client.Common;
 /// trip rather than a stampede, and a failed fetch must not be cached, or one unlucky moment silences the
 /// provider for the whole lifetime.
 /// </remarks>
-internal sealed class RefreshingCache<T>
+internal sealed class RefreshingCache<T>(TimeProvider timeProvider)
     where T : class
 {
-    private readonly TimeProvider _timeProvider;
-
     /// <summary>
     /// The in-flight or completed fetch together with its expiry, held as a single reference so a reader
     /// observes both from the same attempt rather than a mix of two.
@@ -57,11 +55,6 @@ internal sealed class RefreshingCache<T>
     /// lifetime, so the jitter cannot extend how long a stale document or key set stays in use.
     /// </remarks>
     private const double MaximumJitterShare = 0.1;
-
-    /// <summary>
-    /// Creates the cache over the clock that decides when an entry has aged out.
-    /// </summary>
-    public RefreshingCache(TimeProvider timeProvider) => _timeProvider = timeProvider;
 
     /// <summary>
     /// Returns the held value, fetching it when nothing valid is held.
@@ -104,7 +97,7 @@ internal sealed class RefreshingCache<T>
             // letting the first caller's cancellation abort it would cancel everyone else's read as a side
             // effect. Each caller instead abandons its own wait below.
             var replacement = new Entry(
-                () => fetch(CancellationToken.None), _timeProvider.GetUtcNow() + Jitter(lifetime));
+                () => fetch(CancellationToken.None), timeProvider.GetUtcNow() + Jitter(lifetime));
 
             // Whoever wins the exchange owns the fetch; whoever loses joins the winner's rather than
             // duplicating it. Comparing against the entry this caller actually observed is what makes a
@@ -169,7 +162,7 @@ internal sealed class RefreshingCache<T>
     /// nullable parameter here would notice the day this method stopped rejecting null, because the compiler
     /// verifies that postcondition on an <c>out</c> parameter and not on one passed by value.
     /// </remarks>
-    private bool IsValid(Entry entry) => _timeProvider.GetUtcNow() < entry.ExpiresAt;
+    private bool IsValid(Entry entry) => timeProvider.GetUtcNow() < entry.ExpiresAt;
 
     /// <summary>
     /// One attempt to read the value, shared by every caller that arrives while it is in flight.

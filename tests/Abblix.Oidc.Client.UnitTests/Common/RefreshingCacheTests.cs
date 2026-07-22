@@ -23,7 +23,7 @@
 using Abblix.Oidc.Client.Common;
 using Microsoft.Extensions.Time.Testing;
 
-namespace Abblix.Oidc.Client.UnitTests.Internals;
+namespace Abblix.Oidc.Client.UnitTests.Common;
 
 /// <summary>
 /// Tests for <see cref="RefreshingCache{T}"/>, the primitive that keeps the client from asking the provider
@@ -52,13 +52,6 @@ public class RefreshingCacheTests
 
         var cache = new RefreshingCache<string>(new FakeTimeProvider());
 
-        async Task<string> Fetch(CancellationToken _)
-        {
-            Interlocked.Increment(ref fetchCount);
-            await release.Task;
-            return "value";
-        }
-
         // Started while the fetch is deliberately held open, so every caller is in flight at once.
         var callers = Enumerable
             .Range(0, 20)
@@ -70,6 +63,13 @@ public class RefreshingCacheTests
 
         Assert.Equal(1, fetchCount);
         Assert.All(results, result => Assert.Equal("value", result));
+
+        async Task<string> Fetch(CancellationToken _)
+        {
+            Interlocked.Increment(ref fetchCount);
+            await release.Task;
+            return "value";
+        }
     }
 
     /// <summary>
