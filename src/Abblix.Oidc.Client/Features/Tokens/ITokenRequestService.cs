@@ -93,4 +93,19 @@ public interface ITokenRequestService
     /// <exception cref="TokenRequestException">The provider refused, or could not be reached.</exception>
     Task<TokenResponse> ExchangeTokenAsync(
         TokenExchangeParameters exchange, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Redeems the code a device was given, once its user has authorized it elsewhere (RFC 8628 section 3.4).
+    /// </summary>
+    /// <param name="deviceCode">The code from the device authorization response.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <exception cref="TokenRequestException">
+    /// The provider refused, or could not be reached. One call is one attempt, and most of its refusals are
+    /// not final: <see cref="TokenErrorCodes.AuthorizationPending"/> and
+    /// <see cref="TokenErrorCodes.SlowDown"/> both mean "ask again later". Polling in accordance with them is
+    /// what <c>IDeviceAuthorizationService</c> does, and a caller driving this method itself owes the same
+    /// rules.
+    /// </exception>
+    Task<TokenResponse> RedeemDeviceCodeAsync(
+        string deviceCode, CancellationToken cancellationToken = default);
 }

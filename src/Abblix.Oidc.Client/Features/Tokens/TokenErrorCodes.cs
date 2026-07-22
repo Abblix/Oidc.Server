@@ -38,4 +38,28 @@ public static class TokenErrorCodes
     /// to end the session.
     /// </remarks>
     public const string InvalidGrant = "invalid_grant";
+
+    /// <summary>
+    /// The device's user has not finished authorizing it yet, so the client polls again after the interval
+    /// (RFC 8628 section 3.5).
+    /// </summary>
+    public const string AuthorizationPending = "authorization_pending";
+
+    /// <summary>
+    /// The same as <see cref="AuthorizationPending"/>, except that the provider is telling the client it is
+    /// asking too often: RFC 8628 section 3.5 says the interval "MUST be increased by 5 seconds for this and
+    /// all subsequent requests".
+    /// </summary>
+    public const string SlowDown = "slow_down";
+
+    /// <summary>
+    /// The device code has expired and its session is over. The client may start a new one, but RFC 8628
+    /// section 3.5 says it should wait for the user before doing so rather than polling on.
+    /// </summary>
+    public const string ExpiredToken = "expired_token";
+
+    /// <summary>
+    /// The user refused the device (RFC 8628 section 3.5). Final: there is nothing to poll for.
+    /// </summary>
+    public const string AccessDenied = "access_denied";
 }

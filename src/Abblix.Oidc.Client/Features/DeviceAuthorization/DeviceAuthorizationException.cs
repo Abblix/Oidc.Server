@@ -20,33 +20,31 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-
-namespace Abblix.Oidc.Client.Features.Tokens;
+namespace Abblix.Oidc.Client.Features.DeviceAuthorization;
 
 /// <summary>
-/// The grant types this client presents at the token endpoint, as they appear on the wire.
+/// Thrown when the device authorization endpoint refuses to start an exchange, or cannot be reached.
 /// </summary>
-public static class GrantTypes
+/// <remarks>
+/// Separate from the token endpoint's own failure type because the two happen at different moments and mean
+/// different things: this one says the device never got a code to show, while a token failure says it had
+/// one and the exchange ended without tokens.
+/// </remarks>
+public sealed class DeviceAuthorizationException : Exception
 {
-    /// <summary>Exchanging an authorization code for tokens.</summary>
-    public const string AuthorizationCode = "authorization_code";
-
-    /// <summary>Trading a refresh token for a fresh set.</summary>
-    public const string RefreshToken = "refresh_token";
+    /// <summary>
+    /// Creates the exception with a message describing what the provider refused or failed to supply.
+    /// </summary>
+    public DeviceAuthorizationException(string message)
+        : base(message)
+    {
+    }
 
     /// <summary>
-    /// Asking for a token on the client's own behalf, with no user involved (RFC 6749 section 4.4).
+    /// Creates the exception with a message and the underlying transport or parsing failure.
     /// </summary>
-    public const string ClientCredentials = "client_credentials";
-
-    /// <summary>
-    /// Presenting one token to be given another (RFC 8693 section 2.1).
-    /// </summary>
-    public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";
-
-    /// <summary>
-    /// Redeeming the code a device was given while its user authorized it elsewhere
-    /// (RFC 8628 section 3.4).
-    /// </summary>
-    public const string DeviceCode = "urn:ietf:params:oauth:grant-type:device_code";
+    public DeviceAuthorizationException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

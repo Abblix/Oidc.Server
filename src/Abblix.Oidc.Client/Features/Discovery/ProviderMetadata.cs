@@ -84,6 +84,12 @@ public sealed record ProviderMetadata
     public string? RevocationEndpoint { get; init; }
 
     /// <summary>
+    /// The endpoint a device with no browser asks for a user code at, per RFC 8628 section 4.
+    /// </summary>
+    [JsonPropertyName("device_authorization_endpoint")]
+    public string? DeviceAuthorizationEndpoint { get; init; }
+
+    /// <summary>
     /// The provider's session-management frame.
     /// </summary>
     /// <remarks>

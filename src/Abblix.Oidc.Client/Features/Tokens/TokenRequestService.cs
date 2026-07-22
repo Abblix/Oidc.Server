@@ -148,6 +148,18 @@ public sealed class TokenRequestService : ITokenRequestService
         return PostAsync(parameters, repeated, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public Task<TokenResponse> RedeemDeviceCodeAsync(
+        string deviceCode, CancellationToken cancellationToken = default)
+        => PostAsync(
+            new Dictionary<string, string>
+            {
+                ["grant_type"] = GrantTypes.DeviceCode,
+                ["device_code"] = deviceCode,
+            },
+            [],
+            cancellationToken);
+
     /// <param name="parameters">
     /// The single-valued form parameters. Passed as a dictionary because the credentials presenter adds this
     /// client's own to it, and adding a credential twice is not something to leave possible.

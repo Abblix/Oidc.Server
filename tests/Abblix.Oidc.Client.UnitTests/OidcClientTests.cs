@@ -99,6 +99,10 @@ public class OidcClientTests
         public Task<TokenResponse> ExchangeTokenAsync(
             TokenExchangeParameters exchange, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public Task<TokenResponse> RedeemDeviceCodeAsync(
+            string deviceCode, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class StubIdentityTokenValidator(JsonWebToken token) : IIdentityTokenValidator
