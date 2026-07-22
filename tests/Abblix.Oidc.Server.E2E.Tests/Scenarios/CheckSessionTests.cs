@@ -23,7 +23,6 @@
 using System.Net;
 using System.Net.Mime;
 using System.Text.RegularExpressions;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Microsoft.Net.Http.Headers;
 using Xunit;

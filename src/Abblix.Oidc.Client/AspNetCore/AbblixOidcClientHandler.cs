@@ -23,10 +23,8 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
 using Abblix.Oidc.Client.Features.Authorization.Context;
-using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

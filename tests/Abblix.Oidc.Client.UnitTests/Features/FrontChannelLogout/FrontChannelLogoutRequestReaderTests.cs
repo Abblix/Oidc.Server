@@ -22,7 +22,6 @@
 
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.FrontChannelLogout;
-using Abblix.Oidc.Client.UnitTests.Features.Discovery;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.FrontChannelLogout;

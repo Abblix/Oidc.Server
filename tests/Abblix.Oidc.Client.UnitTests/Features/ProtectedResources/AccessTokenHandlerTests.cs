@@ -24,7 +24,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using Abblix.Oidc.Client.Common.Constants;
 using Abblix.Oidc.Client.Features.ProtectedResources;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Abblix.Oidc.Client.UnitTests.Features.ProtectedResources;

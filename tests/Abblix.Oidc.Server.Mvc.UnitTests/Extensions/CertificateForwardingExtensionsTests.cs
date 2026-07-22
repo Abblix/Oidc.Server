@@ -26,7 +26,6 @@ using Abblix.Oidc.Server.Mvc.Extensions;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Xunit;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Extensions;
 

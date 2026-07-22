@@ -25,11 +25,9 @@ using System.Web;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.Discovery;
-using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.Revocation;
 using Abblix.Oidc.Client.Features.Tokens;
-using Abblix.Oidc.Client.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Client.E2E.Tests;

@@ -29,7 +29,6 @@ using Abblix.Oidc.Client.Features.ClientKeys;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Client.E2E.Tests;
 

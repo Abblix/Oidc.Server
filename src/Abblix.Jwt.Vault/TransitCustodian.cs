@@ -24,7 +24,6 @@ using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

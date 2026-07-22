@@ -25,7 +25,6 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Text;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;

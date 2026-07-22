@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using System.Web;
 using Abblix.Oidc.Client.Features.Discovery;

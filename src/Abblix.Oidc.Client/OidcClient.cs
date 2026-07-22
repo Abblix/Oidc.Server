@@ -22,7 +22,6 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.BackChannelLogout;

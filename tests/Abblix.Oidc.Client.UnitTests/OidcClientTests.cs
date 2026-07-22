@@ -27,7 +27,6 @@ using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.Discovery;
-using Abblix.Oidc.Client.UnitTests.Features.Discovery;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.Principal;
