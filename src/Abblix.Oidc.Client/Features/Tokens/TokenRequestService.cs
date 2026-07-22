@@ -87,6 +87,23 @@ public sealed class TokenRequestService : ITokenRequestService
             },
             cancellationToken);
 
+    /// <inheritdoc />
+    public Task<TokenResponse> RequestClientCredentialsAsync(
+        IReadOnlyCollection<string>? scopes = null, CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["grant_type"] = GrantTypes.ClientCredentials,
+        };
+
+        // Omitted rather than sent empty when nothing was asked for: RFC 6749 section 4.4.2 marks scope
+        // OPTIONAL, and an empty value is a request for no scope at all, which is not the same thing.
+        if (scopes is { Count: > 0 })
+            parameters["scope"] = string.Join(' ', scopes);
+
+        return PostAsync(parameters, cancellationToken);
+    }
+
     private async Task<TokenResponse> PostAsync(
         Dictionary<string, string> parameters, CancellationToken cancellationToken)
     {

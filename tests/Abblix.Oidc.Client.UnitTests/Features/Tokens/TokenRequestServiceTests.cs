@@ -239,4 +239,41 @@ public class TokenRequestServiceTests
             () => CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken));
     }
 
+    /// <summary>
+    /// A client asking on its own behalf sends the grant and the scopes it named, space-delimited as
+    /// RFC 6749 section 3.3 requires.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentialsSendsTheGrantAndTheScopesAsked()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await CreateService(handler).RequestClientCredentialsAsync(
+            ["inventory.read", "inventory.write"], TestContext.Current.CancellationToken);
+
+        var form = FormOf(handler.LastRequestBody!);
+        Assert.Equal(GrantTypes.ClientCredentials, form["grant_type"]);
+        Assert.Equal("inventory.read inventory.write", form["scope"]);
+    }
+
+    /// <summary>
+    /// Asking for nothing in particular omits <c>scope</c> rather than sending it empty.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6749 section 4.4.2 marks the parameter OPTIONAL, and the two are not the same request: absent
+    /// leaves the provider to decide what this client's credentials are worth, while present-and-empty asks
+    /// for no scope at all.
+    /// </remarks>
+    [Fact]
+    public async Task ClientCredentialsWithoutScopesOmitsTheParameter()
+    {
+        var handler = new RecordingHttpMessageHandler(SuccessBody);
+
+        await CreateService(handler).RequestClientCredentialsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var form = FormOf(handler.LastRequestBody!);
+        Assert.Equal(GrantTypes.ClientCredentials, form["grant_type"]);
+        Assert.False(form.ContainsKey("scope"));
+    }
 }

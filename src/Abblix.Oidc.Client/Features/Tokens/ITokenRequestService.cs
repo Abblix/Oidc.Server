@@ -51,4 +51,26 @@ public interface ITokenRequestService
     /// <see cref="TokenErrorCodes.InvalidGrant"/> means this token has been rotated away.
     /// </exception>
     Task<TokenResponse> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks for an access token on this client's own behalf, with no user involved (RFC 6749 section 4.4).
+    /// </summary>
+    /// <param name="scopes">
+    /// What the token is being asked for. Optional per RFC 6749 section 4.4.2: pass none and the provider
+    /// decides what the client's own credentials are worth.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>
+    /// The provider's answer. It carries no ID Token, because there is no user to make claims about, and
+    /// section 4.4.3 says a refresh token SHOULD NOT be included either - the client re-authenticates
+    /// instead, which costs it nothing since its credentials are what the grant is made of.
+    /// </returns>
+    /// <exception cref="TokenRequestException">The provider refused, or could not be reached.</exception>
+    /// <remarks>
+    /// The scopes are per call rather than taken from the login configuration: a client asking for a token
+    /// to call one API is not asking for what its users' sessions ask for, and the two lists have no reason
+    /// to coincide.
+    /// </remarks>
+    Task<TokenResponse> RequestClientCredentialsAsync(
+        IReadOnlyCollection<string>? scopes = null, CancellationToken cancellationToken = default);
 }

@@ -89,6 +89,11 @@ public class OidcClientTests
         public Task<TokenResponse> RefreshAsync(
             string refreshToken, CancellationToken cancellationToken = default)
             => Task.FromResult(response);
+
+        // The facade composes user-facing operations, and this grant has no user, so nothing here reaches it.
+        public Task<TokenResponse> RequestClientCredentialsAsync(
+            IReadOnlyCollection<string>? scopes = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class StubIdentityTokenValidator(JsonWebToken token) : IIdentityTokenValidator

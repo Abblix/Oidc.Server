@@ -33,4 +33,9 @@ public static class GrantTypes
 
     /// <summary>Trading a refresh token for a fresh set.</summary>
     public const string RefreshToken = "refresh_token";
+
+    /// <summary>
+    /// Asking for a token on the client's own behalf, with no user involved (RFC 6749 section 4.4).
+    /// </summary>
+    public const string ClientCredentials = "client_credentials";
 }
