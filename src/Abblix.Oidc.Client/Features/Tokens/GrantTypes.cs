@@ -49,4 +49,10 @@ public static class GrantTypes
     /// (RFC 8628 section 3.4).
     /// </summary>
     public const string DeviceCode = "urn:ietf:params:oauth:grant-type:device_code";
+
+    /// <summary>
+    /// Redeeming a backchannel authentication request once its person has answered
+    /// (CIBA section 10.1).
+    /// </summary>
+    public const string Ciba = "urn:openid:params:grant-type:ciba";
 }

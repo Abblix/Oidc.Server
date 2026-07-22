@@ -67,7 +67,7 @@ public sealed class DeviceAuthorizationService(
 
         var parameters = new Dictionary<string, string>();
         if (scopes is { Count: > 0 })
-            parameters["scope"] = string.Join(' ', scopes);
+            parameters[Tokens.Parameters.Scope] = string.Join(' ', scopes);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
         credentialsPresenter.Present(request, parameters);

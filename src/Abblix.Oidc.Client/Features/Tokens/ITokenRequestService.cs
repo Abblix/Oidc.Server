@@ -108,4 +108,17 @@ public interface ITokenRequestService
     /// </exception>
     Task<TokenResponse> RedeemDeviceCodeAsync(
         string deviceCode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Redeems a backchannel authentication request once its person has answered (CIBA section 10.1).
+    /// </summary>
+    /// <param name="authenticationRequestId">The identifier from the authentication request acknowledgement.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <exception cref="TokenRequestException">
+    /// The provider refused, or could not be reached. As with a device, one call is one attempt and most of
+    /// its refusals are not final; polling in accordance with them is what
+    /// <c>IBackChannelAuthenticationService</c> does.
+    /// </exception>
+    Task<TokenResponse> RedeemAuthenticationRequestAsync(
+        string authenticationRequestId, CancellationToken cancellationToken = default);
 }

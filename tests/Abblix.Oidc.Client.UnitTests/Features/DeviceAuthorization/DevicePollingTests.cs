@@ -83,6 +83,10 @@ public class DevicePollingTests
         public Task<TokenResponse> ExchangeTokenAsync(
             TokenExchangeParameters exchange, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public Task<TokenResponse> RedeemAuthenticationRequestAsync(
+            string authenticationRequestId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private static DeviceAuthorizationResponse Authorization(int? interval = null, int expiresIn = 900) => new()

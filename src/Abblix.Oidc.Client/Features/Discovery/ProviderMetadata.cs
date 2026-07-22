@@ -90,6 +90,13 @@ public sealed record ProviderMetadata
     public string? DeviceAuthorizationEndpoint { get; init; }
 
     /// <summary>
+    /// The endpoint a client asks at when the person it wants authenticated is somewhere else, per CIBA
+    /// section 4.
+    /// </summary>
+    [JsonPropertyName("backchannel_authentication_endpoint")]
+    public string? BackChannelAuthenticationEndpoint { get; init; }
+
+    /// <summary>
     /// The provider's session-management frame.
     /// </summary>
     /// <remarks>

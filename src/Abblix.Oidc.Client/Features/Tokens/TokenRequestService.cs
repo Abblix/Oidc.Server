@@ -65,14 +65,14 @@ public sealed class TokenRequestService : ITokenRequestService
         => PostAsync(
             new Dictionary<string, string>
             {
-                ["grant_type"] = GrantTypes.AuthorizationCode,
-                ["code"] = code,
-                ["code_verifier"] = codeVerifier,
+                [Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [Parameters.Code] = code,
+                [Parameters.CodeVerifier] = codeVerifier,
 
                 // Repeated from the authorization request, and compared by the provider against what it
                 // recorded there. A mismatch is what stops a code from being redeemed into someone else's
                 // client.
-                ["redirect_uri"] = redirectUri,
+                [Parameters.RedirectUri] = redirectUri,
             },
             [],
             cancellationToken);
@@ -83,8 +83,8 @@ public sealed class TokenRequestService : ITokenRequestService
         => PostAsync(
             new Dictionary<string, string>
             {
-                ["grant_type"] = GrantTypes.RefreshToken,
-                ["refresh_token"] = refreshToken,
+                [Parameters.GrantType] = GrantTypes.RefreshToken,
+                [Parameters.RefreshToken] = refreshToken,
             },
             [],
             cancellationToken);
@@ -95,13 +95,13 @@ public sealed class TokenRequestService : ITokenRequestService
     {
         var parameters = new Dictionary<string, string>
         {
-            ["grant_type"] = GrantTypes.ClientCredentials,
+            [Parameters.GrantType] = GrantTypes.ClientCredentials,
         };
 
         // Omitted rather than sent empty when nothing was asked for: RFC 6749 section 4.4.2 marks scope
         // OPTIONAL, and an empty value is a request for no scope at all, which is not the same thing.
         if (scopes is { Count: > 0 })
-            parameters["scope"] = string.Join(' ', scopes);
+            parameters[Parameters.Scope] = string.Join(' ', scopes);
 
         return PostAsync(parameters, [], cancellationToken);
     }
@@ -121,28 +121,28 @@ public sealed class TokenRequestService : ITokenRequestService
 
         var parameters = new Dictionary<string, string>
         {
-            ["grant_type"] = GrantTypes.TokenExchange,
-            ["subject_token"] = exchange.SubjectToken,
-            ["subject_token_type"] = exchange.SubjectTokenType,
+            [Parameters.GrantType] = GrantTypes.TokenExchange,
+            [Parameters.SubjectToken] = exchange.SubjectToken,
+            [Parameters.SubjectTokenType] = exchange.SubjectTokenType,
         };
 
         if (exchange.ActorToken is { } actorToken)
         {
-            parameters["actor_token"] = actorToken;
-            parameters["actor_token_type"] = exchange.ActorTokenType!;
+            parameters[Parameters.ActorToken] = actorToken;
+            parameters[Parameters.ActorTokenType] = exchange.ActorTokenType!;
         }
 
         if (exchange.RequestedTokenType is { } requestedTokenType)
-            parameters["requested_token_type"] = requestedTokenType;
+            parameters[Parameters.RequestedTokenType] = requestedTokenType;
 
         if (exchange.Scopes is { Count: > 0 })
-            parameters["scope"] = string.Join(' ', exchange.Scopes);
+            parameters[Parameters.Scope] = string.Join(' ', exchange.Scopes);
 
         // resource and audience may each be given more than once, and the specification says so in as many
         // words. Joining them into one value would name a service nobody has.
         var repeated = exchange.Resources
-            .Select(resource => new KeyValuePair<string, string>("resource", resource.AbsoluteUri))
-            .Concat(exchange.Audiences.Select(audience => new KeyValuePair<string, string>("audience", audience)))
+            .Select(resource => new KeyValuePair<string, string>(Parameters.Resource, resource.AbsoluteUri))
+            .Concat(exchange.Audiences.Select(audience => new KeyValuePair<string, string>(Parameters.Audience, audience)))
             .ToArray();
 
         return PostAsync(parameters, repeated, cancellationToken);
@@ -154,8 +154,20 @@ public sealed class TokenRequestService : ITokenRequestService
         => PostAsync(
             new Dictionary<string, string>
             {
-                ["grant_type"] = GrantTypes.DeviceCode,
-                ["device_code"] = deviceCode,
+                [Parameters.GrantType] = GrantTypes.DeviceCode,
+                [Parameters.DeviceCode] = deviceCode,
+            },
+            [],
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TokenResponse> RedeemAuthenticationRequestAsync(
+        string authenticationRequestId, CancellationToken cancellationToken = default)
+        => PostAsync(
+            new Dictionary<string, string>
+            {
+                [Parameters.GrantType] = GrantTypes.Ciba,
+                [Parameters.AuthenticationRequestId] = authenticationRequestId,
             },
             [],
             cancellationToken);

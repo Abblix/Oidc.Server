@@ -22,6 +22,7 @@
 
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
+using Abblix.Oidc.Client.Features.BackChannelAuthentication;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.DeviceAuthorization;
@@ -143,6 +144,7 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
             })
             .AddTokenRequests()
             .AddDeviceAuthorization()
+            .AddBackChannelAuthentication()
             .AddTokenRevocation()
             .AddUserInfo()
             .AddBackChannelLogout()
@@ -174,6 +176,7 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
             UserInfoService.HttpClientName,
             TokenRevocationService.HttpClientName,
             DeviceAuthorizationService.HttpClientName,
+            BackChannelAuthenticationService.HttpClientName,
         ];
 
         foreach (var name in clientNames)

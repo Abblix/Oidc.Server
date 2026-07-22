@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Client.Common;
+
 namespace Abblix.Oidc.Client.Features.Authorization.Requests;
 
 /// <summary>
@@ -90,7 +92,7 @@ public sealed class AuthorizationRequestOptions
     /// The scopes requested. <c>openid</c> is what makes the request an OpenID Connect one rather than plain
     /// OAuth, so it is included by default.
     /// </summary>
-    public IReadOnlyCollection<string> Scopes { get; set; } = ["openid", "profile"];
+    public IReadOnlyCollection<string> Scopes { get; set; } = [Common.Scopes.OpenId, Common.Scopes.Profile];
 
     /// <summary>
     /// The resources the issued access token is meant for, sent as <c>resource</c> per RFC 8707.
