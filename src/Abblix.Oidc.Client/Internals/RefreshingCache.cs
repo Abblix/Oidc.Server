@@ -86,38 +86,72 @@ internal sealed class RefreshingCache<T>
         bool forceRefresh,
         CancellationToken cancellationToken)
     {
-        var observed = Volatile.Read(ref _entry);
-        if (!forceRefresh && IsValid(observed))
-            return await observed!.Fetch.WaitAsync(cancellationToken);
-
-        // The observed entry is missing, aged out, or explicitly rejected, so a fetch is owed. Publishing the
-        // replacement before the fetch runs is what makes callers share it: a caller arriving mid-flight
-        // finds this entry and awaits the same attempt instead of starting its own.
-        //
-        // The fetch itself is started without any one caller's cancellation token. It is shared, so letting
-        // the first caller's cancellation abort it would cancel everyone else's read as a side effect. Each
-        // caller instead abandons its own wait below.
-        var replacement = new Entry(() => fetch(CancellationToken.None), _timeProvider.GetUtcNow() + Jitter(lifetime));
-
-        // Whoever wins the exchange owns the fetch; whoever loses joins the winner's rather than duplicating
-        // it. Comparing against the entry this caller actually observed is what makes a forced refresh accept
-        // a replacement someone else has already published.
-        var current = Interlocked.CompareExchange(ref _entry, replacement, observed);
-        var winner = ReferenceEquals(current, observed) ? replacement : current!;
-
-        try
+        Entry winner;
+        while (true)
         {
-            return await winner.Fetch.WaitAsync(cancellationToken);
+            var observed = Volatile.Read(ref _entry);
+
+            // Presence is tested here rather than inside IsValid, so the dereference that follows is proved
+            // by the compiler instead of asserted by hand.
+            if (!forceRefresh && observed is not null && IsValid(observed))
+                return await observed.Fetch.WaitAsync(cancellationToken);
+
+            // The observed entry is missing, aged out, or explicitly rejected, so a fetch is owed. Publishing
+            // the replacement before the fetch runs is what makes callers share it: a caller arriving
+            // mid-flight finds this entry and awaits the same attempt instead of starting its own.
+            //
+            // The fetch itself is started without any one caller's cancellation token. It is shared, so
+            // letting the first caller's cancellation abort it would cancel everyone else's read as a side
+            // effect. Each caller instead abandons its own wait below.
+            var replacement = new Entry(
+                () => fetch(CancellationToken.None), _timeProvider.GetUtcNow() + Jitter(lifetime));
+
+            // Whoever wins the exchange owns the fetch; whoever loses joins the winner's rather than
+            // duplicating it. Comparing against the entry this caller actually observed is what makes a
+            // forced refresh accept a replacement someone else has already published.
+            var current = Interlocked.CompareExchange(ref _entry, replacement, observed);
+            if (ReferenceEquals(current, observed))
+            {
+                winner = replacement;
+                DiscardWhenItFails(replacement);
+                break;
+            }
+
+            // Losing the exchange has two outcomes, and they are not the same thing. Finding another
+            // caller's entry means an attempt is in flight, so this caller joins it. Finding nothing means a
+            // failing attempt cleared the entry between the read above and this exchange: there is then no
+            // attempt to join, and this caller's replacement was not published either, because the comparand
+            // no longer matched. Neither using the unpublished replacement nor treating the absence as an
+            // entry is right, so observe again - the next pass compares against nothing and publishes.
+            if (current is not null)
+            {
+                winner = current;
+                break;
+            }
         }
-        catch when (!cancellationToken.IsCancellationRequested)
-        {
-            // A failed attempt must not be left in place, or one unlucky moment silences the provider for the
-            // rest of the lifetime. Removed only if it is still the entry held, so a retry that has already
-            // succeeded is not thrown away.
-            Interlocked.CompareExchange(ref _entry, null, winner);
-            throw;
-        }
+
+        return await winner.Fetch.WaitAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Removes an entry from the cache if its attempt fails.
+    /// </summary>
+    /// <remarks>
+    /// A failed attempt must not be left in place, or one unlucky moment silences the provider for the rest
+    /// of the lifetime.
+    /// Discarding belongs to the attempt rather than to whoever happens to be awaiting it. Tied to a caller,
+    /// it does not run when that caller leaves first - an inbound request aborted while the provider blips -
+    /// and if it was the only caller the failure is then held for the whole lifetime, which is the one thing
+    /// this class says it does not do.
+    /// Removed only if it is still the entry held, so a later attempt that has already succeeded is not
+    /// thrown away.
+    /// </remarks>
+    private void DiscardWhenItFails(Entry entry)
+        => _ = entry.Fetch.ContinueWith(
+            _ => Interlocked.CompareExchange(ref _entry, null, entry),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     /// <summary>
     /// Shortens a lifetime by a random share of itself, so replicas started together stop expiring together.
@@ -125,7 +159,17 @@ internal sealed class RefreshingCache<T>
     private static TimeSpan Jitter(TimeSpan lifetime)
         => lifetime - lifetime * (Random.Shared.NextDouble() * MaximumJitterShare);
 
-    private bool IsValid(Entry? entry) => entry is not null && _timeProvider.GetUtcNow() < entry.ExpiresAt;
+    /// <summary>
+    /// Answers whether an entry that is known to be held has aged out.
+    /// </summary>
+    /// <remarks>
+    /// The parameter is non-nullable so that this method can never again be given responsibility for
+    /// presence. Answering that question here would leave the caller dereferencing on a promise nothing
+    /// checks: neither a null-forgiving operator at the call site nor a <c>[NotNullWhen(true)]</c> on a
+    /// nullable parameter here would notice the day this method stopped rejecting null, because the compiler
+    /// verifies that postcondition on an <c>out</c> parameter and not on one passed by value.
+    /// </remarks>
+    private bool IsValid(Entry entry) => _timeProvider.GetUtcNow() < entry.ExpiresAt;
 
     /// <summary>
     /// One attempt to read the value, shared by every caller that arrives while it is in flight.
