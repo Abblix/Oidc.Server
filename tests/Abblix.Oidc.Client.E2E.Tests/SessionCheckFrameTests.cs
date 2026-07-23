@@ -59,6 +59,13 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<ClientHostFixture>
 {
     /// <summary>
+    /// A ceiling on every regex match below, so a pattern can never run away on unexpected input. The input
+    /// here is the frame this suite fetched, not an attacker's, but a bounded match costs nothing and is the
+    /// habit that keeps a later copy of one of these patterns from being the one that hangs.
+    /// </summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Signs in and fetches the frame the way the hosting page would.
     /// </summary>
     private async Task<(HttpResponseMessage Response, string Html)> FetchFrameAsync(
@@ -123,7 +130,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
         Assert.Contains("default-src 'none'", policy, StringComparison.Ordinal);
         Assert.Contains($"frame-src {ClientAgainstServerFixture.Issuer}", policy, StringComparison.Ordinal);
 
-        var nonce = Regex.Match(policy, @"'nonce-([^']+)'").Groups[1].Value;
+        var nonce = Regex.Match(policy, @"'nonce-([^']+)'", RegexOptions.None, RegexTimeout).Groups[1].Value;
         Assert.NotEmpty(nonce);
         Assert.Contains($"nonce=\"{nonce}\"", html, StringComparison.Ordinal);
     }
@@ -175,7 +182,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
     }
 
     private static string NonceOf(string html)
-        => Regex.Match(html, @"nonce=""([^""]+)""").Groups[1].Value;
+        => Regex.Match(html, @"nonce=""([^""]+)""", RegexOptions.None, RegexTimeout).Groups[1].Value;
 
     /// <summary>
     /// A browser-sized stub: enough of a window and a document for the frame's script to run, recording
@@ -232,7 +239,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
         var (response, html) = await FetchFrameAsync(cancellationToken);
         response.Dispose();
 
-        var script = Regex.Match(html, @"<script[^>]*>(.*?)</script>", RegexOptions.Singleline)
+        var script = Regex.Match(html, @"<script[^>]*>(.*?)</script>", RegexOptions.Singleline, RegexTimeout)
             .Groups[1].Value;
 
         Assert.NotEmpty(script);
