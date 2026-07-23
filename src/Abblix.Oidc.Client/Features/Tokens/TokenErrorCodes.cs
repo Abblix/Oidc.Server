@@ -32,10 +32,6 @@ namespace Abblix.Oidc.Client.Features.Tokens;
 /// section 5.2, and the four that follow it are defined by RFC 8628 section 3.5 for the device grant, which
 /// CIBA section 11 then adopts in the same words. A single class-level reference read as though one document
 /// defined them all.
-///
-/// Kept separate from the authorization and resource error codes deliberately. The three sets overlap in two
-/// values out of twenty-four and are otherwise specific to their own endpoint, so a reader here sees what a
-/// token endpoint can actually answer rather than a catalogue to filter.
 /// </remarks>
 public static class TokenErrorCodes
 {
