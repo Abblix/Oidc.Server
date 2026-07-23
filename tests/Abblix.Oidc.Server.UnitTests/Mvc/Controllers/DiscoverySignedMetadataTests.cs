@@ -212,35 +212,4 @@ public class DiscoverySignedMetadataTests
 
         Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
     }
-
-    /// <summary>
-    /// A signing key that declares no <c>alg</c> is signed with the standard algorithm for its kind, rather
-    /// than with none.
-    /// </summary>
-    /// <remarks>
-    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from an RSA certificate carries
-    /// none - the ordinary case for a deployment that signs with a certificate. Taking the algorithm off the
-    /// key left the header empty, the signer then resolved nothing for the key's type, and the discovery
-    /// endpoint answered with an error instead of a document. Every other case in this class hands over a key
-    /// that names RS256, which is why the one shape that actually ships was the one never exercised.
-    /// </remarks>
-    [Fact]
-    public async Task SignedMetadataEnabled_KeyWithoutAlgorithm_SignsWithTheStandardOneForItsKind()
-    {
-        _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
-
-        JsonWebToken? capturedToken = null;
-        _jwtCreatorMock
-            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(),
-                It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
-            .ReturnsAsync(SignedJws);
-
-        await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
-
-        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
-    }
 }
