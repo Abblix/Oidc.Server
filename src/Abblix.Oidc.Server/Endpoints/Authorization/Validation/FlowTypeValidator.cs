@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// <param name="logger">The logger to be used for logging purposes.</param>
 /// <param name="processors">The set of registered authorization response processors. The
 /// validator rejects requests whose <c>response_type</c> contains a part with no matching
-/// registered processor — this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
+/// registered processor - this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
 /// <param name="options">Provides the server-wide default security profile a client inherits when it
@@ -68,7 +68,7 @@ public partial class FlowTypeValidator(
         var returnsTokenFromAuthorization = responseType.ReturnsTokenFromAuthorization();
 
         // RFC 6749 §4.1.2.1: response_type is REQUIRED, and a missing required parameter is
-        // invalid_request — not unsupported_response_type (no method was named at all) and not
+        // invalid_request - not unsupported_response_type (no method was named at all) and not
         // unauthorized_client (no client policy was consulted).
         if (responseType is not { Length: > 0 })
         {
@@ -78,7 +78,7 @@ public partial class FlowTypeValidator(
 
         // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token
         // from the authorization endpoint, regardless of what the client's AllowedResponseTypes
-        // permits — the profile tightens, the granular whitelist cannot widen it. Checked before the
+        // permits - the profile tightens, the granular whitelist cannot widen it. Checked before the
         // server-support gate so a profiled client gets the profile-specific reason even on a server
         // where Implicit Flow is enabled for other clients.
         var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
@@ -107,7 +107,7 @@ public partial class FlowTypeValidator(
         {
             LogResponseTypeNotAllowed(responseType);
             // RFC 6749 §4.1.2.1 / §4.2.2.1: the server supports this response_type (the gate above
-            // passed), but this particular client is not registered to use it — that is
+            // passed), but this particular client is not registered to use it - that is
             // unauthorized_client. unsupported_response_type (returned before) is reserved for
             // methods the server itself cannot produce.
             return Error(ErrorCodes.UnauthorizedClient, "The response type is not allowed for the client");
@@ -174,25 +174,30 @@ public partial class FlowTypeValidator(
     private static bool TryDetectFlowType(
         [NotNullWhen(true)] string[]? responseType,
         out FlowTypes flowType,
-        out string responseMode)
+        [NotNullWhen(true)] out string? responseMode)
     {
         var none = responseType.HasFlag(ResponseTypes.None);
         var code = responseType.HasFlag(ResponseTypes.Code);
         var token = responseType.ReturnsTokenFromAuthorization();
 
-        // OAuth 2.0 Multiple Response Type Encoding Practices §4: `none` MUST stand alone — it cannot be
-        // combined with code, token or id_token. A none+anything request matches no case below, so
-        // detection fails and the caller returns unsupported_response_type. The none flow defaults to
-        // the query response mode (§4) and carries no credentials.
+        // OAuth 2.0 Multiple Response Type Encoding Practices section 4 says the `none` response type
+        // "SHOULD NOT be combined with other Response Types". We reject the combination outright rather
+        // than merely discouraging it: a none+anything request matches no case below, so detection fails
+        // and the caller returns unsupported_response_type. That is our choice, stricter than the text.
+        // The none flow defaults to the query response mode and carries no credentials.
         (var result, flowType, responseMode) = (none, code, token) switch
         {
             (none: true, code: false, token: false) => (true, FlowTypes.None, ResponseModes.Query),
             (none: false, code: true, token: false) => (true, FlowTypes.AuthorizationCode, ResponseModes.Query),
             (none: false, code: false, token: true) => (true, FlowTypes.Implicit, ResponseModes.Fragment),
             (none: false, code: true, token: true) => (true, FlowTypes.Hybrid, ResponseModes.Fragment),
-            _ => (false, default, null!)
+            _ => (false, default, null)
         };
 
-        return result;
+        // The postcondition is returned rather than asserted: the default arm above leaves the mode unset,
+        // and returning the test itself means no arm added later can claim success while leaving it so.
+        // The annotation alone would not catch that - Roslyn verifies a [NotNullWhen] postcondition on an
+        // out parameter, but only against what the method actually returns.
+        return result && responseMode is not null;
     }
 }

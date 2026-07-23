@@ -74,13 +74,26 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
+    /// The smallest handler output the formatter will accept: the four members OpenID Connect Discovery 1.0
+    /// section 3 marks REQUIRED, and nothing else. These tests are about mTLS aliases, so every other field is
+    /// left absent on purpose - which is now expressible, because absent and empty are different states.
+    /// </summary>
+    private static ConfigurationResponse MinimalResponse() => new()
+    {
+        Issuer = "https://example.com",
+        ResponseTypesSupported = ["code"],
+        IdTokenSigningAlgValuesSupported = ["RS256"],
+        SubjectTypesSupported = ["public"],
+    };
+
+    /// <summary>
     /// Verifies no mTLS aliases when neither MtlsEndpointAliases nor MtlsBaseUri configured.
     /// </summary>
     [Fact]
     public async Task ConfigurationAsync_WithNoMtlsConfiguration_ShouldNotIncludeMtlsAliases()
     {
         // Arrange - base response without URLs (simulating handler output)
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -99,7 +112,7 @@ public class DiscoveryControllerMtlsTests
     {
         // Arrange
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -127,7 +140,7 @@ public class DiscoveryControllerMtlsTests
             IntrospectionEndpoint = new Uri("https://mtls.example.com/custom-introspection"),
             UserInfoEndpoint = new Uri("https://mtls.example.com/custom-userinfo"),
         };
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -154,7 +167,7 @@ public class DiscoveryControllerMtlsTests
             TokenEndpoint = new Uri("https://custom.example.com/token"),
             // Others not set - should be auto-computed
         };
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -176,7 +189,7 @@ public class DiscoveryControllerMtlsTests
     {
         // Arrange
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com/oauth");
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -196,7 +209,7 @@ public class DiscoveryControllerMtlsTests
     {
         // Arrange
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com/oauth/");
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -216,7 +229,7 @@ public class DiscoveryControllerMtlsTests
         // Arrange
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
         _oidcOptions.EnabledEndpoints = 0; // Disable all endpoints
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -236,7 +249,7 @@ public class DiscoveryControllerMtlsTests
     {
         // Arrange
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com:8443");
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -262,7 +275,7 @@ public class DiscoveryControllerMtlsTests
             IntrospectionEndpoint = new Uri("https://custom2.example.com/introspect"),
             // RevocationEndpoint and UserInfoEndpoint will be auto-computed
         };
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -284,7 +297,7 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithCertificateBoundTokensSupported_ShouldSurfaceFlag()
     {
         // Arrange
-        var baseResponse = new ConfigurationResponse { TlsClientCertificateBoundAccessTokens = true };
+        var baseResponse = MinimalResponse() with { TlsClientCertificateBoundAccessTokens = true };
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);
@@ -302,7 +315,7 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithoutCertificateBoundTokens_ShouldOmitFlag()
     {
         // Arrange
-        var baseResponse = new ConfigurationResponse();
+        var baseResponse = MinimalResponse();
 
         // Act
         var result = await _formatter.FormatResponseAsync(baseResponse);

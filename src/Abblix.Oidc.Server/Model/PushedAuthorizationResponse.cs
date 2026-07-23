@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -40,10 +40,14 @@ public record PushedAuthorizationResponse
         public const string ExpiresIn = "expires_in";
     }
 
-    /// <summary>The URI where the pushed authorization request is stored.</summary>
+    /// <summary>
+    /// The URI where the pushed authorization request is stored.
+    /// RFC 9126 section 2.2 states no REQUIRED marker for this member and instead says the server MUST
+    /// generate a request URI and provide it in the response, which binds just as tightly.
+    /// </summary>
     [JsonPropertyName(Parameters.RequestUri)]
     [JsonPropertyOrder(1)]
-    public Uri RequestUri { get; init; } = null!;
+    public required Uri RequestUri { get; init; }
 
     /// <summary>How long the stored request stays valid.</summary>
     [JsonPropertyName(Parameters.ExpiresIn)]

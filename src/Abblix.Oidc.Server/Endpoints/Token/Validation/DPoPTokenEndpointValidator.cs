@@ -61,7 +61,7 @@ public partial class DPoPTokenEndpointValidator(
         if (ValidateCertificateBinding(context) is { } certificateError)
             return certificateError;
 
-        var committed = context.AuthorizedGrant?.Context.ProofKeyThumbprint;
+        var committed = context.AuthorizedGrant.Context.ProofKeyThumbprint;
 
         return context.ClientRequest is { DPoPProof: { } proofJwt }
             ? await ValidatePresentedProofAsync(context, proofJwt, committed)
@@ -78,7 +78,7 @@ public partial class DPoPTokenEndpointValidator(
     /// </summary>
     private static OidcError? ValidateCertificateBinding(TokenValidationContext context)
     {
-        var committedCertThumbprint = context.AuthorizedGrant?.Context.CertificateSha256Thumbprint;
+        var committedCertThumbprint = context.AuthorizedGrant.Context.CertificateSha256Thumbprint;
         if (committedCertThumbprint is null || AuthenticatesByMutualTls(context.ClientInfo))
             return null;
 

@@ -52,6 +52,30 @@ public class SubjectTypeValidatorTests
         _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object);
     }
 
+    /// <summary>
+    /// A pairwise client that registered no redirect URI and no sector identifier URI is refused, not
+    /// crashed on.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of the redirect URI validator's own null case, and reachable for the same reason from
+    /// the opposite direction: a client asking only for a grant type that needs no redirection registers
+    /// none, which that validator correctly permits, so this one receives an absent or empty list. It then
+    /// took the first host out of a list that has none. Both shapes are covered because they arrive by
+    /// different routes - the member omitted or sent as null, and the member sent as an empty array.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateAsync_WithPairwiseAndNoRedirectUris_ShouldReturnError(bool nullRatherThanEmpty)
+    {
+        var context = CreateContext(nullRatherThanEmpty ? null! : [], SubjectTypes.Pairwise);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
     private ClientRegistrationValidationContext CreateContext(
         Uri[] redirectUris,
         string? subjectType = SubjectTypes.Public,

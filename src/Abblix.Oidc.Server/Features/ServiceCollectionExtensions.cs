@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -587,13 +587,13 @@ public static class ServiceCollectionExtensions
         // This service is optional - if not registered, long-polling will be disabled
         services.TryAddSingleton<IBackChannelLongPollingService>(sp =>
         {
-            var options = sp.GetRequiredService<IOptions<OidcOptions>>();
-            if (options.Value.BackChannelAuthentication.UseLongPolling)
-            {
-                var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
-                return new InMemoryLongPollingService(logger);
-            }
-            return null!;
+            // Registered whatever the long-polling setting says. A factory that answers null publishes a
+            // false non-null through the container: a consumer resolving it normally receives the null it
+            // was promised was absent, an enumeration yields a null element, and GetRequiredService reports
+            // the service as unregistered while a descriptor for it plainly exists. Constructing it when it
+            // will not be used costs one object; the alternative costs a diagnosis.
+            var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
+            return new InMemoryLongPollingService(logger);
         });
 
         // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime

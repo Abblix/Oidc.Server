@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -141,6 +141,18 @@ public partial class SubjectTypeValidator(
     private static OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var redirectUris = context.Request.RedirectUris;
+
+        // Without a redirect URI there is no host, and the host is what a pairwise identifier is derived
+        // from when no sector identifier URI was registered - so this combination cannot be honoured and
+        // is refused rather than worked around. It is reachable: a client asking only for a grant type
+        // that needs no redirection registers none, which the redirect URI validator correctly permits,
+        // and it arrives here with the list absent or empty.
+        if (redirectUris is not { Length: > 0 })
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                "The client specified pairwise subject type without a sector identifier URI, which needs "
+                + "a redirect URI to take the host from, and none was registered");
+        }
 
         if (redirectUris.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
         {

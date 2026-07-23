@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -54,7 +54,16 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 
         if (request.GrantTypes.Intersect(RequiringRedirectUri, StringComparer.Ordinal).Any())
         {
-            if (request.RedirectUris.Length == 0)
+            // Absent, explicitly null, and empty are one answer: the client registered no redirect URI for
+            // a grant type that cannot deliver a response without one. The property is declared
+            // non-nullable, but a registration body is attacker-shaped JSON and the deserializer honours
+            // neither the annotation nor a member initialiser against an explicit null, so the null is
+            // real, and reading Length on it turned a rejected registration into an unhandled exception.
+            // The error code is the one this validator already returns for the empty case: RFC 7591
+            // section 3.2.2 defines invalid_redirect_uri as "The value of one or more redirection URIs is
+            // invalid", which names bad values rather than absent ones, so answering absence with it is
+            // this library's choice and not something the document requires.
+            if (request.RedirectUris is not { Length: > 0 })
                 return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} is required");
 
             foreach (var uri in request.RedirectUris)

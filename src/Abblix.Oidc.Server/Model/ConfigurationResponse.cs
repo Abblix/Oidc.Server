@@ -1,22 +1,22 @@
 ﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <remarks>
 /// Decorated with <see cref="JsonIgnoreNullsAttribute"/> so that all nullable optional properties are omitted
 /// from the serialized JSON when <c>null</c>, rather than emitted as <c>"field": null</c>.
-/// RFC 8414 §2 requires that optional metadata fields be absent when not applicable — some OIDC client libraries
+/// RFC 8414 §2 requires that optional metadata fields be absent when not applicable - some OIDC client libraries
 /// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
 /// fields they do not expect to be present.
 /// </remarks>
@@ -264,8 +264,15 @@ public record ConfigurationResponse
     /// The issuer identifier, which uniquely identifies the OpenID Provider. This value must be used by clients
     /// when issuing requests to the provider to ensure that the request is directed to the correct entity.
     /// </summary>
+    /// <remarks>
+    /// REQUIRED by OpenID Connect Discovery 1.0 section 3. Every member here mirrors that section's
+    /// REQUIRED/RECOMMENDED/OPTIONAL marker in its C# nullability, matching
+    /// <see cref="Endpoints.Configuration.Interfaces.ConfigurationResponse"/>, which this record is mapped from.
+    /// A nullable member means the field is legitimately absent, and <see cref="JsonIgnoreNullsAttribute"/> then
+    /// omits it from the document rather than writing a null.
+    /// </remarks>
     [JsonPropertyName(Parameters.Issuer)]
-    public string Issuer { init; get; } = null!;
+    public required string Issuer { init; get; }
 
     /// <summary>
     /// The URL of the OpenID Provider's JSON Web Key Set (JWKS) document. This document contains the provider's public
@@ -374,42 +381,42 @@ public record ConfigurationResponse
     /// Lists the scopes supported by the OpenID Provider, defining the extent of access granted by the authorization.
     /// </summary>
     [JsonPropertyName(Parameters.ScopesSupported)]
-    public IEnumerable<string> ScopesSupported { init; get; } = null!;
+    public IEnumerable<string>? ScopesSupported { init; get; }
 
     /// <summary>
     /// Lists the claims supported by the OpenID Provider, indicating the user information that can be included
     /// in the ID token or obtained from the UserInfo endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.ClaimsSupported)]
-    public IEnumerable<string> ClaimsSupported { init; get; } = null!;
+    public IEnumerable<string>? ClaimsSupported { init; get; }
 
     /// <summary>
     /// Lists the grant types supported by the OpenID Provider, defining the methods through which
     /// clients can request tokens.
     /// </summary>
     [JsonPropertyName(Parameters.GrantTypesSupported)]
-    public IEnumerable<string> GrantTypesSupported { init; get; } = null!;
+    public IEnumerable<string>? GrantTypesSupported { init; get; }
 
     /// <summary>
     /// Lists the response types supported by the OpenID Provider, indicating the formats that can be used
     /// for the authorization response.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseTypesSupported)]
-    public IEnumerable<string> ResponseTypesSupported { init; get; } = null!;
+    public required IEnumerable<string> ResponseTypesSupported { init; get; }
 
     /// <summary>
     /// Lists the response modes supported by the OpenID Provider, defining how the authorization response
     /// should be delivered to the client.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseModesSupported)]
-    public IEnumerable<string> ResponseModesSupported { init; get; } = null!;
+    public IEnumerable<string>? ResponseModesSupported { init; get; }
 
     /// <summary>
     /// Lists the token endpoint authentication methods supported by the OpenID Provider,
     /// specifying how clients authenticate to the token endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethodsSupported)]
-    public IEnumerable<string> TokenEndpointAuthMethodsSupported { init; get; } = null!;
+    public IEnumerable<string>? TokenEndpointAuthMethodsSupported { init; get; }
 
     /// <summary>
     /// Lists the signing algorithms supported by the OpenID Provider for authenticating clients at the token endpoint.
@@ -424,21 +431,21 @@ public record ConfigurationResponse
     /// indicating the algorithms that can be used to sign the ID token.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSigningAlgValuesSupported)]
-    public IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; } = null!;
+    public required IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Lists the subject types supported by the OpenID Provider,
     /// defining how the subject's identifier is formatted and presented to the client.
     /// </summary>
     [JsonPropertyName(Parameters.SubjectTypesSupported)]
-    public IEnumerable<string> SubjectTypesSupported { init; get; } = null!;
+    public required IEnumerable<string> SubjectTypesSupported { init; get; }
 
     /// <summary>
     /// Lists the code challenge methods supported by the OpenID Provider for PKCE,
     /// enhancing the security of the authorization code flow.
     /// </summary>
     [JsonPropertyName(Parameters.CodeChallengeMethodsSupported)]
-    public IEnumerable<string> CodeChallengeMethodsSupported { init; get; } = null!;
+    public IEnumerable<string>? CodeChallengeMethodsSupported { init; get; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports the use of the request parameter,
@@ -452,7 +459,7 @@ public record ConfigurationResponse
     /// specifying how the provider should prompt the user during authentication.
     /// </summary>
     [JsonPropertyName(Parameters.PromptValuesSupported)]
-    public IEnumerable<string> PromptValuesSupported { init; get; } = null!;
+    public IEnumerable<string>? PromptValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the signing algorithms supported by the OpenID Provider for user information endpoints.

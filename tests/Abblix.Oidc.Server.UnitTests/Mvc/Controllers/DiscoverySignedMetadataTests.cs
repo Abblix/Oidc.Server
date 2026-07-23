@@ -79,6 +79,19 @@ public class DiscoverySignedMetadataTests
     }
 
     /// <summary>
+    /// The smallest handler output the formatter will accept: the four members OpenID Connect Discovery 1.0
+    /// section 3 marks REQUIRED, and nothing else. These tests are about the signed_metadata field, so every
+    /// other field is left absent on purpose.
+    /// </summary>
+    private static EndpointResponse MinimalResponse() => new()
+    {
+        Issuer = Issuer,
+        ResponseTypesSupported = ["code"],
+        IdTokenSigningAlgValuesSupported = ["RS256"],
+        SubjectTypesSupported = ["public"],
+    };
+
+    /// <summary>
     /// When the opt-in flag is off, the discovery document carries no <c>signed_metadata</c>
     /// and the signing pipeline is never touched (safe-by-default).
     /// </summary>
@@ -87,7 +100,7 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = false;
 
-        var result = await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(result.Value);
         Assert.Null(result.Value.SignedMetadata);
@@ -99,7 +112,7 @@ public class DiscoverySignedMetadataTests
 
     /// <summary>
     /// When enabled, the field carries the JWS produced by the creator, and the token is
-    /// issued as a pure JWS — no encryption key is passed even though a deployment may have
+    /// issued as a pure JWS - no encryption key is passed even though a deployment may have
     /// encryption keys, so the result stays verifiable against <c>jwks_uri</c>.
     /// </summary>
     [Fact]
@@ -116,7 +129,7 @@ public class DiscoverySignedMetadataTests
                 (_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(SignedJws);
 
-        var result = await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.Equal(SignedJws, result.Value!.SignedMetadata);
         Assert.Null(capturedEncryptionKey);
@@ -140,7 +153,7 @@ public class DiscoverySignedMetadataTests
             .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
             .ReturnsAsync(SignedJws);
 
-        await _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer });
+        await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(capturedToken);
         var payload = capturedToken!.Payload.Json;
@@ -166,7 +179,38 @@ public class DiscoverySignedMetadataTests
         _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _formatter.FormatResponseAsync(new EndpointResponse { Issuer = Issuer }));
+            () => _formatter.FormatResponseAsync(MinimalResponse()));
+    }
+
+    /// <summary>
+    /// A signing key that declares no <c>alg</c> is signed with the standard algorithm for its kind, rather
+    /// than with none.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from an RSA certificate carries
+    /// none - the ordinary case for a deployment that signs with a certificate. Taking the algorithm off the
+    /// key left the header empty, the signer then resolved nothing for the key's type, and the discovery
+    /// endpoint answered with an error instead of a document. Every other case in this class hands over a key
+    /// that names RS256, which is why the one shape that actually ships was the one never exercised.
+    /// </remarks>
+    [Fact]
+    public async Task SignedMetadataEnabled_KeyWithoutAlgorithm_SignsWithTheStandardOneForItsKind()
+    {
+        _oidcOptions.Discovery.SignedMetadata = true;
+        _keysProviderMock
+            .Setup(p => p.GetSigningKeys(true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
+
+        JsonWebToken? capturedToken = null;
+        _jwtCreatorMock
+            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(),
+                It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((t, _, _, _, _) => capturedToken = t)
+            .ReturnsAsync(SignedJws);
+
+        await _formatter.FormatResponseAsync(MinimalResponse());
+
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
     }
 
     /// <summary>

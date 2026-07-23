@@ -47,6 +47,29 @@ public class RedirectUrisValidatorTests
             nonPublic: true)!;
     }
 
+    /// <summary>
+    /// A registration body that carries no redirect_uris at all is refused, not crashed on.
+    /// </summary>
+    /// <remarks>
+    /// The regression test for an unhandled exception at the registration endpoint. The property is
+    /// declared non-nullable and the deserializer honours neither that annotation nor a member initialiser
+    /// against an explicit <c>"redirect_uris": null</c>, so a body shaped by whoever is registering could
+    /// leave it null and the length check dereferenced it. Both ways of saying nothing are covered: the
+    /// member omitted, which leaves the property at its declared default, and the member sent as null.
+    /// The grant type matters - it is what makes a redirect URI required at all, so the sibling case for a
+    /// client-credentials client (which needs none) stays green beside this.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_WithNullRedirectUrisForAuthCode_ShouldReturnError()
+    {
+        var context = CreateContext(null!, [GrantTypes.AuthorizationCode]);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+    }
+
     private ClientRegistrationValidationContext CreateContext(
         Uri[] redirectUris,
         string[] grantTypes,

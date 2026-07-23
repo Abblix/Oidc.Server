@@ -1,24 +1,26 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+
+using System.Diagnostics.CodeAnalysis;
 
 namespace Abblix.Utils;
 
@@ -140,7 +142,7 @@ public abstract record Result<TSuccess, TFailure>
     /// <param name="value">When this method returns, contains the success value if the result is successful;
     /// otherwise, the default value.</param>
     /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-    public abstract bool TryGetSuccess(out TSuccess value);
+    public abstract bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value);
 
     /// <summary>
     /// Gets the success value.
@@ -162,7 +164,7 @@ public abstract record Result<TSuccess, TFailure>
     /// <param name="value">When this method returns, contains the failure value if the result is a failure;
     /// otherwise, the default value.</param>
     /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-    public abstract bool TryGetFailure(out TFailure value);
+    public abstract bool TryGetFailure([MaybeNullWhen(false)] out TFailure value);
 
     /// <summary>
     /// Binds the result to a function that returns a new result, allowing chaining of operations.
@@ -250,7 +252,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the success value if the result is successful;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-        public override bool TryGetSuccess(out TSuccess value)
+        public override bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value)
         {
             value = Value;
             return true;
@@ -262,7 +264,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the failure value if the result is a failure;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-        public override bool TryGetFailure(out TFailure value)
+        public override bool TryGetFailure([MaybeNullWhen(false)] out TFailure value)
         {
             value = default!;
             return false;
@@ -400,7 +402,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the success value if the result is successful;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a success; otherwise, <c>false</c>.</returns>
-        public override bool TryGetSuccess(out TSuccess value)
+        public override bool TryGetSuccess([MaybeNullWhen(false)] out TSuccess value)
         {
             value = default!;
             return false;
@@ -412,7 +414,7 @@ public abstract record Result<TSuccess, TFailure>
         /// <param name="value">When this method returns, contains the failure value if the result is a failure;
         /// otherwise, the default value.</param>
         /// <returns><c>true</c> if the result is a failure; otherwise, <c>false</c>.</returns>
-        public override bool TryGetFailure(out TFailure value)
+        public override bool TryGetFailure([MaybeNullWhen(false)] out TFailure value)
         {
             value = Value;
             return true;

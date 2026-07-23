@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -52,8 +52,19 @@ public static class JsonObjectExtensions
     /// </remarks>
     public static T? GetProperty<T>(this JsonObject json, string name)
     {
-        return json.TryGetPropertyValue(name, out var value) && value != null
-            ? value.GetValue<T>()
+        // A member that is present but is not the JSON type asked for reads as absent, which is what the
+        // summary above has always promised and what every caller is written against. It matters because
+        // the objects this reads are shaped by whoever sent the request: a JWT payload and an
+        // authorization_details entry are both schemaless on the wire, so "type" can arrive as a number
+        // and "locations" as a string. GetValue<T> answers that with an InvalidOperationException thrown
+        // out of a property getter, which turns a request the specification answers with a named protocol
+        // error into an unhandled one, in library code and in the per-type validators hosts write against
+        // these same accessors.
+        // Reading it as absent is not the same as accepting it. The member is then unstated, and whatever
+        // requires it refuses the request in protocol language at the layer that owns that decision.
+        return json.TryGetPropertyValue(name, out var value) && value is JsonValue typed
+               && typed.TryGetValue<T>(out var result)
+            ? result
             : default;
     }
 

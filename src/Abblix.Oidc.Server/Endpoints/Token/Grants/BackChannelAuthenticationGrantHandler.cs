@@ -1,22 +1,22 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
-// 
+//
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
 // warranty. Use at your own risk. Abblix LLP is not liable for any damages
 // arising from the use of this software.
-// 
+//
 // LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
 // in any form outside of the official GitHub repository at:
 // https://github.com/Abblix/OIDC.Server. All development and modifications
 // must occur within the official repository and are managed solely by Abblix LLP.
-// 
+//
 // Unauthorized use, modification, or distribution of this software is strictly
 // prohibited and may be subject to legal action.
-// 
+//
 // For full licensing terms, please visit:
-// 
+//
 // https://oidc.abblix.com/license
-// 
+//
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
@@ -103,13 +103,12 @@ public class BackChannelAuthenticationGrantHandler(
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.AuthenticationRequestId);
         }
 
-        // Try to retrieve the corresponding backchannel authentication request from storage
-        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
-
-        // Resolve mode-specific grant processor using keyed service
-        // Delivery mode is validated at backchannel authentication request time by ClientValidator
-        var processor = serviceProvider.GetRequiredKeyedService<IBackChannelGrantProcessor>(
-            clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode)));
+        // Both of these decide from the client's own registered metadata and need nothing from storage, so they
+        // run before the lookup. Ordering them the other way let a request that is refused on configuration
+        // grounds alone still cost a storage round trip, which hands an authenticated client a cheap way to
+        // make the server work: the refusal is free to produce and the lookup is not.
+        if (ResolveProcessor(clientInfo) is not { } processor)
+            return NotConfiguredForDelivery();
 
         // Validate that the client is allowed to access the token endpoint for this mode
         var accessError = processor.ValidateTokenEndpointAccess();
@@ -117,6 +116,9 @@ public class BackChannelAuthenticationGrantHandler(
         {
             return accessError;
         }
+
+        // Try to retrieve the corresponding backchannel authentication request from storage
+        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
 
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
@@ -253,9 +255,8 @@ public class BackChannelAuthenticationGrantHandler(
             return new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client");
         }
 
-        // Resolve mode-specific grant processor
-        var grantProcessor = serviceProvider.GetRequiredKeyedService<IBackChannelGrantProcessor>(
-            clientInfo.BackChannelTokenDeliveryMode);
+        if (ResolveProcessor(clientInfo) is not { } grantProcessor)
+            return NotConfiguredForDelivery();
 
         switch (updatedRequest)
         {
@@ -281,4 +282,35 @@ public class BackChannelAuthenticationGrantHandler(
                     "The polling interval must be increased by at least 5 seconds for all subsequent requests.");
         }
     }
+
+    /// <summary>
+    /// Resolves the processor for the client's registered delivery mode, or null when there is none to
+    /// resolve.
+    /// </summary>
+    /// <remarks>
+    /// Both ways of having no processor are one answer, and neither is an exception. The mode is optional
+    /// client metadata with nothing tying it to the grant types the client is allowed, so a client can be
+    /// registered for this grant carrying no mode at all; and a mode that names no registered processor is
+    /// a client configured for a delivery this deployment does not offer. GetRequiredKeyedService answers
+    /// both with an InvalidOperationException, which reaches the token endpoint as an unhandled failure -
+    /// while the backchannel authentication endpoint answers the identical client state with a named error
+    /// an operator can read (BackChannelAuthentication/Validation/ClientValidator.cs).
+    /// Keyed lookup with a null check is the dispatch convention this project documents for a value read
+    /// off a wire or off client metadata, precisely so an unknown discriminator is a rejection rather than
+    /// a throw.
+    /// </remarks>
+    private IBackChannelGrantProcessor? ResolveProcessor(ClientInfo clientInfo)
+        => clientInfo.BackChannelTokenDeliveryMode is { Length: > 0 } deliveryMode
+            ? serviceProvider.GetKeyedService<IBackChannelGrantProcessor>(deliveryMode)
+            : null;
+
+    /// <summary>
+    /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, worded as
+    /// its sibling on the backchannel authentication endpoint words it.
+    /// </summary>
+    private static OidcError NotConfiguredForDelivery()
+        => new(
+            ErrorCodes.InvalidClient,
+            "The client is not properly configured for backchannel authentication. " +
+            "A token delivery mode (poll, ping, or push) must be specified.");
 }

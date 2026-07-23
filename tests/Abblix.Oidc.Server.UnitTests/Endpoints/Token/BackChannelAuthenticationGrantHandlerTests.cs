@@ -131,6 +131,37 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// A client registered for this grant but carrying no usable token delivery mode is refused in
+    /// protocol language, the way the backchannel authentication endpoint already refuses it.
+    /// </summary>
+    /// <remarks>
+    /// The mode is optional client metadata and nothing ties it to the grant types a client is allowed, so
+    /// this state is registrable, and a mode naming no registered processor is the same state reached by a
+    /// deployment that does not offer that delivery. Both used to resolve a required keyed service and
+    /// leave the token endpoint with an unhandled exception, while the sibling endpoint answered the
+    /// identical client with invalid_client and a sentence an operator can act on.
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("carrier-pigeon")]
+    public async Task AuthorizeAsync_WithNoUsableDeliveryMode_ReturnsInvalidClient(string? deliveryMode)
+    {
+        // Deliberately no storage stub. The refusal is decided from the client's registered metadata alone, so
+        // the lookup must not happen, and the strict mock turns any attempt into a failure by itself. The
+        // explicit verification below states the same thing as an intention rather than as a side effect of
+        // strictness, so the guarantee survives a future relaxation of the mock.
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = deliveryMode };
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
     /// Verifies that the handler supports the CIBA grant type.
     /// </summary>
     [Fact]
@@ -957,16 +988,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        var expectedGrant = new AuthorizedGrant(
-            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
-            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
-
-        var authenticatedRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            Status = BackChannelAuthenticationStatus.Authenticated
-        };
-
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authenticatedRequest);
+        // No storage stub, deliberately. The delivery mode alone settles this, so the refusal is now
+        // independent of whatever is stored, which is a wider guarantee than the one this test used to make:
+        // it previously stubbed an authenticated request and asserted the lookup happened exactly once,
+        // pinning an ordering that made a refusable request pay for a storage round trip.
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
@@ -977,8 +1002,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Contains("push", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("must not poll", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        // Verify storage was checked but not removed (push mode clients shouldn't access token endpoint)
-        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        // The stored grant is neither read nor consumed: a client that must not poll cannot reach it at all.
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }
