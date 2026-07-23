@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Client.Features.BackChannelLogout;
 
 /// <summary>
@@ -40,6 +42,10 @@ public static class LogoutTokenClaims
     /// JSON object containing the member name http://schemas.openid.net/event/backchannel-logout". The
     /// member value carries nothing; its presence is the statement.
     /// </remarks>
+    [SuppressMessage("SonarQube", "S5332:Using http protocol is insecure",
+        Justification = "Not a URL to fetch: the exact string OpenID Connect Back-Channel Logout 1.0 "
+            + "section 2.4 defines as the events member name, matched literally against the token. Changing "
+            + "the scheme to https would stop matching a conformant provider's token.")]
     public const string BackChannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout";
 
     /// <summary>

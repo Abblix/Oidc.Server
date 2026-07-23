@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.BackChannelLogout;
@@ -192,6 +193,10 @@ public class LogoutTokenValidatorTests
     /// Step 6 again: an events claim naming some other event is not a logout notification.
     /// </summary>
     [Fact]
+    [SuppressMessage("SonarQube", "S5332:Using http protocol is insecure",
+        Justification = "Not a URL to fetch: an event identifier in the http://schemas.openid.net/event/ "
+            + "namespace OpenID Connect Back-Channel Logout 1.0 section 2.4 uses, standing in here for one "
+            + "that is not the logout event, to prove it is rejected.")]
     public async Task AnotherEvent_IsRejected()
     {
         var token = ValidToken();
