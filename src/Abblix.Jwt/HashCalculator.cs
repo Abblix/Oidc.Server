@@ -61,11 +61,11 @@ public static class HashCalculator
     /// </remarks>
     public static string? Compute(string signingAlgorithm, string value)
     {
-        var digest = ComputeDigest(signingAlgorithm, value);
-        if (digest is null)
-            return null;
-
-        return Base64Url.EncodeToString(digest.AsSpan(0, digest.Length / 2));
+        return ComputeDigest(signingAlgorithm, value) switch
+        {
+            {} digest => Base64Url.EncodeToString(digest.AsSpan(0, digest.Length >> 1)),
+            null => null,
+        };
     }
 
     private static byte[]? ComputeDigest(string signingAlgorithm, string value)
