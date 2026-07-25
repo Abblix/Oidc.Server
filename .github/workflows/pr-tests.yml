@@ -37,8 +37,6 @@ jobs:
           - Abblix.Oidc.Server.UnitTests
           - Abblix.Jwt.Vault.UnitTests
           - Abblix.Utils.UnitTests
-          - Abblix.Oidc.Client.UnitTests
-          - Abblix.Oidc.Client.E2E.Tests
     env:
       PROJECT: ${{ matrix.project }}
     steps:

@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Pin transitives too: a new transitive that is not declared in this file
@@ -6,9 +6,6 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <!-- A JavaScript interpreter, test-only: the session-watching frame ships a script, and a
-         string comparison against it is not a test of what it does. -->
-    <PackageVersion Include="Jint" Version="4.13.0" />
     <PackageVersion Include="Azure.Identity" Version="1.13.1" />
     <PackageVersion Include="Azure.Security.KeyVault.Keys" Version="4.7.0" />
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.24.0" />
