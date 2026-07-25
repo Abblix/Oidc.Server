@@ -60,6 +60,11 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
     public const string RedirectUri = "https://client.example.com/cb";
 
     /// <summary>
+    /// Where a login says it was heading, carried through the redirect and handed back on return.
+    /// </summary>
+    public const string ReturnPath = "/home";
+
+    /// <summary>
     /// The issuer the host declares. The client's authority has to be this exact value: its discovery
     /// refuses metadata whose declared issuer is not the authority it asked, and so it should.
     /// </summary>

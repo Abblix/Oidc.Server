@@ -81,7 +81,7 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
         var callback = ClientHostFixture.RedirectOf(authorized);
 
         Assert.Equal(HttpStatusCode.Found, challenge.StatusCode);
-        Assert.StartsWith("https://client.example.com/cb", callback.OriginalString, StringComparison.Ordinal);
+        Assert.StartsWith(ClientAgainstServerFixture.RedirectUri, callback.OriginalString, StringComparison.Ordinal);
 
         // The callback lands on the application, which signs the user in and sends them where they were
         // heading.

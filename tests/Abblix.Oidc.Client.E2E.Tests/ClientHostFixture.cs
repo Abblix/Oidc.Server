@@ -58,6 +58,12 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 public sealed class ClientHostFixture : IAsyncLifetime
 {
     /// <summary>
+    /// Where this application answers. Named because a browser, the provider's registration and the
+    /// back-channel address all have to agree on it, and three copies of a host name agree only by luck.
+    /// </summary>
+    public const string BaseAddress = "https://client.example.com";
+
+    /// <summary>
     /// The path the provider redirects back to, matching the <c>redirect_uri</c> the test host registered.
     /// </summary>
     public const string CallbackPath = "/cb";
@@ -141,7 +147,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
     public HttpClient CreateBrowser()
         => new(new CookieJarHandler { InnerHandler = Server.CreateHandler() })
         {
-            BaseAddress = new Uri("https://client.example.com"),
+            BaseAddress = new Uri(BaseAddress),
         };
 
     /// <summary>
@@ -303,7 +309,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
                     TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
                     RedirectUris = [new Uri(ClientAgainstServerFixture.RedirectUri)],
                     BackChannelLogout = new BackChannelLogoutOptions(
-                        new Uri($"https://client.example.com{BackChannelLogoutPath}")),
+                        new Uri($"{BaseAddress}{BackChannelLogoutPath}")),
                     OfflineAccessAllowed = true,
                 },
             ]);

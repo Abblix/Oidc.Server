@@ -94,7 +94,7 @@ public class TokenExchangeTests(ClientAgainstServerFixture fixture) : IClassFixt
     {
         var request = await client.GetRequiredService<IOidcClient>()
             .CreateAuthorizationRequestAsync(
-                new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
+                new Uri(ClientAgainstServerFixture.ReturnPath, UriKind.Relative), cancellationToken: cancellationToken);
 
         using var browser = fixture.CreateBrowser();
         using var response = await browser.GetAsync(request.RequestUri, cancellationToken);

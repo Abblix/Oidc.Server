@@ -106,7 +106,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         await using var client = fixture.CreateOidcClient();
 
         var request = await client.GetRequiredService<IAuthorizationRequestBuilder>()
-            .CreateAsync(new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
+            .CreateAsync(new Uri(ClientAgainstServerFixture.ReturnPath, UriKind.Relative), cancellationToken: cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
@@ -161,7 +161,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         var maxAge = TimeSpan.FromMinutes(5);
 
         var request = await client.GetRequiredService<IAuthorizationRequestBuilder>().CreateAsync(
-            new Uri("/home", UriKind.Relative),
+            new Uri(ClientAgainstServerFixture.ReturnPath, UriKind.Relative),
             new AuthorizationRequestParameters { MaxAge = maxAge },
             cancellationToken);
 
@@ -283,7 +283,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
     {
         var request = await client.GetRequiredService<IOidcClient>()
             .CreateAuthorizationRequestAsync(
-                new Uri("/home", UriKind.Relative), cancellationToken: cancellationToken);
+                new Uri(ClientAgainstServerFixture.ReturnPath, UriKind.Relative), cancellationToken: cancellationToken);
 
         var callback = await FollowAsync(request.RequestUri, cancellationToken);
 
@@ -335,7 +335,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
 
         var request = await client.GetRequiredService<IOidcClient>()
             .CreateAuthorizationRequestAsync(
-                new Uri("/home", UriKind.Relative), new AuthorizationRequestParameters { Prompt = [Prompts.None] }, cancellationToken);
+                new Uri(ClientAgainstServerFixture.ReturnPath, UriKind.Relative), new AuthorizationRequestParameters { Prompt = [Prompts.None] }, cancellationToken);
 
         Assert.Contains("prompt=none", request.RequestUri.Query, StringComparison.Ordinal);
 
