@@ -64,7 +64,9 @@ public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
             response.ContentType = MediaTypeNames.Text.Html;
             response.Headers.ContentSecurityPolicy = $"default-src 'none'; script-src 'nonce-{nonce}'";
 
-            return response.WriteAsync(htmlContent);
+            // The token is the request's own: a browser that navigates away mid-write aborts the
+            // request, and without it the write goes on against a connection nobody is reading.
+            return response.WriteAsync(htmlContent, context.HttpContext.RequestAborted);
         }
     }
 }
