@@ -234,6 +234,36 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
+	/// A digest binding this ID token to the access token issued alongside it, per OpenID Connect Core
+	/// section 3.1.3.6.
+	/// </summary>
+	/// <remarks>
+	/// Read by a relying party to confirm that the access token it holds is the one this ID token was issued
+	/// with. Without that binding an attacker who can substitute an access token gets an identity assertion
+	/// about one user paired with authority belonging to another.
+	/// </remarks>
+	public string? AccessTokenHash
+	{
+		get => Json.GetProperty<string>(IanaClaimTypes.AtHash);
+		set => Json.SetProperty(IanaClaimTypes.AtHash, value);
+	}
+
+	/// <summary>
+	/// A digest binding this ID token to the authorization code issued alongside it, per OpenID Connect Core
+	/// section 3.3.2.11.
+	/// </summary>
+	/// <remarks>
+	/// Present in the hybrid flow, where the ID token arrives through the front channel before the code is
+	/// redeemed. It is what lets the relying party detect a code swapped in transit, since the swapped code
+	/// would not match the digest in a token it cannot forge.
+	/// </remarks>
+	public string? CodeHash
+	{
+		get => Json.GetProperty<string>(IanaClaimTypes.CHash);
+		set => Json.SetProperty(IanaClaimTypes.CHash, value);
+	}
+
+	/// <summary>
 	/// A list of authentication methods used to authenticate the subject,
 	/// represented as Authentication Method Reference (AMR) values.
 	/// </summary>

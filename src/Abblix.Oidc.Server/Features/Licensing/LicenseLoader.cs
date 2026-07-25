@@ -65,7 +65,12 @@ public static class LicenseLoader
             licenseJwt,
             new ValidationParameters
             {
-                Options = ValidationOptions.RequireIssuer |
+                // RequireValidIssuer, not RequireIssuer: the delegate below is what decides whether this
+                // licence was issued by us, and only ValidateIssuer runs it. The flag used to be RequireIssuer
+                // alone and the delegate ran regardless, because the validator treated either flag as an
+                // instruction to check. Once presence and validity became separate questions, this had to say
+                // which one it meant.
+                Options = ValidationOptions.RequireValidIssuer |
                           ValidationOptions.RequireSignedTokens |
                           ValidationOptions.ValidateIssuerSigningKey,
 

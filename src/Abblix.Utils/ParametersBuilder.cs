@@ -53,6 +53,18 @@ public class ParametersBuilder
 	}
 
 	/// <summary>
+	/// Appends a value under a name, keeping any value already stored under it.
+	/// </summary>
+	/// <param name="name">The name of the parameter to append to.</param>
+	/// <param name="value">The value to append.</param>
+	/// <remarks>
+	/// The indexer replaces, which is what almost every parameter wants. This is for the few that a
+	/// specification allows to repeat (<c>resource</c> of RFC 8707, for one), where each occurrence carries
+	/// its own meaning and replacing would silently drop all but the last.
+	/// </remarks>
+	public void Add(string name, string? value) => _values.Add(name, value);
+
+	/// <summary>
 	/// Returns a string that represents the current query string or URI fragment.
 	/// </summary>
 	/// <returns>A string that represents the current state of the builder.</returns>

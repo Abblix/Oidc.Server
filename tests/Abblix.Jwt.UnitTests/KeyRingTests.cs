@@ -20,12 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

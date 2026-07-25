@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 

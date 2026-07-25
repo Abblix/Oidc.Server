@@ -27,7 +27,6 @@ using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 

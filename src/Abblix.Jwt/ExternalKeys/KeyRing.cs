@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Jwt;
-
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;

@@ -29,7 +29,6 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
