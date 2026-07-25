@@ -142,7 +142,11 @@ internal class IdentityTokenService(
 			identityToken.Payload.Json[IanaClaimTypes.AuthorizationDetails] = authContext.AuthorizationDetails.DeepClone();
 		}
 
-		AppendAdditionalClaims(identityToken, authorizationCode, accessToken);
+		AppendAdditionalClaims(
+			identityToken,
+			clientInfo.IdentityTokenSignedResponseAlgorithm,
+			authorizationCode,
+			accessToken);
 
 		var jwt = await jwtFormatter.FormatAsync(
 			identityToken,
@@ -152,8 +156,14 @@ internal class IdentityTokenService(
 		return new EncodedJsonWebToken(identityToken, jwt);
 	}
 
+	// The signing algorithm arrives as a parameter rather than being read back off the token's own
+	// header. Both hold the same value - the header was filled from the client's registered metadata a
+	// few lines above - but that member is nullable, because it models a header that may still be under
+	// construction, so reading it back needed a null-forgiving operator to assert what the caller
+	// already knew. Passing it lets the compiler carry the guarantee instead of an assertion doing it.
 	private static void AppendAdditionalClaims(
 		JsonWebToken identityToken,
+		string signingAlgorithm,
 		string? authorizationCode,
 		string? accessToken)
 	{
@@ -161,11 +171,15 @@ internal class IdentityTokenService(
 		// half of the value's digest, taken with the hash JWA pairs with this token's own signing 'alg'.
 		// The computation is shared with the client package through Abblix.Jwt, because a binding both
 		// sides must agree on is not something to write twice.
-		AddHashClaim(identityToken, JwtClaimTypes.CodeHash, authorizationCode);
-		AddHashClaim(identityToken, JwtClaimTypes.AccessTokenHash, accessToken);
+		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.CodeHash, authorizationCode);
+		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.AccessTokenHash, accessToken);
 	}
 
-	private static void AddHashClaim(JsonWebToken identityToken, string claimType, string? sourceValue)
+	private static void AddHashClaim(
+		JsonWebToken identityToken,
+        string signingAlgorithm,
+        string claimType,
+        string? sourceValue)
 	{
 		if (!sourceValue.HasValue())
 			return;
@@ -173,7 +187,7 @@ internal class IdentityTokenService(
 		// A null hash means the signing algorithm has none defined - 'none', or one this library does
 		// not know. An issuer's answer to that is to omit the claim: a recipient is required to check
 		// the binding only when the claim is present, and inventing a value would be worse than absence.
-		var hash = HashCalculator.Compute(identityToken.Header.Algorithm!, sourceValue);
+		var hash = HashCalculator.Compute(signingAlgorithm, sourceValue);
 		if (hash is not null)
 			identityToken.Payload[claimType] = hash;
 	}
