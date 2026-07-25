@@ -279,7 +279,11 @@ public class RefreshingCacheTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandoned);
 
         release.SetResult();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => failing!);
+
+        // The attempt is started inside the fetch delegate, so this also says the delegate ran at all -
+        // without it, a cache that never called the provider would reach the throw assertion as a null.
+        Assert.NotNull(failing);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => failing);
 
         Assert.Equal("value", await cache.GetAsync(Fetch, Lifetime, TestContext.Current.CancellationToken));
         Assert.Equal(2, attempts);

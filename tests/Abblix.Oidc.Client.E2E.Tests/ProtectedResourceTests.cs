@@ -40,24 +40,6 @@ public class ProtectedResourceTests(ClientHostFixture fixture) : IClassFixture<C
     private const string Subject = "e2e-subject";
 
     /// <summary>
-    /// Signs a browser in and returns it holding the session cookie.
-    /// </summary>
-    private async Task<HttpClient> SignInAsync(CancellationToken cancellationToken)
-    {
-        var browser = fixture.CreateBrowser();
-
-        using var challenge = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
-
-        using var providerBrowser = fixture.Provider.CreateBrowser();
-        using var authorized = await providerBrowser.GetAsync(
-            challenge.Headers.Location!, cancellationToken);
-
-        using var signedIn = await browser.GetAsync(authorized.Headers.Location!, cancellationToken);
-
-        return browser;
-    }
-
-    /// <summary>
     /// The whole point: the application calls its API on the user's behalf, and the API recognises that
     /// user from the token the client attached.
     /// </summary>
@@ -70,7 +52,7 @@ public class ProtectedResourceTests(ClientHostFixture fixture) : IClassFixture<C
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        using var browser = await SignInAsync(cancellationToken);
+        using var browser = await fixture.SignInAsync(cancellationToken);
 
         using var response = await browser.GetAsync(
             ClientHostFixture.CallApiPath, cancellationToken);

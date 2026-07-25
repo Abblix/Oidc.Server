@@ -71,26 +71,11 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
     private async Task<(HttpResponseMessage Response, string Html)> FetchFrameAsync(
         CancellationToken cancellationToken)
     {
-        using var browser = await SignInAsync(cancellationToken);
+        using var browser = await fixture.SignInAsync(cancellationToken);
 
         var response = await browser.GetAsync(ClientHostFixture.SessionCheckPath, cancellationToken);
 
         return (response, await response.Content.ReadAsStringAsync(cancellationToken));
-    }
-
-    private async Task<HttpClient> SignInAsync(CancellationToken cancellationToken)
-    {
-        var browser = fixture.CreateBrowser();
-
-        using var challenge = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
-
-        using var providerBrowser = fixture.Provider.CreateBrowser();
-        using var authorized = await providerBrowser.GetAsync(
-            challenge.Headers.Location!, cancellationToken);
-
-        using var signedIn = await browser.GetAsync(authorized.Headers.Location!, cancellationToken);
-
-        return browser;
     }
 
     /// <summary>

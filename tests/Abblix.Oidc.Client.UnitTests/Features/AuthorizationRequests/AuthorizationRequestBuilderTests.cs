@@ -73,14 +73,6 @@ public class AuthorizationRequestBuilderTests
         timeProvider ?? new FakeTimeProvider(),
         Options.Create(new AuthorizationStateOptions()));
 
-    private static Dictionary<string, string> QueryOf(Uri uri)
-    {
-        var parsed = HttpUtility.ParseQueryString(uri.Query);
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(key => key!, key => parsed[key]!, StringComparer.Ordinal);
-    }
-
     /// <summary>
     /// The request carries what the authorization code flow needs, and the challenge is the SHA-256 one.
     /// </summary>
@@ -90,7 +82,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.Equal("code", query[Parameters.ResponseType]);
         Assert.Equal("test-client", query[Parameters.ClientId]);
@@ -109,7 +101,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.Equal(request.Context.State, query[Parameters.State]);
         Assert.Equal(request.Context.Nonce, query[Parameters.Nonce]);
@@ -131,7 +123,7 @@ public class AuthorizationRequestBuilderTests
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.ASCII.GetBytes(request.Context.CodeVerifier)));
 
-        Assert.Equal(expectedChallenge, QueryOf(request.RequestUri)[Parameters.CodeChallenge]);
+        Assert.Equal(expectedChallenge, Wire.QueryOf(request.RequestUri)[Parameters.CodeChallenge]);
     }
 
     /// <summary>
@@ -194,7 +186,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(CodeChallengeMethods.S256, QueryOf(request.RequestUri)[Parameters.CodeChallengeMethod]);
+        Assert.Equal(CodeChallengeMethods.S256, Wire.QueryOf(request.RequestUri)[Parameters.CodeChallengeMethod]);
     }
 
     /// <summary>
@@ -231,7 +223,7 @@ public class AuthorizationRequestBuilderTests
 
         var request = await builder.CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("acme", QueryOf(request.RequestUri)["tenant"]);
+        Assert.Equal("acme", Wire.QueryOf(request.RequestUri)["tenant"]);
     }
 
     /// <summary>
@@ -336,7 +328,7 @@ public class AuthorizationRequestBuilderTests
             })
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected, QueryOf(request.RequestUri)[Parameters.ResponseType]);
+        Assert.Equal(expected, Wire.QueryOf(request.RequestUri)[Parameters.ResponseType]);
     }
 
     /// <summary>
@@ -390,7 +382,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.Equal(ResponseTypes.Code, query[Parameters.ResponseType]);
         Assert.False(query.ContainsKey(Parameters.ResponseMode));
@@ -411,7 +403,7 @@ public class AuthorizationRequestBuilderTests
             })
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(ResponseModes.FormPost, QueryOf(request.RequestUri)[Parameters.ResponseMode]);
+        Assert.Equal(ResponseModes.FormPost, Wire.QueryOf(request.RequestUri)[Parameters.ResponseMode]);
     }
 
     /// <summary>
@@ -431,7 +423,7 @@ public class AuthorizationRequestBuilderTests
             })
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.False(query.ContainsKey(Parameters.CodeChallenge));
         Assert.False(query.ContainsKey(Parameters.CodeChallengeMethod));
@@ -455,7 +447,7 @@ public class AuthorizationRequestBuilderTests
             })
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.NotEmpty(query[Parameters.CodeChallenge]);
         Assert.Equal(CodeChallengeMethods.S256, query[Parameters.CodeChallengeMethod]);
@@ -480,7 +472,7 @@ public class AuthorizationRequestBuilderTests
             })
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.NotEmpty(QueryOf(request.RequestUri)[Parameters.Nonce]);
+        Assert.NotEmpty(Wire.QueryOf(request.RequestUri)[Parameters.Nonce]);
     }
 
     /// <summary>
@@ -492,7 +484,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(QueryOf(request.RequestUri).ContainsKey("prompt"));
+        Assert.False(Wire.QueryOf(request.RequestUri).ContainsKey("prompt"));
     }
 
     /// <summary>
@@ -506,7 +498,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, new AuthorizationRequestParameters { Prompt = [Prompts.None] }, TestContext.Current.CancellationToken);
 
-        Assert.Equal("none", QueryOf(request.RequestUri)["prompt"]);
+        Assert.Equal("none", Wire.QueryOf(request.RequestUri)["prompt"]);
     }
 
     /// <summary>
@@ -535,7 +527,7 @@ public class AuthorizationRequestBuilderTests
             },
             TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.Equal("300", query[Parameters.MaxAge]);
         Assert.Equal("urn:mace:incommon:iap:silver urn:mace:incommon:iap:bronze", query[Parameters.AcrValues]);
@@ -604,7 +596,7 @@ public class AuthorizationRequestBuilderTests
         var request = await CreateBuilder(Metadata(), CreateStateStore())
             .CreateAsync(ReturnUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = QueryOf(request.RequestUri);
+        var query = Wire.QueryOf(request.RequestUri);
 
         Assert.False(query.ContainsKey(Parameters.MaxAge));
         Assert.False(query.ContainsKey(Parameters.AcrValues));

@@ -67,7 +67,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        RequestedAddresses.Add(request.RequestUri!);
+        // A request reaching a handler always names where it is going; saying so by name keeps a broken test
+        // from failing as a null reference several frames further in.
+        RequestedAddresses.Add(
+            request.RequestUri
+            ?? throw new InvalidOperationException(
+                $"A request without a {nameof(request.RequestUri)} reached this handler."));
         RequestedAuthorizations.Add(request.Headers.Authorization);
 
         var response = new HttpResponseMessage(_statusCode)

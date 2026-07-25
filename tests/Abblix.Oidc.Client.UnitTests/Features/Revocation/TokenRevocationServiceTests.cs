@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net;
-using System.Web;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.Revocation;
@@ -58,14 +57,6 @@ public class TokenRevocationServiceTests
             credentialsPresenter);
     }
 
-    private static Dictionary<string, string> FormOf(string body)
-    {
-        var parsed = HttpUtility.ParseQueryString(body);
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(key => key!, key => parsed[key]!, StringComparer.Ordinal);
-    }
-
     /// <summary>
     /// The request carries what RFC 7009 section 2.1 defines: the token, the hint when one was given, and
     /// the client's credentials.
@@ -78,7 +69,7 @@ public class TokenRevocationServiceTests
         await CreateService(handler).RevokeAsync(
             "the-refresh-token", TokenTypeHints.RefreshToken, TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal("the-refresh-token", form["token"]);
         Assert.Equal("refresh_token", form["token_type_hint"]);
         Assert.Equal("test-client", form["client_id"]);
@@ -96,7 +87,7 @@ public class TokenRevocationServiceTests
         await CreateService(handler).RevokeAsync(
             "some-token", cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(FormOf(handler.LastRequestBody!).ContainsKey("token_type_hint"));
+        Assert.False(Wire.FormOf(handler.LastRequestBody).ContainsKey("token_type_hint"));
     }
 
     /// <summary>

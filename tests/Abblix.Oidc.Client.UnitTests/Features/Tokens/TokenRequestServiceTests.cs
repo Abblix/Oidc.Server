@@ -22,7 +22,6 @@
 
 using System.Net;
 using System.Text.Json;
-using System.Web;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.Tokens;
@@ -72,14 +71,6 @@ public class TokenRequestServiceTests
             credentialsPresenter);
     }
 
-    private static Dictionary<string, string> FormOf(string body)
-    {
-        var parsed = HttpUtility.ParseQueryString(body);
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(key => key!, key => parsed[key]!, StringComparer.Ordinal);
-    }
-
     /// <summary>
     /// An authorization code is redeemed with the verifier kept from the request and the redirect address the
     /// provider recorded.
@@ -92,7 +83,7 @@ public class TokenRequestServiceTests
         var response = await CreateService(handler).ExchangeCodeAsync(
             "the-code", "the-verifier", RedirectUri, TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal(GrantTypes.AuthorizationCode, form["grant_type"]);
         Assert.Equal("the-code", form["code"]);
         Assert.Equal("the-verifier", form["code_verifier"]);
@@ -112,7 +103,7 @@ public class TokenRequestServiceTests
 
         await CreateService(handler).RefreshAsync("the-refresh-token", TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal(GrantTypes.RefreshToken, form["grant_type"]);
         Assert.Equal("the-refresh-token", form["refresh_token"]);
     }
@@ -128,7 +119,7 @@ public class TokenRequestServiceTests
 
         await CreateService(handler).RefreshAsync("token", TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal("test-client", form["client_id"]);
         Assert.False(form.ContainsKey("client_secret"));
         Assert.Null(handler.LastAuthorizationHeader);
@@ -251,7 +242,7 @@ public class TokenRequestServiceTests
         await CreateService(handler).RequestClientCredentialsAsync(
             ["inventory.read", "inventory.write"], TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal(GrantTypes.ClientCredentials, form["grant_type"]);
         Assert.Equal("inventory.read inventory.write", form["scope"]);
     }
@@ -272,7 +263,7 @@ public class TokenRequestServiceTests
         await CreateService(handler).RequestClientCredentialsAsync(
             cancellationToken: TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal(GrantTypes.ClientCredentials, form["grant_type"]);
         Assert.False(form.ContainsKey("scope"));
     }
@@ -294,7 +285,7 @@ public class TokenRequestServiceTests
             },
             TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal(GrantTypes.TokenExchange, form["grant_type"]);
         Assert.Equal("the-subject-token", form["subject_token"]);
         Assert.Equal(TokenExchangeTokenTypes.AccessToken, form["subject_token_type"]);
@@ -327,7 +318,11 @@ public class TokenRequestServiceTests
             },
             TestContext.Current.CancellationToken);
 
-        var body = handler.LastRequestBody!;
+        // Read as raw text rather than through Wire, because what is at stake is that each occurrence
+        // reached the wire separately - a reading that keys by name would collapse them.
+        var body = handler.LastRequestBody;
+        Assert.NotNull(body);
+
         Assert.Contains("resource=https%3A%2F%2Fapi.example.com%2Forders", body);
         Assert.Contains("resource=https%3A%2F%2Fapi.example.com%2Fbilling", body);
         Assert.Contains("audience=orders-service", body);
@@ -354,7 +349,7 @@ public class TokenRequestServiceTests
             },
             TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal("the-actor-token", form["actor_token"]);
         Assert.Equal(TokenExchangeTokenTypes.Jwt, form["actor_token_type"]);
         Assert.Equal(TokenExchangeTokenTypes.AccessToken, form["requested_token_type"]);

@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net;
-using System.Web;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.Discovery;
@@ -75,14 +74,7 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         Assert.NotNull(location);
         Assert.StartsWith(ClientAgainstServerFixture.RedirectUri, location.OriginalString, StringComparison.Ordinal);
 
-        var parsed = HttpUtility.ParseQueryString(location.Query);
-
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(
-                key => key!,
-                key => (IReadOnlyList<string>)(parsed.GetValues(key) ?? []),
-                StringComparer.Ordinal);
+        return ClientHostFixture.QueryOf(location);
     }
 
     /// <summary>
@@ -220,8 +212,12 @@ public class AuthorizationCodeFlowTests(ClientAgainstServerFixture fixture)
         Assert.Equal(Subject, signIn.Principal.Identity?.Name);
         Assert.True(signIn.Principal.Identity?.IsAuthenticated);
 
+        // Said out loud rather than assumed: a login that produced no access token cannot be asked about the
+        // user, and naming that beats a null reference thrown from inside the call.
+        Assert.NotNull(signIn.AccessToken);
+
         var claims = await client.GetRequiredService<IOidcClient>()
-            .GetUserInfoAsync(signIn.AccessToken!, Subject, cancellationToken);
+            .GetUserInfoAsync(signIn.AccessToken, Subject, cancellationToken);
 
         Assert.Equal(Subject, claims["sub"]?.GetValue<string>());
     }

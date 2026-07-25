@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Web;
 using Abblix.Oidc.Client.Features.BackChannelAuthentication;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.Discovery;
@@ -91,14 +90,6 @@ public class BackChannelAuthenticationRequestTests
             new UnusedTokenEndpoint(),
             TimeProvider.System);
 
-    private static Dictionary<string, string> FormOf(string body)
-    {
-        var parsed = HttpUtility.ParseQueryString(body);
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(key => key!, key => parsed[key]!, StringComparer.Ordinal);
-    }
-
     /// <summary>
     /// The request carries the person named the one way it names them, the scopes asked for, and the
     /// message the person will be shown.
@@ -119,7 +110,7 @@ public class BackChannelAuthenticationRequestTests
             },
             TestContext.Current.CancellationToken);
 
-        var form = FormOf(handler.LastRequestBody!);
+        var form = Wire.FormOf(handler.LastRequestBody);
         Assert.Equal("openid profile", form["scope"]);
         Assert.Equal("alice@example.com", form["login_hint"]);
         Assert.Equal("W4ZE", form["binding_message"]);

@@ -120,10 +120,12 @@ public sealed class TokenRequestService : ITokenRequestService
             [Parameters.SubjectTokenType] = exchange.SubjectTokenType,
         };
 
-        if (exchange.ActorToken is { } actorToken)
+        // Both are matched in one pattern, so the compiler carries what the check above established -
+        // that the two arrive together - instead of an assertion restating it at the second use.
+        if (exchange is { ActorToken: { } actorToken, ActorTokenType: { } actorTokenType })
         {
             parameters[Parameters.ActorToken] = actorToken;
-            parameters[Parameters.ActorTokenType] = exchange.ActorTokenType!;
+            parameters[Parameters.ActorTokenType] = actorTokenType;
         }
 
         if (exchange.RequestedTokenType is { } requestedTokenType)

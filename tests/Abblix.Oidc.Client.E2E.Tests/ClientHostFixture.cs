@@ -25,6 +25,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Text;
+using System.Web;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -144,6 +145,63 @@ public sealed class ClientHostFixture : IAsyncLifetime
         };
 
     /// <summary>
+    /// Signs a browser in through the provider and returns it holding the session cookie.
+    /// </summary>
+    /// <remarks>
+    /// The round trip itself - challenge, the provider's answer, the callback - is what
+    /// <c>AuthenticationHandlerTests</c> asserts step by step. Every other suite needs a signed-in browser
+    /// as a starting point rather than as a subject, and three of them had grown their own copy of this.
+    /// </remarks>
+    public async Task<HttpClient> SignInAsync(CancellationToken cancellationToken)
+    {
+        var browser = CreateBrowser();
+
+        using var challenge = await browser.GetAsync(ProtectedPath, cancellationToken);
+
+        using var providerBrowser = Provider.CreateBrowser();
+        using var authorized = await providerBrowser.GetAsync(RedirectOf(challenge), cancellationToken);
+
+        using var signedIn = await browser.GetAsync(RedirectOf(authorized), cancellationToken);
+
+        return browser;
+    }
+
+    /// <summary>
+    /// The address a redirect names.
+    /// </summary>
+    /// <remarks>
+    /// Asserted rather than assumed: a response that was expected to redirect and did not carries no
+    /// location, and saying so by name beats a null reference thrown from whatever used it next.
+    /// </remarks>
+    public static Uri RedirectOf(HttpResponseMessage response)
+    {
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        return location;
+    }
+
+    /// <summary>
+    /// The parameters an address carries, each under its own name.
+    /// </summary>
+    /// <remarks>
+    /// Values are a list because a parameter may legitimately repeat, and a test that asserts one occurrence
+    /// should say so rather than have the reading silently keep the last.
+    /// </remarks>
+    public static Dictionary<string, IReadOnlyList<string>> QueryOf(Uri location)
+    {
+        var parsed = HttpUtility.ParseQueryString(location.Query);
+
+        // OfType filters and narrows in one step: a valueless entry arrives under a null key, and that is
+        // not a parameter anyone sent.
+        return parsed.AllKeys
+            .OfType<string>()
+            .ToDictionary(
+                key => key,
+                key => (IReadOnlyList<string>)(parsed.GetValues(key) ?? []),
+                StringComparer.Ordinal);
+    }
+
+    /// <summary>
     /// Keeps cookies between requests, which a browser does and the bare test client does not.
     /// </summary>
     /// <remarks>
@@ -157,7 +215,11 @@ public sealed class ClientHostFixture : IAsyncLifetime
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var address = request.RequestUri!;
+            // A request reaching a handler always names where it is going; saying so by name keeps a broken
+            // test from failing as a null reference several frames further in.
+            var address = request.RequestUri
+                          ?? throw new InvalidOperationException(
+                              $"A request without a {nameof(request.RequestUri)} reached the cookie jar.");
 
             if (_cookies.GetCookieHeader(address) is { Length: > 0 } header)
                 request.Headers.Add("Cookie", header);
@@ -440,5 +502,10 @@ public sealed class ClientHostFixture : IAsyncLifetime
                 options.Resource = new Uri(ApiResource);
                 options.Scopes = ["openid"];
             })
-            .ConfigurePrimaryHttpMessageHandler(() => _api!.GetTestServer().CreateHandler());
+            // Resolved when the handler is first built, which is after InitializeAsync has run. Named
+            // rather than asserted away, so a wiring change that moves this earlier says what it broke.
+            .ConfigurePrimaryHttpMessageHandler(
+                () => (_api ?? throw new InvalidOperationException(
+                        "The API host is not running yet, so no handler can reach it."))
+                    .GetTestServer().CreateHandler());
 }

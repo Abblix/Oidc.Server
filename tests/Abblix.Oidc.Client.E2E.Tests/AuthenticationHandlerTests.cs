@@ -53,7 +53,7 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.StartsWith(
             ClientAgainstServerFixture.Issuer,
-            response.Headers.Location!.OriginalString,
+            ClientHostFixture.RedirectOf(response).OriginalString,
             StringComparison.Ordinal);
     }
 
@@ -73,12 +73,12 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
 
         // The application sends the visitor to the provider.
         using var challenge = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
-        var authorizationRequest = challenge.Headers.Location!;
+        var authorizationRequest = ClientHostFixture.RedirectOf(challenge);
 
         // The provider authenticates and redirects back to this application's callback.
         using var providerBrowser = fixture.Provider.CreateBrowser();
         using var authorized = await providerBrowser.GetAsync(authorizationRequest, cancellationToken);
-        var callback = authorized.Headers.Location!;
+        var callback = ClientHostFixture.RedirectOf(authorized);
 
         Assert.Equal(HttpStatusCode.Found, challenge.StatusCode);
         Assert.StartsWith("https://client.example.com/cb", callback.OriginalString, StringComparison.Ordinal);
@@ -88,7 +88,7 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
         using var signedIn = await browser.GetAsync(callback, cancellationToken);
 
         Assert.Equal(HttpStatusCode.Found, signedIn.StatusCode);
-        Assert.Equal(ClientHostFixture.ProtectedPath, signedIn.Headers.Location!.OriginalString);
+        Assert.Equal(ClientHostFixture.ProtectedPath, ClientHostFixture.RedirectOf(signedIn).OriginalString);
 
         // And now the page opens, for the user the provider authenticated.
         using var page = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
@@ -148,25 +148,6 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
     }
 
     /// <summary>
-    /// Signs a browser in through the application, the way the round-trip test does, and returns it holding
-    /// the session cookie.
-    /// </summary>
-    private async Task<HttpClient> SignInAsync(CancellationToken cancellationToken)
-    {
-        var browser = fixture.CreateBrowser();
-
-        using var challenge = await browser.GetAsync(ClientHostFixture.ProtectedPath, cancellationToken);
-
-        using var providerBrowser = fixture.Provider.CreateBrowser();
-        using var authorized = await providerBrowser.GetAsync(
-            challenge.Headers.Location!, cancellationToken);
-
-        using var signedIn = await browser.GetAsync(authorized.Headers.Location!, cancellationToken);
-
-        return browser;
-    }
-
-    /// <summary>
     /// The provider ends the session and tells this application to do the same, over the back channel.
     /// </summary>
     /// <remarks>
@@ -180,7 +161,7 @@ public class AuthenticationHandlerTests(ClientHostFixture fixture) : IClassFixtu
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        using var browser = await SignInAsync(cancellationToken);
+        using var browser = await fixture.SignInAsync(cancellationToken);
 
         var identityToken = await browser.GetStringAsync(
             ClientHostFixture.IdentityTokenPath, cancellationToken);

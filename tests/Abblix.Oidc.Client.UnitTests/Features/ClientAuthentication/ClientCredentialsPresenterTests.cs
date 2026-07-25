@@ -49,7 +49,15 @@ public class ClientCredentialsPresenterTests
     }
 
     private static string DecodeBasic(HttpRequestMessage request)
-        => Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers.Authorization!.Parameter!));
+    {
+        // Both halves said out loud: a request that carries no header, and one whose scheme arrived without
+        // its credentials, are two different failures, and neither is a null reference from inside Convert.
+        var authorization = request.Headers.Authorization;
+        Assert.NotNull(authorization);
+        Assert.NotNull(authorization.Parameter);
+
+        return Encoding.UTF8.GetString(Convert.FromBase64String(authorization.Parameter));
+    }
 
     /// <summary>
     /// A public client names itself and presents no secret, because it has none to keep. RFC 6749 section

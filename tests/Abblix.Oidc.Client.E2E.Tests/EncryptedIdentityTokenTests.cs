@@ -22,7 +22,6 @@
 
 using System.Security.Cryptography;
 using System.Text;
-using System.Web;
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.ClientKeys;
@@ -122,14 +121,7 @@ public class EncryptedIdentityTokenTests : IAsyncLifetime
         using var browser = _fixture.CreateBrowser();
         using var response = await browser.GetAsync(request.RequestUri, cancellationToken);
 
-        var parsed = HttpUtility.ParseQueryString(response.Headers.Location!.Query);
-
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(
-                key => key!,
-                key => (IReadOnlyList<string>)(parsed.GetValues(key) ?? []),
-                StringComparer.Ordinal);
+        return ClientHostFixture.QueryOf(ClientHostFixture.RedirectOf(response));
     }
 
     /// <summary>

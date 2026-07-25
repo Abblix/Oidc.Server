@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Web;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.EndSession;
 using Microsoft.Extensions.Options;
@@ -51,14 +50,6 @@ public class EndSessionRequestBuilderTests
             Options.Create(options));
     }
 
-    private static Dictionary<string, string> QueryOf(Uri uri)
-    {
-        var parsed = HttpUtility.ParseQueryString(uri.Query);
-        return parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(key => key!, key => parsed[key]!, StringComparer.Ordinal);
-    }
-
     /// <summary>
     /// The hint travels, because without it the user is asked to confirm. RP-Initiated Logout 1.0 section 6:
     /// "Logout requests without a valid id_token_hint value are a potential means of denial of service;
@@ -70,7 +61,7 @@ public class EndSessionRequestBuilderTests
         var uri = await CreateBuilder().CreateAsync(
             IdentityToken, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(IdentityToken, QueryOf(uri)["id_token_hint"]);
+        Assert.Equal(IdentityToken, Wire.QueryOf(uri)["id_token_hint"]);
     }
 
     /// <summary>
@@ -84,7 +75,7 @@ public class EndSessionRequestBuilderTests
         var uri = await CreateBuilder().CreateAsync(
             IdentityToken, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("test-client", QueryOf(uri)["client_id"]);
+        Assert.Equal("test-client", Wire.QueryOf(uri)["client_id"]);
     }
 
     /// <summary>
@@ -100,7 +91,7 @@ public class EndSessionRequestBuilderTests
             options.UiLocales.Add("en");
         });
 
-        var query = QueryOf(await builder.CreateAsync(
+        var query = Wire.QueryOf(await builder.CreateAsync(
             IdentityToken, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("https://client.example.com/signed-out", query["post_logout_redirect_uri"]);
@@ -114,7 +105,7 @@ public class EndSessionRequestBuilderTests
     [Fact]
     public async Task OmitsWhatWasNotAskedFor()
     {
-        var query = QueryOf(await CreateBuilder().CreateAsync(
+        var query = Wire.QueryOf(await CreateBuilder().CreateAsync(
             IdentityToken, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.False(query.ContainsKey("state"));
@@ -133,7 +124,7 @@ public class EndSessionRequestBuilderTests
         var uri = await CreateBuilder().CreateAsync(
             IdentityToken, "opaque-state", "user@example.com", TestContext.Current.CancellationToken);
 
-        var query = QueryOf(uri);
+        var query = Wire.QueryOf(uri);
         Assert.Equal("opaque-state", query["state"]);
         Assert.Equal("user@example.com", query["logout_hint"]);
     }
@@ -147,7 +138,7 @@ public class EndSessionRequestBuilderTests
     {
         var builder = CreateBuilder(endSessionEndpoint: $"{EndSessionEndpoint}?tenant=acme");
 
-        var query = QueryOf(await builder.CreateAsync(
+        var query = Wire.QueryOf(await builder.CreateAsync(
             IdentityToken, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("acme", query["tenant"]);

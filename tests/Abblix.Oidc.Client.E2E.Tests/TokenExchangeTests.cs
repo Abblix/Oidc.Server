@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Net;
-using System.Web;
 using Abblix.Oidc.Client.Features.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -107,13 +106,7 @@ public class TokenExchangeTests(ClientAgainstServerFixture fixture) : IClassFixt
         var location = response.Headers.Location;
         Assert.NotNull(location);
 
-        var parsed = HttpUtility.ParseQueryString(location.Query);
-        var callback = parsed.AllKeys
-            .Where(key => key is not null)
-            .ToDictionary(
-                key => key!,
-                key => (IReadOnlyList<string>)(parsed.GetValues(key) ?? []),
-                StringComparer.Ordinal);
+        var callback = ClientHostFixture.QueryOf(location);
 
         var signIn = await client.GetRequiredService<IOidcClient>()
             .HandleCallbackAsync(callback, cancellationToken);
