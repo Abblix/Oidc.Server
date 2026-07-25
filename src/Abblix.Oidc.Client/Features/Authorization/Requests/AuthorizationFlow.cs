@@ -80,6 +80,15 @@ public enum AuthorizationFlow
 public static class AuthorizationFlows
 {
     /// <summary>
+    /// What every switch below says when handed a value none of its arms names.
+    /// </summary>
+    /// <remarks>
+    /// Built from <c>nameof</c> rather than typed out, so renaming the enumeration breaks the build instead
+    /// of leaving five messages naming something that no longer exists.
+    /// </remarks>
+    private const string UnknownFlow = $"Unknown {nameof(AuthorizationFlow)} value.";
+
+    /// <summary>
     /// The <c>response_type</c> wire value for the flow, atoms in the canonical order <c>code id_token
     /// token</c> (OAuth 2.0 Multiple Response Type Encoding Practices).
     /// </summary>
@@ -91,7 +100,7 @@ public static class AuthorizationFlows
         AuthorizationFlow.CodeIdToken => $"{ResponseTypes.Code} {ResponseTypes.IdToken}",
         AuthorizationFlow.CodeToken => $"{ResponseTypes.Code} {ResponseTypes.Token}",
         AuthorizationFlow.CodeIdTokenToken => $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}",
-        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, UnknownFlow),
     };
 
     /// <summary>
@@ -111,7 +120,7 @@ public static class AuthorizationFlows
         AuthorizationFlow.CodeIdToken => true,
         AuthorizationFlow.CodeToken => true,
         AuthorizationFlow.CodeIdTokenToken => true,
-        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, UnknownFlow),
     };
 
     /// <summary>
@@ -126,7 +135,7 @@ public static class AuthorizationFlows
         AuthorizationFlow.CodeIdTokenToken => true,
         AuthorizationFlow.IdToken => false,
         AuthorizationFlow.IdTokenToken => false,
-        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, UnknownFlow),
     };
 
     /// <summary>
@@ -141,7 +150,7 @@ public static class AuthorizationFlows
         AuthorizationFlow.CodeIdTokenToken => true,
         AuthorizationFlow.Code => false,
         AuthorizationFlow.CodeToken => false,
-        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, UnknownFlow),
     };
 
     /// <summary>
@@ -155,6 +164,6 @@ public static class AuthorizationFlows
         AuthorizationFlow.Code => false,
         AuthorizationFlow.IdToken => false,
         AuthorizationFlow.CodeIdToken => false,
-        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, "Unknown authorization flow."),
+        _ => throw new ArgumentOutOfRangeException(nameof(flow), flow, UnknownFlow),
     };
 }

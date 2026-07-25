@@ -66,6 +66,12 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// The recorder the interpreter collects into when the frame's script posts a message to the page
+    /// hosting it. Named because what each case asserts is whether something arrived here at all.
+    /// </summary>
+    private const string ToParent = "toParent";
+
+    /// <summary>
     /// Signs in and fetches the frame the way the hosting page would.
     /// </summary>
     private async Task<(HttpResponseMessage Response, string Html)> FetchFrameAsync(
@@ -276,7 +282,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
 
         Drive(engine, $"deliver('{ClientAgainstServerFixture.Issuer}', 'changed');");
 
-        Assert.Contains("abblix-oidc-session:recheck", Recorded(engine, "toParent"), StringComparison.Ordinal);
+        Assert.Contains("abblix-oidc-session:recheck", Recorded(engine, ToParent), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -295,7 +301,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
 
         Drive(engine, "deliver('https://evil.example.com', 'changed');");
 
-        Assert.Equal("[]", Recorded(engine, "toParent"));
+        Assert.Equal("[]", Recorded(engine, ToParent));
     }
 
     /// <summary>
@@ -313,7 +319,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
 
         Drive(engine, $"deliver('{ClientAgainstServerFixture.Issuer}', 'error');");
 
-        var told = Recorded(engine, "toParent");
+        var told = Recorded(engine, ToParent);
         Assert.Contains("abblix-oidc-session:error", told, StringComparison.Ordinal);
         Assert.DoesNotContain("recheck", told, StringComparison.Ordinal);
     }
@@ -328,7 +334,7 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
 
         Drive(engine, $"deliver('{ClientAgainstServerFixture.Issuer}', 'unchanged');");
 
-        var told = Recorded(engine, "toParent");
+        var told = Recorded(engine, ToParent);
         Assert.Contains("abblix-oidc-session:ok", told, StringComparison.Ordinal);
         Assert.DoesNotContain("recheck", told, StringComparison.Ordinal);
     }
@@ -343,6 +349,6 @@ public class SessionCheckFrameTests(ClientHostFixture fixture) : IClassFixture<C
 
         Drive(engine, $"deliver('{ClientAgainstServerFixture.Issuer}', 'logged-out');");
 
-        Assert.Equal("[]", Recorded(engine, "toParent"));
+        Assert.Equal("[]", Recorded(engine, ToParent));
     }
 }

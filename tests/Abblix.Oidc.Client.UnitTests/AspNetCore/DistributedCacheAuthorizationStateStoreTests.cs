@@ -141,7 +141,9 @@ public class DistributedCacheAuthorizationStateStoreTests
         var callback = NextRequestCarrying(redirect);
         // The cache lost the entry (eviction, expiry) but the browser still has the cookie.
         var name = callback.Request.Cookies.Single().Key;
-        var strayKey = callback.Request.Cookies[name]!;
+        var strayKey = callback.Request.Cookies[name];
+        Assert.NotNull(strayKey);
+
         await _cache.RemoveAsync("abblix:oidc:client:authorization-state:" + strayKey, TestContext.Current.CancellationToken);
 
         var found = await StoreFor(callback).FindAsync("the-state", TestContext.Current.CancellationToken);
