@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Client.Features.FrontChannelLogout;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,6 +104,12 @@ public static class FrontChannelLogoutEndpoint
     private static void NoStore(HttpRequest request)
         => request.HttpContext.Response.Headers.CacheControl = CacheControlHeaderValue.NoStoreString;
 
+    [SuppressMessage("SonarQube", "S1905:Redundant casts should not be used",
+        Justification = "Not redundant: the cast is what makes the dictionary's value type string?, which "
+            + "the declared return type asks for. Removing it produces CS8619 - a Dictionary<string, string> "
+            + "where an IReadOnlyDictionary<string, string?> is expected - so the build refuses it. The rule "
+            + "misses this because the analysis does not compile the project and so reads no nullable "
+            + "context.")]
     private static IReadOnlyDictionary<string, string?> ReadParameters(HttpRequest request)
         => request.Query.ToDictionary(
             entry => entry.Key,

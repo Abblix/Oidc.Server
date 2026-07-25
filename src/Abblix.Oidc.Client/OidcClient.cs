@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
@@ -51,6 +52,13 @@ namespace Abblix.Oidc.Client;
 /// <param name="revocationService">Revokes tokens.</param>
 /// <param name="endSessionRequestBuilder">Builds logout addresses.</param>
 /// <param name="logoutTokenValidator">Validates Logout Tokens the provider posts.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "The count is the feature list. This type is the facade a host talks to instead of "
+        + "resolving eleven services itself, so each parameter is one capability it exposes and the "
+        + "constructor is where that composition is stated. Gathering them behind an options object would "
+        + "add a type whose only purpose is to shorten this line, and would hide from a reader which "
+        + "features the client is made of. The rule is aimed at a method that grew arguments; this is a "
+        + "composition root, where the number is the design rather than a symptom of it.")]
 public sealed class OidcClient(
     IProviderMetadataProvider metadataProvider,
     IOptions<OidcClientOptions> clientOptions,

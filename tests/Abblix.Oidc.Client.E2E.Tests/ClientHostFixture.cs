@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -55,6 +56,11 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 /// cookie, whether an authorization check then passes. That is what this one is for: two in-memory servers,
 /// one running the provider and one running an application that trusts it.
 /// </remarks>
+[SuppressMessage("SonarQube", "S1075:URIs should not be hardcoded",
+    Justification = "These addresses are the fixture's subject, not its configuration. The application's own "
+        + "host is what the browser calls, what the provider registers and what the back-channel address is "
+        + "built from, and the point of the suite is that those three agree. There is no deployment here to "
+        + "vary them for.")]
 public sealed class ClientHostFixture : IAsyncLifetime
 {
     /// <summary>

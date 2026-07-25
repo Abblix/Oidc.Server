@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Client.Common;
 using Microsoft.Extensions.Time.Testing;
 
@@ -29,6 +30,12 @@ namespace Abblix.Oidc.Client.UnitTests.Common;
 /// Tests for <see cref="RefreshingCache{T}"/>, the primitive that keeps the client from asking the provider
 /// the same question twice at once.
 /// </summary>
+[SuppressMessage("SonarQube", "S1172:Unused method parameters should be removed",
+    Justification = "The fetch delegates here are Func<CancellationToken, Task<T>>, which is the shape "
+        + "RefreshingCache.GetAsync accepts, so the parameter is the signature rather than a leftover and "
+        + "cannot be removed. It is named _ to say it is ignored on purpose: these cases drive completion "
+        + "through a TaskCompletionSource they control, and honouring the token would replace the timing "
+        + "each case exists to exercise.")]
 public class RefreshingCacheTests
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);

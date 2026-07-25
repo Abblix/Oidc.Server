@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.BackChannelAuthentication;
@@ -47,6 +48,11 @@ namespace Abblix.Oidc.Client.E2E.Tests;
 /// disagree with what the client expects. This fixture puts a server that was never told about these tests
 /// on the other end of every call, so a response shape the client assumed wrongly has somewhere to surface.
 /// </remarks>
+[SuppressMessage("SonarQube", "S1075:URIs should not be hardcoded",
+    Justification = "These addresses are the fixture's subject, not its configuration. The redirect address "
+        + "is registered with the provider under this exact string and compared against it on the way back, "
+        + "so a test that read it from somewhere else would be asserting that two settings agree rather "
+        + "than that the flow works. There is no deployment here to vary them for.")]
 public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
     /// <summary>
