@@ -75,6 +75,27 @@ public class StringExtensionsTests
     public void TrimSuffixIfExists_WithAnEmptySuffix_ReturnsTheSourceUnchanged()
         => Assert.Equal("https://auth.example.com", "https://auth.example.com".TrimSuffixIfExists(string.Empty));
 
+    /// <summary>
+    /// Retained public API with no call site in this library. Inserting after a fragment is only meaningful
+    /// when the fragment is there, and the refusal names what it could not find rather than returning the
+    /// source unchanged, which would hide the mistake in whatever consumed the result.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/token", "/token", "?x=1", "https://auth.example.com/token?x=1")]
+    [InlineData("abc", "a", "X", "aXbc")]
+    public void InsertAfter_PutsTheValueRightAfterTheFragment(
+        string source, string fragment, string value, string expected)
+        => Assert.Equal(expected, source.InsertAfter(fragment, value));
+
+    [Fact]
+    public void InsertAfter_AFragmentThatIsNotThere_IsRefusedAndNamed()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => "abc".InsertAfter("zzz", "X"));
+
+        Assert.Contains("zzz", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void NotNullOrEmpty_APresentValue_IsReturnedAsIs()
         => Assert.Equal("openid", "openid".NotNullOrEmpty("scope"));
