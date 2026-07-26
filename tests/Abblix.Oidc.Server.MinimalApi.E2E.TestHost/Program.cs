@@ -8,6 +8,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
@@ -21,20 +22,21 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // Load the embedded test license JWT before any OIDC service touches LicenseChecker.
 // The license is scoped to valid_issuers=["https://auth.example.com"] (TestConstants.Issuer)
-// with issuer_limit=1, so it physically cannot be lifted into a production host —
+// with issuer_limit=1, so it physically cannot be lifted into a production host -
 // LicenseChecker.CheckIssuer throws on a non-matching issuer at startup.
 await LoadEmbeddedTestLicenseAsync();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Opt into the endpoints that are no longer on by default (EnabledEndpoints now defaults to OidcEndpoints.Base).
-// The grant-bearing features — device authorization and CIBA — MUST be registered BEFORE AddOidcMinimalApi: their
-// grant handlers must exist before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or a
+// The grant-bearing features - device authorization, CIBA and token exchange - MUST be registered
+// BEFORE AddOidcMinimalApi: their grant handlers must exist before AddOidcCore's AddAuthorizationGrants() composes the grant handlers, or a
 // handler lands beside the composite and the token endpoint resolves the wrong single IAuthorizationGrantHandler.
 // The endpoint-only opt-ins have no ordering constraint but are grouped here so the host mirrors the previous
 // every-endpoint-on server the E2E suite expects.
 builder.Services.AddDeviceAuthorization();
 builder.Services.AddBackChannelAuthentication();
+builder.Services.AddTokenExchangeGrant();
 builder.Services.AddRevocation();
 builder.Services.AddIntrospection();
 builder.Services.AddCheckSession();
