@@ -107,7 +107,15 @@ public class BackChannelAuthenticationRequestProcessor(
 		var backChannelRequest = new BackChannelAuthenticationRequest(authorizedGrant, expiresAt)
 		{
 			Status = BackChannelAuthenticationStatus.Pending,
-			NextPollAt = timeProvider.GetUtcNow() + pollingInterval,
+
+			// The client may poll from the moment it holds the request id, so the first allowed poll is
+			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section
+			// 3.2 there defines the interval as the minimum to wait "between polling requests to the token
+			// endpoint" - it has nothing to sit after until a first poll exists. This used to read
+			// now + interval, which answered the first request with slow_down and cost every sign-in one
+			// interval for polling too fast when nothing had been polled.
+			NextPollAt = timeProvider.GetUtcNow(),
+
 			ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint,
 			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};

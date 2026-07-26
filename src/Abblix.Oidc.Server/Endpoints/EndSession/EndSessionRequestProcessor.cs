@@ -28,6 +28,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -68,7 +69,7 @@ public partial class EndSessionRequestProcessor(
 			{
 				Query =
 				{
-					[Parameters.State] = request.Model.State,
+					[EndSessionRequest.Parameters.State] = request.Model.State,
 				}
 			};
 		}
@@ -130,8 +131,4 @@ public partial class EndSessionRequestProcessor(
 		}
 	}
 
-	private static class Parameters
-	{
-		public const string State = "state";
-	}
 }

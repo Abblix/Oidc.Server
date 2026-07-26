@@ -200,7 +200,10 @@ public sealed class AuthenticationController : ControllerBase
     /// </see>
     /// </remarks>
     [HttpGet(Path.CheckSession)]
-    [Produces(MediaTypes.Javascript)]
+    // The frame is an HTML document loaded in an iframe, and the result writes text/html itself. The
+    // attribute never reaches the response, so its only readers are generated OpenAPI documents and content
+    // negotiation - which is exactly why it has to agree with what is sent.
+    [Produces(MediaTypeNames.Text.Html)]
     [EnableCors(OidcConstants.CorsPolicyName)]
     [EnabledBy(OidcEndpoints.CheckSession)]
     public async Task<ActionResult> CheckSessionAsync(

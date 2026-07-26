@@ -179,10 +179,16 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         var authorization = await StartDeviceFlowAsync(client, discovery, device);
         var deviceCode = authorization[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>();
 
-        // The wait the server just told this device to observe. Enforcement starts at issuance, so the very
-        // first poll of a device that ignores the interval already lands inside the window.
+        // The wait the server just told this device to observe.
         Assert.True(authorization[DeviceResponse.Parameters.Interval]!.GetValue<int>() > 0);
 
+        // The first poll is the device doing what RFC 8628 section 3.4 describes - polling as soon as it
+        // holds the code - and it is answered on its merits, because the interval bounds the gap between
+        // polls and there is no earlier poll for this one to be too close to.
+        var first = await PollAsync(client, discovery, device, deviceCode);
+        await AssertRefusedAsync(first, ErrorCodes.AuthorizationPending);
+
+        // The second, sent immediately, is the one that ignores the interval.
         var response = await PollAsync(client, discovery, device, deviceCode);
 
         await AssertRefusedAsync(response, ErrorCodes.SlowDown);

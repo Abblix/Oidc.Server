@@ -23,7 +23,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
@@ -37,7 +36,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
 using CibaResponse = Abblix.Oidc.Server.Model.BackChannelAuthenticationSuccess.Parameters;
@@ -273,27 +271,22 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         });
 
     /// <summary>
-    /// Builds an isolated host that can actually issue an auth_req_id: a device handler that reports the
-    /// canonical e2e user as reachable, and a zero polling interval.
+    /// Builds an isolated host that can actually issue an auth_req_id, by supplying the device interaction
+    /// the library leaves to the integrator: a handler that reports the canonical e2e user as reachable.
     /// </summary>
     /// <remarks>
-    /// The interval is flattened because the processor stamps <c>NextPollAt = now + PollingInterval</c> at
-    /// the moment the request is stored, so with the five-second default the very first poll is answered
-    /// with <c>slow_down</c> instead of <c>authorization_pending</c>. Waiting out five seconds of wall clock
-    /// would test the rate limiter, not the property under test - that a pending request yields no tokens.
+    /// The polling interval is the shipped default here, deliberately. These tests each poll once, and a
+    /// first poll is answered on its merits because the interval bounds the gap between polls - so what
+    /// they exercise is the configuration a deployment actually runs. This host used to flatten the
+    /// interval to zero, because the request was stamped with a next-poll time at issuance and the first
+    /// poll came back <c>slow_down</c> instead of <c>authorization_pending</c>; that is what #281 changed,
+    /// and the workaround left with it.
     /// </remarks>
     private WebApplicationFactory<Program> CreateCibaHost()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-            {
                 services.Replace(ServiceDescriptor
-                    .Scoped<IUserDeviceAuthenticationHandler, ReachableUserDeviceHandler>());
-
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
-                        Options.DefaultName,
-                        options => options.BackChannelAuthentication.PollingInterval = TimeSpan.Zero));
-            }));
+                    .Scoped<IUserDeviceAuthenticationHandler, ReachableUserDeviceHandler>())));
 
     private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
