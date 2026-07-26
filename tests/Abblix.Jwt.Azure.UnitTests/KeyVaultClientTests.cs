@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -255,6 +255,48 @@ public sealed class KeyVaultClientTests : IDisposable
             [5, 5], TestContext.Current.CancellationToken);
 
         Assert.Equal(plaintext, result);
+    }
+
+    /// <summary>
+    /// Every key-management algorithm this store maps, not just the one the server asks for by default. The
+    /// arm chosen here decides the RSA padding the vault unwraps with, and a wrong arm does not fail here: it
+    /// returns bytes that are not the content encryption key, and the failure surfaces later as a decryption
+    /// error with nothing pointing back to the mapping.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    public async Task UnwrapKeyAsync_AcceptsEveryKeyManagementAlgorithmItMaps(string algorithm)
+    {
+        var plaintext = new byte[] { 4, 2 };
+        using var rsa = RSA.Create(2048);
+        var handler = new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, "oidc-enc", plaintext))
+                : StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
+
+        var result = await ClientOver(handler).UnwrapKeyAsync(
+            "oidc-enc/v1", algorithm, new JsonWebTokenHeader(new JsonObject()),
+            [5, 5], TestContext.Current.CancellationToken);
+
+        Assert.Equal(plaintext, result);
+    }
+
+    /// <summary>
+    /// The store refuses ECDH-ES rather than pretending: Key Vault exposes no key-agreement primitive, so a
+    /// silent fallback would derive a shared secret that is not the one the peer derived.
+    /// </summary>
+    [Fact]
+    public async Task AgreeKeyAsync_IsRefused_BecauseKeyVaultHasNoAgreementPrimitive()
+    {
+        using var rsa = RSA.Create(2048);
+        var handler = new StubHttpMessageHandler(_ =>
+            StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+            "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

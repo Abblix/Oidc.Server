@@ -246,6 +246,23 @@ public sealed class VaultTransitClientTests : IDisposable
         Assert.Contains("ed25519", exception.Message);
     }
 
+    /// <summary>
+    /// The store refuses ECDH-ES rather than pretending: Transit exposes no key-agreement primitive, so a
+    /// silent fallback would derive a shared secret that is not the one the peer derived, and the failure
+    /// would surface as an undecryptable token far from its cause.
+    /// </summary>
+    [Fact]
+    public async Task AgreeKeyAsync_IsRefused_BecauseTransitHasNoAgreementPrimitive()
+    {
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
+            TestContext.Current.CancellationToken));
+
+        Assert.Null(handler.LastRequest);
+    }
+
     [Fact]
     public async Task DecryptAsync_RejectsUnsupportedAlgorithm_WithoutCallingTransit()
     {
