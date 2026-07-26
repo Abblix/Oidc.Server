@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -42,6 +43,8 @@ public interface ITokenContextValidator
     /// </returns>
     [Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
               "implementation keeps working, and will be removed in the next major version.")]
+    [SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+        Justification = "Removal is scheduled and tracked: the overload is kept only so a caller written against the pre-2.4 signature keeps working, and it goes in the next major version (#302).")]
     Task<OidcError?> ValidateAsync(TokenValidationContext context)
         => ValidateAsync(context, CancellationToken.None);
 

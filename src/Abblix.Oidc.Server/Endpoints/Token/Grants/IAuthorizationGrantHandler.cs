@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -50,6 +51,8 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// issued to the same client that is now redeeming it.</param>
 	[Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
 	          "implementation keeps working, and will be removed in the next major version.")]
+	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+		Justification = "Removal is scheduled and tracked: the overload is kept only so a caller written against the pre-2.4 signature keeps working, and it goes in the next major version (#302).")]
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
 		=> AuthorizeAsync(request, clientInfo, CancellationToken.None);
 
