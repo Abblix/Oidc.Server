@@ -177,6 +177,23 @@ public record OidcOptions
 	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
 
 	/// <summary>
+	/// The content encryption algorithm used for an encrypted authorization response (JARM) when the client
+	/// registered <c>authorization_encrypted_response_alg</c> but omitted
+	/// <c>authorization_encrypted_response_enc</c>.
+	/// </summary>
+	/// <remarks>
+	/// Separate from <see cref="DefaultContentEncryptionAlgorithm"/> because the specification names a
+	/// different value for this one response: JWT Secured Authorization Response Mode section 3 says that
+	/// "if authorization_encrypted_response_alg is specified, the default for this value is A128CBC-HS256".
+	/// A client registering only the key-management algorithm expects that, so the server has to encrypt
+	/// with it or produce a response the client cannot read.
+	/// It is a setting rather than a constant so a deployment whose clients all understand a stronger
+	/// algorithm can raise the floor, the same way the general default can be raised.
+	/// </remarks>
+	public string DefaultAuthorizationResponseEncryptionAlgorithm { get; set; }
+		= EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
+
+	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
 	/// registration access and initial access tokens). Each type signs with RS256 and, when a server
 	/// <see cref="EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
