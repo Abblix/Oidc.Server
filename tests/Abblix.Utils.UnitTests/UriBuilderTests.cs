@@ -277,6 +277,9 @@ public class UriBuilderTests
     public void Constructor_WithPathStringValue_CreatesRelativeUri()
     {
         var pathString = new PathString("/manage/linked_accounts");
+        // The framework annotates Value as nullable because an empty PathString carries none; this one was
+        // built from a literal, so assert it rather than suppress the warning.
+        Assert.NotNull(pathString.Value);
 
         var builder = new UriBuilder(pathString.Value);
 
@@ -293,6 +296,9 @@ public class UriBuilderTests
     public void Constructor_WithPathStringValue_WithQueryParameters()
     {
         var pathString = new PathString("/manage/linked_accounts");
+        // The framework annotates Value as nullable because an empty PathString carries none; this one was
+        // built from a literal, so assert it rather than suppress the warning.
+        Assert.NotNull(pathString.Value);
 
         var builder = new UriBuilder(pathString.Value)
         {
@@ -470,7 +476,7 @@ public class UriBuilderTests
 
         var path = builder.Path;
 
-        Assert.Equal("/api/users", path.Value);
+        Assert.Equal("/api/users", path);
     }
 
     /// <summary>
@@ -483,7 +489,7 @@ public class UriBuilderTests
 
         var path = builder.Path;
 
-        Assert.Equal(AuthCallbackPath, path.Value);
+        Assert.Equal(AuthCallbackPath, path);
     }
 
     /// <summary>
