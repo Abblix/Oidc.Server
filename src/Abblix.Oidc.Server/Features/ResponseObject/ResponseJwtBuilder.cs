@@ -87,6 +87,6 @@ public class ResponseJwtBuilder(
         return await clientJwtFormatter.FormatAsync(
             token,
             clientInfo,
-            ClientJwtEncryption.ForJarm(clientInfo));
+            ClientJwtEncryption.ForJarm(clientInfo, options.Value));
     }
 }
