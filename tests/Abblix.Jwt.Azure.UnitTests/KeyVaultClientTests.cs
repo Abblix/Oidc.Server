@@ -22,6 +22,7 @@
 
 using System.Net;
 using Azure;
+using Azure.Identity;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -305,4 +306,158 @@ public sealed class KeyVaultClientTests : IDisposable
         => new(request => request.RequestUri!.AbsolutePath.EndsWith("/sign", StringComparison.Ordinal)
             ? StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, keyName, signature))
             : StubHttpMessageHandler.Json(HttpStatusCode.OK, keyBundle));
+
+    /// <summary>
+    /// Every JWS algorithm this store advertises is accepted and signed remotely, under a key of the type
+    /// that algorithm needs.
+    /// </summary>
+    /// <remarks>
+    /// The mapping to a Key Vault algorithm is a switch with nine reachable arms, of which two were walked.
+    /// An unwalked arm is not merely unmeasured: a wrong one refuses an algorithm the store advertises, or
+    /// names another, and both surface far from here.
+    /// What this case does not assert, and the limit is worth stating rather than leaving to be discovered:
+    /// the algorithm name on the wire. The SDK writes the request body through its own pipeline, so the
+    /// message this transport seam receives carries no content to read. What it does assert is that the call
+    /// reached the vault's sign endpoint - not a local signature, which a public-only key could not produce
+    /// anyway - and came back with what the vault returned. Pinning the wire name needs the live backend,
+    /// which is where the integration suite earns its place.
+    /// </remarks>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.RS384)]
+    [InlineData(SigningAlgorithms.RS512)]
+    [InlineData(SigningAlgorithms.PS256)]
+    [InlineData(SigningAlgorithms.PS384)]
+    [InlineData(SigningAlgorithms.PS512)]
+    [InlineData(SigningAlgorithms.ES256)]
+    [InlineData(SigningAlgorithms.ES384)]
+    [InlineData(SigningAlgorithms.ES512)]
+    public async Task SignAsync_AcceptsEveryAlgorithmItAdvertises(string jwsAlgorithm)
+    {
+        var signature = new byte[] { 1, 2, 3 };
+        using var key = KeyFor(jwsAlgorithm);
+        var handler = SignResponder("oidc-sign", signature, key.Bundle);
+
+        var result = await ClientOver(handler).SignAsync(
+            "oidc-sign/v1", jwsAlgorithm, [9, 9], TestContext.Current.CancellationToken);
+
+        Assert.Equal(signature, result);
+        Assert.Contains(
+            handler.Requests,
+            request => request.RequestUri!.AbsolutePath.EndsWith("/sign", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The same for key management: every algorithm this store advertises for unwrapping is accepted and
+    /// unwrapped remotely.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    public async Task UnwrapKeyAsync_AcceptsEveryAlgorithmItAdvertises(string jweAlgorithm)
+    {
+        var unwrapped = new byte[] { 7, 7, 7 };
+        using var rsa = RSA.Create(2048);
+        var bundle = AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false));
+
+        var handler = new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(
+                    HttpStatusCode.OK, AzureResponses.CryptoResult(VaultUri, "oidc-enc", unwrapped))
+                : StubHttpMessageHandler.Json(HttpStatusCode.OK, bundle));
+
+        var result = await ClientOver(handler).UnwrapKeyAsync(
+            "oidc-enc/v1", jweAlgorithm, new JsonWebTokenHeader(new JsonObject()), [5, 5],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(unwrapped, result);
+        Assert.Contains(
+            handler.Requests,
+            request => request.RequestUri!.AbsolutePath.EndsWith("/decrypt", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A key id that does not name a version is refused before anything is sent.
+    /// </summary>
+    /// <remarks>
+    /// The kid this client publishes is <c>name/version</c>, and the split is what turns it back into the two
+    /// values the vault needs. A kid that cannot be split is not one this client minted - guessing a name from
+    /// it would ask the vault to sign with whatever key happened to match.
+    /// </remarks>
+    [Theory]
+    [InlineData("no-version-at-all")]
+    [InlineData("/leading-slash")]
+    [InlineData("trailing-slash/")]
+    public async Task SignAsync_RefusesAKeyIdThatNamesNoVersion(string keyId)
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            throw new InvalidOperationException("the vault must not be called for a malformed key id"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ClientOver(handler).SignAsync(
+            keyId, SigningAlgorithms.RS256, [9, 9], TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The credential is the configured service principal when all three of its parts are set, and the ambient
+    /// Azure chain otherwise.
+    /// </summary>
+    /// <remarks>
+    /// All three, not any: a half-configured principal is the case worth pinning. Falling back leaves a
+    /// deployment authenticating as whatever ambient identity the host happens to carry - which may well
+    /// succeed, and is then the wrong identity reaching a key store rather than a failure anyone notices.
+    /// </remarks>
+    /// <remarks>
+    /// The unset cases are empty strings rather than nulls because that is the shape a deployment produces:
+    /// the options carry <c>""</c> by default, and configuration binding leaves an absent key at that.
+    /// </remarks>
+    [Theory]
+    [InlineData("tenant", "client", "secret", true)]
+    [InlineData("", "client", "secret", false)]
+    [InlineData("tenant", "", "secret", false)]
+    [InlineData("tenant", "client", "", false)]
+    [InlineData("   ", "client", "secret", false)]
+    public void BuildCredential_UsesTheServicePrincipalOnlyWhenItIsComplete(
+        string tenantId, string clientId, string clientSecret, bool expectServicePrincipal)
+    {
+        var credential = KeyVaultClient.BuildCredential(new AzureKeyVaultOptions
+        {
+            KeyVaultUri = VaultUri,
+            TenantId = tenantId,
+            ClientId = clientId,
+            ClientSecret = clientSecret,
+        });
+
+        Assert.Equal(expectServicePrincipal, credential is ClientSecretCredential);
+    }
+
+    /// <summary>A key of the type the given JWS algorithm signs with, and the bundle the vault would return.</summary>
+    private static SigningKey KeyFor(string algorithm) => algorithm switch
+    {
+        SigningAlgorithms.ES256 => SigningKey.Ec(ECCurve.NamedCurves.nistP256, "P-256"),
+        SigningAlgorithms.ES384 => SigningKey.Ec(ECCurve.NamedCurves.nistP384, "P-384"),
+        SigningAlgorithms.ES512 => SigningKey.Ec(ECCurve.NamedCurves.nistP521, "P-521"),
+        _ => SigningKey.Rsa(),
+    };
+
+    /// <summary>A generated key together with the Key Vault bundle describing its public half.</summary>
+    private sealed class SigningKey(IDisposable key, string bundle) : IDisposable
+    {
+        public string Bundle { get; } = bundle;
+
+        public static SigningKey Rsa()
+        {
+            var rsa = RSA.Create(2048);
+            return new SigningKey(rsa, AzureResponses.KeyBundle(VaultUri, "oidc-sign", rsa.ExportParameters(false)));
+        }
+
+        public static SigningKey Ec(ECCurve curve, string curveName)
+        {
+            var ecdsa = ECDsa.Create(curve);
+            return new SigningKey(
+                ecdsa, AzureResponses.EcKeyBundle(VaultUri, "oidc-sign", ecdsa.ExportParameters(false), curveName));
+        }
+
+        public void Dispose() => key.Dispose();
+    }
 }
