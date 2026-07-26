@@ -21,12 +21,11 @@
 // info@abblix.com
 
 using System.Text;
-using Abblix.Oidc.Server.Mvc.SourceGeneration;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Abblix.Oidc.Server.MinimalApi.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators.MinimalApi;
 
 /// <summary>
 /// Generates Minimal API request-binding models from the core request models. A hand-written partial record stub
@@ -51,26 +50,26 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
     private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
 
-    // Wire-format markers — the value conversion each property's bound string(s) goes through.
+    // Wire-format markers - the value conversion each property's bound string(s) goes through.
     private const string SpaceSeparatedStringMarkerName = "SpaceSeparatedStringAttribute";
     private const string TotalSecondsMarkerName = "TotalSecondsAttribute";
     private const string JsonObjectMarkerName = "JsonObjectAttribute";
     private const string CultureListMarkerName = "CultureListAttribute";
 
-    // Transport-source markers — the property is bound from a header or the TLS connection, not a payload value.
+    // Transport-source markers - the property is bound from a header or the TLS connection, not a payload value.
     private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
     private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
     private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
 
-    // Validation markers — translated to the executable Minimal API validation attributes of the same name, so a
+    // Validation markers - translated to the executable Minimal API validation attributes of the same name, so a
     // Validator pass over the bound model enforces the rule the core declared.
     private const string AllowedValuesMarkerName = "AllowedValuesAttribute";
     private const string AbsoluteUriMarkerName = "AbsoluteUriAttribute";
     private const string ElementsRequiredMarkerName = "ElementsRequiredAttribute";
     private const string RequiredMarkerName = "RequiredAttribute";
 
-    // The generator emits references to these helper types. Rather than hardcode their fully-qualified names —
-    // which silently rot into broken generated code when a type moves namespace — they are resolved to their live
+    // The generator emits references to these helper types. Rather than hardcode their fully-qualified names -
+    // which silently rot into broken generated code when a type moves namespace - they are resolved to their live
     // symbols per compilation (see KnownTypes). Our own helpers are found by simple name within the compiled
     // assembly, so a namespace move follows automatically; the executable validation attributes live in a
     // referenced assembly and are each resolved by metadata name, so a rename or move of any one of them fails the
@@ -78,9 +77,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string FormValuesTypeName = "FormValues";
     private const string RequestValuesTypeName = "RequestValues";
     private const string ValidatableModelTypeName = "IValidatableModel";
-    private const string AllowedValuesAttributeName = "Abblix.Utils.Validation.AllowedValuesAttribute";
+    // The anchor for this library's executable validation attributes: resolved by full metadata name so a move
+    // of the namespace fails loud here, and its namespace is what the shared twin lookup searches first.
     private const string AbsoluteUriAttributeName = "Abblix.Utils.Validation.AbsoluteUriAttribute";
-    private const string ElementsRequiredAttributeName = "Abblix.Utils.Validation.ElementsRequiredAttribute";
 
     private static readonly string CompilerServicesNamespace =
         typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -89,7 +88,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
-    private const string DiagnosticCategory = "Abblix.Oidc.Server.MinimalApi.SourceGeneration";
+    private const string DiagnosticCategory = "Abblix.Oidc.Server.SourceGenerators.MinimalApi";
 
     private static readonly DiagnosticDescriptor CoreTypeNotFound = new(
         id: "ABXM001",
@@ -224,7 +223,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         string DeclarativeMarkerNamespace);
 
     /// <summary>
-    /// The resolved <see cref="KnownTypes"/>, or — when a helper type could not be resolved — the diagnostics to
+    /// The resolved <see cref="KnownTypes"/>, or - when a helper type could not be resolved - the diagnostics to
     /// report. Kept as equatable data so the pipeline re-renders models only when the resolved names actually change.
     /// </summary>
     private sealed record KnownTypesResult(KnownTypes? Types, EquatableArray<DiagnosticInfo> Diagnostics)
@@ -238,12 +237,14 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var validatableModel = ResolveInAssembly(compilation, ValidatableModelTypeName, diagnostics);
 
             // The executable validation attributes live in a referenced assembly, so they cannot be found by the
-            // simple-name search over the compiled source. Each is resolved by metadata name in its own right: they
-            // can be renamed or sub-namespaced one at a time, so anchoring on a single one would let a sibling's
-            // move slip through as a dangling emitted reference.
-            var allowedValues = ResolveExecutable(compilation, AllowedValuesAttributeName, diagnostics);
+            // simple-name search over the compiled source. One is resolved by full metadata name to anchor the
+            // namespace; the rest go through the same twin rule the MVC generator uses, so the two adapters
+            // cannot drift on what a marker's executable counterpart is. A sibling that moves out from under the
+            // anchor still fails loud rather than emitting a dangling reference.
             var absoluteUri = ResolveExecutable(compilation, AbsoluteUriAttributeName, diagnostics);
-            var elementsRequired = ResolveExecutable(compilation, ElementsRequiredAttributeName, diagnostics);
+            var validationNamespace = absoluteUri?.ContainingNamespace.ToDisplayString();
+            var elementsRequired = ResolveTwin(compilation, validationNamespace, ElementsRequiredMarkerName, diagnostics);
+            var allowedValues = ResolveTwin(compilation, validationNamespace, AllowedValuesMarkerName, diagnostics);
 
             // The declarative markers are recognised on core models by their namespace; resolve it from an anchor
             // marker so a rename of the marker namespace fails loud here instead of silently unmatching every marker.
@@ -299,6 +300,16 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             return symbol;
         }
 
+        private static INamedTypeSymbol? ResolveTwin(
+            Compilation compilation, string? validationNamespace, string markerName, List<DiagnosticInfo> diagnostics)
+        {
+            var symbol = ExecutableTwins.Resolve(compilation, validationNamespace, markerName);
+            if (symbol == null)
+                diagnostics.Add(new DiagnosticInfo(HelperTypeNotFound, LocationInfo.None, markerName));
+
+            return symbol;
+        }
+
         private static INamedTypeSymbol? ResolveInAssembly(
             Compilation compilation, string simpleName, List<DiagnosticInfo> diagnostics)
         {
@@ -345,14 +356,14 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     ClassifySource(property, sourceMarker);
                 else if (!IsExcludedFromWire(property))
                     ClassifyWire(property);
-                // A payload-excluded property without a transport-source marker is off-wire — it is not bound and
+                // A payload-excluded property without a transport-source marker is off-wire - it is not bound and
                 // keeps its core default, so it is omitted from both the model and the projection.
 
                 ReportUnrecognizedMarkers(property);
             }
 
             _writer.AppendLine("// <auto-generated/>");
-            _writer.AppendLine($"// Generated by Abblix.Oidc.Server.MinimalApi.SourceGeneration from {coreType.ToDisplayString()}.");
+            _writer.AppendLine($"// Generated by Abblix.Oidc.Server.SourceGenerators.MinimalApi from {coreType.ToDisplayString()}.");
             _writer.AppendLine("#nullable enable");
             _writer.AppendLine();
             _writer.AppendLine($"namespace {stub.Namespace};");
@@ -512,7 +523,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             foreach (var statement in _preStatements)
                 _writer.AppendLine($"\t\t{statement}");
 
-            // A form-only model never reads the query — per RFC 6749 the token-endpoint parameters must travel in the
+            // A form-only model never reads the query - per RFC 6749 the token-endpoint parameters must travel in the
             // request body. A SupportsGet model reads query-or-form via RequestValues.
             if (stub.SupportsGet)
             {
@@ -633,8 +644,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 } attributeClass &&
                 attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace);
 
-        // A declarative-binding attribute the generator does not recognise — renamed on the core side without
-        // updating the matching const here, or newly added — would silently drop its binding or validation. Each
+        // A declarative-binding attribute the generator does not recognise - renamed on the core side without
+        // updating the matching const here, or newly added - would silently drop its binding or validation. Each
         // such marker fails the build instead, mirroring the MVC generator's MarkerWithoutBinder guard.
         private void ReportUnrecognizedMarkers(IPropertySymbol property)
         {

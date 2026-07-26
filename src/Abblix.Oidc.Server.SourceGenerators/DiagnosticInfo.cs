@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators;
 
 /// <summary>
 /// A diagnostic captured as equatable data; <see cref="Diagnostic"/> itself holds non-equatable

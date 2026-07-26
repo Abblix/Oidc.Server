@@ -141,15 +141,29 @@ public class ValidationAttributeTests
         Assert.Contains("redirect_uri", result.ErrorMessage, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AllowedValues_AcceptsWhatIsListed_RegardlessOfCase()
+    /// <summary>
+    /// The values guarded here are protocol names from IANA registries, and those are case-sensitive - the
+    /// registration template in RFC 7636 section 6.2.1 says so in as many words. A differently-cased value is
+    /// therefore a value the client did not send, not the same one written another way.
+    /// </summary>
+    [Theory]
+    [InlineData("code", true)]
+    [InlineData("CODE", false)]
+    public void AllowedValues_AcceptsOnlyTheExactSpelling(string value, bool accepted)
     {
-        var attribute = new AllowedValuesAttribute("code", "id_token");
+        var result = Validate(new AllowedValuesAttribute("code", "id_token"), value, nameof(Model.Undecorated));
 
-        Assert.Null(Validate(attribute, "code", nameof(Model.Undecorated)));
-        Assert.Null(Validate(attribute, "CODE", nameof(Model.Undecorated)));
-        Assert.Null(Validate(attribute, null, nameof(Model.Undecorated)));
+        Assert.Equal(accepted, result is null);
     }
+
+    /// <summary>
+    /// An absent value is not this attribute's concern: nearly every parameter it guards is OPTIONAL on the
+    /// wire, and refusing absence would turn every one of them into a required parameter.
+    /// </summary>
+    [Fact]
+    public void AllowedValues_AcceptsAnAbsentValue()
+        => Assert.Null(Validate(
+            new AllowedValuesAttribute("code", "id_token"), null, nameof(Model.Undecorated)));
 
     [Fact]
     public void AllowedValues_RefusesWhatIsNot_AndSaysWhich()

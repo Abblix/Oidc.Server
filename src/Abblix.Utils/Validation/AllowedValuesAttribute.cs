@@ -25,7 +25,9 @@ using System.ComponentModel.DataAnnotations;
 namespace Abblix.Utils.Validation;
 
 /// <summary>
-/// A validation attribute that restricts a string (or string-collection) value to a fixed, case-insensitive set.
+/// A validation attribute that restricts a string (or string-collection) value to a fixed set, matched exactly.
+/// An absent value passes: whether a member is required is a separate question, asked by a separate attribute,
+/// which is why the framework's own <c>AllowedValues</c> cannot stand in for this one - it refuses null.
 /// Shared by the MVC and Minimal API OIDC server adapters, whose source generators emit it onto a generated model
 /// whenever the corresponding core property carries the declarative <c>AllowedValues</c> marker.
 /// </summary>
@@ -56,8 +58,13 @@ public class AllowedValuesAttribute(params string[] allowedValues) : ValidationA
         return ValidationResult.Success;
     }
 
+    // Ordinal, because every value this attribute guards is a protocol name from an IANA registry, and those
+    // are case-sensitive: RFC 7636 section 6.2.1 states "This name is case-sensitive" in the registration
+    // template for code_challenge_method, whose two values section 4.2 spells "plain" and "S256". Matching
+    // case-insensitively accepted "s256" and answered it as if the client had asked for the SHA-256 transform,
+    // which is a value the client never sent.
     private ValidationResult? IsValid(string value)
-        => allowedValues.Contains(value, StringComparer.OrdinalIgnoreCase)
+        => allowedValues.Contains(value, StringComparer.Ordinal)
             ? ValidationResult.Success
             : new ValidationResult($"The value '{value}' is invalid");
 }

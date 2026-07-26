@@ -59,7 +59,7 @@
         <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" PrivateAssets="all" />
         <!-- Build-time only: generates the Minimal API binding models from the core request models.
              Not a runtime dependency, so it stays out of the package dependency graph. -->
-        <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.SourceGeneration\Abblix.Oidc.Server.MinimalApi.SourceGeneration.csproj"
+        <ProjectReference Include="..\Abblix.Oidc.Server.SourceGenerators.MinimalApi\Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj"
                           OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 

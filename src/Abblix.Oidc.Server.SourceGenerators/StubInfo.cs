@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators;
 
 /// <summary>
 /// The generation stub extracted from a hand-written partial record: where the model lives,
