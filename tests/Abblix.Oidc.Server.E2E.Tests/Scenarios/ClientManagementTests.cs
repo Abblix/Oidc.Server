@@ -98,21 +98,23 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        Assert.NotNull(discovery.RegistrationEndpoint);
+        // The metadata every other case here registers with, minus the one member under test - so what
+        // differs between an accepted registration and this one is exactly the redirect URI.
+        var metadata = NewClientMetadata("redirecting-without-a-uri");
+        metadata.Remove(RequestMembers.RedirectUris);
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
         var response = await client.PostAsJsonAsync(
-            discovery.RegistrationEndpoint!,
-            new JsonObject
-            {
-                [RequestMembers.ClientName] = "redirecting-without-a-uri",
-                [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode),
-                [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
-            },
-            TestContext.Current.CancellationToken);
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, body["error"]!.GetValue<string>());
+        var error = body["error"];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
     }
 
     [Fact]
