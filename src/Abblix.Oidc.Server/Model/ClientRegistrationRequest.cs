@@ -46,12 +46,21 @@ public record ClientRegistrationRequest
 
     /// <summary>
     /// The <c>redirect_uris</c> array (RFC 7591 §2) listing every absolute URI the OP may use to deliver
-    /// authorization responses to this client. At least one entry is required, and authorization requests
-    /// must specify a redirect URI that exactly matches one of these values.
+    /// authorization responses to this client. An authorization request must then specify a redirect URI
+    /// that exactly matches one of these values.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not required at the model layer, because whether it is required depends on another
+    /// member of the same request. RFC 7591 section 2 asks for it only for grant types that redirect, and
+    /// <c>RedirectUrisValidator</c> already applies exactly that rule - it demands at least one entry when
+    /// the requested grants include the authorization code, implicit or refresh token, and says nothing
+    /// otherwise. A declarative constraint here ran first and refused a device-flow or CIBA client, which
+    /// has no user agent to redirect, with a transport-level 400 naming a C# property rather than the
+    /// protocol error the endpoint owes the caller. This mirrors the repository rule that a declarative
+    /// value constraint belongs on a request model only when the specification fixes the rule outright.
+    /// </remarks>
     [JsonPropertyName(Parameters.RedirectUris)]
-    [ElementsRequired]
-    public Uri[] RedirectUris { get; init; } = null!;
+    public Uri[]? RedirectUris { get; init; }
 
     /// <summary>
     /// The <c>response_types</c> the client intends to use (RFC 7591 §2). Each entry is itself a

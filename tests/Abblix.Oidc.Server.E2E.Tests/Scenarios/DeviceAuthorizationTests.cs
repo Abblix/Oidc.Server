@@ -234,11 +234,11 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
             [RegistrationRequest.ClientName] = clientName,
             [RegistrationRequest.GrantTypes] = new JsonArray(GrantTypes.DeviceAuthorization),
 
-            // A device client has no user agent to redirect, so it declares no response type. The MVC
-            // registration model still marks redirect_uris as required, so one is supplied and never used.
+            // A device client has no user agent to redirect, so it declares no response type and registers
+            // no redirect_uris at all - which is also the point: this registration is what proves the
+            // endpoint no longer demands one from a client that can never use it.
             // client_secret_post keeps the credentials in the same form body the other scenarios post.
             [RegistrationRequest.ResponseTypes] = new JsonArray(),
-            [RegistrationRequest.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
             [RegistrationRequest.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
         });
 
