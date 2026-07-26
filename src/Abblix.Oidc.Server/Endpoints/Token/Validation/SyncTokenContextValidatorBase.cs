@@ -42,7 +42,8 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// if the validation fails;
     /// otherwise, resolves to null indicating that the validation was successful.
     /// </returns>
-    public Task<OidcError?> ValidateAsync(TokenValidationContext context)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
         => Task.FromResult(Validate(context));
 
     /// <summary>

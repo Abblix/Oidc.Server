@@ -57,11 +57,13 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// It employs rigorous validation to prevent unauthorized access and to maintain the integrity of the token
     /// lifecycle management process.
     /// </remarks>
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public async Task<Result<TokenIssued, OidcError>> HandleAsync(
         TokenRequest tokenRequest,
-        ClientRequest clientRequest)
+        ClientRequest clientRequest,
+        CancellationToken cancellationToken)
     {
-        var validationResult = await validator.ValidateAsync(tokenRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tokenRequest, clientRequest, cancellationToken);
         return await validationResult.BindAsync(processor.ProcessAsync);
     }
 }

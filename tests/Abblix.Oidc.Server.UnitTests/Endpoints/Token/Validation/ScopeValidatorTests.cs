@@ -101,7 +101,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read", "write");
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -126,7 +126,7 @@ public class ScopeValidatorTests
             .Returns(false);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -147,7 +147,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile", "email");
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         _scopeManager.Verify(m => m.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
@@ -167,7 +167,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile");
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, context.Scope.Length);
@@ -190,7 +190,7 @@ public class ScopeValidatorTests
             .Returns(false);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -209,7 +209,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read");
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -230,7 +230,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes(scopes);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -253,7 +253,7 @@ public class ScopeValidatorTests
         // No need to setup scope manager for empty scopes
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -272,7 +272,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read");
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         _scopeManager.Verify(

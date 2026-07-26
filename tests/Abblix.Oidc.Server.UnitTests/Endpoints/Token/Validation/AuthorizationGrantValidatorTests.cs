@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -106,11 +107,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(redirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -130,7 +131,7 @@ public class AuthorizationGrantValidatorTests
             allowedGrantTypes: [GrantTypes.ClientCredentials]);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -151,11 +152,11 @@ public class AuthorizationGrantValidatorTests
         var grantError = new OidcError(ErrorCodes.InvalidGrant, "Invalid authorization code");
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Failure(grantError));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(grantError, error);
@@ -175,11 +176,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -199,11 +200,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(redirectUri: null);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -222,14 +223,14 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(context.Request, context.ClientInfo))
+            .Setup(h => h.AuthorizeAsync(context.Request, context.ClientInfo, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
-        _grantHandler.Verify(h => h.AuthorizeAsync(context.Request, context.ClientInfo), Times.Once);
+        _grantHandler.Verify(h => h.AuthorizeAsync(context.Request, context.ClientInfo, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -245,7 +246,7 @@ public class AuthorizationGrantValidatorTests
             allowedGrantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         _grantHandler.VerifyNoOtherCalls();
@@ -263,11 +264,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(authorizedGrant, context.AuthorizedGrant);
@@ -292,11 +293,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -316,11 +317,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>()))
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AuthorizedGrant, OidcError>.Success(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert - Path is case-sensitive
         Assert.NotNull(error);

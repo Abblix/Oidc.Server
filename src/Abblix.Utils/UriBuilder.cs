@@ -20,7 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Utils;
 
@@ -111,10 +110,16 @@ public class UriBuilder
     /// <summary>
     /// The path part of the URI.
     /// </summary>
-    public PathString Path
+    /// <remarks>
+    /// Typed as a plain string rather than the framework's PathString: this is a foundation library, and that
+    /// type would put an ASP.NET Core dependency on every package beneath the server, including hosts that
+    /// never serve HTTP. A caller holding a PathString still assigns and reads it, since that type converts
+    /// to and from string implicitly.
+    /// </remarks>
+    public string Path
     {
-        get => new(_builder.Path);
-        set => _builder.Path = value.Value;
+        get => _builder.Path;
+        set => _builder.Path = value;
     }
 
     /// <summary>

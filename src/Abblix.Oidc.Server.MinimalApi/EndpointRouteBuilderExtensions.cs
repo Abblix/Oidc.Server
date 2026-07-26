@@ -408,11 +408,14 @@ public static class EndpointRouteBuilderExtensions
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
         ITokenHandler handler,
-        ITokenResultFormatter formatter)
+        ITokenResultFormatter formatter,
+        CancellationToken cancellationToken)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreTokenRequest, coreClientRequest);
+        // Minimal API binds this parameter to the request's own RequestAborted. CIBA holds this call open for
+        // the long-polling window, so without it a client that disconnects leaves the server polling storage.
+        var response = await handler.HandleAsync(coreTokenRequest, coreClientRequest, cancellationToken);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 

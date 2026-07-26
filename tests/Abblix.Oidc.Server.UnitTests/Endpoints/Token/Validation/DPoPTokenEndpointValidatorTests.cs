@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -56,7 +56,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// Unit tests for <see cref="DPoPTokenEndpointValidator"/> covering the four-way branch
 /// (mandatory vs opportunistic × proof-present vs proof-missing), the proof-validation
 /// failure path, and the RFC 9449 §8 nonce challenge-response loop. The validator's own
-/// JWT structural / signature / claim-binding checks are out of scope here — those land
+/// JWT structural / signature / claim-binding checks are out of scope here - those land
 /// in <see cref="ProofValidatorTests"/>; this test mocks <see cref="IProofValidator"/>
 /// to focus on the wiring between proof, nonce, and confirmation-stash decisions.
 /// </summary>
@@ -90,7 +90,7 @@ public class DPoPTokenEndpointValidatorTests
     {
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -100,7 +100,7 @@ public class DPoPTokenEndpointValidatorTests
     {
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.ProofKeyThumbprint);
@@ -119,7 +119,7 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: false,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -140,7 +140,7 @@ public class DPoPTokenEndpointValidatorTests
             clientCertificate: certificate,
             tlsClientCertificateBoundAccessTokens: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.ProofKeyThumbprint);
@@ -160,7 +160,7 @@ public class DPoPTokenEndpointValidatorTests
             clientCertificate: certificate,
             tlsClientCertificateBoundAccessTokens: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -175,7 +175,7 @@ public class DPoPTokenEndpointValidatorTests
         _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false, securityProfile: null);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -193,7 +193,7 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: false,
             securityProfile: ClientSecurityProfile.None);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.ProofKeyThumbprint);
@@ -205,7 +205,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof());
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -216,7 +216,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof());
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -227,7 +227,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorFailure(new ProofError(ProofErrorReasons.SignatureInvalid));
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -240,7 +240,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceIssue();
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertNonceChallenge(error, context);
     }
@@ -254,7 +254,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceIssue();
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertNonceChallenge(error, context);
     }
@@ -267,7 +267,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceValidate("good-nonce", failure: null);
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -281,7 +281,7 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: false,
             committedThumbprint: ProofKeyThumbprint);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -295,7 +295,7 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: false,
             committedThumbprint: "different-committed-thumbprint");
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -311,7 +311,7 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: false,
             committedThumbprint: "committed-thumbprint-from-authorize");
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -325,7 +325,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof(nonceClaim: "some-nonce"));
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
         _nonceService.VerifyNoOtherCalls();
@@ -333,7 +333,7 @@ public class DPoPTokenEndpointValidatorTests
 
     /// <summary>
     /// RFC 8705 §4: a certificate-bound grant redeemed by a non-mTLS client that presents no certificate
-    /// must be rejected with invalid_grant — otherwise a stolen certificate-bound refresh token is
+    /// must be rejected with invalid_grant - otherwise a stolen certificate-bound refresh token is
     /// redeemable with no certificate at all.
     /// </summary>
     [Fact]
@@ -345,7 +345,7 @@ public class DPoPTokenEndpointValidatorTests
             committedCertThumbprint: "committed-x5t-s256",
             tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -366,7 +366,7 @@ public class DPoPTokenEndpointValidatorTests
             committedCertThumbprint: CertThumbprint(certificate),
             tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }
@@ -385,7 +385,7 @@ public class DPoPTokenEndpointValidatorTests
             committedCertThumbprint: "committed-x5t-s256",
             tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }

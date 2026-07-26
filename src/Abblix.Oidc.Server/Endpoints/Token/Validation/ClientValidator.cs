@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -47,7 +47,8 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator): ITokenCo
     /// A <see cref="OidcError"/> if the client cannot be authenticated,
     /// otherwise null indicating successful validation.
     /// </returns>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
     {
         var clientRequest = context.ClientRequest;
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
