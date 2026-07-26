@@ -71,10 +71,13 @@ public partial class SubjectTypeValidator(
         if (contentResult.TryGetFailure(out var contentError))
             return contentError;
 
+        // A client registering no redirect URIs satisfies the subset check below with nothing to check:
+        // the rule is that everything it registered must appear in the sector document, and it registered
+        // nothing. Passing an empty set says that, where passing null would only ask the question again.
         var error = ValidateSectorIdentifierContent(
             sectorIdentifierUri,
             contentResult.GetSuccess(),
-            context.Request.RedirectUris);
+            context.Request.RedirectUris ?? []);
 
         if (error != null)
             return error;
